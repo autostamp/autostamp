@@ -10,6 +10,9 @@ init: vendor-init
 build:
     cargo build --all
 
+run:
+    cargo run --example run -- vendor/schemas/APIs/svix.com/1.4/openapi.yaml components/svix wilted:svix@0.1.0
+
 # Build the Wasm component (wasm32-wasip2 reactor exporting `openapi-bindgen:generator`).
 component:
     cargo build -p openapi-bindgen --target wasm32-wasip2 --release
