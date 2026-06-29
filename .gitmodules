@@ -1,0 +1,4 @@
+[submodule "vendor/schemas"]
+	path = vendor/schemas
+	url = https://github.com/APIs-guru/openapi-directory.git
+	shallow = true

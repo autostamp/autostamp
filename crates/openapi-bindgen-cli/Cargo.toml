@@ -17,7 +17,11 @@ path = "src/main.rs"
 
 [dependencies]
 openapi-bindgen = { workspace = true }
-clap = { workspace = true }
+anyhow = "1"
+heck = "0.5"
+indexmap = "2"
+openapiv3 = "2"
+serde_json = "1"
 
 [dev-dependencies]
 
