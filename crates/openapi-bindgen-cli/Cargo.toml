@@ -1,0 +1,25 @@
+[package]
+name = "openapi-bindgen-cli"
+description = "CLI for openapi-bindgen"
+readme = "README.md"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "openapi-bindgen"
+path = "src/main.rs"
+
+[features]
+
+[dependencies]
+openapi-bindgen = { workspace = true }
+clap = { workspace = true }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

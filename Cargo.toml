@@ -1,0 +1,30 @@
+[workspace]
+members = ["crates/*", "xtask"]
+default-members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/yoshuawuyts/openapi-bindgen"
+documentation = "https://docs.rs/openapi-bindgen"
+edition = "2024"
+authors = ["yoshuawuyts"]
+
+[workspace.dependencies]
+openapi-bindgen = { version = "0.1.0", path = "crates/openapi-bindgen" }
+clap = { version = "4.5", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "deny"
+nonstandard_style = { level = "deny", priority = -1 }
+missing_docs = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+fallible_impl_from = "deny"
+fn_params_excessive_bools = "deny"
+indexing_slicing = "deny"
+must_use_candidate = "deny"
+unneeded_field_pattern = "deny"

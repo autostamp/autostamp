@@ -1,0 +1,21 @@
+[package]
+name = "openapi-bindgen"
+description = "Convert OpenAPI schema definitions to WebAssembly Components"
+readme = "README.md"
+keywords = []
+categories = []
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+documentation.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[features]
+
+[dependencies]
+
+[dev-dependencies]
+
+[lints]
+workspace = true
