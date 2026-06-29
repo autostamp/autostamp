@@ -1,0 +1,57 @@
+package openapi-bindgen:generator@0.1.0;
+
+/// Generate WIT and Rust component bindings from an OpenAPI document.
+interface generator {
+    /// A WIT package identifier: `namespace:name` with an optional `@version`.
+    record package-name {
+        /// The package namespace: the part before `:`.
+        namespace: string,
+        /// The package name: the part after `:`.
+        name: string,
+        /// The optional package version: the part after `@`, if present.
+        version: option<string>,
+    }
+
+    /// The generated WIT and Rust sources.
+    record generated {
+        /// The generated WIT source, with one interface per OpenAPI tag.
+        wit: string,
+        /// The generated Rust source: `guest` impls plus `*-to-json` / `*-to-str` helpers.
+        rust: string,
+        /// The kebab-case names of the generated interfaces, in emission order.
+        interfaces: list<string>,
+    }
+
+    /// A failure produced while generating bindings.
+    variant error {
+        /// The supplied OpenAPI document could not be parsed.
+        invalid-document(string),
+        /// The supplied package identifier was malformed.
+        invalid-package(string),
+        /// Binding generation failed.
+        generation-failed(string),
+    }
+
+    /// Parse a `namespace:name[@version]` identifier such as `incidentio:api@0.1.0`.
+    parse-package: func(raw: string) -> result<package-name, error>;
+
+    /// Generate bindings from an OpenAPI 3 document supplied as a JSON string.
+    ///
+    /// Operations are grouped into one interface per tag. When `tags` is set, only
+    /// operations carrying one of the listed tags are emitted; otherwise every operation
+    /// is emitted and grouped by its first tag.
+    generate: func(
+        spec-json: string,
+        target-package: package-name,
+        tags: option<list<string>>,
+    ) -> result<generated, error>;
+
+    /// Rewrite the `export` list of a WIT world to the given interfaces, returning the
+    /// rewritten source.
+    rewrite-world-exports: func(src: string, interfaces: list<string>) -> string;
+}
+
+/// A binding generator: turns OpenAPI documents into WIT and Rust component sources.
+world bindgen {
+    export generator;
+}

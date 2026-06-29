@@ -43,13 +43,25 @@
 
 ## Installation
 ```sh
-$ cargo add openapi-bindgen          # Rust library
-$ cargo install openapi-bindgen-cli  # CLI command
+$ cargo add openapi-bindgen
 ```
 
+## WebAssembly component
+Besides the Rust library, this crate builds as a [WebAssembly component][component] that
+exports the `openapi-bindgen:generator/generator` interface defined in
+[`crates/openapi-bindgen/wit`](crates/openapi-bindgen/wit/world.wit):
+
+```sh
+$ just component
+# or: cargo build -p openapi-bindgen --target wasm32-wasip2 --release
+```
+
+[component]: https://component-model.bytecodealliance.org/
+
 ## Safety
-This crate uses ``#![deny(unsafe_code)]`` to ensure everything is implemented in
-100% Safe Rust.
+This crate denies `unsafe_code` throughout. The single exception is the
+wit-bindgen-generated component bindings, which require the component-model FFI glue and
+are confined to one module behind `#[allow(unsafe_code)]`.
 
 ## Contributing
 Want to join us? Check out our ["Contributing" guide][contributing] and take a

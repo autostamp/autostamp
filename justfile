@@ -10,6 +10,11 @@ init: vendor-init
 build:
     cargo build --all
 
+# Build the Wasm component (wasm32-wasip2 reactor exporting `openapi-bindgen:generator`).
+component:
+    cargo build -p openapi-bindgen --target wasm32-wasip2 --release
+    @echo "component: target/wasm32-wasip2/release/openapi_bindgen.wasm"
+
 # Format-check, lint, and run the test suite.
 test:
     cargo fmt --all -- --check
