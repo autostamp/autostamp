@@ -113,6 +113,80 @@ fn parses_openapi_v3_through_parse_openapi() {
 }
 
 #[test]
+fn synthesizes_function_name_for_operation_without_operation_id() {
+    // `operationId` is optional in OpenAPI; an operation without one must still generate,
+    // with a function name synthesized from its method and path (instead of panicking).
+    let spec_json = r#"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets/{id}": {
+          "get": {
+            "tags": ["pets"],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      }
+    }"#;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+    assert!(generated.interfaces.iter().any(|i| i == "pets"));
+    // method + path -> `get pets id` -> kebab `get-pets-id`.
+    assert!(
+        generated.wit.contains("get-pets-id:"),
+        "expected synthesized function name in WIT:\n{}",
+        generated.wit
+    );
+}
+
+#[test]
+fn groups_untagged_operations_by_path_segment() {
+    // A document whose operations have no tags still generates: each operation groups into an
+    // interface named after its first meaningful path segment (the `v1` version prefix is
+    // skipped), instead of bailing with "no interfaces".
+    let spec_json = r#"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/v1/charges": {
+          "get": { "operationId": "listCharges", "responses": { "200": { "description": "ok" } } }
+        },
+        "/v1/customers": {
+          "get": { "operationId": "listCustomers", "responses": { "200": { "description": "ok" } } }
+        }
+      }
+    }"#;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+    assert!(generated.interfaces.iter().any(|i| i == "charges"));
+    assert!(generated.interfaces.iter().any(|i| i == "customers"));
+}
+
+#[test]
+fn dedupes_colliding_operation_names() {
+    // Two operations whose ids kebab to the same `validate-address` under one tag would, without
+    // disambiguation, emit two same-named WIT functions — a "defined more than once" error.
+    let spec_json = r#"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/a": { "post": { "tags": ["things"], "operationId": "validateAddress",
+          "responses": { "200": { "description": "ok" } } } },
+        "/b": { "get": { "tags": ["things"], "operationId": "ValidateAddress",
+          "responses": { "200": { "description": "ok" } } } }
+      }
+    }"#;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    // `generate` validates the WIT internally, so an Ok result means the names were disambiguated.
+    let generated = generate(&spec, &package, None).unwrap();
+    assert!(generated.wit.contains("validate-address:"));
+    assert!(generated.wit.contains("validate-address-v2:"));
+}
+
+#[test]
 fn generates_from_swagger_v2() {
     // A Swagger 2.0 document is normalized to v3 by `parse_openapi`, then drives generation
     // through the same pipeline. A successful `generate` means the WIT validated.

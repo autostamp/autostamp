@@ -15,7 +15,7 @@ use std::collections::BTreeSet;
 use crate::enum_model::EnumModel;
 use crate::field::Field;
 use crate::location::Location;
-use crate::naming::{sanitize_wit_name, unique_name};
+use crate::naming::{sanitize_wit_name, synthesize_operation_id, unique_name};
 use crate::operation_model::OperationModel;
 use crate::package_name::PackageName;
 use crate::record_model::RecordModel;
@@ -59,6 +59,19 @@ impl InterfaceModel {
 
     pub(crate) fn is_record(&self, name_kebab: &str) -> bool {
         self.records.iter().any(|r| r.name_kebab == name_kebab)
+    }
+
+    /// Whether `name_kebab` is already claimed by a record, enum, operation function, or params
+    /// record in this interface. WIT gives types and functions a single shared namespace, so any
+    /// of these colliding is a "defined more than once" error; route every generated name through
+    /// here to keep them mutually unique.
+    fn name_in_use(&self, name_kebab: &str) -> bool {
+        self.is_record(name_kebab)
+            || self.is_enum(name_kebab)
+            || self
+                .operations
+                .iter()
+                .any(|o| o.op_kebab == name_kebab || o.params_record == name_kebab)
     }
 }
 
@@ -163,7 +176,7 @@ impl InterfaceModel {
                         }
                         let final_name =
                             unique_name(&format!("{name_hint}-enum").to_kebab_case(), |n| {
-                                self.is_enum(n) || self.is_record(n)
+                                self.name_in_use(n)
                             });
                         self.enums.push(EnumModel {
                             name_kebab: final_name.clone(),
@@ -190,9 +203,8 @@ impl InterfaceModel {
                     Ok(WitType::List(Box::new(item_type)))
                 }
                 Type::Object(_) => {
-                    let record_name = unique_name(&name_hint.to_kebab_case(), |n| {
-                        self.is_record(n) || self.is_enum(n)
-                    });
+                    let record_name =
+                        unique_name(&name_hint.to_kebab_case(), |n| self.name_in_use(n));
                     self.emit_record_from_schema(ctx, schema, &record_name)?;
                     Ok(WitType::Named(record_name))
                 }
@@ -212,9 +224,7 @@ impl InterfaceModel {
         name_hint: &str,
     ) -> Result<WitType> {
         if !any.properties.is_empty() {
-            let record_name = unique_name(&name_hint.to_kebab_case(), |n| {
-                self.is_record(n) || self.is_enum(n)
-            });
+            let record_name = unique_name(&name_hint.to_kebab_case(), |n| self.name_in_use(n));
             self.emit_record_from_any(ctx, any, &record_name)?;
             return Ok(WitType::Named(record_name));
         }
@@ -363,10 +373,17 @@ impl InterfaceModel {
         op: &Operation,
         auth: Vec<AuthApply>,
     ) -> Result<()> {
-        let raw_id = op
-            .operation_id
-            .as_deref()
-            .unwrap_or_else(|| panic!("operation at {method} {path} missing operationId"));
+        // `operationId` is optional in OpenAPI; synthesize a deterministic id from the
+        // method and path (unique per document) when it is absent or empty so the operation
+        // still generates instead of crashing.
+        let synthesized;
+        let raw_id = match op.operation_id.as_deref() {
+            Some(id) if !id.is_empty() => id,
+            _ => {
+                synthesized = synthesize_operation_id(method, path);
+                &synthesized
+            }
+        };
         // Keep every segment after the first `#` so operations like
         // "Heartbeat V2#Ping" and "Heartbeat V2#Ping#1" don't collide.
         let op_kebab_raw: String = match raw_id.split_once('#') {
@@ -374,7 +391,6 @@ impl InterfaceModel {
             None => raw_id.to_kebab_case(),
         };
         let op_kebab = sanitize_wit_name(&op_kebab_raw);
-        let op_snake = op_kebab.replace('-', "_");
 
         let mut fields: Vec<Field> = vec![];
 
@@ -477,8 +493,6 @@ impl InterfaceModel {
             }
         }
 
-        let params_record = sanitize_wit_name(&format!("{op_kebab}-params"));
-
         // Drop request fields that merely duplicate a credential we already inject centrally
         // for this operation. Some APIs (e.g. Plaid) declare a credential both as a security
         // scheme *and* as a redundant request-body/query/header property; carrying both would
@@ -487,6 +501,16 @@ impl InterfaceModel {
         let before = fields.len();
         fields.retain(|f| !is_injected_credential(f, &auth));
         self.pruned_credential_fields += before - fields.len();
+
+        // Finalize identifiers so they're unique within the interface. WIT shares one namespace
+        // for record/enum *types* and *functions*, so an operation's function name and its params
+        // record must not collide with each other, with other operations, or with any generated
+        // record/enum (e.g. Telnyx declares two `validateAddress` operations under one tag).
+        let op_kebab = unique_name(&op_kebab, |n| self.name_in_use(n));
+        let op_snake = op_kebab.replace('-', "_");
+        let params_record = unique_name(&format!("{op_kebab}-params"), |n| {
+            op_kebab == n || self.name_in_use(n)
+        });
 
         self.operations.push(OperationModel {
             op_kebab,
@@ -600,7 +624,9 @@ impl InterfaceModel {
 
         for op in &self.operations {
             if let Some(s) = &op.summary {
-                out.push_str(&format!("  /// {}\n", s));
+                for line in s.lines() {
+                    out.push_str(&format!("  /// {line}\n"));
+                }
             }
             if op.fields.is_empty() {
                 // No params — no record, no argument.

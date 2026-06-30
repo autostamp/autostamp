@@ -87,7 +87,45 @@ pub fn from_json_value(mut doc: serde_json::Value) -> Result<OpenAPI> {
     if swagger2::is_v2(&doc) {
         swagger2::convert(&mut doc).context("failed to normalize Swagger 2.0 document")?;
     }
+    strip_numeric_bounds(&mut doc);
     serde_json::from_value(doc).context("failed to parse OpenAPI document")
+}
+
+/// Remove numeric validation keywords from every schema in `doc` before it reaches
+/// `openapiv3`.
+///
+/// `openapiv3`'s `IntegerType` bounds are `i64`, so out-of-range values that some specs
+/// carry (e.g. DigitalOcean's `maximum: 18446744073709552000`) fail to deserialize. The WIT
+/// generator never reads numeric bounds — only `type`, `$ref`, and `properties` — so dropping
+/// `maximum` / `minimum` / `exclusiveMaximum` / `exclusiveMinimum` / `multipleOf` is lossless
+/// for our purposes. Only *number*-valued occurrences are removed, so a schema property
+/// literally named `maximum` (whose value is a schema object) is preserved.
+fn strip_numeric_bounds(value: &mut serde_json::Value) {
+    const NUMERIC_KEYWORDS: [&str; 5] = [
+        "maximum",
+        "minimum",
+        "exclusiveMaximum",
+        "exclusiveMinimum",
+        "multipleOf",
+    ];
+    match value {
+        serde_json::Value::Object(map) => {
+            for keyword in NUMERIC_KEYWORDS {
+                if map.get(keyword).is_some_and(serde_json::Value::is_number) {
+                    map.remove(keyword);
+                }
+            }
+            for child in map.values_mut() {
+                strip_numeric_bounds(child);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for child in items {
+                strip_numeric_bounds(child);
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Generate WIT and Rust bindings from a parsed OpenAPI 3 document.
@@ -122,12 +160,18 @@ pub fn generate(
                 Some(allow) => op.tags.iter().find(|t| allow.iter().any(|a| a == *t)),
                 None => op.tags.first(),
             };
-            let Some(tag) = matched_tag else { continue };
 
             // Tags become interface names, so they must be valid WIT identifiers: a tag
             // like `Export` or `Lists` would otherwise emit `interface export`/`list`
             // (reserved words) or an empty name.
-            let iface_name = sanitize_wit_name(tag);
+            let iface_name = match matched_tag {
+                Some(tag) => sanitize_wit_name(tag),
+                // An untagged operation has no tag to group under. With an explicit tag
+                // allowlist the caller asked to filter, so it stays excluded; otherwise group
+                // it by path segment so it still generates (e.g. `/v1/charges` -> `charges`).
+                None if tags.is_some() => continue,
+                None => interface_name_from_path(path, &spec.info.title),
+            };
             let iface = by_iface
                 .entry(iface_name.clone())
                 .or_insert_with(|| InterfaceModel::new(iface_name.clone()));
@@ -206,6 +250,41 @@ pub fn generate(
     })
 }
 
+/// Derive an interface name for an untagged operation from its request path: the first path
+/// segment that is a real resource — not a version marker (`v1`, `v2.1`, ...), a `{template}`
+/// parameter, or a `#`-fragment pseudo-path (AWS-style `/#X-Amz-Target=...` RPC routes) —
+/// matching the convention that `/v1/charges` groups under `charges`. Falls back to the
+/// sanitized API title, then `api`, when the path offers no usable segment (e.g. `/`, an
+/// all-version/template path, or a fragment route).
+fn interface_name_from_path(path: &str, title: &str) -> String {
+    for segment in path.split('/') {
+        let segment = segment.trim();
+        if segment.is_empty()
+            || segment.starts_with('{')
+            || segment.starts_with('#')
+            || is_version_segment(segment)
+        {
+            continue;
+        }
+        return sanitize_wit_name(segment);
+    }
+    let title = title.trim();
+    if title.is_empty() {
+        "api".to_string()
+    } else {
+        sanitize_wit_name(title)
+    }
+}
+
+/// Whether a path segment is a version marker like `v1`, `v2`, or `v1.2`. Such segments make
+/// poor interface names, so untagged grouping skips them in favor of the following segment.
+fn is_version_segment(segment: &str) -> bool {
+    match segment.strip_prefix(['v', 'V']) {
+        Some(rest) => !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit() || c == '.'),
+        None => false,
+    }
+}
+
 /// Emit the generated `bindgen` world: import the `wasi:http` outgoing-request surface and
 /// the `wasmcloud:secrets` store/reveal interfaces the runtime uses, and export every
 /// generated interface.
@@ -271,6 +350,72 @@ pub fn rewrite_world_exports(src: &str, interfaces: &[String]) -> String {
         return prefix;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{interface_name_from_path, is_version_segment, strip_numeric_bounds};
+
+    #[test]
+    fn strips_only_number_valued_numeric_keywords() {
+        let mut doc: serde_json::Value = serde_json::from_str(
+            r#"{
+              "outer": {
+                "type": "integer",
+                "maximum": 18446744073709552000,
+                "minimum": 0,
+                "multipleOf": 2,
+                "properties": { "maximum": { "type": "number" } }
+              }
+            }"#,
+        )
+        .unwrap();
+        strip_numeric_bounds(&mut doc);
+        // Number-valued bounds are removed (including the out-of-range `maximum`)...
+        assert!(doc.pointer("/outer/maximum").is_none());
+        assert!(doc.pointer("/outer/minimum").is_none());
+        assert!(doc.pointer("/outer/multipleOf").is_none());
+        // ...but a schema *property* literally named `maximum` (object value) is preserved.
+        assert!(doc.pointer("/outer/properties/maximum").is_some());
+        assert!(doc.pointer("/outer/type").is_some());
+    }
+
+    #[test]
+    fn recognizes_version_segments() {
+        assert!(is_version_segment("v1"));
+        assert!(is_version_segment("v2"));
+        assert!(is_version_segment("v1.2"));
+        assert!(!is_version_segment("version"));
+        assert!(!is_version_segment("v"));
+        assert!(!is_version_segment("v1beta"));
+        assert!(!is_version_segment("charges"));
+    }
+
+    #[test]
+    fn path_grouping_skips_version_and_template_segments() {
+        assert_eq!(interface_name_from_path("/v1/charges", "Demo"), "charges");
+        assert_eq!(
+            interface_name_from_path("/v1/charges/{id}", "Demo"),
+            "charges"
+        );
+        assert_eq!(
+            interface_name_from_path("/customers/{id}", "Demo"),
+            "customers"
+        );
+    }
+
+    #[test]
+    fn path_grouping_falls_back_to_title_then_api() {
+        // Path made only of a template parameter -> fall back to the sanitized title.
+        assert_eq!(interface_name_from_path("/{id}", "Demo API"), "demo-api");
+        // AWS-style `#`-fragment RPC route -> no usable segment -> title.
+        assert_eq!(
+            interface_name_from_path("/#X-Amz-Target=Hub.DoThing", "AWS Migration Hub"),
+            "aws-migration-hub"
+        );
+        // Root path with an empty title -> the `api` constant.
+        assert_eq!(interface_name_from_path("/", ""), "api");
+    }
 }
 
 // The component bindings require `unsafe` and other lints that are denied across the rest

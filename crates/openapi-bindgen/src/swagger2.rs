@@ -119,8 +119,8 @@ pub(crate) fn convert(doc: &mut Value) -> Result<()> {
 
     // Convert every path item and its operations.
     if let Some(paths) = obj.get_mut("paths").and_then(Value::as_object_mut) {
-        for (path, item) in paths.iter_mut() {
-            convert_path_item(path, item);
+        for (_path, item) in paths.iter_mut() {
+            convert_path_item(item);
         }
     }
 
@@ -132,7 +132,7 @@ pub(crate) fn convert(doc: &mut Value) -> Result<()> {
 }
 
 /// Convert a single Path Item Object: its shared parameters and each operation.
-fn convert_path_item(path: &str, item: &mut Value) {
+fn convert_path_item(item: &mut Value) {
     let Some(obj) = item.as_object_mut() else {
         return;
     };
@@ -158,34 +158,20 @@ fn convert_path_item(path: &str, item: &mut Value) {
 
     for &method in HTTP_METHODS {
         if let Some(op) = obj.get_mut(method) {
-            convert_operation(method, path, op);
+            convert_operation(op);
         }
     }
 }
 
 /// Convert a single Operation Object: split its parameters into v3 parameters plus a
 /// synthesized `requestBody`, and normalize its responses.
-fn convert_operation(method: &str, path: &str, op: &mut Value) {
+fn convert_operation(op: &mut Value) {
     let Some(obj) = op.as_object_mut() else {
         return;
     };
 
     obj.remove("consumes");
     obj.remove("produces");
-
-    // `operationId` is optional in OpenAPI, but the generator requires one to name each
-    // function. Synthesize a deterministic id from the method and path (unique per document)
-    // when it is absent so such operations generate instead of being dropped.
-    if obj
-        .get("operationId")
-        .and_then(Value::as_str)
-        .is_none_or(str::is_empty)
-    {
-        obj.insert(
-            "operationId".into(),
-            Value::String(synthesize_operation_id(method, path)),
-        );
-    }
 
     if let Some(Value::Array(arr)) = obj.remove("parameters") {
         let mut kept = Vec::with_capacity(arr.len());
@@ -267,22 +253,6 @@ fn convert_operation(method: &str, path: &str, op: &mut Value) {
             convert_response(resp);
         }
     }
-}
-
-/// Synthesize a deterministic `operationId` for an operation that lacks one, derived from its
-/// HTTP method and path. The method+path pair is unique within a document, so the result is
-/// collision-free; the generator kebab-cases it downstream (e.g. `get /pets/{id}` becomes
-/// `get-pets-id`).
-fn synthesize_operation_id(method: &str, path: &str) -> String {
-    let mut id = String::from(method);
-    for segment in path.split('/') {
-        let segment = segment.trim_matches(|c| c == '{' || c == '}');
-        if !segment.is_empty() {
-            id.push(' ');
-            id.push_str(segment);
-        }
-    }
-    id
 }
 
 /// Convert a single non-body parameter in place, nesting its inline type fields under a
@@ -636,26 +606,6 @@ mod tests {
         assert!(
             out.pointer("/components/schemas/Pet/discriminator")
                 .is_none()
-        );
-    }
-
-    #[test]
-    fn synthesizes_missing_operation_id_from_method_and_path() {
-        let out = convert_value(json!({
-            "swagger": "2.0",
-            "paths": {
-                "/pets/{id}": {
-                    "get": {
-                        "tags": ["pets"],
-                        "responses": { "200": { "description": "ok" } },
-                    },
-                },
-            },
-        }));
-        assert_eq!(
-            out.pointer("/paths/~1pets~1{id}/get/operationId")
-                .and_then(Value::as_str),
-            Some("get pets id"),
         );
     }
 

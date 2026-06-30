@@ -48,6 +48,23 @@ pub(crate) fn sanitize_wit_name(s: &str) -> String {
     }
 }
 
+/// Synthesize a deterministic `operationId` for an operation that lacks one, derived from its
+/// HTTP method and path. `operationId` is optional in OpenAPI, but the generator needs one to
+/// name each function; the method+path pair is unique within a document, so the result is
+/// collision-free. The output is kebab-cased downstream (e.g. `get /pets/{id}` becomes
+/// `get-pets-id`).
+pub(crate) fn synthesize_operation_id(method: &str, path: &str) -> String {
+    let mut id = String::from(method);
+    for segment in path.split('/') {
+        let segment = segment.trim_matches(|c| c == '{' || c == '}');
+        if !segment.is_empty() {
+            id.push(' ');
+            id.push_str(segment);
+        }
+    }
+    id
+}
+
 /// Convert a kebab-case WIT field name to the Rust identifier wit-bindgen generates.
 pub(crate) fn wit_field_to_rust_ident(kebab: &str) -> String {
     // wit-bindgen converts kebab -> snake; rust reserved words get `r#` prefix.
