@@ -1,10 +1,12 @@
 //! Convert OpenAPI schema definitions to WebAssembly Components.
 //!
-//! Reads an OpenAPI 3 document and produces:
+//! Reads an OpenAPI 2 (Swagger) or 3 document and produces:
 //! - WIT source: one interface per tag, with per-operation parameter records
 //! - Rust source: `Guest` trait impls plus manual `*_to_json` / `*_to_str` helpers
 //!
-//! The entry point is [`generate`], which takes a parsed [`OpenAPI`] document and a
+//! [`parse_openapi`] (and [`from_json_value`]) read a document, transparently normalizing
+//! Swagger 2.0 into the OpenAPI 3 model so the rest of the pipeline only ever sees v3. The
+//! entry point is [`generate`], which takes a parsed [`OpenAPI`] document and a
 //! [`PackageName`] and returns the generated [`Generated::wit`] and [`Generated::rust`]
 //! sources. [`rewrite_world_exports`] updates the `export` list of a WIT world so it
 //! matches the generated interfaces.
@@ -16,10 +18,12 @@
 //! # Examples
 //!
 //! ```no_run
-//! use openapi_bindgen::{PackageName, generate};
+//! use openapi_bindgen::{PackageName, generate, parse_openapi};
 //!
 //! # fn main() -> anyhow::Result<()> {
-//! let spec: openapiv3::OpenAPI = serde_json::from_slice(&std::fs::read("openapi.json")?)?;
+//! let json = std::fs::read_to_string("openapi.json")?;
+//! // Accepts OpenAPI 2 (Swagger) or 3; v2 is normalized to v3 internally.
+//! let spec = parse_openapi(&json)?;
 //! let package = PackageName::parse("incidentio:api@0.1.0")?;
 //! let generated = generate(&spec, &package, None)?;
 //! std::fs::write("api.wit", &generated.wit)?;
@@ -41,6 +45,7 @@ mod package_name;
 mod record_model;
 mod rust_codegen;
 mod schema_ctx;
+mod swagger2;
 mod wit_type;
 
 pub use generated::Generated;
@@ -55,6 +60,30 @@ use crate::interface_model::InterfaceModel;
 use crate::naming::sanitize_wit_name;
 use crate::rust_codegen::emit_rust;
 use crate::schema_ctx::SchemaCtx;
+
+/// Parse an OpenAPI document from a JSON string, accepting either OpenAPI 2 (Swagger) or
+/// OpenAPI 3.
+///
+/// Swagger 2.0 documents are detected by their `swagger` field and normalized into the
+/// OpenAPI 3 model before being returned, so callers only ever deal with [`OpenAPI`].
+pub fn parse_openapi(spec_json: &str) -> Result<OpenAPI> {
+    let doc: serde_json::Value =
+        serde_json::from_str(spec_json).context("failed to parse OpenAPI document as JSON")?;
+    from_json_value(doc)
+}
+
+/// Build an [`OpenAPI`] document from an already-parsed JSON [`Value`](serde_json::Value),
+/// accepting either OpenAPI 2 (Swagger) or OpenAPI 3.
+///
+/// This is the value-level counterpart to [`parse_openapi`]; use it when the document was
+/// read from a non-JSON source (for example YAML deserialized into a `serde_json::Value`).
+/// Swagger 2.0 documents are normalized into the OpenAPI 3 model in place.
+pub fn from_json_value(mut doc: serde_json::Value) -> Result<OpenAPI> {
+    if swagger2::is_v2(&doc) {
+        swagger2::convert(&mut doc).context("failed to normalize Swagger 2.0 document")?;
+    }
+    serde_json::from_value(doc).context("failed to parse OpenAPI document")
+}
 
 /// Generate WIT and Rust bindings from a parsed OpenAPI 3 document.
 ///

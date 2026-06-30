@@ -60,8 +60,8 @@ impl wit::Guest for Component {
         target_package: wit::PackageName,
         tags: Option<Vec<String>>,
     ) -> Result<wit::Generated, wit::Error> {
-        let spec: openapiv3::OpenAPI = serde_json::from_str(&spec_json)
-            .map_err(|err| wit::Error::InvalidDocument(err.to_string()))?;
+        let spec = crate::parse_openapi(&spec_json)
+            .map_err(|err| wit::Error::InvalidDocument(format!("{err:#}")))?;
         let package = crate::PackageName::from(target_package);
         crate::generate(&spec, &package, tags.as_deref())
             .map(Into::into)

@@ -1,9 +1,9 @@
 //! Throwaway dev helper: run the `openapi-bindgen` library natively.
 //!
-//! Reads an OpenAPI 3 document, generates WIT + Rust bindings, and writes them to an
-//! output directory. This deliberately skips the WebAssembly component path and calls the
-//! library's `generate` directly — we're cheating to iterate quickly. It's temporary and
-//! will be deleted once the component workflow is wired up.
+//! Reads an OpenAPI 2 (Swagger) or 3 document, generates WIT + Rust bindings, and writes
+//! them to an output directory. This deliberately skips the WebAssembly component path and
+//! calls the library's `generate` directly — we're cheating to iterate quickly. It's
+//! temporary and will be deleted once the component workflow is wired up.
 //!
 //! ```sh
 //! cargo run --example run -- <openapi-path> <out-dir> <package>
@@ -14,7 +14,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use openapi_bindgen::{PackageName, generate};
+use openapi_bindgen::{PackageName, from_json_value, generate};
 use openapiv3::OpenAPI;
 
 fn main() -> Result<()> {
@@ -49,18 +49,19 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Read and parse an OpenAPI document, choosing JSON or YAML by file extension.
+/// Read and parse an OpenAPI document, choosing JSON or YAML by file extension. Accepts
+/// OpenAPI 2 (Swagger) or 3; v2 documents are normalized to v3 by `from_json_value`.
 fn load_spec(path: &str) -> Result<OpenAPI> {
     let bytes = std::fs::read(path).with_context(|| format!("failed to read `{path}`"))?;
     let is_json = Path::new(path)
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
-    let spec = if is_json {
+    let doc: serde_json::Value = if is_json {
         serde_json::from_slice(&bytes)
             .with_context(|| format!("failed to parse `{path}` as JSON"))?
     } else {
         serde_yaml::from_slice(&bytes)
             .with_context(|| format!("failed to parse `{path}` as YAML"))?
     };
-    Ok(spec)
+    from_json_value(doc).with_context(|| format!("failed to load OpenAPI document `{path}`"))
 }

@@ -37,7 +37,8 @@ interface generator {
     /// Parse a `namespace:name[@version]` identifier such as `incidentio:api@0.1.0`.
     parse-package: func(raw: string) -> result<package-name, error>;
 
-    /// Generate bindings from an OpenAPI 3 document supplied as a JSON string.
+    /// Generate bindings from an OpenAPI 2 (Swagger) or 3 document supplied as a JSON
+    /// string. Swagger 2.0 documents are normalized to the OpenAPI 3 model internally.
     ///
     /// Operations are grouped into one interface per tag. When `tags` is set, only
     /// operations carrying one of the listed tags are emitted; otherwise every operation

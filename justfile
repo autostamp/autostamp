@@ -12,11 +12,12 @@ build:
     @echo "component: target/wasm32-wasip2/release/openapi_bindgen.wasm"
 
 # `gen` regenerates bindings for a curated ~top-100 set of API providers.
-# Picks one representative OpenAPI 3 spec per provider (the first `openapi.yaml`
-# in sorted order) and writes WIT + Rust bindings to `components/<name>`.
-# Providers that ship only Swagger 2.0 (`swagger.yaml`) or are absent from the
-# vendored corpus are skipped; specs the generator can't yet handle are reported
-# and skipped without aborting the run. A summary is printed at the end.
+# Picks one representative spec per provider, preferring an OpenAPI 3 document
+# (`openapi.yaml`/`openapi.json`) and falling back to Swagger 2.0
+# (`swagger.yaml`/`swagger.json`); Swagger 2.0 is normalized to OpenAPI 3
+# internally. Providers absent from the vendored corpus are skipped, as are
+# specs the generator can't yet handle (reported and skipped without aborting
+# the run). A summary is printed at the end.
 
 # Generate bindings for a curated set of ~top-100 API providers.
 gen:
@@ -53,9 +54,12 @@ gen:
     ok=0; fail=0; skip=0
     for provider in "${providers[@]}"; do
         spec=$(find "vendor/schemas/APIs/$provider" \( -name openapi.yaml -o -name openapi.json \) 2>/dev/null | sort | head -n1)
+        if [[ -z "$spec" ]]; then
+            spec=$(find "vendor/schemas/APIs/$provider" \( -name swagger.yaml -o -name swagger.json \) 2>/dev/null | sort | head -n1)
+        fi
         name="${provider%%.*}"
         if [[ -z "$spec" ]]; then
-            printf 'skip  %-24s no OpenAPI 3 spec\n' "$provider"
+            printf 'skip  %-24s no OpenAPI spec\n' "$provider"
             skip=$((skip + 1))
             continue
         fi
