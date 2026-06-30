@@ -236,3 +236,74 @@ fn emits_base_url_and_auth_tables() {
     assert!(rust.contains(r#"path_template: "/widgets/{widget_id}""#));
     assert!(rust.contains("location: FieldLocation::Header"));
 }
+
+/// An OpenAPI 3 document where a security credential (`secret`, an apiKey header) is *also*
+/// declared as a redundant request-body property — the Plaid pattern. A second body field
+/// (`amount`) is a legitimate, non-credential input that must survive pruning.
+const DEDUP_SPEC: &str = r#"{
+  "openapi": "3.0.0",
+  "info": { "title": "pay", "version": "1.0.0" },
+  "servers": [{ "url": "https://api.pay.test" }],
+  "components": {
+    "securitySchemes": {
+      "secret": { "type": "apiKey", "in": "header", "name": "X-Secret" }
+    }
+  },
+  "security": [{ "secret": [] }],
+  "paths": {
+    "/charge": {
+      "post": {
+        "tags": ["billing"],
+        "operationId": "createCharge",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "amount": { "type": "integer", "format": "int64" },
+                  "secret": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}"#;
+
+#[test]
+fn prunes_request_fields_that_duplicate_injected_credentials() {
+    let spec = parse_openapi(DEDUP_SPEC).unwrap();
+    let package = PackageName::parse("pay:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The params record keeps the real input but drops the body field that merely duplicates
+    // the injected `secret` credential.
+    let wit = &generated.wit;
+    let start = wit
+        .find("record create-charge-params")
+        .expect("params record present");
+    let record = &wit[start..start + wit[start..].find('}').expect("record closes")];
+    assert!(record.contains("amount"), "non-credential field retained");
+    assert!(
+        !record.contains("secret"),
+        "duplicated credential field pruned from params record:\n{record}"
+    );
+
+    // The credential is still injected centrally: the OpSpec carries the auth table even
+    // though the body field is gone.
+    assert!(
+        generated.rust.contains(
+            r#"AuthApply { secret_key: "secret", kind: AuthKind::ApiKeyHeader("X-Secret") }"#
+        ),
+        "auth table retained after pruning"
+    );
+
+    // The now-orphaned credential field leaves no dangling record behind.
+    assert!(generated.wit.contains("amount"));
+}

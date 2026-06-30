@@ -38,4 +38,22 @@ that operation. When an operation lists several alternative requirements (OR sem
 first is used. OAuth2/OIDC token flows are not run — the host supplies a pre-acquired access
 token as a bearer secret.
 
+## Credential deduplication
+
+Some documents declare a credential **twice**: once as a `securityScheme` and again as a
+redundant request property (body field, query, or header) on many operations. The Plaid API,
+for instance, declares `clientId` and `secret` as `apiKey` headers *and* repeats them as
+optional body properties on nearly every request.
+
+Because the runtime already injects those credentials, carrying them in operation arguments
+too would force every caller to supply a secret the host provides. The generator therefore
+**prunes request fields that duplicate an injected credential**, on by default. A non-path
+field is dropped when its name matches the security scheme's name or, for `apiKey` schemes,
+the credential's wire name (compared in `snake_case`). The operation's auth table is
+unaffected — the credential is still injected centrally.
+
+This is a name-based heuristic: a legitimate request field that happens to share a name with
+an active security scheme would also be pruned. Path parameters are structural and never
+pruned.
+
 [secrets]: https://github.com/wasmCloud/wasmCloud/tree/main/wit/secrets

@@ -20,7 +20,7 @@ use crate::operation_model::OperationModel;
 use crate::package_name::PackageName;
 use crate::record_model::RecordModel;
 use crate::schema_ctx::SchemaCtx;
-use crate::security::AuthApply;
+use crate::security::{AuthApply, AuthKind};
 use crate::wit_type::WitType;
 
 /// Borrowed `(field-name, field-schema)` entries from an object/`any` schema.
@@ -475,6 +475,13 @@ impl InterfaceModel {
 
         let params_record = sanitize_wit_name(&format!("{op_kebab}-params"));
 
+        // Drop request fields that merely duplicate a credential we already inject centrally
+        // for this operation. Some APIs (e.g. Plaid) declare a credential both as a security
+        // scheme *and* as a redundant request-body/query/header property; carrying both would
+        // force every caller to pass a secret the runtime already supplies. Path fields are
+        // structural and never pruned.
+        fields.retain(|f| !is_injected_credential(f, &auth));
+
         self.operations.push(OperationModel {
             op_kebab,
             op_snake,
@@ -488,24 +495,63 @@ impl InterfaceModel {
         Ok(())
     }
 
-    /// Drop records that nothing references, so request-body records whose fields were
-    /// inlined into a params record don't linger as dead WIT types. A record is kept when
-    /// any other record's field or any operation's field names it. Pruning only removes
-    /// records absent from the reference set, so it can never create a dangling reference.
+    /// Drop records that no operation can reach, so request-body records whose fields were
+    /// inlined into a params record — and any types reachable only through other dead records —
+    /// don't linger as dead WIT. Records exist solely to support operation params/bodies, so
+    /// the live set is everything reachable from an operation's fields by following
+    /// record→record edges to a fixpoint. Anything outside that set is unreferenced and safe to
+    /// remove; pruning can never create a dangling reference.
     pub(crate) fn prune_unused_records(&mut self) {
-        let mut referenced: BTreeSet<String> = BTreeSet::new();
-        for r in &self.records {
-            for f in &r.fields {
-                collect_named(&f.ty, &mut referenced);
+        let mut reachable: BTreeSet<String> = BTreeSet::new();
+        let mut worklist: Vec<String> = Vec::new();
+        let mark = |ty: &WitType, reachable: &mut BTreeSet<String>, work: &mut Vec<String>| {
+            let mut names = BTreeSet::new();
+            collect_named(ty, &mut names);
+            for n in names {
+                if reachable.insert(n.clone()) {
+                    work.push(n);
+                }
             }
-        }
+        };
         for op in &self.operations {
             for f in &op.fields {
-                collect_named(&f.ty, &mut referenced);
+                mark(&f.ty, &mut reachable, &mut worklist);
             }
         }
-        self.records.retain(|r| referenced.contains(&r.name_kebab));
+        while let Some(name) = worklist.pop() {
+            if let Some(rec) = self.records.iter().find(|r| r.name_kebab == name).cloned() {
+                for f in &rec.fields {
+                    mark(&f.ty, &mut reachable, &mut worklist);
+                }
+            }
+        }
+        self.records.retain(|r| reachable.contains(&r.name_kebab));
     }
+}
+
+/// Whether `field` duplicates a security credential the runtime injects for this operation.
+///
+/// Matches a non-`Path` field whose snake-cased name equals either the security scheme's name
+/// (the key the host provisions the secret under) or, for `apiKey` schemes, the credential's
+/// wire name. This is a name-based heuristic: a legitimate request field that happens to share
+/// a name with an active security scheme would also be pruned. That trade-off is intentional —
+/// the dedup pass is on by default so generated operations stay free of credentials the host
+/// already supplies. `Path` fields are structural routing segments and are never pruned.
+fn is_injected_credential(field: &Field, auth: &[AuthApply]) -> bool {
+    if field.location == Location::Path {
+        return false;
+    }
+    auth.iter().any(|a| {
+        if field.name_snake == a.secret_key.to_snake_case() {
+            return true;
+        }
+        match &a.kind {
+            AuthKind::ApiKeyHeader { name }
+            | AuthKind::ApiKeyQuery { name }
+            | AuthKind::ApiKeyCookie { name } => field.name_snake == name.to_snake_case(),
+            AuthKind::Bearer | AuthKind::Basic => false,
+        }
+    })
 }
 
 // ---------------------------------------------------------------------------
