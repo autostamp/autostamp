@@ -47,12 +47,12 @@ pub use generated::Generated;
 pub use package_name::PackageName;
 
 use anyhow::{Context, Result, bail};
-use heck::ToKebabCase;
 use indexmap::IndexMap;
 use openapiv3::{OpenAPI, ReferenceOr};
 use wit_parser::Resolve;
 
 use crate::interface_model::InterfaceModel;
+use crate::naming::sanitize_wit_name;
 use crate::rust_codegen::emit_rust;
 use crate::schema_ctx::SchemaCtx;
 
@@ -89,7 +89,10 @@ pub fn generate(
             };
             let Some(tag) = matched_tag else { continue };
 
-            let iface_name = tag.to_kebab_case();
+            // Tags become interface names, so they must be valid WIT identifiers: a tag
+            // like `Export` or `Lists` would otherwise emit `interface export`/`list`
+            // (reserved words) or an empty name.
+            let iface_name = sanitize_wit_name(tag);
             let iface = by_iface
                 .entry(iface_name.clone())
                 .or_insert_with(|| InterfaceModel::new(iface_name.clone()));
@@ -97,12 +100,18 @@ pub fn generate(
         }
     }
 
-    let ifaces: Vec<InterfaceModel> = by_iface.into_values().collect();
+    let mut ifaces: Vec<InterfaceModel> = by_iface.into_values().collect();
 
     if ifaces.is_empty() {
         bail!(
             "no interfaces generated: the document has no tagged operations to group into interfaces"
         );
+    }
+
+    // Drop request-body records whose fields were inlined into params records and which
+    // nothing else references, so they don't surface as dead WIT types.
+    for iface in &mut ifaces {
+        iface.prune_unused_records();
     }
 
     let mut wit = String::new();

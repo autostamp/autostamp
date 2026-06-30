@@ -70,7 +70,7 @@ impl InterfaceModel {
         if let ReferenceOr::Reference { reference } = schema_ref
             && let Some(simple_name) = reference.strip_prefix("#/components/schemas/")
         {
-            let record_name = simple_name.to_kebab_case();
+            let record_name = sanitize_wit_name(simple_name);
             // Cycle: break by degrading to opaque string.
             if self.emitting.contains(&record_name) {
                 return Ok(WitType::String);
@@ -97,7 +97,7 @@ impl InterfaceModel {
         if let ReferenceOr::Reference { reference } = schema_ref
             && let Some(simple_name) = reference.strip_prefix("#/components/schemas/")
         {
-            let record_name = simple_name.to_kebab_case();
+            let record_name = sanitize_wit_name(simple_name);
             if self.emitting.contains(&record_name) {
                 return Ok(WitType::String);
             }
@@ -126,19 +126,22 @@ impl InterfaceModel {
                     if s.enumeration.is_empty() {
                         Ok(WitType::String)
                     } else {
-                        let cases: Vec<(String, String)> = s
-                            .enumeration
-                            .iter()
-                            .flatten()
-                            .map(|v| {
-                                let kebab = if v.is_empty() {
-                                    "empty".to_string()
-                                } else {
-                                    v.to_kebab_case()
-                                };
-                                (sanitize_wit_name(&kebab), v.clone())
-                            })
-                            .collect();
+                        // Enum case names must be valid, non-empty, and unique within the
+                        // enum. A value like `/` kebab-collapses to empty and distinct
+                        // values can collide after sanitizing, so route each through
+                        // `sanitize_wit_name` (non-empty) and `unique_name` (deduped).
+                        let mut cases: Vec<(String, String)> = Vec::new();
+                        let mut seen: BTreeSet<String> = BTreeSet::new();
+                        for v in s.enumeration.iter().flatten() {
+                            let base = if v.is_empty() {
+                                "empty".to_string()
+                            } else {
+                                sanitize_wit_name(&v.to_kebab_case())
+                            };
+                            let name = unique_name(&base, |n| seen.contains(n));
+                            seen.insert(name.clone());
+                            cases.push((name, v.clone()));
+                        }
                         // Dedupe by kebab case set
                         if let Some(existing) = self
                             .enums
@@ -445,9 +448,10 @@ impl InterfaceModel {
                                 nf.location = Location::Body;
                                 fields.push(nf);
                             }
-                            // We inlined the body record's fields. Remove the body record
-                            // from emission since we don't need it as a separate WIT type.
-                            self.records.retain(|r| r.name_kebab != record_name);
+                            // The body record's fields are inlined into the params record.
+                            // Don't drop it here: another record may still reference it
+                            // (e.g. a nested `$ref`). `prune_unused_records` removes it
+                            // later only if nothing references it.
                         }
                     }
                     other => {
@@ -479,6 +483,25 @@ impl InterfaceModel {
             fields,
         });
         Ok(())
+    }
+
+    /// Drop records that nothing references, so request-body records whose fields were
+    /// inlined into a params record don't linger as dead WIT types. A record is kept when
+    /// any other record's field or any operation's field names it. Pruning only removes
+    /// records absent from the reference set, so it can never create a dangling reference.
+    pub(crate) fn prune_unused_records(&mut self) {
+        let mut referenced: BTreeSet<String> = BTreeSet::new();
+        for r in &self.records {
+            for f in &r.fields {
+                collect_named(&f.ty, &mut referenced);
+            }
+        }
+        for op in &self.operations {
+            for f in &op.fields {
+                collect_named(&f.ty, &mut referenced);
+            }
+        }
+        self.records.retain(|r| referenced.contains(&r.name_kebab));
     }
 }
 
@@ -561,5 +584,16 @@ fn ref_or_to_box(r: &ReferenceOr<Schema>) -> ReferenceOr<Box<Schema>> {
             reference: reference.clone(),
         },
         ReferenceOr::Item(s) => ReferenceOr::Item(Box::new(s.clone())),
+    }
+}
+
+/// Collect the names of every `WitType::Named` reachable from `ty` into `out`.
+fn collect_named(ty: &WitType, out: &mut BTreeSet<String>) {
+    match ty {
+        WitType::Named(name) => {
+            out.insert(name.clone());
+        }
+        WitType::Option(inner) | WitType::List(inner) => collect_named(inner, out),
+        _ => {}
     }
 }

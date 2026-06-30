@@ -9,7 +9,9 @@ pub(crate) fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
         return candidate;
     }
     for i in 2.. {
-        let attempt = format!("{candidate}-{i}");
+        // Re-sanitize so the numeric suffix doesn't introduce a bare-digit segment
+        // (`foo-2` is invalid WIT); sanitizing turns it into `foo-v2`.
+        let attempt = sanitize_wit_name(&format!("{candidate}-{i}"));
         if !taken(&attempt) {
             return attempt;
         }
@@ -35,6 +37,10 @@ pub(crate) fn sanitize_wit_name(s: &str) -> String {
         }
     }
     let k = segments.join("-");
+    // A WIT identifier can't be empty: when every segment was stripped (e.g. the source
+    // was `/`, punctuation, or already empty) fall back to a placeholder so callers always
+    // get a usable identifier. Callers that need uniqueness route this through `unique_name`.
+    let k = if k.is_empty() { "x".to_string() } else { k };
     if WIT_KEYWORDS.contains(&k.as_str()) {
         format!("{k}-op")
     } else {
