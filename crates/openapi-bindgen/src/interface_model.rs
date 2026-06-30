@@ -33,6 +33,9 @@ pub(crate) struct InterfaceModel {
     pub(crate) operations: Vec<OperationModel>,
     pub(crate) records: Vec<RecordModel>,
     pub(crate) enums: Vec<EnumModel>,
+    /// Count of request fields dropped by the duplicate-credential pruning heuristic, surfaced
+    /// in the generated README's diagnostics.
+    pub(crate) pruned_credential_fields: usize,
     /// Records currently being emitted (the recursion stack). A `$ref` to a
     /// record in this set is a cycle and gets degraded to `string`.
     emitting: BTreeSet<String>,
@@ -45,6 +48,7 @@ impl InterfaceModel {
             operations: vec![],
             records: vec![],
             enums: vec![],
+            pruned_credential_fields: 0,
             emitting: BTreeSet::new(),
         }
     }
@@ -480,7 +484,9 @@ impl InterfaceModel {
         // scheme *and* as a redundant request-body/query/header property; carrying both would
         // force every caller to pass a secret the runtime already supplies. Path fields are
         // structural and never pruned.
+        let before = fields.len();
         fields.retain(|f| !is_injected_credential(f, &auth));
+        self.pruned_credential_fields += before - fields.len();
 
         self.operations.push(OperationModel {
             op_kebab,

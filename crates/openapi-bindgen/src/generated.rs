@@ -12,6 +12,10 @@ pub struct Generated {
     /// The generated `wasm.toml` declaring the component's WIT interface dependencies
     /// (`wasi:http`, `wasmcloud:secrets`), resolved into `wit/deps/` at build time.
     pub wasm_toml: String,
+    /// The generated `README.md`: a title matching the component name plus a "Generator
+    /// Diagnostics" section recording the options and heuristics this component was generated
+    /// with.
+    pub readme: String,
     /// The kebab-case names of the generated interfaces, in emission order.
     ///
     /// Pass these to [`crate::rewrite_world_exports`] to update a WIT world's `export` list.

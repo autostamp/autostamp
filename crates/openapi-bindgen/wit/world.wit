@@ -23,6 +23,9 @@ interface generator {
         /// The generated `wasm.toml` declaring the component's WIT interface dependencies
         /// (`wasi:http`, `wasmcloud:secrets`).
         wasm-toml: string,
+        /// The generated `README.md`: a title matching the component name plus a "Generator
+        /// Diagnostics" section recording the options and heuristics used to generate it.
+        readme: string,
         /// The kebab-case names of the generated interfaces, in emission order.
         interfaces: list<string>,
     }

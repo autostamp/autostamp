@@ -307,3 +307,31 @@ fn prunes_request_fields_that_duplicate_injected_credentials() {
     // The now-orphaned credential field leaves no dangling record behind.
     assert!(generated.wit.contains("amount"));
 }
+
+#[test]
+fn generates_readme_with_generator_diagnostics() {
+    // The dedup spec prunes exactly one duplicated credential field, so the README's
+    // diagnostics table should report the prune heuristic as triggered.
+    let spec = parse_openapi(DEDUP_SPEC).unwrap();
+    let package = PackageName::parse("pay:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // Title matches the component name; the diagnostics section documents the options and
+    // heuristics this component was generated with.
+    assert!(generated.readme.starts_with("# api\n"));
+    assert!(generated.readme.contains("## Generator Diagnostics"));
+    assert!(generated.readme.contains("| Package | `pay:api@0.1.0` |"));
+    assert!(generated.readme.contains("| Tag filter | all tags |"));
+    assert!(generated.readme.contains(
+        "| Prune duplicate credential fields | enabled — **triggered**, 1 field pruned |"
+    ));
+
+    // A spec with nothing to prune reports the heuristic as not triggered.
+    let plain = parse_openapi(MINIMAL_SPEC).unwrap();
+    let plain_pkg = PackageName::parse("demo:things@0.1.0").unwrap();
+    let plain_readme = generate(&plain, &plain_pkg, None).unwrap().readme;
+    assert!(plain_readme.starts_with("# things\n"));
+    assert!(
+        plain_readme.contains("| Prune duplicate credential fields | enabled — not triggered |")
+    );
+}

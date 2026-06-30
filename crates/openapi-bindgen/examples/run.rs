@@ -36,6 +36,7 @@ fn main() -> Result<()> {
     let rust_path = out_dir.join(format!("{}.rs", package.name));
     let cargo_path = out_dir.join("Cargo.toml");
     let wasm_path = out_dir.join("wasm.toml");
+    let readme_path = out_dir.join("README.md");
     std::fs::write(&wit_path, &generated.wit)
         .with_context(|| format!("failed to write `{}`", wit_path.display()))?;
     std::fs::write(&rust_path, &generated.rust)
@@ -44,11 +45,14 @@ fn main() -> Result<()> {
         .with_context(|| format!("failed to write `{}`", cargo_path.display()))?;
     std::fs::write(&wasm_path, &generated.wasm_toml)
         .with_context(|| format!("failed to write `{}`", wasm_path.display()))?;
+    std::fs::write(&readme_path, &generated.readme)
+        .with_context(|| format!("failed to write `{}`", readme_path.display()))?;
 
     println!("wrote {}", wit_path.display());
     println!("wrote {}", rust_path.display());
     println!("wrote {}", cargo_path.display());
     println!("wrote {}", wasm_path.display());
+    println!("wrote {}", readme_path.display());
     println!("interfaces: {}", generated.interfaces.join(", "));
     Ok(())
 }

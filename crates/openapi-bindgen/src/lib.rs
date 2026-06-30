@@ -29,6 +29,7 @@
 //! std::fs::write("api.wit", &generated.wit)?;
 //! std::fs::write("api.rs", &generated.rust)?;
 //! std::fs::write("Cargo.toml", &generated.cargo_toml)?;
+//! std::fs::write("README.md", &generated.readme)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -42,6 +43,7 @@ mod manifest;
 mod naming;
 mod operation_model;
 mod package_name;
+mod readme;
 mod record_model;
 mod rust_codegen;
 mod schema_ctx;
@@ -187,11 +189,19 @@ pub fn generate(
     let cargo_toml = manifest::render(package);
     let wasm_toml = manifest::render_wasm_deps();
 
+    let diagnostics = readme::Diagnostics {
+        tag_filter: tags.map(<[String]>::to_vec),
+        operations: ifaces.iter().map(|i| i.operations.len()).sum(),
+        pruned_credential_fields: ifaces.iter().map(|i| i.pruned_credential_fields).sum(),
+    };
+    let readme = readme::render(package, &diagnostics);
+
     Ok(Generated {
         wit,
         rust,
         cargo_toml,
         wasm_toml,
+        readme,
         interfaces,
     })
 }

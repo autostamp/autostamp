@@ -44,6 +44,7 @@ impl From<crate::Generated> for wit::Generated {
             rust: value.rust,
             cargo_toml: value.cargo_toml,
             wasm_toml: value.wasm_toml,
+            readme: value.readme,
             interfaces: value.interfaces,
         }
     }
