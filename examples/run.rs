@@ -1,14 +1,25 @@
-//! Throwaway dev helper: run the `openapi-bindgen` library natively.
+//! Dev helper: run the `openapi-bindgen` library natively and write a buildable component crate.
 //!
-//! Reads an OpenAPI 2 (Swagger) or 3 document, generates WIT + Rust bindings, and writes
-//! them to an output directory. This deliberately skips the WebAssembly component path and
-//! calls the library's `generate` directly — we're cheating to iterate quickly. It's
-//! temporary and will be deleted once the component workflow is wired up.
+//! Reads an OpenAPI 2 (Swagger) or 3 document, generates the WIT + Rust bindings, and lays
+//! them out as a ready-to-build component crate in the output directory:
+//!
+//! ```text
+//! <out-dir>/
+//!   Cargo.toml
+//!   wasm.toml      # [package] publish metadata + explicit WIT interface deps
+//!   README.md
+//!   src/lib.rs     # generated Rust (wit-bindgen guest)
+//!   wit/world.wit  # generated WIT (deps resolved into wit/deps/ at build time)
+//! ```
+//!
+//! It calls the library's `generate` directly rather than driving the component, which is how
+//! `just gen` produces the `components/` tree; `just build-components` then resolves the WIT
+//! deps and compiles each crate for `wasm32-wasip2`.
 //!
 //! ```sh
 //! cargo run --example run -- <openapi-path> <out-dir> <package>
 //! # e.g.
-//! cargo run --example run -- vendor/schemas/APIs/svix.com/1.4/openapi.yaml out/svix svix:api@0.1.0
+//! cargo run --example run -- vendor/schemas/APIs/svix.com/1.4/openapi.yaml components/svix autostamp:svix@0.1.0
 //! ```
 
 use std::path::Path;
@@ -38,11 +49,15 @@ fn main() -> Result<()> {
     };
 
     let out_dir = Path::new(out_dir);
-    std::fs::create_dir_all(out_dir)
-        .with_context(|| format!("failed to create output dir `{}`", out_dir.display()))?;
+    let src_dir = out_dir.join("src");
+    let wit_dir = out_dir.join("wit");
+    std::fs::create_dir_all(&src_dir)
+        .with_context(|| format!("failed to create source dir `{}`", src_dir.display()))?;
+    std::fs::create_dir_all(&wit_dir)
+        .with_context(|| format!("failed to create wit dir `{}`", wit_dir.display()))?;
 
-    let wit_path = out_dir.join(format!("{}.wit", package.name));
-    let rust_path = out_dir.join(format!("{}.rs", package.name));
+    let wit_path = wit_dir.join("world.wit");
+    let rust_path = src_dir.join("lib.rs");
     let cargo_path = out_dir.join("Cargo.toml");
     let wasm_path = out_dir.join("wasm.toml");
     let readme_path = out_dir.join("README.md");

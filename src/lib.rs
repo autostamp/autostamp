@@ -52,6 +52,7 @@ mod schema_ctx;
 mod security;
 mod servers;
 mod swagger2;
+mod version;
 mod wit_type;
 
 pub use generated::Generated;
@@ -270,9 +271,16 @@ pub fn generate(
     wit.push_str(&emit_world(&interfaces));
 
     let cargo_toml = manifest::render(package);
-    let wasm_toml = manifest::render_wasm_deps();
+
+    // The publish version carries the document's `info.version` as SemVer build metadata
+    // (e.g. `0.1.0+2022-11-28`) so the published artifact records which schema revision it
+    // was generated from. The base version (and the WIT/`Cargo.toml` versions) stay clean.
+    let base_version = package.version.as_deref().unwrap_or("0.1.0");
+    let publish_version = version::publish_version(base_version, &spec.info.version);
+    let wasm_toml = manifest::render_wasm_manifest(package, &publish_version);
 
     let diagnostics = readme::Diagnostics {
+        published_version: publish_version,
         tag_filter: tags.map(<[String]>::to_vec),
         operations: ifaces.iter().map(|i| i.operations.len()).sum(),
         pruned_credential_fields: ifaces.iter().map(|i| i.pruned_credential_fields).sum(),

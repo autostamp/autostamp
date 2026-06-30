@@ -12,6 +12,9 @@ use crate::security::AuthApply;
 /// the README's "Generator Diagnostics" section (plus the authentication table above it).
 #[derive(Debug)]
 pub(crate) struct Diagnostics {
+    /// The full publish version written to `[package].version` in `wasm.toml`, including any
+    /// schema build metadata (e.g. `0.1.0+2022-11-28`).
+    pub(crate) published_version: String,
     /// The tag filter passed to [`crate::generate`], if any. `None` means every tag was emitted.
     pub(crate) tag_filter: Option<Vec<String>>,
     /// Total operations emitted across all interfaces.
@@ -66,10 +69,12 @@ pub(crate) fn render(package: &PackageName, diagnostics: &Diagnostics) -> String
         | Setting | Value |\n\
         | --- | --- |\n\
         | Package | `{package_id}` |\n\
+        | Published version | `{published_version}` |\n\
         | Tag filter | {tag_filter} |\n\
         | Operations generated | {operations} |\n\
         | Prune duplicate credential fields | {prune} |\n",
         operations = diagnostics.operations,
+        published_version = diagnostics.published_version,
     ));
 
     out
@@ -89,6 +94,7 @@ mod tests {
         let readme = render(
             &package(),
             &Diagnostics {
+                published_version: "0.1.0+2024-01-01".into(),
                 tag_filter: None,
                 operations: 199,
                 pruned_credential_fields: 197,
@@ -98,6 +104,7 @@ mod tests {
         assert!(readme.starts_with("# plaid\n"));
         assert!(readme.contains("## Generator Diagnostics"));
         assert!(readme.contains("| Package | `autostamp:plaid@0.1.0` |"));
+        assert!(readme.contains("| Published version | `0.1.0+2024-01-01` |"));
         assert!(readme.contains("| Tag filter | all tags |"));
         assert!(readme.contains("| Operations generated | 199 |"));
     }
@@ -107,6 +114,7 @@ mod tests {
         let readme = render(
             &package(),
             &Diagnostics {
+                published_version: "0.1.0".into(),
                 tag_filter: Some(vec!["billing".into()]),
                 operations: 3,
                 pruned_credential_fields: 2,
@@ -122,6 +130,7 @@ mod tests {
         let readme = render(
             &package(),
             &Diagnostics {
+                published_version: "0.1.0".into(),
                 tag_filter: None,
                 operations: 1,
                 pruned_credential_fields: 0,
@@ -136,6 +145,7 @@ mod tests {
         let readme = render(
             &package(),
             &Diagnostics {
+                published_version: "0.1.0".into(),
                 tag_filter: None,
                 operations: 1,
                 pruned_credential_fields: 0,
@@ -160,6 +170,7 @@ mod tests {
         let readme = render(
             &package(),
             &Diagnostics {
+                published_version: "0.1.0".into(),
                 tag_filter: None,
                 operations: 1,
                 pruned_credential_fields: 0,

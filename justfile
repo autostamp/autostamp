@@ -83,6 +83,74 @@ gen:
     done
     printf '\ngenerated %d, failed %d, skipped %d (of %d providers)\n' "$ok" "$fail" "$skip" "${#providers[@]}"
 
+# Compile generated components to wasm32-wasip2. Pass a name to build one (e.g.
+# `just build-components nasa`); artifacts land in components/<name>/build/<name>.wasm.
+build-components name="":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    command -v component >/dev/null 2>&1 || { echo "the 'component' CLI is required: cargo install --git https://github.com/yoshuawuyts/component-registry component"; exit 1; }
+    rustup target list --installed 2>/dev/null | grep -q wasm32-wasip2 || { echo "missing target: rustup target add wasm32-wasip2"; exit 1; }
+    # A shared target dir lets the common deps (wit-bindgen, serde_json, ...) compile once
+    # across all ~100 crates instead of once per crate.
+    export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target/components}"
+    ok=0; fail=0
+    for dir in components/*/; do
+        name="$(basename "$dir")"
+        [[ -n "{{name}}" && "$name" != "{{name}}" ]] && continue
+        [[ -f "$dir/wasm.toml" ]] || continue
+        artifact="${name//-/_}.wasm"
+        if (
+            cd "$dir" || exit 1
+            component install || exit 1
+            # wit-bindgen reads wit/deps/; `component install` vendors to vendor/wit/ — bridge them.
+            mkdir -p wit/deps
+            cp vendor/wit/*.wit wit/deps/ || exit 1
+            cargo build --quiet --target wasm32-wasip2 --release || exit 1
+            mkdir -p build
+            cp "$CARGO_TARGET_DIR/wasm32-wasip2/release/$artifact" "build/$name.wasm" || exit 1
+        ); then
+            printf 'ok    %-24s %sbuild/%s.wasm\n' "$name" "$dir" "$name"
+            ok=$((ok + 1))
+        else
+            printf 'FAIL  %-24s\n' "$name"
+            fail=$((fail + 1))
+        fi
+    done
+    printf '\nbuilt %d, failed %d\n' "$ok" "$fail"
+    [[ $fail -eq 0 ]]
+
+# Publish built components to ghcr.io/autostamp via the `component` CLI. Pass a name for
+# one; set `dry_run=1` to preview (`just publish-components "" 1`). Needs GHCR auth:
+# GHCR_TOKEN/GH_TOKEN_CLASSIC (classic PAT, write:packages) or a prior `docker login ghcr.io`.
+publish-components name="" dry_run="":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    command -v component >/dev/null 2>&1 || { echo "the 'component' CLI is required: cargo install --git https://github.com/yoshuawuyts/component-registry component"; exit 1; }
+    tok="${GHCR_TOKEN:-${GH_TOKEN_CLASSIC:-}}"
+    if [[ -n "$tok" ]]; then
+        echo "$tok" | docker login ghcr.io -u token --password-stdin >/dev/null 2>&1 || { echo "docker login ghcr.io failed"; exit 1; }
+    fi
+    flag=""; [[ -n "{{dry_run}}" ]] && flag="--dry-run"
+    ok=0; fail=0; skip=0
+    for dir in components/*/; do
+        name="$(basename "$dir")"
+        [[ -n "{{name}}" && "$name" != "{{name}}" ]] && continue
+        [[ -f "$dir/wasm.toml" ]] || continue
+        if [[ ! -f "$dir/build/$name.wasm" ]]; then
+            printf 'skip  %-24s no build/%s.wasm (run `just build-components %s` first)\n' "$name" "$name" "$name"
+            skip=$((skip + 1)); continue
+        fi
+        if component publish --manifest-path "$dir" $flag; then
+            printf 'ok    %-24s\n' "$name"
+            ok=$((ok + 1))
+        else
+            printf 'FAIL  %-24s\n' "$name"
+            fail=$((fail + 1))
+        fi
+    done
+    printf '\npublished %d, failed %d, skipped %d\n' "$ok" "$fail" "$skip"
+    [[ $fail -eq 0 ]]
+
 # Format-check, lint, and run the test suite.
 test:
     cargo fmt --all -- --check

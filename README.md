@@ -20,11 +20,70 @@ achieve with automation here. But those SDKs currently don't exist, and we belie
 
 ## Usage
 
-With the [component CLI](https://github.com/yoshuawuyts/component-registry) installed:
+Generate component crates for the curated provider set from the vendored schemas:
+
 ```sh
-# Generate an `acme:api` component from an OpenAPI schema
-$ component run autostamp:openapi acme.json build/acme acme:api
+just gen
 ```
+
+This writes one buildable crate per provider into `components/<name>/`:
+
+```text
+components/nasa/
+  Cargo.toml      # clean SemVer (0.1.0); builds a cdylib for wasm32-wasip2
+  wasm.toml       # [package] publish metadata + explicit WIT interface deps
+  README.md       # generated usage + diagnostics
+  src/lib.rs      # generated Rust (wit-bindgen guest)
+  wit/world.wit   # generated WIT world (deps resolved into wit/deps/ at build time)
+```
+
+To generate a single component directly (what `just gen` calls under the hood):
+
+```sh
+cargo run --example run -- <openapi-path> components/<name> autostamp:<name>@0.1.0
+```
+
+## Building and publishing
+
+Generated crates are compiled and published as OCI artifacts to `ghcr.io/autostamp/<name>`
+with the [`component` CLI](https://github.com/yoshuawuyts/component-registry). The flow is
+three `just` recipes — the same ones CI runs:
+
+```sh
+just gen                 # 1. generate components/<name>/ from the vendored schemas
+just build-components    # 2. compile each crate to components/<name>/build/<name>.wasm
+just publish-components  # 3. push each component to ghcr.io/autostamp
+```
+
+`build-components` resolves the WIT interface dependencies (`wasi:http`, `wasmcloud:secrets`)
+with `component install`, bridges the vendored WIT into `wit/deps/`, and builds for
+`wasm32-wasip2` with a shared target directory so the common crates compile once. Pass a
+provider name to act on one component (`just build-components nasa`); pass `dry_run=1` to
+preview a publish without pushing (`just publish-components nasa 1`).
+
+**Versioning.** Each component's published version is the base SemVer plus the OpenAPI
+document's `info.version` as SemVer build metadata — e.g. `0.1.0+1.0.0`. The base version
+stays on the WIT package decl and `Cargo.toml`; only `wasm.toml`'s `[package].version`
+carries the metadata, recording exactly which schema revision the bindings came from.
+
+**GHCR auth.** Publishing uses Docker credentials. Set `GHCR_TOKEN` (or `GH_TOKEN_CLASSIC`)
+to a **classic** PAT with `write:packages`, or run `docker login ghcr.io` first. CI uses a
+`GHCR_PAT` secret.
+
+### `component` CLI requirements and gaps
+
+- **OCI-tag build metadata (required).** `component publish` maps a `+` in the version onto
+  `_` in the OCI tag (`0.1.0+1.0.0` → tag `0.1.0_1.0.0`), keeping the full SemVer in the
+  `org.opencontainers.image.version` annotation — the same convention Helm uses. Install a
+  `component` build that includes this fix.
+- **`wit/deps` bridge.** `component install` vendors WIT to `vendor/wit/`, but wit-bindgen
+  reads `wit/deps/`; `build-components` copies between them. A native `wit/deps` output
+  would remove the step.
+- **Offline dependency resolution.** Short manifest keys (`"wasi:http@0.2.3" = "0.2.3"`)
+  need a running meta-registry; the generator emits explicit `{ registry, namespace,
+  package, version }` tables so `component install` resolves straight from GHCR.
+- **Ergonomics (nice-to-have).** No `[package]` scaffolding, no `component build` (we shell
+  out to cargo), and no batch/workspace publish (we loop in `just`).
 
 ## Known limitations
 

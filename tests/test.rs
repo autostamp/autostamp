@@ -280,9 +280,19 @@ fn emits_world_importing_http_and_secrets() {
     assert!(generated.wit.contains("import wasmcloud:secrets/reveal"));
     assert!(generated.wit.contains("export widgets;"));
 
-    // The wasm.toml declares the interface dependencies for the component build.
-    assert!(generated.wasm_toml.contains("wasi:http"));
-    assert!(generated.wasm_toml.contains("wasmcloud:secrets@1.0.0"));
+    // The wasm.toml carries a publishable [package] section plus explicit interface deps.
+    assert!(generated.wasm_toml.contains("[package]"));
+    assert!(
+        generated
+            .wasm_toml
+            .contains("registry = \"ghcr.io/widget/api\"")
+    );
+    assert!(generated.wasm_toml.contains(
+        "\"wasi:http\" = { registry = \"ghcr.io\", namespace = \"webassembly\", package = \"wasi/http\", version = \"0.2.3\" }"
+    ));
+    assert!(generated.wasm_toml.contains(
+        "\"wasmcloud:secrets\" = { registry = \"ghcr.io\", namespace = \"wasmcloud\", package = \"interfaces/wasmcloud/secrets\", version = \"1.0.0\" }"
+    ));
 }
 
 #[test]

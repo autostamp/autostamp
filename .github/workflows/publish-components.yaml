@@ -1,0 +1,68 @@
+name: Publish components
+
+# Build every generated component and publish it to ghcr.io/autostamp.
+#
+# Reuses the same `just` recipes as local development:
+#   just gen                 # generate components/<name>/ from the vendored schemas
+#   just build-components    # compile each crate to a wasm32-wasip2 component
+#   just publish-components  # push each component to ghcr.io/autostamp via the CLI
+#
+# Triggers on a version tag (the release path) or manually (with an optional dry run).
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview the publish plan without pushing to GHCR"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # The `component` CLI must include the OCI-tag fix that maps SemVer build metadata
+  # (`0.1.0+2026-01-14`) onto a valid tag (`0.1.0_2026-01-14`); install from a ref that has it.
+  COMPONENT_CLI_REF: main
+
+jobs:
+  publish:
+    name: Build and publish to ghcr.io/autostamp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Install the component CLI
+        run: cargo install --locked --git https://github.com/yoshuawuyts/component-registry --branch "${COMPONENT_CLI_REF}" component
+
+      - name: Fetch vendored OpenAPI schemas
+        run: just vendor-init
+
+      - name: Log in to ghcr.io
+        # A classic PAT with write:packages (fine-grained PATs frequently lack it).
+        # The username is ignored by GHCR when authenticating with a token.
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u token --password-stdin
+
+      - name: Generate component crates
+        run: just gen
+
+      - name: Build components
+        run: just build-components
+
+      - name: Publish components
+        run: just publish-components "" "${{ inputs.dry_run && '1' || '' }}"
