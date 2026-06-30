@@ -1,0 +1,4 @@
+[dependencies.components]
+
+[dependencies.interfaces]
+"wasmcloud:secrets@1.0.0" = "1.0.0"

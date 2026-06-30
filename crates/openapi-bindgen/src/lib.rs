@@ -24,6 +24,7 @@
 //! let generated = generate(&spec, &package, None)?;
 //! std::fs::write("api.wit", &generated.wit)?;
 //! std::fs::write("api.rs", &generated.rust)?;
+//! std::fs::write("Cargo.toml", &generated.cargo_toml)?;
 //! # Ok(())
 //! # }
 //! ```
@@ -33,6 +34,7 @@ mod field;
 mod generated;
 mod interface_model;
 mod location;
+mod manifest;
 mod naming;
 mod operation_model;
 mod package_name;
@@ -44,10 +46,11 @@ mod wit_type;
 pub use generated::Generated;
 pub use package_name::PackageName;
 
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use heck::ToKebabCase;
 use indexmap::IndexMap;
 use openapiv3::{OpenAPI, ReferenceOr};
+use wit_parser::Resolve;
 
 use crate::interface_model::InterfaceModel;
 use crate::rust_codegen::emit_rust;
@@ -96,6 +99,12 @@ pub fn generate(
 
     let ifaces: Vec<InterfaceModel> = by_iface.into_values().collect();
 
+    if ifaces.is_empty() {
+        bail!(
+            "no interfaces generated: the document has no tagged operations to group into interfaces"
+        );
+    }
+
     let mut wit = String::new();
     for (i, iface) in ifaces.iter().enumerate() {
         let body = iface.to_wit(package);
@@ -117,11 +126,29 @@ pub fn generate(
 
     let interfaces = ifaces.iter().map(|i| i.name_kebab.clone()).collect();
 
+    // Validate the assembled WIT as the final step of generation: a parse + resolve with
+    // `wit-parser` rejects malformed packages, duplicate or invalid identifiers, and
+    // dangling type references before we ever hand the source back to a caller.
+    validate_wit(&wit)?;
+
+    let cargo_toml = manifest::render(package);
+
     Ok(Generated {
         wit,
         rust,
+        cargo_toml,
         interfaces,
     })
+}
+
+/// Parse and resolve `wit` with `wit-parser`, returning an error if it is not a valid,
+/// self-contained WIT package.
+fn validate_wit(wit: &str) -> Result<()> {
+    let mut resolve = Resolve::new();
+    resolve
+        .push_str("generated.wit", wit)
+        .context("generated WIT failed validation")?;
+    Ok(())
 }
 
 /// Rewrite the `export` list of a WIT world, replacing any existing `export <iface>;`

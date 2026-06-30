@@ -18,6 +18,8 @@ interface generator {
         wit: string,
         /// The generated Rust source: `guest` impls plus `*-to-json` / `*-to-str` helpers.
         rust: string,
+        /// The generated `Cargo.toml` manifest for the component crate.
+        cargo-toml: string,
         /// The kebab-case names of the generated interfaces, in emission order.
         interfaces: list<string>,
     }

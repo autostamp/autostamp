@@ -63,7 +63,10 @@ gen:
             printf 'ok    %-24s components/%s\n' "$provider" "$name"
             ok=$((ok + 1))
         else
-            reason=$(printf '%s' "$msg" | grep -v 'note: run with' | sed '/^[[:space:]]*$/d' | tail -n1 | sed 's/^[[:space:]]*//')
+            reason=$(printf '%s' "$msg" | awk '/^Caused by:/ {c=1; next} c && NF {sub(/^[[:space:]]+/, ""); print; exit}')
+            if [[ -z "$reason" ]]; then
+                reason=$(printf '%s' "$msg" | grep -v 'note: run with' | sed '/^[[:space:]]*$/d' | tail -n1 | sed 's/^[[:space:]]*//')
+            fi
             printf 'FAIL  %-24s %s\n' "$provider" "$reason"
             fail=$((fail + 1))
         fi

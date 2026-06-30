@@ -34,13 +34,17 @@ fn main() -> Result<()> {
 
     let wit_path = out_dir.join(format!("{}.wit", package.name));
     let rust_path = out_dir.join(format!("{}.rs", package.name));
+    let cargo_path = out_dir.join("Cargo.toml");
     std::fs::write(&wit_path, &generated.wit)
         .with_context(|| format!("failed to write `{}`", wit_path.display()))?;
     std::fs::write(&rust_path, &generated.rust)
         .with_context(|| format!("failed to write `{}`", rust_path.display()))?;
+    std::fs::write(&cargo_path, &generated.cargo_toml)
+        .with_context(|| format!("failed to write `{}`", cargo_path.display()))?;
 
     println!("wrote {}", wit_path.display());
     println!("wrote {}", rust_path.display());
+    println!("wrote {}", cargo_path.display());
     println!("interfaces: {}", generated.interfaces.join(", "));
     Ok(())
 }

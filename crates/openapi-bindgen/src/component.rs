@@ -42,6 +42,7 @@ impl From<crate::Generated> for wit::Generated {
         wit::Generated {
             wit: value.wit,
             rust: value.rust,
+            cargo_toml: value.cargo_toml,
             interfaces: value.interfaces,
         }
     }
