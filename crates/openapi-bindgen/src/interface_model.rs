@@ -20,6 +20,7 @@ use crate::operation_model::OperationModel;
 use crate::package_name::PackageName;
 use crate::record_model::RecordModel;
 use crate::schema_ctx::SchemaCtx;
+use crate::security::AuthApply;
 use crate::wit_type::WitType;
 
 /// Borrowed `(field-name, field-schema)` entries from an object/`any` schema.
@@ -356,6 +357,7 @@ impl InterfaceModel {
         method: &str,
         path: &str,
         op: &Operation,
+        auth: Vec<AuthApply>,
     ) -> Result<()> {
         let raw_id = op
             .operation_id
@@ -380,7 +382,7 @@ impl InterfaceModel {
             let (data, location) = match p {
                 Parameter::Path { parameter_data, .. } => (parameter_data, Location::Path),
                 Parameter::Query { parameter_data, .. } => (parameter_data, Location::Query),
-                Parameter::Header { parameter_data, .. } => (parameter_data, Location::Query),
+                Parameter::Header { parameter_data, .. } => (parameter_data, Location::Header),
                 Parameter::Cookie { .. } => continue,
             };
             let name_kebab = sanitize_wit_name(&data.name.to_kebab_case());
@@ -481,6 +483,7 @@ impl InterfaceModel {
             summary: op.summary.clone(),
             params_record,
             fields,
+            auth,
         });
         Ok(())
     }

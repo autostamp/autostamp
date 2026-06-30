@@ -9,6 +9,9 @@ pub struct Generated {
     pub rust: String,
     /// The generated `Cargo.toml` manifest for the component crate.
     pub cargo_toml: String,
+    /// The generated `wasm.toml` declaring the component's WIT interface dependencies
+    /// (`wasi:http`, `wasmcloud:secrets`), resolved into `wit/deps/` at build time.
+    pub wasm_toml: String,
     /// The kebab-case names of the generated interfaces, in emission order.
     ///
     /// Pass these to [`crate::rewrite_world_exports`] to update a WIT world's `export` list.

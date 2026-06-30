@@ -153,3 +153,86 @@ fn generates_from_swagger_v2_formdata() {
     assert!(generated.wit.contains("fast"));
     assert!(generated.wit.contains("careful"));
 }
+
+/// An OpenAPI 3 document exercising security schemes: a global `bearer` default, a
+/// per-operation `apiKey` override (header OR query alternatives), a server URL, and a
+/// header parameter.
+const AUTH_SPEC: &str = r#"{
+  "openapi": "3.0.0",
+  "info": { "title": "demo", "version": "1.0.0" },
+  "servers": [{ "url": "https://api.example.com/v1/" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" },
+      "apiKeyHeader": { "type": "apiKey", "in": "header", "name": "X-API-Key" },
+      "apiKeyQuery": { "type": "apiKey", "in": "query", "name": "api_key" }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/widgets/{widgetId}": {
+      "get": {
+        "tags": ["widgets"],
+        "operationId": "getWidget",
+        "parameters": [
+          { "name": "widgetId", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "X-Trace", "in": "header", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/search": {
+      "get": {
+        "tags": ["widgets"],
+        "operationId": "searchWidgets",
+        "security": [{ "apiKeyHeader": [] }, { "apiKeyQuery": [] }],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}"#;
+
+#[test]
+fn emits_world_importing_http_and_secrets() {
+    let spec = parse_openapi(AUTH_SPEC).unwrap();
+    let package = PackageName::parse("widget:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The generated world imports the host HTTP + secrets capabilities and exports the
+    // generated interface; operations themselves stay auth-free.
+    assert!(generated.wit.contains("world bindgen {"));
+    assert!(generated.wit.contains("import wasi:http/outgoing-handler"));
+    assert!(generated.wit.contains("import wasmcloud:secrets/store"));
+    assert!(generated.wit.contains("import wasmcloud:secrets/reveal"));
+    assert!(generated.wit.contains("export widgets;"));
+
+    // The wasm.toml declares the interface dependencies for the component build.
+    assert!(generated.wasm_toml.contains("wasi:http"));
+    assert!(generated.wasm_toml.contains("wasmcloud:secrets@1.0.0"));
+}
+
+#[test]
+fn emits_base_url_and_auth_tables() {
+    let spec = parse_openapi(AUTH_SPEC).unwrap();
+    let package = PackageName::parse("widget:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+    let rust = &generated.rust;
+
+    // The base URL is resolved from `servers` (trailing slash stripped).
+    assert!(rust.contains(r#"const BASE_URL: &str = "https://api.example.com/v1";"#));
+
+    // The globally-defaulted operation carries the bearer scheme, keyed by the security
+    // scheme's name.
+    assert!(rust.contains(r#"AuthApply { secret_key: "bearerAuth", kind: AuthKind::Bearer }"#));
+
+    // The per-operation override resolves the *first* alternative (header), carrying the
+    // real wire header name.
+    assert!(rust.contains(
+        r#"AuthApply { secret_key: "apiKeyHeader", kind: AuthKind::ApiKeyHeader("X-API-Key") }"#
+    ));
+
+    // The path placeholder is snake-cased to match the runtime's field key, and the header
+    // parameter is located in the header (not miscategorized as a query).
+    assert!(rust.contains(r#"path_template: "/widgets/{widget_id}""#));
+    assert!(rust.contains("location: FieldLocation::Header"));
+}

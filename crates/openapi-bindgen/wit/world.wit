@@ -20,6 +20,9 @@ interface generator {
         rust: string,
         /// The generated `Cargo.toml` manifest for the component crate.
         cargo-toml: string,
+        /// The generated `wasm.toml` declaring the component's WIT interface dependencies
+        /// (`wasi:http`, `wasmcloud:secrets`).
+        wasm-toml: string,
         /// The kebab-case names of the generated interfaces, in emission order.
         interfaces: list<string>,
     }

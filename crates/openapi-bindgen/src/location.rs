@@ -5,5 +5,6 @@
 pub(crate) enum Location {
     Path,
     Query,
+    Header,
     Body,
 }

@@ -45,6 +45,8 @@ mod package_name;
 mod record_model;
 mod rust_codegen;
 mod schema_ctx;
+mod security;
+mod servers;
 mod swagger2;
 mod wit_type;
 
@@ -60,6 +62,7 @@ use crate::interface_model::InterfaceModel;
 use crate::naming::sanitize_wit_name;
 use crate::rust_codegen::emit_rust;
 use crate::schema_ctx::SchemaCtx;
+use crate::security::SecurityRegistry;
 
 /// Parse an OpenAPI document from a JSON string, accepting either OpenAPI 2 (Swagger) or
 /// OpenAPI 3.
@@ -96,6 +99,7 @@ pub fn generate(
     tags: Option<&[String]>,
 ) -> Result<Generated> {
     let ctx = SchemaCtx::new(spec);
+    let registry = SecurityRegistry::from_spec(spec);
 
     let mut by_iface: IndexMap<String, InterfaceModel> = IndexMap::new();
 
@@ -125,7 +129,8 @@ pub fn generate(
             let iface = by_iface
                 .entry(iface_name.clone())
                 .or_insert_with(|| InterfaceModel::new(iface_name.clone()));
-            iface.process_operation(&ctx, method, path, op)?;
+            let auth = registry.operation_requirement(spec, op);
+            iface.process_operation(&ctx, method, path, op, auth)?;
         }
     }
 
@@ -160,23 +165,52 @@ pub fn generate(
         }
     }
 
-    let rust = emit_rust(&ifaces, package);
+    let base_url = servers::resolve_base_url(spec).unwrap_or_default();
+    let rust = emit_rust(&ifaces, package, &base_url);
 
-    let interfaces = ifaces.iter().map(|i| i.name_kebab.clone()).collect();
+    let interfaces: Vec<String> = ifaces.iter().map(|i| i.name_kebab.clone()).collect();
 
-    // Validate the assembled WIT as the final step of generation: a parse + resolve with
-    // `wit-parser` rejects malformed packages, duplicate or invalid identifiers, and
-    // dangling type references before we ever hand the source back to a caller.
+    // Validate the assembled interface WIT as the final step of generation: a parse +
+    // resolve with `wit-parser` rejects malformed packages, duplicate or invalid
+    // identifiers, and dangling type references before we ever hand the source back to a
+    // caller. We validate the interfaces alone — before appending the world, whose external
+    // imports are not resolvable in this self-contained, in-memory check.
     validate_wit(&wit)?;
 
+    // Append the `bindgen` world importing `wasi:http` + `wasmcloud:secrets` and exporting
+    // the generated interfaces. It is deliberately excluded from `validate_wit`, because its
+    // imports reference packages that are only fetched into `wit/deps/` at component-build
+    // time.
+    wit.push('\n');
+    wit.push_str(&emit_world(&interfaces));
+
     let cargo_toml = manifest::render(package);
+    let wasm_toml = manifest::render_wasm_deps();
 
     Ok(Generated {
         wit,
         rust,
         cargo_toml,
+        wasm_toml,
         interfaces,
     })
+}
+
+/// Emit the generated `bindgen` world: import the `wasi:http` outgoing-request surface and
+/// the `wasmcloud:secrets` store/reveal interfaces the runtime uses, and export every
+/// generated interface.
+fn emit_world(interfaces: &[String]) -> String {
+    let mut world = String::from("/// The component world: imports the HTTP + secrets host\n");
+    world.push_str("/// capabilities the runtime uses and exports the generated interfaces.\n");
+    world.push_str("world bindgen {\n");
+    world.push_str("  import wasi:http/outgoing-handler@0.2.3;\n");
+    world.push_str("  import wasmcloud:secrets/store@1.0.0;\n");
+    world.push_str("  import wasmcloud:secrets/reveal@1.0.0;\n");
+    for iface in interfaces {
+        world.push_str(&format!("  export {iface};\n"));
+    }
+    world.push_str("}\n");
+    world
 }
 
 /// Parse and resolve `wit` with `wit-parser`, returning an error if it is not a valid,

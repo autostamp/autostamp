@@ -1,4 +1,4 @@
-<h1 align="center">openapi-bindgen</h1>
+<h1 align="center">autostamp-openapi</h1>
 <div align="center">
   <strong>
     Convert OpenAPI schema definitions to WebAssembly Components
@@ -7,56 +7,66 @@
 
 <br />
 
-<div align="center">
-  <!-- Crates version -->
-  <a href="https://crates.io/crates/openapi-bindgen">
-    <img src="https://img.shields.io/crates/v/openapi-bindgen.svg?style=flat-square"
-    alt="Crates.io version" />
-  </a>
-  <!-- Downloads -->
-  <a href="https://crates.io/crates/openapi-bindgen">
-    <img src="https://img.shields.io/crates/d/openapi-bindgen.svg?style=flat-square"
-      alt="Download" />
-  </a>
-  <!-- docs.rs docs -->
-  <a href="https://docs.rs/openapi-bindgen">
-    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
-      alt="docs.rs docs" />
-  </a>
-</div>
+## About
 
-<div align="center">
-  <h3>
-    <a href="https://docs.rs/openapi-bindgen">
-      API Docs
-    </a>
-    <span> | </span>
-    <a href="https://github.com/yoshuawuyts/openapi-bindgen/releases">
-      Releases
-    </a>
-    <span> | </span>
-    <a href="https://github.com/yoshuawuyts/openapi-bindgen/blob/master/.github/CONTRIBUTING.md">
-      Contributing
-    </a>
-  </h3>
-</div>
+[WebAssembly Components][component] are universal, portable libraries which can be linked to
+by any other language. This project exists to automate library creation by
+taking OpenAPI schema definitions and creating WebAssembly guest components from
+them.
 
-## Installation
+The goal of this project is to _automate_ Component-based SDK creation as much
+as possible. Hand-crafted Components are likely to be nicer than what we can
+achieve with automation here. But 
+
+## Usage
+
+With the [component CLI](https://github.com/yoshuawuyts/component-registry) installed:
 ```sh
-$ cargo add openapi-bindgen
+# Generate an `acme:api` component from an OpenAPI schema
+$ component run autostamp:openapi acme.json build/acme acme:api
 ```
 
-## WebAssembly component
-Besides the Rust library, this crate builds as a [WebAssembly component][component] that
-exports the `openapi-bindgen:generator/generator` interface defined in
-[`crates/openapi-bindgen/wit`](crates/openapi-bindgen/wit/world.wit):
 
-```sh
-$ just component
-# or: cargo build -p openapi-bindgen --target wasm32-wasip2 --release
+## Authentication
+
+Many APIs require a credential on every request. Rather than threading a token through
+every operation signature, generated components keep operations **auth-free** and inject
+credentials centrally at runtime. Each generated component:
+
+- imports [`wasmcloud:secrets`][secrets] and reads its credentials from the host, and
+- imports `wasi:http` and applies the credential to each outgoing request.
+
+The generator reads the document's `securitySchemes` / `security` and emits a per-operation
+auth table that the embedded runtime consumes. Operation arguments never carry a token.
+
+**Secret-key contract.** The key the runtime fetches from `wasmcloud:secrets` is the
+**security scheme's name** in `components.securitySchemes`. A host provisioning credentials
+must store each secret under that name. For example, given:
+
+```jsonc
+"securitySchemes": {
+  "bearerAuth":   { "type": "http",   "scheme": "bearer" },
+  "apiKeyHeader": { "type": "apiKey", "in": "header", "name": "X-API-Key" }
+}
 ```
 
-[component]: https://component-model.bytecodealliance.org/
+the host provisions secrets named `bearerAuth` and `apiKeyHeader`. They are applied as:
+
+| OpenAPI scheme | Applied to the request as |
+|---|---|
+| `http` `bearer` (and `oauth2` / `openIdConnect`, pre-acquired token) | `Authorization: Bearer <secret>` |
+| `http` `basic` | `Authorization: Basic base64(<secret>)`, secret = `user:pass` |
+| `apiKey` `in: header` | header `<name>: <secret>` |
+| `apiKey` `in: query` | query `<name>=<secret>` |
+| `apiKey` `in: cookie` | `Cookie: <name>=<secret>` |
+
+A per-operation `security` overrides the document default; `security: []` disables auth for
+that operation. When an operation lists several alternative requirements (OR semantics), the
+first is used. OAuth2/OIDC token flows are not run — the host supplies a pre-acquired access
+token as a bearer secret.
+
+[secrets]: https://github.com/wasmCloud/wasmCloud/tree/main/wit/secrets
+
 
 ## Safety
 This crate denies `unsafe_code` throughout. The single exception is the
@@ -88,3 +98,5 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
 be licensed as above, without any additional terms or conditions.
 </sub>
+
+[component]: https://component-model.bytecodealliance.org/
