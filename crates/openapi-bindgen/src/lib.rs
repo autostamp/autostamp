@@ -35,6 +35,7 @@
 //! ```
 
 mod auth_doc;
+mod compat;
 mod enum_model;
 mod field;
 mod generated;
@@ -88,6 +89,7 @@ pub fn from_json_value(mut doc: serde_json::Value) -> Result<OpenAPI> {
     if swagger2::is_v2(&doc) {
         swagger2::convert(&mut doc).context("failed to normalize Swagger 2.0 document")?;
     }
+    compat::inline_nonlocal_refs(&mut doc);
     strip_numeric_bounds(&mut doc);
     serde_json::from_value(doc).context("failed to parse OpenAPI document")
 }
@@ -129,6 +131,23 @@ fn strip_numeric_bounds(value: &mut serde_json::Value) {
     }
 }
 
+/// Error returned by [`generate`] when a document defines no operations to bind.
+///
+/// A specification whose `paths` is empty (or whose path items carry no operations) has nothing
+/// to generate. This is distinct from a document that *has* operations but none could be grouped
+/// into an interface. Callers can downcast the [`anyhow::Error`] to this type to treat an empty
+/// document as a benign skip rather than a hard failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoOperations;
+
+impl std::fmt::Display for NoOperations {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the document defines no operations to bind")
+    }
+}
+
+impl std::error::Error for NoOperations {}
+
 /// Generate WIT and Rust bindings from a parsed OpenAPI 3 document.
 ///
 /// Operations are grouped into one interface per tag. When `tags` is `Some`, only
@@ -143,6 +162,7 @@ pub fn generate(
     let registry = SecurityRegistry::from_spec(spec);
 
     let mut by_iface: IndexMap<String, InterfaceModel> = IndexMap::new();
+    let mut total_operations: usize = 0;
 
     for (path, item_ref) in spec.paths.paths.iter() {
         let item = match item_ref {
@@ -157,6 +177,7 @@ pub fn generate(
             ("delete", &item.delete),
         ] {
             let Some(op) = op_opt else { continue };
+            total_operations += 1;
             let matched_tag = match tags {
                 Some(allow) => op.tags.iter().find(|t| allow.iter().any(|a| a == *t)),
                 None => op.tags.first(),
@@ -184,6 +205,12 @@ pub fn generate(
     let mut ifaces: Vec<InterfaceModel> = by_iface.into_values().collect();
 
     if ifaces.is_empty() {
+        if total_operations == 0 {
+            // A document with no operations (e.g. `paths: {}`) has nothing to bind. This is a
+            // benign, recognizable condition rather than a generation failure — callers can
+            // downcast to `NoOperations` and treat it as a skip.
+            return Err(NoOperations.into());
+        }
         bail!(
             "no interfaces generated: the document has no tagged operations to group into interfaces"
         );

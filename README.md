@@ -30,17 +30,14 @@ $ component run autostamp:openapi acme.json build/acme acme:api
 
 The generator accepts OpenAPI 2 (Swagger) and 3.0 documents and normalizes a range of
 real-world quirks — missing `operationId`s, untagged operations, deep `$ref`s into a component's
-`properties`/`items`, out-of-range numeric bounds, and stray control characters. A few input
-shapes are still unsupported and will fail to generate:
+`properties`/`items`, whole-document `$ref`s into `#/paths/...`, out-of-range numeric bounds, and
+stray control characters. A document with no operations (e.g. an empty `paths: {}`) has nothing to
+bind and is reported as a skip. A few input shapes are still unsupported and will fail to generate:
 
 - **OpenAPI 3.1 documents.** The underlying `openapiv3` parser targets 3.0; 3.1-only constructs
   (type arrays, `const`, sibling `$ref`s) aren't deserialized yet.
-- **`$ref`s into `#/paths/...`.** Whole-document JSON-Pointer references that reuse an inline
-  schema defined under a path item (rather than `#/components/schemas/...`) aren't resolved.
 - **Malformed source documents.** Specs whose YAML is structurally invalid for a strict parser
   (e.g. inconsistent block-scalar indentation) can't be loaded.
-- **Documents with no operations.** A spec whose `paths` is empty has nothing to bind and
-  produces no interfaces.
 
 ## Documentation
 

@@ -1,6 +1,6 @@
 //! Integration tests for `openapi-bindgen`.
 
-use openapi_bindgen::{PackageName, generate, parse_openapi};
+use openapi_bindgen::{NoOperations, PackageName, generate, parse_openapi};
 
 /// A minimal OpenAPI 3 document with a single tagged operation.
 const MINIMAL_SPEC: &str = r#"{
@@ -463,5 +463,85 @@ fn documents_required_auth_secrets_in_readme_and_wit() {
     assert!(
         plain.wit.trim_start().starts_with("package"),
         "WIT with no auth starts at the package declaration"
+    );
+}
+
+/// A document whose `paths` is empty defines no operations to bind. `generate` reports this with
+/// the distinct `NoOperations` error so callers can treat it as a benign skip rather than a
+/// failure (e.g. ipinfodb.com ships `paths: {}`).
+#[test]
+fn empty_document_reports_no_operations() {
+    const EMPTY_SPEC: &str = r#"{
+  "openapi": "3.0.0",
+  "info": { "title": "empty", "version": "1.0.0" },
+  "paths": {}
+}"#;
+    let spec = parse_openapi(EMPTY_SPEC).unwrap();
+    let package = PackageName::parse("demo:empty@0.1.0").unwrap();
+
+    let err = generate(&spec, &package, None).expect_err("empty document should not generate");
+    assert!(
+        err.downcast_ref::<NoOperations>().is_some(),
+        "expected NoOperations, got: {err}"
+    );
+}
+
+/// Some specs (notably DigitalOcean) reuse inline schemas via whole-document `$ref`s into
+/// `#/paths/...` rather than `#/components/...`. The schema resolver rejects those directly, so
+/// they are inlined before parsing. Here `createWidget`'s request body has a `color` property
+/// that references a schema defined under the `/palette` path; generation must resolve it to the
+/// concrete `string` type (without inlining, the resolver fails with `unsupported ref`).
+#[test]
+fn inlines_paths_ref_into_concrete_schema() {
+    const PATHS_REF_SPEC: &str = r##"{
+  "openapi": "3.0.0",
+  "info": { "title": "demo", "version": "1.0.0" },
+  "paths": {
+    "/widgets": {
+      "post": {
+        "tags": ["widgets"],
+        "operationId": "createWidget",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "color": {
+                    "$ref": "#/paths/~1palette/get/responses/200/content/application~1json/schema"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ok" } }
+      }
+    },
+    "/palette": {
+      "get": {
+        "tags": ["palette"],
+        "operationId": "getPalette",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": { "schema": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}"##;
+    let spec = parse_openapi(PATHS_REF_SPEC).unwrap();
+    let package = PackageName::parse("demo:widgets@0.1.0").unwrap();
+
+    let generated =
+        generate(&spec, &package, None).expect("paths `$ref` should inline and resolve");
+    assert!(
+        generated.wit.contains("color: option<string>"),
+        "inlined `#/paths` ref should resolve to a concrete string field:\n{}",
+        generated.wit
     );
 }

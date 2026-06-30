@@ -14,7 +14,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result, bail};
-use openapi_bindgen::{PackageName, from_json_value, generate};
+use openapi_bindgen::{NoOperations, PackageName, from_json_value, generate};
 use openapiv3::OpenAPI;
 
 fn main() -> Result<()> {
@@ -26,7 +26,16 @@ fn main() -> Result<()> {
 
     let spec = load_spec(spec_path)?;
     let package = PackageName::parse(package_raw)?;
-    let generated = generate(&spec, &package, None)?;
+    let generated = match generate(&spec, &package, None) {
+        Ok(generated) => generated,
+        // An empty document (no operations to bind) is a benign skip, not a failure. Signal it
+        // with a distinct exit code so the corpus runner can tally it separately.
+        Err(err) if err.downcast_ref::<NoOperations>().is_some() => {
+            eprintln!("skip: {err}");
+            std::process::exit(3);
+        }
+        Err(err) => return Err(err),
+    };
 
     let out_dir = Path::new(out_dir);
     std::fs::create_dir_all(out_dir)

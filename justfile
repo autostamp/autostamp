@@ -63,9 +63,15 @@ gen:
             skip=$((skip + 1))
             continue
         fi
-        if msg=$("$bin" "$spec" "components/$name" "autostamp:$name@0.1.0" 2>&1); then
+        msg=$("$bin" "$spec" "components/$name" "autostamp:$name@0.1.0" 2>&1)
+        rc=$?
+        if [[ $rc -eq 0 ]]; then
             printf 'ok    %-24s components/%s\n' "$provider" "$name"
             ok=$((ok + 1))
+        elif [[ $rc -eq 3 ]]; then
+            reason=$(printf '%s' "$msg" | sed -n 's/^skip: //p' | tail -n1)
+            printf 'skip  %-24s %s\n' "$provider" "${reason:-no operations}"
+            skip=$((skip + 1))
         else
             reason=$(printf '%s' "$msg" | awk '/^Caused by:/ {c=1; next} c && NF {sub(/^[[:space:]]+/, ""); print; exit}')
             if [[ -z "$reason" ]]; then
