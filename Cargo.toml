@@ -1,27 +1,43 @@
-[workspace]
-members = ["crates/*", "xtask"]
-default-members = ["crates/*"]
-resolver = "2"
-
-[workspace.package]
+[package]
+name = "openapi-bindgen"
+description = "Convert OpenAPI schema definitions to WebAssembly Components"
 version = "0.1.0"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/yoshuawuyts/openapi-bindgen"
 documentation = "https://docs.rs/openapi-bindgen"
 edition = "2024"
 authors = ["yoshuawuyts"]
+readme = "README.md"
+keywords = []
+categories = []
 
-[workspace.dependencies]
-clap = { version = "4.5", features = ["derive"] }
+[lib]
+crate-type = ["cdylib", "rlib"]
 
-[workspace.lints.rust]
+[features]
+
+[dependencies]
+anyhow = "1"
+heck = "0.5"
+indexmap = "2"
+openapiv3 = "2"
+serde_json = { version = "1", features = ["preserve_order"] }
+wit-parser = "0.227"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = "0.41"
+
+[dev-dependencies]
+serde_yaml = "0.9"
+
+[lints.rust]
 unsafe_code = "deny"
 missing_debug_implementations = "deny"
 nonstandard_style = { level = "deny", priority = -1 }
 missing_docs = "warn"
 unreachable_pub = "warn"
 
-[workspace.lints.clippy]
+[lints.clippy]
 fallible_impl_from = "deny"
 fn_params_excessive_bools = "deny"
 indexing_slicing = "deny"
