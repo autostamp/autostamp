@@ -400,6 +400,20 @@ fn generates_readme_with_generator_diagnostics() {
         "| Prune duplicate credential fields | enabled — **triggered**, 1 field pruned |"
     ));
 
+    // The dedup spec requires the `secret` apiKey header, so the README documents it in an
+    // Authentication section above the diagnostics.
+    let auth_at = generated
+        .readme
+        .find("## Authentication")
+        .expect("authentication section present");
+    let diag_at = generated.readme.find("## Generator Diagnostics").unwrap();
+    assert!(auth_at < diag_at, "auth section precedes diagnostics");
+    assert!(
+        generated
+            .readme
+            .contains("| `secret` | header `X-Secret` |")
+    );
+
     // A spec with nothing to prune reports the heuristic as not triggered.
     let plain = parse_openapi(MINIMAL_SPEC).unwrap();
     let plain_pkg = PackageName::parse("demo:things@0.1.0").unwrap();
@@ -407,5 +421,47 @@ fn generates_readme_with_generator_diagnostics() {
     assert!(plain_readme.starts_with("# things\n"));
     assert!(
         plain_readme.contains("| Prune duplicate credential fields | enabled — not triggered |")
+    );
+    // No security schemes means no Authentication section at all.
+    assert!(!plain_readme.contains("## Authentication"));
+}
+
+#[test]
+fn documents_required_auth_secrets_in_readme_and_wit() {
+    let spec = parse_openapi(AUTH_SPEC).unwrap();
+    let package = PackageName::parse("widget:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The same authentication table is rendered into both the README and the WIT package
+    // comment, listing each named secret and how it is applied to requests.
+    let bearer_row = "| `bearerAuth` | `Authorization: Bearer <secret>` |";
+    let header_row = "| `apiKeyHeader` | header `X-API-Key` |";
+    assert!(generated.readme.contains("## Authentication"));
+    assert!(generated.readme.contains(bearer_row));
+    assert!(generated.readme.contains(header_row));
+
+    // The WIT carries the same rows as a doc comment leading the `package` declaration.
+    assert!(generated.wit.contains("/// ## Authentication"));
+    assert!(generated.wit.contains(&format!("/// {bearer_row}")));
+    assert!(generated.wit.contains(&format!("/// {header_row}")));
+    let comment_at = generated.wit.find("/// ## Authentication").unwrap();
+    let package_at = generated.wit.find("package widget:api").unwrap();
+    assert!(comment_at < package_at, "auth comment leads the package");
+
+    // `searchWidgets` declares `apiKeyHeader OR apiKeyQuery`; only the resolved first
+    // alternative is documented, so the query-key secret is omitted from both surfaces.
+    assert!(!generated.readme.contains("apiKeyQuery"));
+    assert!(!generated.readme.contains("api_key"));
+    assert!(!generated.wit.contains("apiKeyQuery"));
+    assert!(!generated.wit.contains("api_key"));
+
+    // A spec with no security schemes gets no auth comment: the WIT begins at `package`.
+    let plain = parse_openapi(MINIMAL_SPEC).unwrap();
+    let plain_pkg = PackageName::parse("demo:things@0.1.0").unwrap();
+    let plain = generate(&plain, &plain_pkg, None).unwrap();
+    assert!(!plain.wit.contains("## Authentication"));
+    assert!(
+        plain.wit.trim_start().starts_with("package"),
+        "WIT with no auth starts at the package declaration"
     );
 }

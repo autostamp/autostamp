@@ -28,6 +28,22 @@ pub(crate) enum AuthKind {
     ApiKeyCookie { name: String },
 }
 
+impl AuthKind {
+    /// A short, markdown-flavored description of how the revealed secret is attached to each
+    /// outgoing request. Shared by the README's authentication table and the WIT package
+    /// comment so the two never drift. The wire name (for `apiKey` schemes) is wrapped in
+    /// backticks so it renders as code.
+    pub(crate) fn applied_as(&self) -> String {
+        match self {
+            AuthKind::Bearer => "`Authorization: Bearer <secret>`".to_string(),
+            AuthKind::Basic => "`Authorization: Basic base64(<secret>)`".to_string(),
+            AuthKind::ApiKeyHeader { name } => format!("header `{name}`"),
+            AuthKind::ApiKeyQuery { name } => format!("query `{name}`"),
+            AuthKind::ApiKeyCookie { name } => format!("cookie `{name}`"),
+        }
+    }
+}
+
 /// A single security scheme to apply to a request, paired with the secret key the runtime
 /// fetches from `wasmcloud:secrets`.
 #[derive(Debug, Clone, PartialEq, Eq)]

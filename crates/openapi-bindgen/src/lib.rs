@@ -34,6 +34,7 @@
 //! # }
 //! ```
 
+mod auth_doc;
 mod enum_model;
 mod field;
 mod generated;
@@ -64,7 +65,7 @@ use crate::interface_model::InterfaceModel;
 use crate::naming::sanitize_wit_name;
 use crate::rust_codegen::emit_rust;
 use crate::schema_ctx::SchemaCtx;
-use crate::security::SecurityRegistry;
+use crate::security::{AuthApply, SecurityRegistry};
 
 /// Parse an OpenAPI document from a JSON string, accepting either OpenAPI 2 (Swagger) or
 /// OpenAPI 3.
@@ -194,6 +195,11 @@ pub fn generate(
         iface.prune_unused_records();
     }
 
+    // The named secrets this component expects the host to provision: the union of every
+    // operation's resolved auth requirement, deduplicated by secret key and ordered. Surfaced
+    // in both the README and the WIT package comment.
+    let auth_schemes = collect_auth_schemes(&ifaces);
+
     let mut wit = String::new();
     for (i, iface) in ifaces.iter().enumerate() {
         let body = iface.to_wit(package);
@@ -209,6 +215,12 @@ pub fn generate(
                     .join("\n"),
             );
         }
+    }
+
+    // Lead the package declaration with an authentication doc comment naming the secrets the
+    // host must provision. Prepended before validation so the comment is checked too.
+    if let Some(comment) = auth_doc::wit_comment(&auth_schemes) {
+        wit = format!("{comment}{wit}");
     }
 
     let base_url = servers::resolve_base_url(spec).unwrap_or_default();
@@ -237,6 +249,7 @@ pub fn generate(
         tag_filter: tags.map(<[String]>::to_vec),
         operations: ifaces.iter().map(|i| i.operations.len()).sum(),
         pruned_credential_fields: ifaces.iter().map(|i| i.pruned_credential_fields).sum(),
+        auth: auth_schemes,
     };
     let readme = readme::render(package, &diagnostics);
 
@@ -256,6 +269,26 @@ pub fn generate(
 /// matching the convention that `/v1/charges` groups under `charges`. Falls back to the
 /// sanitized API title, then `api`, when the path offers no usable segment (e.g. `/`, an
 /// all-version/template path, or a fragment route).
+/// Collect the named security schemes a component expects the host to provision: the union of
+/// every operation's *resolved* auth requirement, deduplicated by secret key (keeping the first
+/// occurrence) and sorted by secret key for deterministic output. Because the requirement is
+/// already resolved to a single alternative, non-selected OR branches are naturally excluded.
+fn collect_auth_schemes(ifaces: &[InterfaceModel]) -> Vec<AuthApply> {
+    let mut schemes: Vec<AuthApply> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for iface in ifaces {
+        for op in &iface.operations {
+            for apply in &op.auth {
+                if seen.insert(apply.secret_key.clone()) {
+                    schemes.push(apply.clone());
+                }
+            }
+        }
+    }
+    schemes.sort_by(|a, b| a.secret_key.cmp(&b.secret_key));
+    schemes
+}
+
 fn interface_name_from_path(path: &str, title: &str) -> String {
     for segment in path.split('/') {
         let segment = segment.trim();
