@@ -13,7 +13,7 @@
 //! ```
 //!
 //! It calls the library's `generate` directly rather than driving the component, which is how
-//! `just gen` produces the `components/` tree; `just build-components` then resolves the WIT
+//! `just gen` produces the `components/` tree; `just build` then resolves the WIT
 //! deps and compiles each crate for `wasm32-wasip2`.
 //!
 //! ```sh

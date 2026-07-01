@@ -3,8 +3,8 @@ name: Publish components
 # Build every generated component and publish it to ghcr.io/autostamp.
 #
 # Reuses the same `just` recipes as local development:
-#   just gen                 # generate components/<name>/ from the vendored schemas
-#   just build-components    # compile each crate to a wasm32-wasip2 component
+#   just build               # regenerate components/<name>/, then compile the generator +
+#                            # each crate to a wasm32-wasip2 component
 #   just publish-components  # push each component to ghcr.io/autostamp via the CLI
 #
 # Triggers on a version tag (the release path) or manually (with an optional dry run).
@@ -58,11 +58,9 @@ jobs:
         # The username is ignored by GHCR when authenticating with a token.
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u token --password-stdin
 
-      - name: Generate component crates
-        run: just gen
-
       - name: Build components
-        run: just build-components
+        # Regenerates the component crates from the vendored schemas, then compiles each.
+        run: just build
 
       - name: Publish components
         run: just publish-components "" "${{ inputs.dry_run && '1' || '' }}"

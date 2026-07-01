@@ -2,19 +2,22 @@
 
 Generated crates are compiled and published as OCI artifacts to `ghcr.io/autostamp/<name>`
 with the [`component` CLI](https://github.com/yoshuawuyts/component-registry). The flow is
-three `just` recipes — the same ones CI runs:
+two `just` recipes — the same ones CI runs:
 
 ```sh
-just gen                 # 1. generate components/<name>/ from the vendored schemas
-just build-components    # 2. compile each crate to components/<name>/build/<name>.wasm
-just publish-components  # 3. push each component to ghcr.io/autostamp
+just build               # 1. regenerate components/<name>/, then compile the generator + each
+                         #    crate to a wasm32-wasip2 component
+just publish-components  # 2. push each component to ghcr.io/autostamp
 ```
 
-`build-components` resolves the WIT interface dependencies (`wasi:http`, `wasmcloud:secrets`)
-with `component install`, bridges the vendored WIT into `wit/deps/`, and builds for
-`wasm32-wasip2` with a shared target directory so the common crates compile once. Pass a
-provider name to act on one component (`just build-components nasa`); pass `dry_run=1` to
-preview a publish without pushing (`just publish-components nasa 1`).
+`build` first regenerates the component crates from the vendored schemas (the `gen` recipe runs
+as a dependency), then compiles the generator itself to a component, then builds each generated
+crate: it resolves the WIT interface dependencies (`wasi:http`, `wasmcloud:secrets`) with
+`component install`, bridges the vendored WIT into `wit/deps/`, and builds for `wasm32-wasip2`
+with a shared target directory so the common crates compile once. Pass a provider name to
+regenerate and build a single component (`just build nasa`); pass `dry_run=1` to
+`publish-components` to preview a publish without pushing (`just publish-components nasa 1`). Run
+`just gen` on its own to regenerate without compiling.
 
 **Versioning.** Each component's published version is the base SemVer plus the OpenAPI
 document's `info.version` as SemVer build metadata — e.g. `0.1.0+1.0.0`. The base version
@@ -38,7 +41,7 @@ to a **classic** PAT with `write:packages`, or run `docker login ghcr.io` first.
   `org.opencontainers.image.version` annotation — the same convention Helm uses. Install a
   `component` build that includes this fix.
 - **`wit/deps` bridge.** `component install` vendors WIT to `vendor/wit/`, but wit-bindgen
-  reads `wit/deps/`; `build-components` copies between them. A native `wit/deps` output
+  reads `wit/deps/`; `build` copies between them. A native `wit/deps` output
   would remove the step.
 - **Keyword package names (wit-bindgen, not `component`).** wit-bindgen names a package's
   Rust module `name.to_snake_case()` *without* keyword-escaping it

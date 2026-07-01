@@ -47,8 +47,9 @@ cargo run --example run -- <openapi-path> components/<name> autostamp:<name>@0.1
 
 Generated crates are compiled to `wasm32-wasip2` components and published as OCI artifacts to
 `ghcr.io/autostamp/<name>` with the
-[`component` CLI](https://github.com/yoshuawuyts/component-registry), via three `just` recipes
-(`just gen`, `just build-components`, `just publish-components`). See the
+[`component` CLI](https://github.com/yoshuawuyts/component-registry), via two `just` recipes:
+`just build` (regenerates the crates, then compiles the generator and each component) and
+`just publish-components`. See the
 [building and publishing guide](./docs/building-and-publishing.md) for the full flow, versioning,
 build profile, GHCR auth, and the `component` CLI requirements and gaps.
 
