@@ -1,0 +1,13 @@
+# Base SemVer shared by every generated component.
+#
+# `just gen` stamps this single version onto every component's WIT `package …@<base>` decl and
+# `Cargo.toml`. The generator then appends per-component provenance build metadata
+# (`+<provider>-<info.version>`) to `wasm.toml`'s `[package].version` — see `src/version.rs`.
+#
+# Bump it for all components at once with the `bump` recipe, then regenerate:
+#
+#     just bump            # patch: 0.1.0 -> 0.1.1
+#     just bump minor      # 0.1.1 -> 0.2.0
+#     just bump 1.0.0      # set explicitly
+#     just gen             # regenerate every component with the new base
+version = "0.2.0"

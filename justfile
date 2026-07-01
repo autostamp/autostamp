@@ -65,6 +65,10 @@ gen name="":
     set -uo pipefail
     cargo build --quiet -p openapi-bindgen --example run || { echo "build failed"; exit 1; }
     bin="target/debug/examples/run"
+    # One base SemVer, shared by every component, read from version.toml (default 0.1.0 when
+    # absent). Bump it for all components at once with `just bump`.
+    base=$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' version.toml 2>/dev/null | head -n1)
+    base="${base:-0.1.0}"
     providers=(
         # Tier 1 — foundational infrastructure
         amazonaws.com googleapis.com azure.com stripe.com twilio.com
@@ -107,7 +111,7 @@ gen name="":
             skip=$((skip + 1))
             continue
         fi
-        msg=$("$bin" "$spec" "components/$name" "autostamp:$name@0.1.0" 2>&1)
+        msg=$("$bin" "$spec" "components/$name" "autostamp:$name@$base" 2>&1)
         rc=$?
         if [[ $rc -eq 0 ]]; then
             printf 'ok    %-24s components/%s\n' "$provider" "$name"
@@ -127,6 +131,35 @@ gen name="":
     done
     printf '\ngenerated %d, failed %d, skipped %d (of %d providers)\n' "$ok" "$fail" "$skip" "${#providers[@]}"
 
+# `level` is patch (default), minor, major, or an explicit `X.Y.Z`.
+# Bump the shared base SemVer in version.toml for all components (then regenerate with `just gen`).
+bump level="patch":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    ledger="version.toml"
+    level="{{level}}"
+    [[ -f "$ledger" ]] || { echo "missing $ledger"; exit 1; }
+    cur=$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$ledger" | head -n1)
+    cur="${cur:-0.1.0}"
+    [[ "$cur" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || { echo "current version is not X.Y.Z: '$cur'"; exit 1; }
+    maj="${BASH_REMATCH[1]}"; min="${BASH_REMATCH[2]}"; pat="${BASH_REMATCH[3]}"
+    case "$level" in
+        major) new="$((maj + 1)).0.0" ;;
+        minor) new="$maj.$((min + 1)).0" ;;
+        patch) new="$maj.$min.$((pat + 1))" ;;
+        [0-9]*.[0-9]*.[0-9]*)
+            [[ "$level" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "explicit version must be X.Y.Z: '$level'"; exit 1; }
+            new="$level" ;;
+        *) echo "level must be patch, minor, major, or X.Y.Z (got '$level')"; exit 1 ;;
+    esac
+    if grep -q '^[[:space:]]*version[[:space:]]*=' "$ledger"; then
+        tmp=$(mktemp)
+        sed 's/^\([[:space:]]*version[[:space:]]*=[[:space:]]*\)"[^"]*"/\1"'"$new"'"/' "$ledger" > "$tmp" && mv "$tmp" "$ledger"
+    else
+        printf 'version = "%s"\n' "$new" >> "$ledger"
+    fi
+    echo "bumped base version: $cur -> $new  (run 'just gen' to regenerate all components)"
+
 # Publish built components to ghcr.io/autostamp via the `component` CLI. Pass a name for
 # one; set `dry_run=1` to preview (`just publish-components "" 1`). Needs GHCR auth:
 # GHCR_TOKEN/GH_TOKEN_CLASSIC (classic PAT, write:packages) or a prior `docker login ghcr.io`.
@@ -134,10 +167,6 @@ publish-components name="" dry_run="":
     #!/usr/bin/env bash
     set -uo pipefail
     command -v component >/dev/null 2>&1 || { echo "the 'component' CLI is required: cargo install --git https://github.com/yoshuawuyts/component-registry component"; exit 1; }
-    tok="${GHCR_TOKEN:-${GH_TOKEN_CLASSIC:-}}"
-    if [[ -n "$tok" ]]; then
-        echo "$tok" | docker login ghcr.io -u token --password-stdin >/dev/null 2>&1 || { echo "docker login ghcr.io failed"; exit 1; }
-    fi
     flag=""; [[ -n "{{dry_run}}" ]] && flag="--dry-run"
     ok=0; fail=0; skip=0
     for dir in components/*/; do
@@ -163,6 +192,12 @@ publish-components name="" dry_run="":
     done
     printf '\npublished %d, failed %d, skipped %d\n' "$ok" "$fail" "$skip"
     [[ $fail -eq 0 ]]
+
+# `level` is patch (default), minor, major, or an explicit X.Y.Z — same as `bump`. The bump is
+# written to version.toml before anything is generated; set dry_run=1 to preview the publish
+# without pushing (`just publish minor 1`). Needs GHCR auth (see publish-components).
+# Cut a release: bump the shared version, then regenerate, build, and publish every component.
+publish level="patch" dry_run="": (bump level) build (publish-components "" dry_run)
 
 # Format-check, lint, and run the test suite.
 test:

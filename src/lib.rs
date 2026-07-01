@@ -274,7 +274,7 @@ pub fn generate(
     // imports are not resolvable in this self-contained, in-memory check.
     validate_wit(&wit)?;
 
-    // Append the `bindgen` world importing `wasi:http` + `wasmcloud:secrets` and exporting
+    // Append the `client` world importing `wasi:http` + `wasmcloud:secrets` and exporting
     // the generated interfaces. It is deliberately excluded from `validate_wit`, because its
     // imports reference packages that are only fetched into `wit/deps/` at component-build
     // time.
@@ -283,11 +283,12 @@ pub fn generate(
 
     let cargo_toml = manifest::render(package);
 
-    // The publish version carries the document's `info.version` as SemVer build metadata
-    // (e.g. `0.1.0+2022-11-28`) so the published artifact records which schema revision it
-    // was generated from. The base version (and the WIT/`Cargo.toml` versions) stay clean.
+    // The publish version carries the provider name and the document's `info.version` as
+    // SemVer build metadata (e.g. `0.1.0+github-2022-11-28`) so the published artifact records
+    // which provider and schema revision it was generated from. The base version (and the
+    // WIT/`Cargo.toml` versions) stay clean.
     let base_version = package.version.as_deref().unwrap_or("0.1.0");
-    let publish_version = version::publish_version(base_version, &spec.info.version);
+    let publish_version = version::publish_version(base_version, &package.name, &spec.info.version);
     let wasm_toml = manifest::render_wasm_manifest(package, &publish_version);
 
     let diagnostics = readme::Diagnostics {
@@ -364,13 +365,13 @@ fn is_version_segment(segment: &str) -> bool {
     }
 }
 
-/// Emit the generated `bindgen` world: import the `wasi:http` outgoing-request surface and
+/// Emit the generated `client` world: import the `wasi:http` outgoing-request surface and
 /// the `wasmcloud:secrets` store/reveal interfaces the runtime uses, and export every
 /// generated interface.
 fn emit_world(interfaces: &[String]) -> String {
     let mut world = String::from("/// The component world: imports the HTTP + secrets host\n");
     world.push_str("/// capabilities the runtime uses and exports the generated interfaces.\n");
-    world.push_str("world bindgen {\n");
+    world.push_str("world client {\n");
     world.push_str("  import wasi:http/outgoing-handler@0.2.3;\n");
     world.push_str("  import wasmcloud:secrets/store@1.0.0;\n");
     world.push_str("  import wasmcloud:secrets/reveal@1.0.0;\n");

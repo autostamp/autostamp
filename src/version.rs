@@ -4,27 +4,32 @@
 //!
 //! * a **base** SemVer (`0.1.0` by default), set when the generator is invoked
 //!   (`autostamp:nasa@0.1.0`), and stamped onto the WIT package decl and `Cargo.toml`; and
-//! * the **schema version** from the OpenAPI document's `info.version`, attached as SemVer
-//!   build metadata (`0.1.0+2022-11-28`) so the published artifact records exactly which
-//!   schema revision the bindings came from.
+//! * a **provenance marker** attached as SemVer build metadata: the provider name followed by
+//!   the OpenAPI document's `info.version` (`0.1.0+nasa-1.0.0`), so the published artifact
+//!   records both which provider and exactly which schema revision the bindings came from.
 //!
 //! Only `[package].version` in `wasm.toml` carries the `+metadata`. Build metadata is ignored
 //! for SemVer precedence, so it never changes how the package resolves — it is purely a
 //! provenance marker.
 
-/// The maximum length of the sanitized schema-version build metadata. OCI tags are capped at
-/// 128 characters (`<base>_<metadata>`), so we keep the metadata comfortably short.
+/// The maximum length of the composed build metadata (`<name>-<schema>`). OCI tags are capped
+/// at 128 characters (`<base>_<metadata>`), so we keep the metadata comfortably short.
 const MAX_METADATA_LEN: usize = 64;
 
-/// Compose the publishable `[package].version`: the `base` SemVer with the document's
-/// `info.version` attached as build metadata when it yields anything usable.
+/// Compose the publishable `[package].version`: the `base` SemVer with build metadata that
+/// records the provider and the source document's schema version.
 ///
 /// `base` is used verbatim (it is already valid SemVer). When `info_version` sanitizes to a
-/// non-empty build-metadata string it is appended after `+`; otherwise `base` is returned
-/// unchanged.
-pub(crate) fn publish_version(base: &str, info_version: &str) -> String {
+/// non-empty build-metadata string, the metadata `<name>-<schema>` is appended after `+`
+/// (e.g. `0.1.0+vonage-1.11.8`) — the `name` prefix makes each component's metadata
+/// self-identifying. When `info_version` yields nothing usable there is no schema revision to
+/// record, so `base` is returned unchanged.
+pub(crate) fn publish_version(base: &str, name: &str, info_version: &str) -> String {
     match schema_build_metadata(info_version) {
-        Some(meta) => format!("{base}+{meta}"),
+        Some(schema) => {
+            let meta = cap_metadata(format!("{}-{schema}", sanitize_identifier(name)));
+            format!("{base}+{meta}")
+        }
         None => base.to_string(),
     }
 }
@@ -36,7 +41,7 @@ pub(crate) fn publish_version(base: &str, info_version: &str) -> String {
 /// `2022-11-28`, `v3`, `1.0 beta`, ...), so we map them onto that grammar: `.` separates
 /// identifiers, every other non-`[0-9A-Za-z-]` character becomes `-`, runs of `-` are
 /// collapsed, and empty identifiers are dropped. Returns `None` when nothing usable remains.
-pub(crate) fn schema_build_metadata(info_version: &str) -> Option<String> {
+fn schema_build_metadata(info_version: &str) -> Option<String> {
     let identifiers: Vec<String> = info_version
         .split('.')
         .map(sanitize_identifier)
@@ -44,23 +49,24 @@ pub(crate) fn schema_build_metadata(info_version: &str) -> Option<String> {
         .collect();
 
     if identifiers.is_empty() {
-        return None;
-    }
-
-    let mut joined = identifiers.join(".");
-    if joined.len() > MAX_METADATA_LEN {
-        joined.truncate(MAX_METADATA_LEN);
-        // Truncation can leave a trailing separator or dash, which would be an empty/invalid
-        // trailing identifier; trim them off.
-        let trimmed = joined.trim_end_matches(['.', '-']);
-        joined.truncate(trimmed.len());
-    }
-
-    if joined.is_empty() {
         None
     } else {
-        Some(joined)
+        Some(identifiers.join("."))
     }
+}
+
+/// Truncate composed build metadata to [`MAX_METADATA_LEN`] and strip any leading or trailing
+/// separator, which truncation (or an empty name) can otherwise leave behind as an invalid
+/// identifier.
+fn cap_metadata(meta: String) -> String {
+    // Metadata is pure ASCII (every identifier char is `[0-9A-Za-z-]`), so a byte-index
+    // truncation never splits a multibyte character.
+    let capped = if meta.len() > MAX_METADATA_LEN {
+        &meta[..MAX_METADATA_LEN]
+    } else {
+        meta.as_str()
+    };
+    capped.trim_matches(['.', '-']).to_string()
 }
 
 /// Map a single dot-delimited segment onto one SemVer build-metadata identifier: keep
@@ -129,20 +135,35 @@ mod tests {
     #[test]
     fn truncates_overlong_metadata_without_trailing_separator() {
         let long = "a".repeat(100);
-        let meta = schema_build_metadata(&long).expect("non-empty");
+        let version = publish_version("0.1.0", "vonage", &long);
+        let meta = version.strip_prefix("0.1.0+").expect("has metadata");
         assert_eq!(meta.len(), 64);
+        assert!(meta.starts_with("vonage-"));
         assert!(!meta.ends_with('-') && !meta.ends_with('.'));
     }
 
     #[test]
-    fn publish_version_appends_metadata_when_present() {
-        assert_eq!(publish_version("0.1.0", "2022-11-28"), "0.1.0+2022-11-28");
-        assert_eq!(publish_version("0.1.0", "1.0"), "0.1.0+1.0");
+    fn publish_version_prefixes_metadata_with_provider_name() {
+        assert_eq!(
+            publish_version("0.1.0", "vonage", "1.11.8"),
+            "0.1.0+vonage-1.11.8"
+        );
+        assert_eq!(
+            publish_version("0.1.0", "github", "2022-11-28"),
+            "0.1.0+github-2022-11-28"
+        );
+        // A renamed keyword package keeps its published name (`box-api`) in the metadata prefix.
+        assert_eq!(
+            publish_version("0.1.0", "box-api", "1.0"),
+            "0.1.0+box-api-1.0"
+        );
     }
 
     #[test]
     fn publish_version_falls_back_to_base_when_unusable() {
-        assert_eq!(publish_version("0.1.0", ""), "0.1.0");
-        assert_eq!(publish_version("0.1.0", "   "), "0.1.0");
+        // With no usable schema version there is no revision to record, so the provider prefix
+        // is dropped too and the base is returned clean.
+        assert_eq!(publish_version("0.1.0", "vonage", ""), "0.1.0");
+        assert_eq!(publish_version("0.1.0", "vonage", "   "), "0.1.0");
     }
 }

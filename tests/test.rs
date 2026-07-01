@@ -274,7 +274,7 @@ fn emits_world_importing_http_and_secrets() {
 
     // The generated world imports the host HTTP + secrets capabilities and exports the
     // generated interface; operations themselves stay auth-free.
-    assert!(generated.wit.contains("world bindgen {"));
+    assert!(generated.wit.contains("world client {"));
     assert!(generated.wit.contains("import wasi:http/outgoing-handler"));
     assert!(generated.wit.contains("import wasmcloud:secrets/store"));
     assert!(generated.wit.contains("import wasmcloud:secrets/reveal"));

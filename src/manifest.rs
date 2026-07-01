@@ -45,7 +45,7 @@ codegen-units = 256
 /// The `[package]` section targets the `<namespace>` org on GHCR
 /// (`ghcr.io/<namespace>/<name>`) and points `file` at `build/<name>.wasm`, where the build
 /// step deposits the compiled component. `version` is the full publish version, including any
-/// schema build metadata (e.g. `0.1.0+2022-11-28`).
+/// provider/schema build metadata (e.g. `0.1.0+github-2022-11-28`).
 ///
 /// The dependencies (`wasi:http` to perform requests, `wasmcloud:secrets` to fetch
 /// credentials) are written in the explicit table form (`registry`/`namespace`/`package`/
