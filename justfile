@@ -193,11 +193,20 @@ publish-components name="" dry_run="":
     printf '\npublished %d, failed %d, skipped %d\n' "$ok" "$fail" "$skip"
     [[ $fail -eq 0 ]]
 
-# `level` is patch (default), minor, major, or an explicit X.Y.Z — same as `bump`. The bump is
-# written to version.toml before anything is generated; set dry_run=1 to preview the publish
-# without pushing (`just publish minor 1`). Needs GHCR auth (see publish-components).
+# `level` is required: major, minor, or patch. A bare `just publish` fails and asks you to
+# choose, so a release always makes a deliberate SemVer bump. The bump is written to version.toml
+# before anything is generated; set dry_run=1 to preview the publish without pushing
+# (`just publish minor 1`). Needs GHCR auth (see publish-components).
 # Cut a release: bump the shared version, then regenerate, build, and publish every component.
-publish level="patch" dry_run="": (bump level) build (publish-components "" dry_run)
+publish level="" dry_run="":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    level="{{level}}"; dry_run="{{dry_run}}"
+    case "$level" in
+        major|minor|patch) ;;
+        *) echo "just publish needs a release level: major, minor, or patch (e.g. just publish minor)"; exit 1 ;;
+    esac
+    just bump "$level" && just build && just publish-components "" "$dry_run"
 
 # Format-check, lint, and run the test suite.
 test:

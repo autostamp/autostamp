@@ -11,12 +11,13 @@ just publish-components  # 2. push each component to ghcr.io/autostamp
 ```
 
 To cut a release in one step, `just publish <level>` bumps the shared version, then runs both
-recipes above (regenerate → build → publish) at the new version:
+recipes above (regenerate → build → publish) at the new version. A level is required — a bare
+`just publish` fails and asks you to choose, so a release is always a deliberate bump:
 
 ```sh
 just publish minor       # bump version.toml minor, then regenerate + build + publish all
-just publish             # patch release (the default level)
-just publish 1.0.0       # release an explicit version
+just publish patch       # patch release
+just publish major       # major release
 just publish minor 1     # preview: bump + build, but pass dry_run to the publish step
 ```
 
