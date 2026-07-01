@@ -1,0 +1,1266 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `apiKeyScheme` | header `x-api-key` |
+package autostamp:spoonacular@0.2.0;
+
+interface misc {
+  /// Talk to Chatbot
+  record talk-to-chatbot-params {
+    /// The request / question / answer from the user to the chatbot.
+    text: string,
+    /// An arbitrary globally unique id for your conversation. The conversation can contain states so you should pass your context id if you want the bot to be able to remember the conversation.
+    context-id: option<string>
+  }
+  talk-to-chatbot: func(params: talk-to-chatbot-params) -> result<string, string>;
+
+  /// Conversation Suggests
+  record get-conversation-suggests-params {
+    /// A (partial) query from the user. The endpoint will return if it matches topics it can talk about.
+    query: string,
+    /// The number of suggestions to return (between 1 and 25).
+    number: option<f64>
+  }
+  get-conversation-suggests: func(params: get-conversation-suggests-params) -> result<string, string>;
+
+  /// Search Custom Foods
+  record search-custom-foods-params {
+    /// The username.
+    username: string,
+    /// The private hash for the username.
+    hash: string
+  }
+  search-custom-foods: func(params: search-custom-foods-params) -> result<string, string>;
+
+  /// Detect Food in Text
+  detect-food-in-text: func() -> result<string, string>;
+
+  /// Image Analysis by URL
+  record image-analysis-by-url-params {
+    /// The URL of the image to be analyzed.
+    image-url: string
+  }
+  image-analysis-by-url: func(params: image-analysis-by-url-params) -> result<string, string>;
+
+  /// Image Classification by URL
+  record image-classification-by-url-params {
+    /// The URL of the image to be classified.
+    image-url: string
+  }
+  image-classification-by-url: func(params: image-classification-by-url-params) -> result<string, string>;
+
+  /// Random Food Joke
+  get-a-random-food-joke: func() -> result<string, string>;
+
+  /// Search All Food
+  record search-all-food-params {
+    /// The search query.
+    query: string
+  }
+  search-all-food: func(params: search-all-food-params) -> result<string, string>;
+
+  /// Search Site Content
+  record search-site-content-params {
+    /// The query to search for. You can also use partial queries such as "spagh" to already find spaghetti recipes, articles, grocery products, and other content.
+    query: string
+  }
+  search-site-content: func(params: search-site-content-params) -> result<string, string>;
+
+  /// Random Food Trivia
+  get-random-food-trivia: func() -> result<string, string>;
+
+  /// Search Food Videos
+  record search-food-videos-params {
+    /// The type of the recipes. See a full list of supported meal types.
+    type-op: option<string>,
+    /// The cuisine(s) of the recipes. One or more, comma separated. See a full list of supported cuisines.
+    cuisine: option<string>,
+    /// The diet for which the recipes must be suitable. See a full list of supported diets.
+    diet: option<string>,
+    /// A comma-separated list of ingredients that the recipes should contain.
+    include-ingredients: option<string>,
+    /// A comma-separated list of ingredients or ingredient types that the recipes must not contain.
+    exclude-ingredients: option<string>,
+    /// Minimum video length in seconds.
+    min-length: option<f64>,
+    /// Maximum video length in seconds.
+    max-length: option<f64>
+  }
+  search-food-videos: func(params: search-food-videos-params) -> result<string, string>;
+
+}
+
+
+interface ingredients {
+  enum ingredients-by-id-image-measure-enum {
+    us,
+    metric,
+  }
+
+  /// Autocomplete Ingredient Search
+  record autocomplete-ingredient-search-params {
+    /// Whether to return more meta information about the ingredients.
+    meta-information: option<bool>,
+    /// A comma-separated list of intolerances. All recipes returned must not contain ingredients that are not suitable for people with the intolerances entered. See a full list of supported intolerances.
+    intolerances: option<string>
+  }
+  autocomplete-ingredient-search: func(params: autocomplete-ingredient-search-params) -> result<string, string>;
+
+  /// Map Ingredients to Grocery Products
+  record map-ingredients-to-grocery-products-params {
+    ingredients: list<string>,
+    servings: f64
+  }
+  map-ingredients-to-grocery-products: func(params: map-ingredients-to-grocery-products-params) -> result<string, string>;
+
+  /// Ingredient Search
+  record ingredient-search-params {
+    /// Whether to add children of found foods.
+    add-children: option<bool>,
+    /// The minimum percentage of protein the food must have (between 0 and 100).
+    min-protein-percent: option<f64>,
+    /// The maximum percentage of protein the food can have (between 0 and 100).
+    max-protein-percent: option<f64>,
+    /// The minimum percentage of fat the food must have (between 0 and 100).
+    min-fat-percent: option<f64>,
+    /// The maximum percentage of fat the food can have (between 0 and 100).
+    max-fat-percent: option<f64>,
+    /// The minimum percentage of carbs the food must have (between 0 and 100).
+    min-carbs-percent: option<f64>,
+    /// The maximum percentage of carbs the food can have (between 0 and 100).
+    max-carbs-percent: option<f64>,
+    /// Whether to return more meta information about the ingredients.
+    meta-information: option<bool>,
+    /// A comma-separated list of intolerances. All recipes returned must not contain ingredients that are not suitable for people with the intolerances entered. See a full list of supported intolerances.
+    intolerances: option<string>,
+    /// The strategy to sort recipes by. See a full list of supported sorting options.
+    sort: option<string>,
+    /// The direction in which to sort. Must be either 'asc' (ascending) or 'desc' (descending).
+    sort-direction: option<string>
+  }
+  ingredient-search: func(params: ingredient-search-params) -> result<string, string>;
+
+  /// Get Ingredient Substitutes
+  record get-ingredient-substitutes-params {
+    /// The name of the ingredient you want to replace.
+    ingredient-name: string
+  }
+  get-ingredient-substitutes: func(params: get-ingredient-substitutes-params) -> result<string, string>;
+
+  /// Compute Ingredient Amount
+  record compute-ingredient-amount-params {
+    /// The id of the ingredient you want the amount for.
+    id: string,
+    /// The target nutrient. See a list of supported nutrients.
+    nutrient: string,
+    /// The target number of the given nutrient.
+    target: f64,
+    /// The target unit.
+    unit: option<string>
+  }
+  compute-ingredient-amount: func(params: compute-ingredient-amount-params) -> result<string, string>;
+
+  /// Get Ingredient Information
+  record get-ingredient-information-params {
+    /// The ingredient id.
+    id: string,
+    /// The amount of this ingredient.
+    amount: option<f64>,
+    /// The unit for the given amount.
+    unit: option<string>
+  }
+  get-ingredient-information: func(params: get-ingredient-information-params) -> result<string, string>;
+
+  /// Get Ingredient Substitutes by ID
+  record get-ingredient-substitutes-by-id-params {
+    /// The id of the ingredient you want substitutes for.
+    id: string
+  }
+  get-ingredient-substitutes-by-id: func(params: get-ingredient-substitutes-by-id-params) -> result<string, string>;
+
+  /// Ingredients Widget
+  visualize-ingredients: func() -> result<string, string>;
+
+  /// Ingredients by ID Image
+  record ingredients-by-id-image-params {
+    /// The recipe id.
+    id: string,
+    /// Whether the the measures should be 'us' or 'metric'.
+    measure: option<ingredients-by-id-image-measure-enum>
+  }
+  ingredients-by-id-image: func(params: ingredients-by-id-image-params) -> result<string, string>;
+
+}
+
+interface recipes {
+  enum visualize-recipe-ingredients-by-id-measure-enum {
+    us,
+    metric,
+  }
+
+  /// Compute Glycemic Load
+  record compute-glycemic-load-params {
+    ingredients: list<string>
+  }
+  compute-glycemic-load: func(params: compute-glycemic-load-params) -> result<string, string>;
+
+  /// Analyze Recipe
+  record analyze-recipe-params {
+    /// The input language, either "en" or "de".
+    language: option<string>,
+    /// Whether nutrition data should be added to correctly parsed ingredients.
+    include-nutrition: option<bool>,
+    /// Whether taste data should be added to correctly parsed ingredients.
+    include-taste: option<bool>,
+    ingredients: option<list<string>>,
+    instructions: option<string>,
+    servings: option<s32>,
+    title: option<string>
+  }
+  analyze-recipe: func(params: analyze-recipe-params) -> result<string, string>;
+
+  /// Analyze Recipe Instructions
+  analyze-recipe-instructions: func() -> result<string, string>;
+
+  /// Autocomplete Recipe Search
+  autocomplete-recipe-search: func() -> result<string, string>;
+
+  /// Search Recipes
+  record search-recipes-params {
+    /// The cuisine(s) of the recipes. One or more, comma separated (will be interpreted as 'OR'). See a full list of supported cuisines.
+    cuisine: option<string>,
+    /// The cuisine(s) the recipes must not match. One or more, comma separated (will be interpreted as 'AND'). See a full list of supported cuisines.
+    exclude-cuisine: option<string>,
+    /// The diet for which the recipes must be suitable. See a full list of supported diets.
+    diet: option<string>,
+    /// A comma-separated list of intolerances. All recipes returned must not contain ingredients that are not suitable for people with the intolerances entered. See a full list of supported intolerances.
+    intolerances: option<string>,
+    /// The equipment required. Multiple values will be interpreted as 'or'. For example, value could be "blender, frying pan, bowl".
+    equipment: option<string>,
+    /// A comma-separated list of ingredients that should/must be used in the recipes.
+    include-ingredients: option<string>,
+    /// A comma-separated list of ingredients or ingredient types that the recipes must not contain.
+    exclude-ingredients: option<string>,
+    /// The type of recipe. See a full list of supported meal types.
+    type-op: option<string>,
+    /// Whether the recipes must have instructions.
+    instructions-required: option<bool>,
+    /// Add information about the ingredients and whether they are used or missing in relation to the query.
+    fill-ingredients: option<bool>,
+    /// If set to true, you get more information about the recipes returned.
+    add-recipe-information: option<bool>,
+    /// If set to true, you get nutritional information about each recipes returned.
+    add-recipe-nutrition: option<bool>,
+    /// The username of the recipe author.
+    author: option<string>,
+    /// The id of the recipe box to which the search should be limited to.
+    recipe-box-id: option<f64>,
+    /// Enter text that must be found in the title of the recipes.
+    title-match: option<string>,
+    /// The maximum time in minutes it should take to prepare and cook the recipe.
+    max-ready-time: option<f64>,
+    /// The strategy to sort recipes by. See a full list of supported sorting options.
+    sort: option<string>,
+    /// The direction in which to sort. Must be either 'asc' (ascending) or 'desc' (descending).
+    sort-direction: option<string>,
+    /// The minimum amount of carbohydrates in grams the recipe must have.
+    min-carbs: option<f64>,
+    /// The maximum amount of carbohydrates in grams the recipe can have.
+    max-carbs: option<f64>,
+    /// The minimum amount of protein in grams the recipe must have.
+    min-protein: option<f64>,
+    /// The maximum amount of protein in grams the recipe can have.
+    max-protein: option<f64>,
+    /// The minimum amount of calories the recipe must have.
+    min-calories: option<f64>,
+    /// The maximum amount of calories the recipe can have.
+    max-calories: option<f64>,
+    /// The minimum amount of fat in grams the recipe must have.
+    min-fat: option<f64>,
+    /// The maximum amount of fat in grams the recipe can have.
+    max-fat: option<f64>,
+    /// The minimum amount of alcohol in grams the recipe must have.
+    min-alcohol: option<f64>,
+    /// The maximum amount of alcohol in grams the recipe can have.
+    max-alcohol: option<f64>,
+    /// The minimum amount of caffeine in milligrams the recipe must have.
+    min-caffeine: option<f64>,
+    /// The maximum amount of caffeine in milligrams the recipe can have.
+    max-caffeine: option<f64>,
+    /// The minimum amount of copper in milligrams the recipe must have.
+    min-copper: option<f64>,
+    /// The maximum amount of copper in milligrams the recipe can have.
+    max-copper: option<f64>,
+    /// The minimum amount of calcium in milligrams the recipe must have.
+    min-calcium: option<f64>,
+    /// The maximum amount of calcium in milligrams the recipe can have.
+    max-calcium: option<f64>,
+    /// The minimum amount of choline in milligrams the recipe must have.
+    min-choline: option<f64>,
+    /// The maximum amount of choline in milligrams the recipe can have.
+    max-choline: option<f64>,
+    /// The minimum amount of cholesterol in milligrams the recipe must have.
+    min-cholesterol: option<f64>,
+    /// The maximum amount of cholesterol in milligrams the recipe can have.
+    max-cholesterol: option<f64>,
+    /// The minimum amount of fluoride in milligrams the recipe must have.
+    min-fluoride: option<f64>,
+    /// The maximum amount of fluoride in milligrams the recipe can have.
+    max-fluoride: option<f64>,
+    /// The minimum amount of saturated fat in grams the recipe must have.
+    min-saturated-fat: option<f64>,
+    /// The maximum amount of saturated fat in grams the recipe can have.
+    max-saturated-fat: option<f64>,
+    /// The minimum amount of Vitamin A in IU the recipe must have.
+    min-vitamin-a: option<f64>,
+    /// The maximum amount of Vitamin A in IU the recipe can have.
+    max-vitamin-a: option<f64>,
+    /// The minimum amount of Vitamin C milligrams the recipe must have.
+    min-vitamin-c: option<f64>,
+    /// The maximum amount of Vitamin C in milligrams the recipe can have.
+    max-vitamin-c: option<f64>,
+    /// The minimum amount of Vitamin D in micrograms the recipe must have.
+    min-vitamin-d: option<f64>,
+    /// The maximum amount of Vitamin D in micrograms the recipe can have.
+    max-vitamin-d: option<f64>,
+    /// The minimum amount of Vitamin E in milligrams the recipe must have.
+    min-vitamin-e: option<f64>,
+    /// The maximum amount of Vitamin E in milligrams the recipe can have.
+    max-vitamin-e: option<f64>,
+    /// The minimum amount of Vitamin K in micrograms the recipe must have.
+    min-vitamin-k: option<f64>,
+    /// The maximum amount of Vitamin K in micrograms the recipe can have.
+    max-vitamin-k: option<f64>,
+    /// The minimum amount of Vitamin B1 in milligrams the recipe must have.
+    min-vitamin-b1: option<f64>,
+    /// The maximum amount of Vitamin B1 in milligrams the recipe can have.
+    max-vitamin-b1: option<f64>,
+    /// The minimum amount of Vitamin B2 in milligrams the recipe must have.
+    min-vitamin-b2: option<f64>,
+    /// The maximum amount of Vitamin B2 in milligrams the recipe can have.
+    max-vitamin-b2: option<f64>,
+    /// The minimum amount of Vitamin B5 in milligrams the recipe must have.
+    min-vitamin-b5: option<f64>,
+    /// The maximum amount of Vitamin B5 in milligrams the recipe can have.
+    max-vitamin-b5: option<f64>,
+    /// The minimum amount of Vitamin B3 in milligrams the recipe must have.
+    min-vitamin-b3: option<f64>,
+    /// The maximum amount of Vitamin B3 in milligrams the recipe can have.
+    max-vitamin-b3: option<f64>,
+    /// The minimum amount of Vitamin B6 in milligrams the recipe must have.
+    min-vitamin-b6: option<f64>,
+    /// The maximum amount of Vitamin B6 in milligrams the recipe can have.
+    max-vitamin-b6: option<f64>,
+    /// The minimum amount of Vitamin B12 in micrograms the recipe must have.
+    min-vitamin-b12: option<f64>,
+    /// The maximum amount of Vitamin B12 in micrograms the recipe can have.
+    max-vitamin-b12: option<f64>,
+    /// The minimum amount of fiber in grams the recipe must have.
+    min-fiber: option<f64>,
+    /// The maximum amount of fiber in grams the recipe can have.
+    max-fiber: option<f64>,
+    /// The minimum amount of folate in micrograms the recipe must have.
+    min-folate: option<f64>,
+    /// The maximum amount of folate in micrograms the recipe can have.
+    max-folate: option<f64>,
+    /// The minimum amount of folic acid in micrograms the recipe must have.
+    min-folic-acid: option<f64>,
+    /// The maximum amount of folic acid in micrograms the recipe can have.
+    max-folic-acid: option<f64>,
+    /// The minimum amount of iodine in micrograms the recipe must have.
+    min-iodine: option<f64>,
+    /// The maximum amount of iodine in micrograms the recipe can have.
+    max-iodine: option<f64>,
+    /// The minimum amount of iron in milligrams the recipe must have.
+    min-iron: option<f64>,
+    /// The maximum amount of iron in milligrams the recipe can have.
+    max-iron: option<f64>,
+    /// The minimum amount of magnesium in milligrams the recipe must have.
+    min-magnesium: option<f64>,
+    /// The maximum amount of magnesium in milligrams the recipe can have.
+    max-magnesium: option<f64>,
+    /// The minimum amount of manganese in milligrams the recipe must have.
+    min-manganese: option<f64>,
+    /// The maximum amount of manganese in milligrams the recipe can have.
+    max-manganese: option<f64>,
+    /// The minimum amount of phosphorus in milligrams the recipe must have.
+    min-phosphorus: option<f64>,
+    /// The maximum amount of phosphorus in milligrams the recipe can have.
+    max-phosphorus: option<f64>,
+    /// The minimum amount of potassium in milligrams the recipe must have.
+    min-potassium: option<f64>,
+    /// The maximum amount of potassium in milligrams the recipe can have.
+    max-potassium: option<f64>,
+    /// The minimum amount of selenium in micrograms the recipe must have.
+    min-selenium: option<f64>,
+    /// The maximum amount of selenium in micrograms the recipe can have.
+    max-selenium: option<f64>,
+    /// The minimum amount of sodium in milligrams the recipe must have.
+    min-sodium: option<f64>,
+    /// The maximum amount of sodium in milligrams the recipe can have.
+    max-sodium: option<f64>,
+    /// The minimum amount of sugar in grams the recipe must have.
+    min-sugar: option<f64>,
+    /// The maximum amount of sugar in grams the recipe can have.
+    max-sugar: option<f64>,
+    /// The minimum amount of zinc in milligrams the recipe must have.
+    min-zinc: option<f64>,
+    /// The maximum amount of zinc in milligrams the recipe can have.
+    max-zinc: option<f64>
+  }
+  search-recipes: func(params: search-recipes-params) -> result<string, string>;
+
+  /// Convert Amounts
+  record convert-amounts-params {
+    /// The ingredient which you want to convert.
+    ingredient-name: string,
+    /// The amount from which you want to convert, e.g. the 2.5 in "2.5 cups of flour to grams".
+    source-amount: f64,
+    /// The unit from which you want to convert, e.g. the grams in "2.5 cups of flour to grams". You can also use "piece", e.g. "3.4 oz tomatoes to piece"
+    source-unit: string,
+    /// The unit to which you want to convert, e.g. the grams in "2.5 cups of flour to grams". You can also use "piece", e.g. "3.4 oz tomatoes to piece"
+    target-unit: string
+  }
+  convert-amounts: func(params: convert-amounts-params) -> result<string, string>;
+
+  /// Classify Cuisine
+  classify-cuisine: func() -> result<string, string>;
+
+  /// Extract Recipe from Website
+  record extract-recipe-from-website-params {
+    /// The URL of the recipe page.
+    url: string,
+    /// If true, the extraction will be triggered whether we already know the recipe or not. Use this only if information is missing as this operation is slower.
+    force-extraction: option<bool>,
+    /// If true, the recipe will be analyzed and classified resolving in more data such as cuisines, dish types, and more.
+    analyze: option<bool>
+  }
+  extract-recipe-from-website: func(params: extract-recipe-from-website-params) -> result<string, string>;
+
+  /// Search Recipes by Ingredients
+  record search-recipes-by-ingredients-params {
+    /// Whether to maximize used ingredients (1) or minimize missing ingredients (2) first.
+    ranking: option<f64>
+  }
+  search-recipes-by-ingredients: func(params: search-recipes-by-ingredients-params) -> result<string, string>;
+
+  /// Search Recipes by Nutrients
+  record search-recipes-by-nutrients-params {
+    /// The minimum amount of carbohydrates in grams the recipe must have.
+    min-carbs: option<f64>,
+    /// The maximum amount of carbohydrates in grams the recipe can have.
+    max-carbs: option<f64>,
+    /// The minimum amount of protein in grams the recipe must have.
+    min-protein: option<f64>,
+    /// The maximum amount of protein in grams the recipe can have.
+    max-protein: option<f64>,
+    /// The minimum amount of calories the recipe must have.
+    min-calories: option<f64>,
+    /// The maximum amount of calories the recipe can have.
+    max-calories: option<f64>,
+    /// The minimum amount of fat in grams the recipe must have.
+    min-fat: option<f64>,
+    /// The maximum amount of fat in grams the recipe can have.
+    max-fat: option<f64>,
+    /// The minimum amount of alcohol in grams the recipe must have.
+    min-alcohol: option<f64>,
+    /// The maximum amount of alcohol in grams the recipe can have.
+    max-alcohol: option<f64>,
+    /// The minimum amount of caffeine in milligrams the recipe must have.
+    min-caffeine: option<f64>,
+    /// The maximum amount of caffeine in milligrams the recipe can have.
+    max-caffeine: option<f64>,
+    /// The minimum amount of copper in milligrams the recipe must have.
+    min-copper: option<f64>,
+    /// The maximum amount of copper in milligrams the recipe can have.
+    max-copper: option<f64>,
+    /// The minimum amount of calcium in milligrams the recipe must have.
+    min-calcium: option<f64>,
+    /// The maximum amount of calcium in milligrams the recipe can have.
+    max-calcium: option<f64>,
+    /// The minimum amount of choline in milligrams the recipe must have.
+    min-choline: option<f64>,
+    /// The maximum amount of choline in milligrams the recipe can have.
+    max-choline: option<f64>,
+    /// The minimum amount of cholesterol in milligrams the recipe must have.
+    min-cholesterol: option<f64>,
+    /// The maximum amount of cholesterol in milligrams the recipe can have.
+    max-cholesterol: option<f64>,
+    /// The minimum amount of fluoride in milligrams the recipe must have.
+    min-fluoride: option<f64>,
+    /// The maximum amount of fluoride in milligrams the recipe can have.
+    max-fluoride: option<f64>,
+    /// The minimum amount of saturated fat in grams the recipe must have.
+    min-saturated-fat: option<f64>,
+    /// The maximum amount of saturated fat in grams the recipe can have.
+    max-saturated-fat: option<f64>,
+    /// The minimum amount of Vitamin A in IU the recipe must have.
+    min-vitamin-a: option<f64>,
+    /// The maximum amount of Vitamin A in IU the recipe can have.
+    max-vitamin-a: option<f64>,
+    /// The minimum amount of Vitamin C in milligrams the recipe must have.
+    min-vitamin-c: option<f64>,
+    /// The maximum amount of Vitamin C in milligrams the recipe can have.
+    max-vitamin-c: option<f64>,
+    /// The minimum amount of Vitamin D in micrograms the recipe must have.
+    min-vitamin-d: option<f64>,
+    /// The maximum amount of Vitamin D in micrograms the recipe can have.
+    max-vitamin-d: option<f64>,
+    /// The minimum amount of Vitamin E in milligrams the recipe must have.
+    min-vitamin-e: option<f64>,
+    /// The maximum amount of Vitamin E in milligrams the recipe can have.
+    max-vitamin-e: option<f64>,
+    /// The minimum amount of Vitamin K in micrograms the recipe must have.
+    min-vitamin-k: option<f64>,
+    /// The maximum amount of Vitamin K in micrograms the recipe can have.
+    max-vitamin-k: option<f64>,
+    /// The minimum amount of Vitamin B1 in milligrams the recipe must have.
+    min-vitamin-b1: option<f64>,
+    /// The maximum amount of Vitamin B1 in milligrams the recipe can have.
+    max-vitamin-b1: option<f64>,
+    /// The minimum amount of Vitamin B2 in milligrams the recipe must have.
+    min-vitamin-b2: option<f64>,
+    /// The maximum amount of Vitamin B2 in milligrams the recipe can have.
+    max-vitamin-b2: option<f64>,
+    /// The minimum amount of Vitamin B5 in milligrams the recipe must have.
+    min-vitamin-b5: option<f64>,
+    /// The maximum amount of Vitamin B5 in milligrams the recipe can have.
+    max-vitamin-b5: option<f64>,
+    /// The minimum amount of Vitamin B3 in milligrams the recipe must have.
+    min-vitamin-b3: option<f64>,
+    /// The maximum amount of Vitamin B3 in milligrams the recipe can have.
+    max-vitamin-b3: option<f64>,
+    /// The minimum amount of Vitamin B6 in milligrams the recipe must have.
+    min-vitamin-b6: option<f64>,
+    /// The maximum amount of Vitamin B6 in milligrams the recipe can have.
+    max-vitamin-b6: option<f64>,
+    /// The minimum amount of Vitamin B12 in micrograms the recipe must have.
+    min-vitamin-b12: option<f64>,
+    /// The maximum amount of Vitamin B12 in micrograms the recipe can have.
+    max-vitamin-b12: option<f64>,
+    /// The minimum amount of fiber in grams the recipe must have.
+    min-fiber: option<f64>,
+    /// The maximum amount of fiber in grams the recipe can have.
+    max-fiber: option<f64>,
+    /// The minimum amount of folate in micrograms the recipe must have.
+    min-folate: option<f64>,
+    /// The maximum amount of folate in micrograms the recipe can have.
+    max-folate: option<f64>,
+    /// The minimum amount of folic acid in micrograms the recipe must have.
+    min-folic-acid: option<f64>,
+    /// The maximum amount of folic acid in micrograms the recipe can have.
+    max-folic-acid: option<f64>,
+    /// The minimum amount of iodine in micrograms the recipe must have.
+    min-iodine: option<f64>,
+    /// The maximum amount of iodine in micrograms the recipe can have.
+    max-iodine: option<f64>,
+    /// The minimum amount of iron in milligrams the recipe must have.
+    min-iron: option<f64>,
+    /// The maximum amount of iron in milligrams the recipe can have.
+    max-iron: option<f64>,
+    /// The minimum amount of magnesium in milligrams the recipe must have.
+    min-magnesium: option<f64>,
+    /// The maximum amount of magnesium in milligrams the recipe can have.
+    max-magnesium: option<f64>,
+    /// The minimum amount of manganese in milligrams the recipe must have.
+    min-manganese: option<f64>,
+    /// The maximum amount of manganese in milligrams the recipe can have.
+    max-manganese: option<f64>,
+    /// The minimum amount of phosphorus in milligrams the recipe must have.
+    min-phosphorus: option<f64>,
+    /// The maximum amount of phosphorus in milligrams the recipe can have.
+    max-phosphorus: option<f64>,
+    /// The minimum amount of potassium in milligrams the recipe must have.
+    min-potassium: option<f64>,
+    /// The maximum amount of potassium in milligrams the recipe can have.
+    max-potassium: option<f64>,
+    /// The minimum amount of selenium in micrograms the recipe must have.
+    min-selenium: option<f64>,
+    /// The maximum amount of selenium in micrograms the recipe can have.
+    max-selenium: option<f64>,
+    /// The minimum amount of sodium in milligrams the recipe must have.
+    min-sodium: option<f64>,
+    /// The maximum amount of sodium in milligrams the recipe can have.
+    max-sodium: option<f64>,
+    /// The minimum amount of sugar in grams the recipe must have.
+    min-sugar: option<f64>,
+    /// The maximum amount of sugar in grams the recipe can have.
+    max-sugar: option<f64>,
+    /// The minimum amount of zinc in milligrams the recipe must have.
+    min-zinc: option<f64>,
+    /// The maximum amount of zinc in milligrams the recipe can have.
+    max-zinc: option<f64>,
+    /// If true, every request will give you a random set of recipes within the requested limits.
+    random: option<bool>
+  }
+  search-recipes-by-nutrients: func(params: search-recipes-by-nutrients-params) -> result<string, string>;
+
+  /// Guess Nutrition by Dish Name
+  record guess-nutrition-by-dish-name-params {
+    /// The title of the dish.
+    title: string
+  }
+  guess-nutrition-by-dish-name: func(params: guess-nutrition-by-dish-name-params) -> result<string, string>;
+
+  /// Get Recipe Information Bulk
+  record get-recipe-information-bulk-params {
+    /// A comma-separated list of recipe ids.
+    ids: string
+  }
+  get-recipe-information-bulk: func(params: get-recipe-information-bulk-params) -> result<string, string>;
+
+  /// Parse Ingredients
+  parse-ingredients: func() -> result<string, string>;
+
+  /// Analyze a Recipe Search Query
+  record analyze-a-recipe-search-query-params {
+    /// The recipe search query.
+    q: string
+  }
+  analyze-a-recipe-search-query: func(params: analyze-a-recipe-search-query-params) -> result<string, string>;
+
+  /// Quick Answer
+  record quick-answer-params {
+    /// The nutrition related question.
+    q: string
+  }
+  quick-answer: func(params: quick-answer-params) -> result<string, string>;
+
+  /// Get Random Recipes
+  get-random-recipes: func() -> result<string, string>;
+
+  /// Equipment Widget
+  visualize-equipment: func() -> result<string, string>;
+
+  /// Recipe Nutrition Widget
+  visualize-recipe-nutrition: func() -> result<string, string>;
+
+  /// Price Breakdown Widget
+  visualize-price-breakdown: func() -> result<string, string>;
+
+  /// Create Recipe Card
+  create-recipe-card: func() -> result<string, string>;
+
+  /// Recipe Taste Widget
+  record visualize-recipe-taste-params {
+    /// Whether to normalize to the strongest taste.
+    normalize: option<bool>
+  }
+  visualize-recipe-taste: func(params: visualize-recipe-taste-params) -> result<string, string>;
+
+  /// Get Analyzed Recipe Instructions
+  record get-analyzed-recipe-instructions-params {
+    /// The recipe id.
+    id: string,
+    /// Whether to break down the recipe steps even more.
+    step-breakdown: option<bool>
+  }
+  get-analyzed-recipe-instructions: func(params: get-analyzed-recipe-instructions-params) -> result<string, string>;
+
+  /// Create Recipe Card
+  record create-recipe-card-get-params {
+    /// The recipe id.
+    id: string,
+    /// The mask to put over the recipe image ("ellipseMask", "diamondMask", "starMask", "heartMask", "potMask", "fishMask").
+    mask: option<string>,
+    /// The background image ("none","background1", or "background2").
+    background-image: option<string>,
+    /// The background color for the recipe card as a hex-string.
+    background-color: option<string>,
+    /// The font color for the recipe card as a hex-string.
+    font-color: option<string>
+  }
+  create-recipe-card-get: func(params: create-recipe-card-get-params) -> result<string, string>;
+
+  /// Equipment by ID Widget
+  record visualize-recipe-equipment-by-id-params {
+    /// The recipe id.
+    id: string
+  }
+  visualize-recipe-equipment-by-id: func(params: visualize-recipe-equipment-by-id-params) -> result<string, string>;
+
+  /// Equipment by ID
+  record get-recipe-equipment-by-id-params {
+    /// The recipe id.
+    id: string
+  }
+  get-recipe-equipment-by-id: func(params: get-recipe-equipment-by-id-params) -> result<string, string>;
+
+  /// Equipment by ID Image
+  record equipment-by-id-image-params {
+    /// The recipe id.
+    id: string
+  }
+  equipment-by-id-image: func(params: equipment-by-id-image-params) -> result<string, string>;
+
+  /// Get Recipe Information
+  record get-recipe-information-params {
+    /// The id of the recipe.
+    id: string
+  }
+  get-recipe-information: func(params: get-recipe-information-params) -> result<string, string>;
+
+  /// Ingredients by ID Widget
+  record visualize-recipe-ingredients-by-id-params {
+    /// The recipe id.
+    id: string,
+    /// Whether the the measures should be 'us' or 'metric'.
+    measure: option<visualize-recipe-ingredients-by-id-measure-enum>
+  }
+  visualize-recipe-ingredients-by-id: func(params: visualize-recipe-ingredients-by-id-params) -> result<string, string>;
+
+  /// Ingredients by ID
+  record get-recipe-ingredients-by-id-params {
+    /// The recipe id.
+    id: string
+  }
+  get-recipe-ingredients-by-id: func(params: get-recipe-ingredients-by-id-params) -> result<string, string>;
+
+  /// Recipe Nutrition Label Widget
+  record recipe-nutrition-label-widget-params {
+    /// The recipe id.
+    id: string,
+    /// Whether to show optional nutrients.
+    show-optional-nutrients: option<bool>,
+    /// Whether to show zero values.
+    show-zero-values: option<bool>,
+    /// Whether to show a list of ingredients.
+    show-ingredients: option<bool>
+  }
+  recipe-nutrition-label-widget: func(params: recipe-nutrition-label-widget-params) -> result<string, string>;
+
+  /// Recipe Nutrition Label Image
+  record recipe-nutrition-label-image-params {
+    /// The recipe id.
+    id: string,
+    /// Whether to show optional nutrients.
+    show-optional-nutrients: option<bool>,
+    /// Whether to show zero values.
+    show-zero-values: option<bool>,
+    /// Whether to show a list of ingredients.
+    show-ingredients: option<bool>
+  }
+  recipe-nutrition-label-image: func(params: recipe-nutrition-label-image-params) -> result<string, string>;
+
+  /// Recipe Nutrition by ID Widget
+  record visualize-recipe-nutrition-by-id-params {
+    /// The recipe id.
+    id: string
+  }
+  visualize-recipe-nutrition-by-id: func(params: visualize-recipe-nutrition-by-id-params) -> result<string, string>;
+
+  /// Nutrition by ID
+  record get-recipe-nutrition-widget-by-id-params {
+    /// The recipe id.
+    id: string
+  }
+  get-recipe-nutrition-widget-by-id: func(params: get-recipe-nutrition-widget-by-id-params) -> result<string, string>;
+
+  /// Recipe Nutrition by ID Image
+  record recipe-nutrition-by-id-image-params {
+    /// The recipe id.
+    id: string
+  }
+  recipe-nutrition-by-id-image: func(params: recipe-nutrition-by-id-image-params) -> result<string, string>;
+
+  /// Price Breakdown by ID Widget
+  record visualize-recipe-price-breakdown-by-id-params {
+    /// The recipe id.
+    id: string
+  }
+  visualize-recipe-price-breakdown-by-id: func(params: visualize-recipe-price-breakdown-by-id-params) -> result<string, string>;
+
+  /// Price Breakdown by ID
+  record get-recipe-price-breakdown-by-id-params {
+    /// The recipe id.
+    id: string
+  }
+  get-recipe-price-breakdown-by-id: func(params: get-recipe-price-breakdown-by-id-params) -> result<string, string>;
+
+  /// Price Breakdown by ID Image
+  record price-breakdown-by-id-image-params {
+    /// The recipe id.
+    id: string
+  }
+  price-breakdown-by-id-image: func(params: price-breakdown-by-id-image-params) -> result<string, string>;
+
+  /// Get Similar Recipes
+  record get-similar-recipes-params {
+    /// The id of the source recipe for which similar recipes should be found.
+    id: string
+  }
+  get-similar-recipes: func(params: get-similar-recipes-params) -> result<string, string>;
+
+  /// Summarize Recipe
+  record summarize-recipe-params {
+    /// The recipe id.
+    id: string
+  }
+  summarize-recipe: func(params: summarize-recipe-params) -> result<string, string>;
+
+  /// Recipe Taste by ID Widget
+  record visualize-recipe-taste-by-id-params {
+    /// The recipe id.
+    id: string,
+    /// Whether to normalize to the strongest taste.
+    normalize: option<bool>
+  }
+  visualize-recipe-taste-by-id: func(params: visualize-recipe-taste-by-id-params) -> result<string, string>;
+
+  /// Taste by ID
+  record get-recipe-taste-by-id-params {
+    /// The recipe id.
+    id: string,
+    /// Normalize to the strongest taste.
+    normalize: option<bool>
+  }
+  get-recipe-taste-by-id: func(params: get-recipe-taste-by-id-params) -> result<string, string>;
+
+  /// Recipe Taste by ID Image
+  record recipe-taste-by-id-image-params {
+    /// The recipe id.
+    id: string,
+    /// Normalize to the strongest taste.
+    normalize: option<bool>
+  }
+  recipe-taste-by-id-image: func(params: recipe-taste-by-id-image-params) -> result<string, string>;
+
+}
+
+interface menu-items {
+  /// Search Menu Items
+  record search-menu-items-params {
+    /// The minimum amount of calories the menu item must have.
+    min-calories: option<f64>,
+    /// The maximum amount of calories the menu item can have.
+    max-calories: option<f64>,
+    /// The minimum amount of carbohydrates in grams the menu item must have.
+    min-carbs: option<f64>,
+    /// The maximum amount of carbohydrates in grams the menu item can have.
+    max-carbs: option<f64>,
+    /// The minimum amount of protein in grams the menu item must have.
+    min-protein: option<f64>,
+    /// The maximum amount of protein in grams the menu item can have.
+    max-protein: option<f64>,
+    /// The minimum amount of fat in grams the menu item must have.
+    min-fat: option<f64>,
+    /// The maximum amount of fat in grams the menu item can have.
+    max-fat: option<f64>,
+    /// If set to true, you get more information about the menu items returned.
+    add-menu-item-information: option<bool>
+  }
+  search-menu-items: func(params: search-menu-items-params) -> result<string, string>;
+
+  /// Autocomplete Menu Item Search
+  record autocomplete-menu-item-search-params {
+    /// The (partial) search query.
+    query: string,
+    /// The number of results to return (between 1 and 25).
+    number: option<f64>
+  }
+  autocomplete-menu-item-search: func(params: autocomplete-menu-item-search-params) -> result<string, string>;
+
+  /// Get Menu Item Information
+  record get-menu-item-information-params {
+    /// The menu item id.
+    id: string
+  }
+  get-menu-item-information: func(params: get-menu-item-information-params) -> result<string, string>;
+
+  /// Menu Item Nutrition Label Widget
+  record menu-item-nutrition-label-widget-params {
+    /// The menu item id.
+    id: string,
+    /// Whether to show optional nutrients.
+    show-optional-nutrients: option<bool>,
+    /// Whether to show zero values.
+    show-zero-values: option<bool>,
+    /// Whether to show a list of ingredients.
+    show-ingredients: option<bool>
+  }
+  menu-item-nutrition-label-widget: func(params: menu-item-nutrition-label-widget-params) -> result<string, string>;
+
+  /// Menu Item Nutrition Label Image
+  record menu-item-nutrition-label-image-params {
+    /// The menu item id.
+    id: string,
+    /// Whether to show optional nutrients.
+    show-optional-nutrients: option<bool>,
+    /// Whether to show zero values.
+    show-zero-values: option<bool>,
+    /// Whether to show a list of ingredients.
+    show-ingredients: option<bool>
+  }
+  menu-item-nutrition-label-image: func(params: menu-item-nutrition-label-image-params) -> result<string, string>;
+
+  /// Menu Item Nutrition by ID Widget
+  record visualize-menu-item-nutrition-by-id-params {
+    /// The menu item id.
+    id: string
+  }
+  visualize-menu-item-nutrition-by-id: func(params: visualize-menu-item-nutrition-by-id-params) -> result<string, string>;
+
+  /// Menu Item Nutrition by ID Image
+  record menu-item-nutrition-by-id-image-params {
+    /// The menu item id.
+    id: string
+  }
+  menu-item-nutrition-by-id-image: func(params: menu-item-nutrition-by-id-image-params) -> result<string, string>;
+
+}
+
+interface products {
+  enum classify-grocery-product-locale-enum {
+    en-us,
+    en-gb,
+  }
+
+  record classify-grocery-product-bulk-body-item {
+    plu-code: string,
+    title: string,
+    upc: string
+  }
+
+  /// Classify Grocery Product
+  record classify-grocery-product-params {
+    /// The display name of the returned category, supported is en_US (for American English) and en_GB (for British English).
+    locale: option<classify-grocery-product-locale-enum>,
+    plu-code: string,
+    title: string,
+    upc: string
+  }
+  classify-grocery-product: func(params: classify-grocery-product-params) -> result<string, string>;
+
+  /// Classify Grocery Product Bulk
+  record classify-grocery-product-bulk-params {
+    /// The display name of the returned category, supported is en_US (for American English) and en_GB (for British English).
+    locale: option<string>,
+    body: list<classify-grocery-product-bulk-body-item>
+  }
+  classify-grocery-product-bulk: func(params: classify-grocery-product-bulk-params) -> result<string, string>;
+
+  /// Search Grocery Products
+  record search-grocery-products-params {
+    /// The minimum amount of calories the product must have.
+    min-calories: option<f64>,
+    /// The maximum amount of calories the product can have.
+    max-calories: option<f64>,
+    /// The minimum amount of carbohydrates in grams the product must have.
+    min-carbs: option<f64>,
+    /// The maximum amount of carbohydrates in grams the product can have.
+    max-carbs: option<f64>,
+    /// The minimum amount of protein in grams the product must have.
+    min-protein: option<f64>,
+    /// The maximum amount of protein in grams the product can have.
+    max-protein: option<f64>,
+    /// The minimum amount of fat in grams the product must have.
+    min-fat: option<f64>,
+    /// The maximum amount of fat in grams the product can have.
+    max-fat: option<f64>,
+    /// If set to true, you get more information about the products returned.
+    add-product-information: option<bool>
+  }
+  search-grocery-products: func(params: search-grocery-products-params) -> result<string, string>;
+
+  /// Autocomplete Product Search
+  record autocomplete-product-search-params {
+    /// The (partial) search query.
+    query: string,
+    /// The number of results to return (between 1 and 25).
+    number: option<s32>
+  }
+  autocomplete-product-search: func(params: autocomplete-product-search-params) -> result<string, string>;
+
+  /// Search Grocery Products by UPC
+  record search-grocery-products-by-upc-params {
+    /// The product's UPC.
+    upc: string
+  }
+  search-grocery-products-by-upc: func(params: search-grocery-products-by-upc-params) -> result<string, string>;
+
+  /// Get Comparable Products
+  record get-comparable-products-params {
+    /// The UPC of the product for which you want to find comparable products.
+    upc: string
+  }
+  get-comparable-products: func(params: get-comparable-products-params) -> result<string, string>;
+
+  /// Get Product Information
+  record get-product-information-params {
+    /// The id of the packaged food.
+    id: string
+  }
+  get-product-information: func(params: get-product-information-params) -> result<string, string>;
+
+  /// Product Nutrition Label Widget
+  record product-nutrition-label-widget-params {
+    /// The product id.
+    id: string,
+    /// Whether to show optional nutrients.
+    show-optional-nutrients: option<bool>,
+    /// Whether to show zero values.
+    show-zero-values: option<bool>,
+    /// Whether to show a list of ingredients.
+    show-ingredients: option<bool>
+  }
+  product-nutrition-label-widget: func(params: product-nutrition-label-widget-params) -> result<string, string>;
+
+  /// Product Nutrition Label Image
+  record product-nutrition-label-image-params {
+    /// The product id.
+    id: string,
+    /// Whether to show optional nutrients.
+    show-optional-nutrients: option<bool>,
+    /// Whether to show zero values.
+    show-zero-values: option<bool>,
+    /// Whether to show a list of ingredients.
+    show-ingredients: option<bool>
+  }
+  product-nutrition-label-image: func(params: product-nutrition-label-image-params) -> result<string, string>;
+
+  /// Product Nutrition by ID Widget
+  record visualize-product-nutrition-by-id-params {
+    /// The id of the product.
+    id: string
+  }
+  visualize-product-nutrition-by-id: func(params: visualize-product-nutrition-by-id-params) -> result<string, string>;
+
+  /// Product Nutrition by ID Image
+  record product-nutrition-by-id-image-params {
+    /// The id of the product.
+    id: string
+  }
+  product-nutrition-by-id-image: func(params: product-nutrition-by-id-image-params) -> result<string, string>;
+
+}
+
+interface food {
+  /// Search Restaurants
+  record search-restaurants-params {
+    /// The search query.
+    query: option<string>,
+    /// The latitude of the user's location.
+    lat: option<f64>,
+    /// The longitude of the user's location.".
+    lng: option<f64>,
+    /// The distance around the location in miles.
+    distance: option<f64>,
+    /// The user's budget for a meal in USD.
+    budget: option<f64>,
+    /// The cuisine of the restaurant.
+    cuisine: option<string>,
+    /// The minimum rating of the restaurant between 0 and 5.
+    min-rating: option<f64>,
+    /// Whether the restaurant must be open at the time of search.
+    is-open: option<bool>,
+    /// How to sort the results, one of the following 'cheapest', 'fastest', 'rating', 'distance' or the default 'relevance'.
+    sort: option<string>,
+    /// The page number of results.
+    page: option<f64>
+  }
+  search-restaurants: func(params: search-restaurants-params) -> result<string, string>;
+
+}
+
+interface wine {
+  /// Wine Description
+  record get-wine-description-params {
+    /// The name of the wine that should be paired, e.g. "merlot", "riesling", or "malbec".
+    wine: string
+  }
+  get-wine-description: func(params: get-wine-description-params) -> result<string, string>;
+
+  /// Dish Pairing for Wine
+  record get-dish-pairing-for-wine-params {
+    /// The type of wine that should be paired, e.g. "merlot", "riesling", or "malbec".
+    wine: string
+  }
+  get-dish-pairing-for-wine: func(params: get-dish-pairing-for-wine-params) -> result<string, string>;
+
+  /// Wine Pairing
+  record get-wine-pairing-params {
+    /// The food to get a pairing for. This can be a dish ("steak"), an ingredient ("salmon"), or a cuisine ("italian").
+    food: string,
+    /// The maximum price for the specific wine recommendation in USD.
+    max-price: option<f64>
+  }
+  get-wine-pairing: func(params: get-wine-pairing-params) -> result<string, string>;
+
+  /// Wine Recommendation
+  record get-wine-recommendation-params {
+    /// The type of wine to get a specific product recommendation for.
+    wine: string,
+    /// The maximum price for the specific wine recommendation in USD.
+    max-price: option<f64>,
+    /// The minimum rating of the recommended wine between 0 and 1. For example, 0.8 equals 4 out of 5 stars.
+    min-rating: option<f64>,
+    /// The number of wine recommendations expected (between 1 and 100).
+    number: option<f64>
+  }
+  get-wine-recommendation: func(params: get-wine-recommendation-params) -> result<string, string>;
+
+}
+
+interface meal-planning {
+  record add-to-meal-plan-body-value {
+    ingredients: list<add-to-meal-plan-body-value-ingredients-item>
+  }
+
+  record add-to-meal-plan-body-value-ingredients-item {
+    name: string
+  }
+
+  /// Generate Meal Plan
+  record generate-meal-plan-params {
+    /// Either for one "day" or an entire "week".
+    time-frame: option<string>,
+    /// What is the caloric target for one day? The meal plan generator will try to get as close as possible to that goal.
+    target-calories: option<f64>,
+    /// Enter a diet that the meal plan has to adhere to. See a full list of supported diets.
+    diet: option<string>,
+    /// A comma-separated list of allergens or ingredients that must be excluded.
+    exclude: option<string>
+  }
+  generate-meal-plan: func(params: generate-meal-plan-params) -> result<string, string>;
+
+  /// Clear Meal Plan Day
+  record clear-meal-plan-day-params {
+    /// The username.
+    username: string,
+    /// The date in the format yyyy-mm-dd.
+    date: string
+  }
+  clear-meal-plan-day: func(params: clear-meal-plan-day-params) -> result<string, string>;
+
+  /// Add to Meal Plan
+  record add-to-meal-plan-params {
+    /// The username.
+    username: string,
+    date: f64,
+    position: s32,
+    slot: s32,
+    type-op: string,
+    value: add-to-meal-plan-body-value
+  }
+  add-to-meal-plan: func(params: add-to-meal-plan-params) -> result<string, string>;
+
+  /// Delete from Meal Plan
+  record delete-from-meal-plan-params {
+    /// The username.
+    username: string,
+    /// The shopping list item id.
+    id: string
+  }
+  delete-from-meal-plan: func(params: delete-from-meal-plan-params) -> result<string, string>;
+
+  /// Get Shopping List
+  record get-shopping-list-params {
+    /// The username.
+    username: string
+  }
+  get-shopping-list: func(params: get-shopping-list-params) -> result<string, string>;
+
+  /// Add to Shopping List
+  record add-to-shopping-list-params {
+    /// The username.
+    username: string,
+    aisle: string,
+    item: string,
+    parse: bool
+  }
+  add-to-shopping-list: func(params: add-to-shopping-list-params) -> result<string, string>;
+
+  /// Delete from Shopping List
+  record delete-from-shopping-list-params {
+    /// The username.
+    username: string,
+    /// The shopping list item id.
+    id: string
+  }
+  delete-from-shopping-list: func(params: delete-from-shopping-list-params) -> result<string, string>;
+
+  /// Generate Shopping List
+  record generate-shopping-list-params {
+    /// The username.
+    username: string,
+    /// The start date in the format yyyy-mm-dd.
+    start-date: string,
+    /// The end date in the format yyyy-mm-dd.
+    end-date: string
+  }
+  generate-shopping-list: func(params: generate-shopping-list-params) -> result<string, string>;
+
+  /// Get Meal Plan Templates
+  record get-meal-plan-templates-params {
+    /// The username.
+    username: string
+  }
+  get-meal-plan-templates: func(params: get-meal-plan-templates-params) -> result<string, string>;
+
+  /// Add Meal Plan Template
+  record add-meal-plan-template-params {
+    /// The username.
+    username: string,
+    /// The private hash for the username.
+    hash: string
+  }
+  add-meal-plan-template: func(params: add-meal-plan-template-params) -> result<string, string>;
+
+  /// Get Meal Plan Template
+  record get-meal-plan-template-params {
+    /// The username.
+    username: string,
+    /// The shopping list item id.
+    id: string
+  }
+  get-meal-plan-template: func(params: get-meal-plan-template-params) -> result<string, string>;
+
+  /// Delete Meal Plan Template
+  record delete-meal-plan-template-params {
+    /// The username.
+    username: string,
+    /// The shopping list item id.
+    id: string,
+    /// The private hash for the username.
+    hash: string
+  }
+  delete-meal-plan-template: func(params: delete-meal-plan-template-params) -> result<string, string>;
+
+  /// Get Meal Plan Week
+  record get-meal-plan-week-params {
+    /// The username.
+    username: string,
+    /// The start date of the meal planned week in the format yyyy-mm-dd.
+    start-date: string
+  }
+  get-meal-plan-week: func(params: get-meal-plan-week-params) -> result<string, string>;
+
+  /// Connect User
+  record connect-user-params {
+    email: string,
+    first-name: string,
+    last-name: string,
+    username: string
+  }
+  connect-user: func(params: connect-user-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export misc;
+  export ingredients;
+  export recipes;
+  export menu-items;
+  export products;
+  export food;
+  export wine;
+  export meal-planning;
+}

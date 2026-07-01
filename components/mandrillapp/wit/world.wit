@@ -1,0 +1,852 @@
+package autostamp:mandrillapp@0.2.0;
+
+interface exports {
+  record post-exports-activity-json-params {
+    api-keys: option<list<string>>,
+    date-from: option<string>,
+    date-to: option<string>,
+    key: option<string>,
+    notify-email: option<string>,
+    senders: option<list<string>>,
+    states: option<list<string>>,
+    tags: option<list<string>>
+  }
+  post-exports-activity-json: func(params: post-exports-activity-json-params) -> result<string, string>;
+
+  record post-exports-info-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-exports-info-json: func(params: post-exports-info-json-params) -> result<string, string>;
+
+  record post-exports-list-json-params {
+    key: option<string>
+  }
+  post-exports-list-json: func(params: post-exports-list-json-params) -> result<string, string>;
+
+  record post-exports-rejects-json-params {
+    key: option<string>,
+    notify-email: option<string>
+  }
+  post-exports-rejects-json: func(params: post-exports-rejects-json-params) -> result<string, string>;
+
+  record post-exports-whitelist-json-params {
+    key: option<string>,
+    notify-email: option<string>
+  }
+  post-exports-whitelist-json: func(params: post-exports-whitelist-json-params) -> result<string, string>;
+
+}
+
+
+interface inbound {
+  record post-inbound-add-domain-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-inbound-add-domain-json: func(params: post-inbound-add-domain-json-params) -> result<string, string>;
+
+  record post-inbound-add-route-json-params {
+    domain: option<string>,
+    key: option<string>,
+    pattern: option<string>,
+    url: option<string>
+  }
+  post-inbound-add-route-json: func(params: post-inbound-add-route-json-params) -> result<string, string>;
+
+  record post-inbound-check-domain-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-inbound-check-domain-json: func(params: post-inbound-check-domain-json-params) -> result<string, string>;
+
+  record post-inbound-delete-domain-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-inbound-delete-domain-json: func(params: post-inbound-delete-domain-json-params) -> result<string, string>;
+
+  record post-inbound-delete-route-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-inbound-delete-route-json: func(params: post-inbound-delete-route-json-params) -> result<string, string>;
+
+  record post-inbound-domains-json-params {
+    key: option<string>
+  }
+  post-inbound-domains-json: func(params: post-inbound-domains-json-params) -> result<string, string>;
+
+  record post-inbound-routes-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-inbound-routes-json: func(params: post-inbound-routes-json-params) -> result<string, string>;
+
+  record post-inbound-send-raw-json-params {
+    client-address: option<string>,
+    helo: option<string>,
+    key: option<string>,
+    mail-from: option<string>,
+    raw-message: option<string>,
+    to: option<list<string>>
+  }
+  post-inbound-send-raw-json: func(params: post-inbound-send-raw-json-params) -> result<string, string>;
+
+  record post-inbound-update-route-json-params {
+    id: option<string>,
+    key: option<string>,
+    pattern: option<string>,
+    url: option<string>
+  }
+  post-inbound-update-route-json: func(params: post-inbound-update-route-json-params) -> result<string, string>;
+
+}
+
+interface ips {
+  record post-ips-cancel-warmup-json-params {
+    ip: option<string>,
+    key: option<string>
+  }
+  post-ips-cancel-warmup-json: func(params: post-ips-cancel-warmup-json-params) -> result<string, string>;
+
+  record post-ips-check-custom-dns-json-params {
+    domain: option<string>,
+    ip: option<string>,
+    key: option<string>
+  }
+  post-ips-check-custom-dns-json: func(params: post-ips-check-custom-dns-json-params) -> result<string, string>;
+
+  record post-ips-create-pool-json-params {
+    key: option<string>,
+    pool: option<string>
+  }
+  post-ips-create-pool-json: func(params: post-ips-create-pool-json-params) -> result<string, string>;
+
+  record post-ips-delete-pool-json-params {
+    key: option<string>,
+    pool: option<string>
+  }
+  post-ips-delete-pool-json: func(params: post-ips-delete-pool-json-params) -> result<string, string>;
+
+  record post-ips-delete-json-params {
+    ip: option<string>,
+    key: option<string>
+  }
+  post-ips-delete-json: func(params: post-ips-delete-json-params) -> result<string, string>;
+
+  record post-ips-info-json-params {
+    ip: option<string>,
+    key: option<string>
+  }
+  post-ips-info-json: func(params: post-ips-info-json-params) -> result<string, string>;
+
+  record post-ips-list-pools-json-params {
+    key: option<string>
+  }
+  post-ips-list-pools-json: func(params: post-ips-list-pools-json-params) -> result<string, string>;
+
+  record post-ips-list-json-params {
+    key: option<string>
+  }
+  post-ips-list-json: func(params: post-ips-list-json-params) -> result<string, string>;
+
+  record post-ips-pool-info-json-params {
+    key: option<string>,
+    pool: option<string>
+  }
+  post-ips-pool-info-json: func(params: post-ips-pool-info-json-params) -> result<string, string>;
+
+  record post-ips-provision-json-params {
+    key: option<string>,
+    pool: option<string>,
+    warmup: option<bool>
+  }
+  post-ips-provision-json: func(params: post-ips-provision-json-params) -> result<string, string>;
+
+  record post-ips-set-custom-dns-json-params {
+    domain: option<string>,
+    ip: option<string>,
+    key: option<string>
+  }
+  post-ips-set-custom-dns-json: func(params: post-ips-set-custom-dns-json-params) -> result<string, string>;
+
+  record post-ips-set-pool-json-params {
+    create-pool: option<bool>,
+    ip: option<string>,
+    key: option<string>,
+    pool: option<string>
+  }
+  post-ips-set-pool-json: func(params: post-ips-set-pool-json-params) -> result<string, string>;
+
+  record post-ips-start-warmup-json-params {
+    ip: option<string>,
+    key: option<string>
+  }
+  post-ips-start-warmup-json: func(params: post-ips-start-warmup-json-params) -> result<string, string>;
+
+}
+
+interface messages {
+  record messages-send-template-message {
+    attachments: option<list<messages-send-template-message-attachments-item>>,
+    auto-html: option<string>,
+    auto-text: option<string>,
+    bcc-address: option<string>,
+    from-email: option<string>,
+    from-name: option<string>,
+    global-merge-vars: option<list<messages-send-template-message-global-merge-vars-item>>,
+    google-analytics-campaign: option<string>,
+    google-analytics-domains: option<list<string>>,
+    headers: option<messages-send-template-message-headers>,
+    html: option<string>,
+    images: option<list<messages-send-template-message-images-item>>,
+    important: option<bool>,
+    inline-css: option<string>,
+    merge: option<bool>,
+    merge-vars: option<list<messages-send-template-message-merge-vars-item>>,
+    metadata: option<messages-send-template-message-metadata>,
+    preserve-recipients: option<string>,
+    recipient-metadata: option<list<messages-send-template-message-recipient-metadata-item>>,
+    return-path-domain: option<string>,
+    signing-domain: option<string>,
+    subaccount: option<string>,
+    subject: option<string>,
+    tags: option<list<string>>,
+    text: option<string>,
+    to: option<list<messages-send-template-message-to-item>>,
+    track-clicks: option<string>,
+    track-opens: option<string>,
+    tracking-domain: option<string>,
+    url-strip-qs: option<string>,
+    view-content-link: option<string>
+  }
+
+  record messages-send-template-message-attachments-item {
+    content: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record messages-send-template-message-global-merge-vars-item {
+    content: option<string>,
+    name: option<string>
+  }
+
+  record messages-send-template-message-headers {
+    reply-to: option<string>
+  }
+
+  record messages-send-template-message-images-item {
+    content: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record messages-send-template-message-merge-vars-item {
+    rcpt: option<string>,
+    vars: option<list<messages-send-template-message-merge-vars-item-vars-item>>
+  }
+
+  record messages-send-template-message-merge-vars-item-vars-item {
+    content: option<string>,
+    name: option<string>
+  }
+
+  record messages-send-template-message-metadata {
+    website: option<string>
+  }
+
+  record messages-send-template-message-recipient-metadata-item {
+    rcpt: option<string>,
+    values: option<messages-send-template-message-recipient-metadata-item-values>
+  }
+
+  record messages-send-template-message-recipient-metadata-item-values {
+    user-id: option<s32>
+  }
+
+  record messages-send-template-message-to-item {
+    email: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record messages-send-template-template-content-item {
+    content: option<string>,
+    name: option<string>
+  }
+
+  record messages-send-message {
+    attachments: option<list<messages-send-message-attachments-item>>,
+    auto-html: option<string>,
+    auto-text: option<string>,
+    bcc-address: option<string>,
+    from-email: option<string>,
+    from-name: option<string>,
+    global-merge-vars: option<list<messages-send-message-global-merge-vars-item>>,
+    google-analytics-campaign: option<string>,
+    google-analytics-domains: option<list<string>>,
+    headers: option<messages-send-message-headers>,
+    html: option<string>,
+    images: option<list<messages-send-message-images-item>>,
+    important: option<bool>,
+    inline-css: option<string>,
+    merge: option<bool>,
+    merge-vars: option<list<messages-send-message-merge-vars-item>>,
+    metadata: option<messages-send-message-metadata>,
+    preserve-recipients: option<string>,
+    recipient-metadata: option<list<messages-send-message-recipient-metadata-item>>,
+    return-path-domain: option<string>,
+    signing-domain: option<string>,
+    subaccount: option<string>,
+    subject: option<string>,
+    tags: option<list<string>>,
+    text: option<string>,
+    to: option<list<messages-send-message-to-item>>,
+    track-clicks: option<string>,
+    track-opens: option<string>,
+    tracking-domain: option<string>,
+    url-strip-qs: option<string>,
+    view-content-link: option<string>
+  }
+
+  record messages-send-message-attachments-item {
+    content: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record messages-send-message-global-merge-vars-item {
+    content: option<string>,
+    name: option<string>
+  }
+
+  record messages-send-message-headers {
+    reply-to: option<string>
+  }
+
+  record messages-send-message-images-item {
+    content: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record messages-send-message-merge-vars-item {
+    rcpt: option<string>,
+    vars: option<list<messages-send-message-merge-vars-item-vars-item>>
+  }
+
+  record messages-send-message-merge-vars-item-vars-item {
+    content: option<string>,
+    name: option<string>
+  }
+
+  record messages-send-message-metadata {
+    website: option<string>
+  }
+
+  record messages-send-message-recipient-metadata-item {
+    rcpt: option<string>,
+    values: option<messages-send-message-recipient-metadata-item-values>
+  }
+
+  record messages-send-message-recipient-metadata-item-values {
+    user-id: option<s32>
+  }
+
+  record messages-send-message-to-item {
+    email: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record post-messages-cancel-scheduled-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-messages-cancel-scheduled-json: func(params: post-messages-cancel-scheduled-json-params) -> result<string, string>;
+
+  record post-messages-content-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-messages-content-json: func(params: post-messages-content-json-params) -> result<string, string>;
+
+  record post-messages-info-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-messages-info-json: func(params: post-messages-info-json-params) -> result<string, string>;
+
+  record post-messages-list-scheduled-json-params {
+    key: option<string>,
+    to: option<string>
+  }
+  post-messages-list-scheduled-json: func(params: post-messages-list-scheduled-json-params) -> result<string, string>;
+
+  record post-messages-parse-json-params {
+    key: option<string>,
+    raw-message: option<string>
+  }
+  post-messages-parse-json: func(params: post-messages-parse-json-params) -> result<string, string>;
+
+  record post-messages-reschedule-json-params {
+    id: option<string>,
+    key: option<string>,
+    send-at: option<string>
+  }
+  post-messages-reschedule-json: func(params: post-messages-reschedule-json-params) -> result<string, string>;
+
+  record post-messages-search-time-series-json-params {
+    date-from: option<string>,
+    date-to: option<string>,
+    key: option<string>,
+    query: option<string>,
+    senders: option<list<string>>,
+    tags: option<list<string>>
+  }
+  post-messages-search-time-series-json: func(params: post-messages-search-time-series-json-params) -> result<string, string>;
+
+  record post-messages-search-json-params {
+    api-keys: option<list<string>>,
+    date-from: option<string>,
+    date-to: option<string>,
+    key: option<string>,
+    limit: option<s32>,
+    query: option<string>,
+    senders: option<list<string>>,
+    tags: option<list<string>>
+  }
+  post-messages-search-json: func(params: post-messages-search-json-params) -> result<string, string>;
+
+  record post-messages-send-raw-json-params {
+    async-op: option<bool>,
+    from-email: option<string>,
+    from-name: option<string>,
+    ip-pool: option<string>,
+    key: option<string>,
+    raw-message: option<string>,
+    return-path-domain: option<string>,
+    send-at: option<string>,
+    to: option<list<string>>
+  }
+  post-messages-send-raw-json: func(params: post-messages-send-raw-json-params) -> result<string, string>;
+
+  record post-messages-send-template-json-params {
+    async-op: option<bool>,
+    ip-pool: option<string>,
+    key: option<string>,
+    message: option<messages-send-template-message>,
+    send-at: option<string>,
+    template-content: option<list<messages-send-template-template-content-item>>,
+    template-name: option<string>
+  }
+  post-messages-send-template-json: func(params: post-messages-send-template-json-params) -> result<string, string>;
+
+  record post-messages-send-json-params {
+    async-op: option<bool>,
+    ip-pool: option<string>,
+    key: option<string>,
+    message: option<messages-send-message>,
+    send-at: option<string>
+  }
+  post-messages-send-json: func(params: post-messages-send-json-params) -> result<string, string>;
+
+}
+
+interface metadata {
+  record post-metadata-add-json-params {
+    key: option<string>,
+    name: option<string>,
+    view-template: option<string>
+  }
+  post-metadata-add-json: func(params: post-metadata-add-json-params) -> result<string, string>;
+
+  record post-metadata-delete-json-params {
+    key: option<string>,
+    name: option<string>
+  }
+  post-metadata-delete-json: func(params: post-metadata-delete-json-params) -> result<string, string>;
+
+  record post-metadata-list-json-params {
+    key: option<string>
+  }
+  post-metadata-list-json: func(params: post-metadata-list-json-params) -> result<string, string>;
+
+  record post-metadata-update-json-params {
+    key: option<string>,
+    name: option<string>,
+    view-template: option<string>
+  }
+  post-metadata-update-json: func(params: post-metadata-update-json-params) -> result<string, string>;
+
+}
+
+interface rejects {
+  record post-rejects-add-json-params {
+    comment: option<string>,
+    email: option<string>,
+    key: option<string>,
+    subaccount: option<string>
+  }
+  post-rejects-add-json: func(params: post-rejects-add-json-params) -> result<string, string>;
+
+  record post-rejects-delete-json-params {
+    email: option<string>,
+    key: option<string>,
+    subaccount: option<string>
+  }
+  post-rejects-delete-json: func(params: post-rejects-delete-json-params) -> result<string, string>;
+
+  record post-rejects-list-json-params {
+    email: option<string>,
+    include-expired: option<bool>,
+    key: option<string>,
+    subaccount: option<string>
+  }
+  post-rejects-list-json: func(params: post-rejects-list-json-params) -> result<string, string>;
+
+}
+
+interface senders {
+  record post-senders-add-domain-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-senders-add-domain-json: func(params: post-senders-add-domain-json-params) -> result<string, string>;
+
+  record post-senders-check-domain-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-senders-check-domain-json: func(params: post-senders-check-domain-json-params) -> result<string, string>;
+
+  record post-senders-domains-json-params {
+    key: option<string>
+  }
+  post-senders-domains-json: func(params: post-senders-domains-json-params) -> result<string, string>;
+
+  record post-senders-info-json-params {
+    address: option<string>,
+    key: option<string>
+  }
+  post-senders-info-json: func(params: post-senders-info-json-params) -> result<string, string>;
+
+  record post-senders-list-json-params {
+    key: option<string>
+  }
+  post-senders-list-json: func(params: post-senders-list-json-params) -> result<string, string>;
+
+  record post-senders-time-series-json-params {
+    address: option<string>,
+    key: option<string>
+  }
+  post-senders-time-series-json: func(params: post-senders-time-series-json-params) -> result<string, string>;
+
+  record post-senders-verify-domain-json-params {
+    domain: option<string>,
+    key: option<string>,
+    mailbox: option<string>
+  }
+  post-senders-verify-domain-json: func(params: post-senders-verify-domain-json-params) -> result<string, string>;
+
+}
+
+interface subaccounts {
+  record post-subaccounts-add-json-params {
+    custom-quota: option<s32>,
+    id: option<string>,
+    key: option<string>,
+    name: option<string>,
+    notes: option<string>
+  }
+  post-subaccounts-add-json: func(params: post-subaccounts-add-json-params) -> result<string, string>;
+
+  record post-subaccounts-delete-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-subaccounts-delete-json: func(params: post-subaccounts-delete-json-params) -> result<string, string>;
+
+  record post-subaccounts-info-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-subaccounts-info-json: func(params: post-subaccounts-info-json-params) -> result<string, string>;
+
+  record post-subaccounts-list-json-params {
+    key: option<string>,
+    q: option<string>
+  }
+  post-subaccounts-list-json: func(params: post-subaccounts-list-json-params) -> result<string, string>;
+
+  record post-subaccounts-pause-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-subaccounts-pause-json: func(params: post-subaccounts-pause-json-params) -> result<string, string>;
+
+  record post-subaccounts-resume-json-params {
+    id: option<string>,
+    key: option<string>
+  }
+  post-subaccounts-resume-json: func(params: post-subaccounts-resume-json-params) -> result<string, string>;
+
+  record post-subaccounts-update-json-params {
+    custom-quota: option<s32>,
+    id: option<string>,
+    key: option<string>,
+    name: option<string>,
+    notes: option<string>
+  }
+  post-subaccounts-update-json: func(params: post-subaccounts-update-json-params) -> result<string, string>;
+
+}
+
+interface tags {
+  record post-tags-all-time-series-json-params {
+    key: option<string>
+  }
+  post-tags-all-time-series-json: func(params: post-tags-all-time-series-json-params) -> result<string, string>;
+
+  record post-tags-delete-json-params {
+    key: option<string>,
+    tag: option<string>
+  }
+  post-tags-delete-json: func(params: post-tags-delete-json-params) -> result<string, string>;
+
+  record post-tags-info-json-params {
+    key: option<string>,
+    tag: option<string>
+  }
+  post-tags-info-json: func(params: post-tags-info-json-params) -> result<string, string>;
+
+  record post-tags-list-json-params {
+    key: option<string>
+  }
+  post-tags-list-json: func(params: post-tags-list-json-params) -> result<string, string>;
+
+  record post-tags-time-series-json-params {
+    key: option<string>,
+    tag: option<string>
+  }
+  post-tags-time-series-json: func(params: post-tags-time-series-json-params) -> result<string, string>;
+
+}
+
+interface templates {
+  record templates-render-merge-vars-item {
+    content: option<string>,
+    name: option<string>
+  }
+
+  record templates-render-template-content-item {
+    content: option<string>,
+    name: option<string>
+  }
+
+  record post-templates-add-json-params {
+    code: option<string>,
+    from-email: option<string>,
+    from-name: option<string>,
+    key: option<string>,
+    labels: option<list<string>>,
+    name: option<string>,
+    publish: option<bool>,
+    subject: option<string>,
+    text: option<string>
+  }
+  post-templates-add-json: func(params: post-templates-add-json-params) -> result<string, string>;
+
+  record post-templates-delete-json-params {
+    key: option<string>,
+    name: option<string>
+  }
+  post-templates-delete-json: func(params: post-templates-delete-json-params) -> result<string, string>;
+
+  record post-templates-info-json-params {
+    key: option<string>,
+    name: option<string>
+  }
+  post-templates-info-json: func(params: post-templates-info-json-params) -> result<string, string>;
+
+  record post-templates-list-json-params {
+    key: option<string>,
+    label: option<string>
+  }
+  post-templates-list-json: func(params: post-templates-list-json-params) -> result<string, string>;
+
+  record post-templates-publish-json-params {
+    key: option<string>,
+    name: option<string>
+  }
+  post-templates-publish-json: func(params: post-templates-publish-json-params) -> result<string, string>;
+
+  record post-templates-render-json-params {
+    key: option<string>,
+    merge-vars: option<list<templates-render-merge-vars-item>>,
+    template-content: option<list<templates-render-template-content-item>>,
+    template-name: option<string>
+  }
+  post-templates-render-json: func(params: post-templates-render-json-params) -> result<string, string>;
+
+  record post-templates-time-series-json-params {
+    key: option<string>,
+    name: option<string>
+  }
+  post-templates-time-series-json: func(params: post-templates-time-series-json-params) -> result<string, string>;
+
+  record post-templates-update-json-params {
+    code: option<string>,
+    from-email: option<string>,
+    from-name: option<string>,
+    key: option<string>,
+    labels: option<list<string>>,
+    name: option<string>,
+    publish: option<bool>,
+    subject: option<string>,
+    text: option<string>
+  }
+  post-templates-update-json: func(params: post-templates-update-json-params) -> result<string, string>;
+
+}
+
+interface urls {
+  record post-urls-add-tracking-domain-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-urls-add-tracking-domain-json: func(params: post-urls-add-tracking-domain-json-params) -> result<string, string>;
+
+  record post-urls-check-tracking-domain-json-params {
+    domain: option<string>,
+    key: option<string>
+  }
+  post-urls-check-tracking-domain-json: func(params: post-urls-check-tracking-domain-json-params) -> result<string, string>;
+
+  record post-urls-list-json-params {
+    key: option<string>
+  }
+  post-urls-list-json: func(params: post-urls-list-json-params) -> result<string, string>;
+
+  record post-urls-search-json-params {
+    key: option<string>,
+    q: option<string>
+  }
+  post-urls-search-json: func(params: post-urls-search-json-params) -> result<string, string>;
+
+  record post-urls-time-series-json-params {
+    key: option<string>,
+    url: option<string>
+  }
+  post-urls-time-series-json: func(params: post-urls-time-series-json-params) -> result<string, string>;
+
+  record post-urls-tracking-domains-json-params {
+    key: option<string>
+  }
+  post-urls-tracking-domains-json: func(params: post-urls-tracking-domains-json-params) -> result<string, string>;
+
+}
+
+interface users {
+  record post-users-info-json-params {
+    key: option<string>
+  }
+  post-users-info-json: func(params: post-users-info-json-params) -> result<string, string>;
+
+  record post-users-ping-json-params {
+    key: option<string>
+  }
+  post-users-ping-json: func(params: post-users-ping-json-params) -> result<string, string>;
+
+  record post-users-ping2-json-params {
+    key: option<string>
+  }
+  post-users-ping2-json: func(params: post-users-ping2-json-params) -> result<string, string>;
+
+  record post-users-senders-json-params {
+    key: option<string>
+  }
+  post-users-senders-json: func(params: post-users-senders-json-params) -> result<string, string>;
+
+}
+
+interface webhooks {
+  record post-webhooks-add-json-params {
+    description: option<string>,
+    events: option<list<string>>,
+    key: option<string>,
+    url: option<string>
+  }
+  post-webhooks-add-json: func(params: post-webhooks-add-json-params) -> result<string, string>;
+
+  record post-webhooks-delete-json-params {
+    id: option<s32>,
+    key: option<string>
+  }
+  post-webhooks-delete-json: func(params: post-webhooks-delete-json-params) -> result<string, string>;
+
+  record post-webhooks-info-json-params {
+    id: option<s32>,
+    key: option<string>
+  }
+  post-webhooks-info-json: func(params: post-webhooks-info-json-params) -> result<string, string>;
+
+  record post-webhooks-list-json-params {
+    key: option<string>
+  }
+  post-webhooks-list-json: func(params: post-webhooks-list-json-params) -> result<string, string>;
+
+  record post-webhooks-update-json-params {
+    description: option<string>,
+    events: option<list<string>>,
+    id: option<s32>,
+    key: option<string>,
+    url: option<string>
+  }
+  post-webhooks-update-json: func(params: post-webhooks-update-json-params) -> result<string, string>;
+
+}
+
+interface whitelists {
+  record post-whitelists-add-json-params {
+    email: option<string>,
+    key: option<string>
+  }
+  post-whitelists-add-json: func(params: post-whitelists-add-json-params) -> result<string, string>;
+
+  record post-whitelists-delete-json-params {
+    email: option<string>,
+    key: option<string>
+  }
+  post-whitelists-delete-json: func(params: post-whitelists-delete-json-params) -> result<string, string>;
+
+  record post-whitelists-list-json-params {
+    email: option<string>,
+    key: option<string>
+  }
+  post-whitelists-list-json: func(params: post-whitelists-list-json-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export exports;
+  export inbound;
+  export ips;
+  export messages;
+  export metadata;
+  export rejects;
+  export senders;
+  export subaccounts;
+  export tags;
+  export templates;
+  export urls;
+  export users;
+  export webhooks;
+  export whitelists;
+}

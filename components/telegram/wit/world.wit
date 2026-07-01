@@ -1,0 +1,1803 @@
+package autostamp:telegram@0.2.0;
+
+interface add-sticker-to-set {
+  post-add-sticker-to-set: func() -> result<string, string>;
+
+}
+
+
+interface answer-callback-query {
+  record post-answer-callback-query-params {
+    /// The maximum amount of time in seconds that the result of the callback query may be cached client-side. Telegram apps will support caching starting in version 3.14. Defaults to 0.
+    cache-time: option<s32>,
+    /// Unique identifier for the query to be answered
+    callback-query-id: string,
+    /// If *true*, an alert will be shown by the client instead of a notification at the top of the chat screen. Defaults to *false*.
+    show-alert: option<bool>,
+    /// Text of the notification. If not specified, nothing will be shown to the user, 0-200 characters
+    text: option<string>,
+    /// URL that will be opened by the user's client. If you have created a [Game](https://core.telegram.org/bots/api/#game) and accepted the conditions via [@Botfather](https://t.me/botfather), specify the URL that opens your game — note that this will only work if the query comes from a [*callback\_game*](https://core.telegram.org/bots/api/#inlinekeyboardbutton) button.  
+    /// 
+    url: option<string>
+  }
+  post-answer-callback-query: func(params: post-answer-callback-query-params) -> result<string, string>;
+
+}
+
+interface answer-inline-query {
+  /// This object represents one result of an inline query. Telegram clients currently support results of the following 20 types:
+  record inline-query-result {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record post-answer-inline-query-params {
+    /// The maximum amount of time in seconds that the result of the inline query may be cached on the server. Defaults to 300.
+    cache-time: option<s32>,
+    /// Unique identifier for the answered query
+    inline-query-id: string,
+    /// Pass *True*, if results may be cached on the server side only for the user that sent the query. By default, results may be returned to any user who sends the same query
+    is-personal: option<bool>,
+    /// Pass the offset that a client should send in the next query with the same text to receive more results. Pass an empty string if there are no more results or if you don't support pagination. Offset length can't exceed 64 bytes.
+    next-offset: option<string>,
+    /// A JSON-serialized array of results for the inline query
+    results: list<inline-query-result>,
+    /// [Deep-linking](/bots#deep-linking) parameter for the /start message sent to the bot when user presses the switch button. 1-64 characters, only `A-Z`, `a-z`, `0-9`, `_` and `-` are allowed.  
+    /// 
+    switch-pm-parameter: option<string>,
+    /// If passed, clients will display a button with specified text that switches the user to a private chat with the bot and sends the bot a start message with the parameter *switch\_pm\_parameter*
+    switch-pm-text: option<string>
+  }
+  post-answer-inline-query: func(params: post-answer-inline-query-params) -> result<string, string>;
+
+}
+
+interface answer-pre-checkout-query {
+  record post-answer-pre-checkout-query-params {
+    /// Required if *ok* is *False*. Error message in human readable form that explains the reason for failure to proceed with the checkout (e.g. "Sorry, somebody just bought the last of our amazing black T-shirts while you were busy filling out your payment details. Please choose a different color or garment!"). Telegram will display this message to the user.
+    error-message: option<string>,
+    /// Specify *True* if everything is alright (goods are available, etc.) and the bot is ready to proceed with the order. Use *False* if there are any problems.
+    ok: bool,
+    /// Unique identifier for the query to be answered
+    pre-checkout-query-id: string
+  }
+  post-answer-pre-checkout-query: func(params: post-answer-pre-checkout-query-params) -> result<string, string>;
+
+}
+
+interface answer-shipping-query {
+  /// This object represents one shipping option.
+  record shipping-option {
+    /// Shipping option identifier
+    id: string,
+    /// List of price portions
+    prices: list<labeled-price>,
+    /// Option title
+    title: string
+  }
+
+  /// This object represents a portion of the price for goods or services.
+  record labeled-price {
+    /// Price of the product in the *smallest units* of the [currency](/bots/payments#supported-currencies) (integer, **not** float/double). For example, for a price of `US$ 1.45` pass `amount = 145`. See the *exp* parameter in [currencies.json](https://core.telegram.org/bots/payments/currencies.json), it shows the number of digits past the decimal point for each currency (2 for the majority of currencies).
+    amount: s32,
+    /// Portion label
+    label: string
+  }
+
+  record post-answer-shipping-query-params {
+    /// Required if *ok* is False. Error message in human readable form that explains why it is impossible to complete the order (e.g. "Sorry, delivery to your desired address is unavailable'). Telegram will display this message to the user.
+    error-message: option<string>,
+    /// Specify True if delivery to the specified address is possible and False if there are any problems (for example, if delivery to the specified address is not possible)
+    ok: bool,
+    /// Required if *ok* is True. A JSON-serialized array of available shipping options.
+    shipping-options: option<list<shipping-option>>,
+    /// Unique identifier for the query to be answered
+    shipping-query-id: string
+  }
+  post-answer-shipping-query: func(params: post-answer-shipping-query-params) -> result<string, string>;
+
+}
+
+interface close {
+  post-close: func() -> result<string, string>;
+
+}
+
+interface copy-message {
+  enum message-entity-type-op-enum {
+    mention,
+    hashtag,
+    cashtag,
+    bot-command,
+    url,
+    email,
+    phone-number,
+    bold,
+    italic,
+    underline,
+    strikethrough,
+    code,
+    pre,
+    text-link,
+    text-mention,
+  }
+
+  /// This object represents one special entity in a text message. For example, hashtags, usernames, URLs, etc.
+  record message-entity {
+    /// *Optional*. For “pre” only, the programming language of the entity text
+    language: option<string>,
+    /// Length of the entity in UTF-16 code units
+    length: s32,
+    /// Offset in UTF-16 code units to the start of the entity
+    offset: s32,
+    /// Type of the entity. Can be “mention” (`@username`), “hashtag” (`#hashtag`), “cashtag” (`$USD`), “bot\_command” (`/start@jobs_bot`), “url” (`https://telegram.org`), “email” (`do-not-reply@telegram.org`), “phone\_number” (`+1-212-555-0123`), “bold” (**bold text**), “italic” (*italic text*), “underline” (underlined text), “strikethrough” (strikethrough text), “code” (monowidth string), “pre” (monowidth block), “text\_link” (for clickable text URLs), “text\_mention” (for users [without usernames](https://telegram.org/blog/edit#new-mentions))
+    type-op: message-entity-type-op-enum,
+    /// *Optional*. For “text\_link” only, url that will be opened after user taps on the text
+    url: option<string>,
+    user: option<user>
+  }
+
+  /// This object represents a Telegram user or bot.
+  record user {
+    /// *Optional*. True, if the bot can be invited to groups. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-join-groups: option<bool>,
+    /// *Optional*. True, if [privacy mode](https://core.telegram.org/bots#privacy-mode) is disabled for the bot. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-read-all-group-messages: option<bool>,
+    /// User's or bot's first name
+    first-name: string,
+    /// Unique identifier for this user or bot
+    id: s32,
+    /// True, if this user is a bot
+    is-bot: bool,
+    /// *Optional*. [IETF language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the user's language
+    language-code: option<string>,
+    /// *Optional*. User's or bot's last name
+    last-name: option<string>,
+    /// *Optional*. True, if the bot supports inline queries. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    supports-inline-queries: option<bool>,
+    /// *Optional*. User's or bot's username
+    username: option<string>
+  }
+
+  record post-copy-message-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// New caption for media, 0-1024 characters after entities parsing. If not specified, the original caption is kept
+    caption: option<string>,
+    /// List of special entities that appear in the new caption, which can be specified instead of *parse\_mode*
+    caption-entities: option<list<message-entity>>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Unique identifier for the chat where the original message was sent (or channel username in the format `@channelusername`)
+    from-chat-id: string,
+    /// Message identifier in the chat specified in *from\_chat\_id*
+    message-id: s32,
+    /// Mode for parsing entities in the new caption. See [formatting options](https://core.telegram.org/bots/api/#formatting-options) for more details.
+    parse-mode: option<string>,
+    /// Additional interface options. A JSON-serialized object for an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating), [custom reply keyboard](https://core.telegram.org/bots#keyboards), instructions to remove reply keyboard or to force a reply from the user.
+    reply-markup: option<string>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>
+  }
+  post-copy-message: func(params: post-copy-message-params) -> result<string, string>;
+
+}
+
+interface create-new-sticker-set {
+  post-create-new-sticker-set: func() -> result<string, string>;
+
+}
+
+interface delete-chat-photo {
+  record post-delete-chat-photo-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-delete-chat-photo: func(params: post-delete-chat-photo-params) -> result<string, string>;
+
+}
+
+interface delete-chat-sticker-set {
+  record post-delete-chat-sticker-set-params {
+    /// Unique identifier for the target chat or username of the target supergroup (in the format `@supergroupusername`)
+    chat-id: string
+  }
+  post-delete-chat-sticker-set: func(params: post-delete-chat-sticker-set-params) -> result<string, string>;
+
+}
+
+interface delete-message {
+  record post-delete-message-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Identifier of the message to delete
+    message-id: s32
+  }
+  post-delete-message: func(params: post-delete-message-params) -> result<string, string>;
+
+}
+
+interface delete-sticker-from-set {
+  record post-delete-sticker-from-set-params {
+    /// File identifier of the sticker
+    sticker: string
+  }
+  post-delete-sticker-from-set: func(params: post-delete-sticker-from-set-params) -> result<string, string>;
+
+}
+
+interface delete-webhook {
+  record post-delete-webhook-params {
+    /// Pass *True* to drop all pending updates
+    drop-pending-updates: option<bool>
+  }
+  post-delete-webhook: func(params: post-delete-webhook-params) -> result<string, string>;
+
+}
+
+interface edit-message-caption {
+  enum message-entity-type-op-enum {
+    mention,
+    hashtag,
+    cashtag,
+    bot-command,
+    url,
+    email,
+    phone-number,
+    bold,
+    italic,
+    underline,
+    strikethrough,
+    code,
+    pre,
+    text-link,
+    text-mention,
+  }
+
+  /// This object represents one special entity in a text message. For example, hashtags, usernames, URLs, etc.
+  record message-entity {
+    /// *Optional*. For “pre” only, the programming language of the entity text
+    language: option<string>,
+    /// Length of the entity in UTF-16 code units
+    length: s32,
+    /// Offset in UTF-16 code units to the start of the entity
+    offset: s32,
+    /// Type of the entity. Can be “mention” (`@username`), “hashtag” (`#hashtag`), “cashtag” (`$USD`), “bot\_command” (`/start@jobs_bot`), “url” (`https://telegram.org`), “email” (`do-not-reply@telegram.org`), “phone\_number” (`+1-212-555-0123`), “bold” (**bold text**), “italic” (*italic text*), “underline” (underlined text), “strikethrough” (strikethrough text), “code” (monowidth string), “pre” (monowidth block), “text\_link” (for clickable text URLs), “text\_mention” (for users [without usernames](https://telegram.org/blog/edit#new-mentions))
+    type-op: message-entity-type-op-enum,
+    /// *Optional*. For “text\_link” only, url that will be opened after user taps on the text
+    url: option<string>,
+    user: option<user>
+  }
+
+  /// This object represents a Telegram user or bot.
+  record user {
+    /// *Optional*. True, if the bot can be invited to groups. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-join-groups: option<bool>,
+    /// *Optional*. True, if [privacy mode](https://core.telegram.org/bots#privacy-mode) is disabled for the bot. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-read-all-group-messages: option<bool>,
+    /// User's or bot's first name
+    first-name: string,
+    /// Unique identifier for this user or bot
+    id: s32,
+    /// True, if this user is a bot
+    is-bot: bool,
+    /// *Optional*. [IETF language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the user's language
+    language-code: option<string>,
+    /// *Optional*. User's or bot's last name
+    last-name: option<string>,
+    /// *Optional*. True, if the bot supports inline queries. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    supports-inline-queries: option<bool>,
+    /// *Optional*. User's or bot's username
+    username: option<string>
+  }
+
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-edit-message-caption-params {
+    /// New caption of the message, 0-1024 characters after entities parsing
+    caption: option<string>,
+    /// List of special entities that appear in the caption, which can be specified instead of *parse\_mode*
+    caption-entities: option<list<message-entity>>,
+    /// Required if *inline\_message\_id* is not specified. Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: option<string>,
+    /// Required if *chat\_id* and *message\_id* are not specified. Identifier of the inline message
+    inline-message-id: option<string>,
+    /// Required if *inline\_message\_id* is not specified. Identifier of the message to edit
+    message-id: option<s32>,
+    /// Mode for parsing entities in the message caption. See [formatting options](https://core.telegram.org/bots/api/#formatting-options) for more details.
+    parse-mode: option<string>,
+    reply-markup: option<inline-keyboard-markup>
+  }
+  post-edit-message-caption: func(params: post-edit-message-caption-params) -> result<string, string>;
+
+}
+
+interface edit-message-live-location {
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-edit-message-live-location-params {
+    /// Required if *inline\_message\_id* is not specified. Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: option<string>,
+    /// Direction in which the user is moving, in degrees. Must be between 1 and 360 if specified.
+    heading: option<s32>,
+    /// The radius of uncertainty for the location, measured in meters; 0-1500
+    horizontal-accuracy: option<f64>,
+    /// Required if *chat\_id* and *message\_id* are not specified. Identifier of the inline message
+    inline-message-id: option<string>,
+    /// Latitude of new location
+    latitude: f64,
+    /// Longitude of new location
+    longitude: f64,
+    /// Required if *inline\_message\_id* is not specified. Identifier of the message to edit
+    message-id: option<s32>,
+    /// Maximum distance for proximity alerts about approaching another chat member, in meters. Must be between 1 and 100000 if specified.
+    proximity-alert-radius: option<s32>,
+    reply-markup: option<inline-keyboard-markup>
+  }
+  post-edit-message-live-location: func(params: post-edit-message-live-location-params) -> result<string, string>;
+
+}
+
+interface edit-message-media {
+  post-edit-message-media: func() -> result<string, string>;
+
+}
+
+interface edit-message-reply-markup {
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-edit-message-reply-markup-params {
+    /// Required if *inline\_message\_id* is not specified. Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: option<string>,
+    /// Required if *chat\_id* and *message\_id* are not specified. Identifier of the inline message
+    inline-message-id: option<string>,
+    /// Required if *inline\_message\_id* is not specified. Identifier of the message to edit
+    message-id: option<s32>,
+    reply-markup: option<inline-keyboard-markup>
+  }
+  post-edit-message-reply-markup: func(params: post-edit-message-reply-markup-params) -> result<string, string>;
+
+}
+
+interface edit-message-text {
+  enum message-entity-type-op-enum {
+    mention,
+    hashtag,
+    cashtag,
+    bot-command,
+    url,
+    email,
+    phone-number,
+    bold,
+    italic,
+    underline,
+    strikethrough,
+    code,
+    pre,
+    text-link,
+    text-mention,
+  }
+
+  /// This object represents one special entity in a text message. For example, hashtags, usernames, URLs, etc.
+  record message-entity {
+    /// *Optional*. For “pre” only, the programming language of the entity text
+    language: option<string>,
+    /// Length of the entity in UTF-16 code units
+    length: s32,
+    /// Offset in UTF-16 code units to the start of the entity
+    offset: s32,
+    /// Type of the entity. Can be “mention” (`@username`), “hashtag” (`#hashtag`), “cashtag” (`$USD`), “bot\_command” (`/start@jobs_bot`), “url” (`https://telegram.org`), “email” (`do-not-reply@telegram.org`), “phone\_number” (`+1-212-555-0123`), “bold” (**bold text**), “italic” (*italic text*), “underline” (underlined text), “strikethrough” (strikethrough text), “code” (monowidth string), “pre” (monowidth block), “text\_link” (for clickable text URLs), “text\_mention” (for users [without usernames](https://telegram.org/blog/edit#new-mentions))
+    type-op: message-entity-type-op-enum,
+    /// *Optional*. For “text\_link” only, url that will be opened after user taps on the text
+    url: option<string>,
+    user: option<user>
+  }
+
+  /// This object represents a Telegram user or bot.
+  record user {
+    /// *Optional*. True, if the bot can be invited to groups. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-join-groups: option<bool>,
+    /// *Optional*. True, if [privacy mode](https://core.telegram.org/bots#privacy-mode) is disabled for the bot. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-read-all-group-messages: option<bool>,
+    /// User's or bot's first name
+    first-name: string,
+    /// Unique identifier for this user or bot
+    id: s32,
+    /// True, if this user is a bot
+    is-bot: bool,
+    /// *Optional*. [IETF language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the user's language
+    language-code: option<string>,
+    /// *Optional*. User's or bot's last name
+    last-name: option<string>,
+    /// *Optional*. True, if the bot supports inline queries. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    supports-inline-queries: option<bool>,
+    /// *Optional*. User's or bot's username
+    username: option<string>
+  }
+
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-edit-message-text-params {
+    /// Required if *inline\_message\_id* is not specified. Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: option<string>,
+    /// Disables link previews for links in this message
+    disable-web-page-preview: option<bool>,
+    /// List of special entities that appear in message text, which can be specified instead of *parse\_mode*
+    entities: option<list<message-entity>>,
+    /// Required if *chat\_id* and *message\_id* are not specified. Identifier of the inline message
+    inline-message-id: option<string>,
+    /// Required if *inline\_message\_id* is not specified. Identifier of the message to edit
+    message-id: option<s32>,
+    /// Mode for parsing entities in the message text. See [formatting options](https://core.telegram.org/bots/api/#formatting-options) for more details.
+    parse-mode: option<string>,
+    reply-markup: option<inline-keyboard-markup>,
+    /// New text of the message, 1-4096 characters after entities parsing
+    text: string
+  }
+  post-edit-message-text: func(params: post-edit-message-text-params) -> result<string, string>;
+
+}
+
+interface export-chat-invite-link {
+  record post-export-chat-invite-link-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-export-chat-invite-link: func(params: post-export-chat-invite-link-params) -> result<string, string>;
+
+}
+
+interface forward-message {
+  record post-forward-message-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Unique identifier for the chat where the original message was sent (or channel username in the format `@channelusername`)
+    from-chat-id: string,
+    /// Message identifier in the chat specified in *from\_chat\_id*
+    message-id: s32
+  }
+  post-forward-message: func(params: post-forward-message-params) -> result<string, string>;
+
+}
+
+interface get-chat {
+  record post-get-chat-params {
+    /// Unique identifier for the target chat or username of the target supergroup or channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-get-chat: func(params: post-get-chat-params) -> result<string, string>;
+
+}
+
+interface get-chat-administrators {
+  record post-get-chat-administrators-params {
+    /// Unique identifier for the target chat or username of the target supergroup or channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-get-chat-administrators: func(params: post-get-chat-administrators-params) -> result<string, string>;
+
+}
+
+interface get-chat-member {
+  record post-get-chat-member-params {
+    /// Unique identifier for the target chat or username of the target supergroup or channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Unique identifier of the target user
+    user-id: s32
+  }
+  post-get-chat-member: func(params: post-get-chat-member-params) -> result<string, string>;
+
+}
+
+interface get-chat-members-count {
+  record post-get-chat-members-count-params {
+    /// Unique identifier for the target chat or username of the target supergroup or channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-get-chat-members-count: func(params: post-get-chat-members-count-params) -> result<string, string>;
+
+}
+
+interface get-file {
+  record post-get-file-params {
+    /// File identifier to get info about
+    file-id: string
+  }
+  post-get-file: func(params: post-get-file-params) -> result<string, string>;
+
+}
+
+interface get-game-high-scores {
+  record post-get-game-high-scores-params {
+    /// Required if *inline\_message\_id* is not specified. Unique identifier for the target chat
+    chat-id: option<s32>,
+    /// Required if *chat\_id* and *message\_id* are not specified. Identifier of the inline message
+    inline-message-id: option<string>,
+    /// Required if *inline\_message\_id* is not specified. Identifier of the sent message
+    message-id: option<s32>,
+    /// Target user id
+    user-id: s32
+  }
+  post-get-game-high-scores: func(params: post-get-game-high-scores-params) -> result<string, string>;
+
+}
+
+interface get-me {
+  post-get-me: func() -> result<string, string>;
+
+}
+
+interface get-my-commands {
+  post-get-my-commands: func() -> result<string, string>;
+
+}
+
+interface get-sticker-set {
+  record post-get-sticker-set-params {
+    /// Name of the sticker set
+    name: string
+  }
+  post-get-sticker-set: func(params: post-get-sticker-set-params) -> result<string, string>;
+
+}
+
+interface get-updates {
+  record post-get-updates-params {
+    /// A JSON-serialized list of the update types you want your bot to receive. For example, specify [“message”, “edited\_channel\_post”, “callback\_query”] to only receive updates of these types. See [Update](https://core.telegram.org/bots/api/#update) for a complete list of available update types. Specify an empty list to receive all updates regardless of type (default). If not specified, the previous setting will be used.  
+    /// 
+    allowed-updates: option<list<string>>,
+    /// Limits the number of updates to be retrieved. Values between 1-100 are accepted. Defaults to 100.
+    limit: option<s32>,
+    /// Identifier of the first update to be returned. Must be greater by one than the highest among the identifiers of previously received updates. By default, updates starting with the earliest unconfirmed update are returned. An update is considered confirmed as soon as [getUpdates](https://core.telegram.org/bots/api/#getupdates) is called with an *offset* higher than its *update\_id*. The negative offset can be specified to retrieve updates starting from *-offset* update from the end of the updates queue. All previous updates will forgotten.
+    offset: option<s32>,
+    /// Timeout in seconds for long polling. Defaults to 0, i.e. usual short polling. Should be positive, short polling should be used for testing purposes only.
+    timeout: option<s32>
+  }
+  post-get-updates: func(params: post-get-updates-params) -> result<string, string>;
+
+}
+
+interface get-user-profile-photos {
+  record post-get-user-profile-photos-params {
+    /// Limits the number of photos to be retrieved. Values between 1-100 are accepted. Defaults to 100.
+    limit: option<s32>,
+    /// Sequential number of the first photo to be returned. By default, all photos are returned.
+    offset: option<s32>,
+    /// Unique identifier of the target user
+    user-id: s32
+  }
+  post-get-user-profile-photos: func(params: post-get-user-profile-photos-params) -> result<string, string>;
+
+}
+
+interface get-webhook-info {
+  post-get-webhook-info: func() -> result<string, string>;
+
+}
+
+interface kick-chat-member {
+  record post-kick-chat-member-params {
+    /// Unique identifier for the target group or username of the target supergroup or channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Date when the user will be unbanned, unix time. If user is banned for more than 366 days or less than 30 seconds from the current time they are considered to be banned forever
+    until-date: option<s32>,
+    /// Unique identifier of the target user
+    user-id: s32
+  }
+  post-kick-chat-member: func(params: post-kick-chat-member-params) -> result<string, string>;
+
+}
+
+interface leave-chat {
+  record post-leave-chat-params {
+    /// Unique identifier for the target chat or username of the target supergroup or channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-leave-chat: func(params: post-leave-chat-params) -> result<string, string>;
+
+}
+
+interface log-out {
+  post-log-out: func() -> result<string, string>;
+
+}
+
+interface pin-chat-message {
+  record post-pin-chat-message-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Pass *True*, if it is not necessary to send a notification to all chat members about the new pinned message. Notifications are always disabled in channels and private chats.
+    disable-notification: option<bool>,
+    /// Identifier of a message to pin
+    message-id: s32
+  }
+  post-pin-chat-message: func(params: post-pin-chat-message-params) -> result<string, string>;
+
+}
+
+interface promote-chat-member {
+  record post-promote-chat-member-params {
+    /// Pass True, if the administrator can change chat title, photo and other settings
+    can-change-info: option<bool>,
+    /// Pass True, if the administrator can delete messages of other users
+    can-delete-messages: option<bool>,
+    /// Pass True, if the administrator can edit messages of other users and can pin messages, channels only
+    can-edit-messages: option<bool>,
+    /// Pass True, if the administrator can invite new users to the chat
+    can-invite-users: option<bool>,
+    /// Pass True, if the administrator can pin messages, supergroups only
+    can-pin-messages: option<bool>,
+    /// Pass True, if the administrator can create channel posts, channels only
+    can-post-messages: option<bool>,
+    /// Pass True, if the administrator can add new administrators with a subset of their own privileges or demote administrators that he has promoted, directly or indirectly (promoted by administrators that were appointed by him)
+    can-promote-members: option<bool>,
+    /// Pass True, if the administrator can restrict, ban or unban chat members
+    can-restrict-members: option<bool>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Pass *True*, if the administrator's presence in the chat is hidden
+    is-anonymous: option<bool>,
+    /// Unique identifier of the target user
+    user-id: s32
+  }
+  post-promote-chat-member: func(params: post-promote-chat-member-params) -> result<string, string>;
+
+}
+
+interface restrict-chat-member {
+  /// Describes actions that a non-administrator user is allowed to take in a chat.
+  record chat-permissions {
+    /// *Optional*. True, if the user is allowed to add web page previews to their messages, implies can\_send\_media\_messages
+    can-add-web-page-previews: option<bool>,
+    /// *Optional*. True, if the user is allowed to change the chat title, photo and other settings. Ignored in public supergroups
+    can-change-info: option<bool>,
+    /// *Optional*. True, if the user is allowed to invite new users to the chat
+    can-invite-users: option<bool>,
+    /// *Optional*. True, if the user is allowed to pin messages. Ignored in public supergroups
+    can-pin-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send audios, documents, photos, videos, video notes and voice notes, implies can\_send\_messages
+    can-send-media-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send text messages, contacts, locations and venues
+    can-send-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send animations, games, stickers and use inline bots, implies can\_send\_media\_messages
+    can-send-other-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send polls, implies can\_send\_messages
+    can-send-polls: option<bool>
+  }
+
+  record post-restrict-chat-member-params {
+    /// Unique identifier for the target chat or username of the target supergroup (in the format `@supergroupusername`)
+    chat-id: string,
+    permissions: chat-permissions,
+    /// Date when restrictions will be lifted for the user, unix time. If user is restricted for more than 366 days or less than 30 seconds from the current time, they are considered to be restricted forever
+    until-date: option<s32>,
+    /// Unique identifier of the target user
+    user-id: s32
+  }
+  post-restrict-chat-member: func(params: post-restrict-chat-member-params) -> result<string, string>;
+
+}
+
+interface send-animation {
+  post-send-animation: func() -> result<string, string>;
+
+}
+
+interface send-audio {
+  post-send-audio: func() -> result<string, string>;
+
+}
+
+interface send-chat-action {
+  record post-send-chat-action-params {
+    /// Type of action to broadcast. Choose one, depending on what the user is about to receive: *typing* for [text messages](https://core.telegram.org/bots/api/#sendmessage), *upload\_photo* for [photos](https://core.telegram.org/bots/api/#sendphoto), *record\_video* or *upload\_video* for [videos](https://core.telegram.org/bots/api/#sendvideo), *record\_voice* or *upload\_voice* for [voice notes](https://core.telegram.org/bots/api/#sendvoice), *upload\_document* for [general files](https://core.telegram.org/bots/api/#senddocument), *find\_location* for [location data](https://core.telegram.org/bots/api/#sendlocation), *record\_video\_note* or *upload\_video\_note* for [video notes](https://core.telegram.org/bots/api/#sendvideonote).
+    action: string,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-send-chat-action: func(params: post-send-chat-action-params) -> result<string, string>;
+
+}
+
+interface send-contact {
+  record post-send-contact-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Contact's first name
+    first-name: string,
+    /// Contact's last name
+    last-name: option<string>,
+    /// Contact's phone number
+    phone-number: string,
+    /// Additional interface options. A JSON-serialized object for an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating), [custom reply keyboard](https://core.telegram.org/bots#keyboards), instructions to remove keyboard or to force a reply from the user.
+    reply-markup: option<string>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>,
+    /// Additional data about the contact in the form of a [vCard](https://en.wikipedia.org/wiki/VCard), 0-2048 bytes
+    vcard: option<string>
+  }
+  post-send-contact: func(params: post-send-contact-params) -> result<string, string>;
+
+}
+
+interface send-dice {
+  enum post-send-dice-body-emoji-enum {
+    x,
+    x-v2,
+    x-v3,
+    x-v4,
+    x-v5,
+  }
+
+  record post-send-dice-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Emoji on which the dice throw animation is based. Currently, must be one of “<img alt="🎲" src="//telegram.org/img/emoji/40/F09F8EB2.png" height="20" width="20" />”, “<img alt="🎯" src="//telegram.org/img/emoji/40/F09F8EAF.png" height="20" width="20" />”, “<img alt="🏀" src="//telegram.org/img/emoji/40/F09F8F80.png" height="20" width="20" />”, “<img alt="⚽" src="//telegram.org/img/emoji/40/E29ABD.png" height="20" width="20" />”, or “<img alt="🎰" src="//telegram.org/img/emoji/40/F09F8EB0.png" height="20" width="20" />”. Dice can have values 1-6 for “<img alt="🎲" src="//telegram.org/img/emoji/40/F09F8EB2.png" height="20" width="20" />” and “<img alt="🎯" src="//telegram.org/img/emoji/40/F09F8EAF.png" height="20" width="20" />”, values 1-5 for “<img alt="🏀" src="//telegram.org/img/emoji/40/F09F8F80.png" height="20" width="20" />” and “<img alt="⚽" src="//telegram.org/img/emoji/40/E29ABD.png" height="20" width="20" />”, and values 1-64 for “<img alt="🎰" src="//telegram.org/img/emoji/40/F09F8EB0.png" height="20" width="20" />”. Defaults to “<img alt="🎲" src="//telegram.org/img/emoji/40/F09F8EB2.png" height="20" width="20" />”
+    emoji: option<post-send-dice-body-emoji-enum>,
+    /// Additional interface options. A JSON-serialized object for an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating), [custom reply keyboard](https://core.telegram.org/bots#keyboards), instructions to remove reply keyboard or to force a reply from the user.
+    reply-markup: option<string>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>
+  }
+  post-send-dice: func(params: post-send-dice-params) -> result<string, string>;
+
+}
+
+interface send-document {
+  post-send-document: func() -> result<string, string>;
+
+}
+
+interface send-game {
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-send-game-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// Unique identifier for the target chat
+    chat-id: s32,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Short name of the game, serves as the unique identifier for the game. Set up your games via [Botfather](https://t.me/botfather).
+    game-short-name: string,
+    reply-markup: option<inline-keyboard-markup>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>
+  }
+  post-send-game: func(params: post-send-game-params) -> result<string, string>;
+
+}
+
+interface send-invoice {
+  /// This object represents a portion of the price for goods or services.
+  record labeled-price {
+    /// Price of the product in the *smallest units* of the [currency](/bots/payments#supported-currencies) (integer, **not** float/double). For example, for a price of `US$ 1.45` pass `amount = 145`. See the *exp* parameter in [currencies.json](https://core.telegram.org/bots/payments/currencies.json), it shows the number of digits past the decimal point for each currency (2 for the majority of currencies).
+    amount: s32,
+    /// Portion label
+    label: string
+  }
+
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-send-invoice-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// Unique identifier for the target private chat
+    chat-id: s32,
+    /// Three-letter ISO 4217 currency code, see [more on currencies](/bots/payments#supported-currencies)
+    currency: string,
+    /// Product description, 1-255 characters
+    description: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Pass *True*, if the final price depends on the shipping method
+    is-flexible: option<bool>,
+    /// Pass *True*, if you require the user's email address to complete the order
+    need-email: option<bool>,
+    /// Pass *True*, if you require the user's full name to complete the order
+    need-name: option<bool>,
+    /// Pass *True*, if you require the user's phone number to complete the order
+    need-phone-number: option<bool>,
+    /// Pass *True*, if you require the user's shipping address to complete the order
+    need-shipping-address: option<bool>,
+    /// Bot-defined invoice payload, 1-128 bytes. This will not be displayed to the user, use for your internal processes.
+    payload: string,
+    /// Photo height
+    photo-height: option<s32>,
+    /// Photo size
+    photo-size: option<s32>,
+    /// URL of the product photo for the invoice. Can be a photo of the goods or a marketing image for a service. People like it better when they see what they are paying for.
+    photo-url: option<string>,
+    /// Photo width
+    photo-width: option<s32>,
+    /// Price breakdown, a JSON-serialized list of components (e.g. product price, tax, discount, delivery cost, delivery tax, bonus, etc.)
+    prices: list<labeled-price>,
+    /// A JSON-serialized data about the invoice, which will be shared with the payment provider. A detailed description of required fields should be provided by the payment provider.
+    provider-data: option<string>,
+    /// Payments provider token, obtained via [Botfather](https://t.me/botfather)
+    provider-token: string,
+    reply-markup: option<inline-keyboard-markup>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>,
+    /// Pass *True*, if user's email address should be sent to provider
+    send-email-to-provider: option<bool>,
+    /// Pass *True*, if user's phone number should be sent to provider
+    send-phone-number-to-provider: option<bool>,
+    /// Unique deep-linking parameter that can be used to generate this invoice when used as a start parameter
+    start-parameter: string,
+    /// Product name, 1-32 characters
+    title: string
+  }
+  post-send-invoice: func(params: post-send-invoice-params) -> result<string, string>;
+
+}
+
+interface send-location {
+  record post-send-location-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// For live locations, a direction in which the user is moving, in degrees. Must be between 1 and 360 if specified.
+    heading: option<s32>,
+    /// The radius of uncertainty for the location, measured in meters; 0-1500
+    horizontal-accuracy: option<f64>,
+    /// Latitude of the location
+    latitude: f64,
+    /// Period in seconds for which the location will be updated (see [Live Locations](https://telegram.org/blog/live-locations), should be between 60 and 86400.
+    live-period: option<s32>,
+    /// Longitude of the location
+    longitude: f64,
+    /// For live locations, a maximum distance for proximity alerts about approaching another chat member, in meters. Must be between 1 and 100000 if specified.
+    proximity-alert-radius: option<s32>,
+    /// Additional interface options. A JSON-serialized object for an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating), [custom reply keyboard](https://core.telegram.org/bots#keyboards), instructions to remove reply keyboard or to force a reply from the user.
+    reply-markup: option<string>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>
+  }
+  post-send-location: func(params: post-send-location-params) -> result<string, string>;
+
+}
+
+interface send-media-group {
+  post-send-media-group: func() -> result<string, string>;
+
+}
+
+interface send-message {
+  enum message-entity-type-op-enum {
+    mention,
+    hashtag,
+    cashtag,
+    bot-command,
+    url,
+    email,
+    phone-number,
+    bold,
+    italic,
+    underline,
+    strikethrough,
+    code,
+    pre,
+    text-link,
+    text-mention,
+  }
+
+  /// This object represents one special entity in a text message. For example, hashtags, usernames, URLs, etc.
+  record message-entity {
+    /// *Optional*. For “pre” only, the programming language of the entity text
+    language: option<string>,
+    /// Length of the entity in UTF-16 code units
+    length: s32,
+    /// Offset in UTF-16 code units to the start of the entity
+    offset: s32,
+    /// Type of the entity. Can be “mention” (`@username`), “hashtag” (`#hashtag`), “cashtag” (`$USD`), “bot\_command” (`/start@jobs_bot`), “url” (`https://telegram.org`), “email” (`do-not-reply@telegram.org`), “phone\_number” (`+1-212-555-0123`), “bold” (**bold text**), “italic” (*italic text*), “underline” (underlined text), “strikethrough” (strikethrough text), “code” (monowidth string), “pre” (monowidth block), “text\_link” (for clickable text URLs), “text\_mention” (for users [without usernames](https://telegram.org/blog/edit#new-mentions))
+    type-op: message-entity-type-op-enum,
+    /// *Optional*. For “text\_link” only, url that will be opened after user taps on the text
+    url: option<string>,
+    user: option<user>
+  }
+
+  /// This object represents a Telegram user or bot.
+  record user {
+    /// *Optional*. True, if the bot can be invited to groups. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-join-groups: option<bool>,
+    /// *Optional*. True, if [privacy mode](https://core.telegram.org/bots#privacy-mode) is disabled for the bot. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-read-all-group-messages: option<bool>,
+    /// User's or bot's first name
+    first-name: string,
+    /// Unique identifier for this user or bot
+    id: s32,
+    /// True, if this user is a bot
+    is-bot: bool,
+    /// *Optional*. [IETF language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the user's language
+    language-code: option<string>,
+    /// *Optional*. User's or bot's last name
+    last-name: option<string>,
+    /// *Optional*. True, if the bot supports inline queries. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    supports-inline-queries: option<bool>,
+    /// *Optional*. User's or bot's username
+    username: option<string>
+  }
+
+  record post-send-message-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Disables link previews for links in this message
+    disable-web-page-preview: option<bool>,
+    /// List of special entities that appear in message text, which can be specified instead of *parse\_mode*
+    entities: option<list<message-entity>>,
+    /// Mode for parsing entities in the message text. See [formatting options](https://core.telegram.org/bots/api/#formatting-options) for more details.
+    parse-mode: option<string>,
+    /// Additional interface options. A JSON-serialized object for an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating), [custom reply keyboard](https://core.telegram.org/bots#keyboards), instructions to remove reply keyboard or to force a reply from the user.
+    reply-markup: option<string>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>,
+    /// Text of the message to be sent, 1-4096 characters after entities parsing
+    text: string
+  }
+  post-send-message: func(params: post-send-message-params) -> result<string, string>;
+
+}
+
+interface send-photo {
+  post-send-photo: func() -> result<string, string>;
+
+}
+
+interface send-poll {
+  enum message-entity-type-op-enum {
+    mention,
+    hashtag,
+    cashtag,
+    bot-command,
+    url,
+    email,
+    phone-number,
+    bold,
+    italic,
+    underline,
+    strikethrough,
+    code,
+    pre,
+    text-link,
+    text-mention,
+  }
+
+  /// This object represents one special entity in a text message. For example, hashtags, usernames, URLs, etc.
+  record message-entity {
+    /// *Optional*. For “pre” only, the programming language of the entity text
+    language: option<string>,
+    /// Length of the entity in UTF-16 code units
+    length: s32,
+    /// Offset in UTF-16 code units to the start of the entity
+    offset: s32,
+    /// Type of the entity. Can be “mention” (`@username`), “hashtag” (`#hashtag`), “cashtag” (`$USD`), “bot\_command” (`/start@jobs_bot`), “url” (`https://telegram.org`), “email” (`do-not-reply@telegram.org`), “phone\_number” (`+1-212-555-0123`), “bold” (**bold text**), “italic” (*italic text*), “underline” (underlined text), “strikethrough” (strikethrough text), “code” (monowidth string), “pre” (monowidth block), “text\_link” (for clickable text URLs), “text\_mention” (for users [without usernames](https://telegram.org/blog/edit#new-mentions))
+    type-op: message-entity-type-op-enum,
+    /// *Optional*. For “text\_link” only, url that will be opened after user taps on the text
+    url: option<string>,
+    user: option<user>
+  }
+
+  /// This object represents a Telegram user or bot.
+  record user {
+    /// *Optional*. True, if the bot can be invited to groups. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-join-groups: option<bool>,
+    /// *Optional*. True, if [privacy mode](https://core.telegram.org/bots#privacy-mode) is disabled for the bot. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    can-read-all-group-messages: option<bool>,
+    /// User's or bot's first name
+    first-name: string,
+    /// Unique identifier for this user or bot
+    id: s32,
+    /// True, if this user is a bot
+    is-bot: bool,
+    /// *Optional*. [IETF language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the user's language
+    language-code: option<string>,
+    /// *Optional*. User's or bot's last name
+    last-name: option<string>,
+    /// *Optional*. True, if the bot supports inline queries. Returned only in [getMe](https://core.telegram.org/bots/api/#getme).
+    supports-inline-queries: option<bool>,
+    /// *Optional*. User's or bot's username
+    username: option<string>
+  }
+
+  record post-send-poll-params {
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// True, if the poll allows multiple answers, ignored for polls in quiz mode, defaults to *False*
+    allows-multiple-answers: option<bool>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Point in time (Unix timestamp) when the poll will be automatically closed. Must be at least 5 and no more than 600 seconds in the future. Can't be used together with *open\_period*.
+    close-date: option<s32>,
+    /// 0-based identifier of the correct answer option, required for polls in quiz mode
+    correct-option-id: option<s32>,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Text that is shown when a user chooses an incorrect answer or taps on the lamp icon in a quiz-style poll, 0-200 characters with at most 2 line feeds after entities parsing
+    explanation: option<string>,
+    /// List of special entities that appear in the poll explanation, which can be specified instead of *parse\_mode*
+    explanation-entities: option<list<message-entity>>,
+    /// Mode for parsing entities in the explanation. See [formatting options](https://core.telegram.org/bots/api/#formatting-options) for more details.
+    explanation-parse-mode: option<string>,
+    /// True, if the poll needs to be anonymous, defaults to *True*
+    is-anonymous: option<bool>,
+    /// Pass *True*, if the poll needs to be immediately closed. This can be useful for poll preview.
+    is-closed: option<bool>,
+    /// Amount of time in seconds the poll will be active after creation, 5-600. Can't be used together with *close\_date*.
+    open-period: option<s32>,
+    /// A JSON-serialized list of answer options, 2-10 strings 1-100 characters each
+    options: list<string>,
+    /// Poll question, 1-300 characters
+    question: string,
+    /// Additional interface options. A JSON-serialized object for an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating), [custom reply keyboard](https://core.telegram.org/bots#keyboards), instructions to remove reply keyboard or to force a reply from the user.
+    reply-markup: option<string>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>,
+    /// Poll type, “quiz” or “regular”, defaults to “regular”
+    type-op: option<string>
+  }
+  post-send-poll: func(params: post-send-poll-params) -> result<string, string>;
+
+}
+
+interface send-sticker {
+  post-send-sticker: func() -> result<string, string>;
+
+}
+
+interface send-venue {
+  record post-send-venue-params {
+    /// Address of the venue
+    address: string,
+    /// Pass *True*, if the message should be sent even if the specified replied-to message is not found
+    allow-sending-without-reply: option<bool>,
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Sends the message [silently](https://telegram.org/blog/channels-2-0#silent-messages). Users will receive a notification with no sound.
+    disable-notification: option<bool>,
+    /// Foursquare identifier of the venue
+    foursquare-id: option<string>,
+    /// Foursquare type of the venue, if known. (For example, “arts\_entertainment/default”, “arts\_entertainment/aquarium” or “food/icecream”.)
+    foursquare-type: option<string>,
+    /// Google Places identifier of the venue
+    google-place-id: option<string>,
+    /// Google Places type of the venue. (See [supported types](https://developers.google.com/places/web-service/supported_types).)
+    google-place-type: option<string>,
+    /// Latitude of the venue
+    latitude: f64,
+    /// Longitude of the venue
+    longitude: f64,
+    /// Additional interface options. A JSON-serialized object for an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating), [custom reply keyboard](https://core.telegram.org/bots#keyboards), instructions to remove reply keyboard or to force a reply from the user.
+    reply-markup: option<string>,
+    /// If the message is a reply, ID of the original message
+    reply-to-message-id: option<s32>,
+    /// Name of the venue
+    title: string
+  }
+  post-send-venue: func(params: post-send-venue-params) -> result<string, string>;
+
+}
+
+interface send-video {
+  post-send-video: func() -> result<string, string>;
+
+}
+
+interface send-video-note {
+  post-send-video-note: func() -> result<string, string>;
+
+}
+
+interface send-voice {
+  post-send-voice: func() -> result<string, string>;
+
+}
+
+interface set-chat-administrator-custom-title {
+  record post-set-chat-administrator-custom-title-params {
+    /// Unique identifier for the target chat or username of the target supergroup (in the format `@supergroupusername`)
+    chat-id: string,
+    /// New custom title for the administrator; 0-16 characters, emoji are not allowed
+    custom-title: string,
+    /// Unique identifier of the target user
+    user-id: s32
+  }
+  post-set-chat-administrator-custom-title: func(params: post-set-chat-administrator-custom-title-params) -> result<string, string>;
+
+}
+
+interface set-chat-description {
+  record post-set-chat-description-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// New chat description, 0-255 characters
+    description: option<string>
+  }
+  post-set-chat-description: func(params: post-set-chat-description-params) -> result<string, string>;
+
+}
+
+interface set-chat-permissions {
+  /// Describes actions that a non-administrator user is allowed to take in a chat.
+  record chat-permissions {
+    /// *Optional*. True, if the user is allowed to add web page previews to their messages, implies can\_send\_media\_messages
+    can-add-web-page-previews: option<bool>,
+    /// *Optional*. True, if the user is allowed to change the chat title, photo and other settings. Ignored in public supergroups
+    can-change-info: option<bool>,
+    /// *Optional*. True, if the user is allowed to invite new users to the chat
+    can-invite-users: option<bool>,
+    /// *Optional*. True, if the user is allowed to pin messages. Ignored in public supergroups
+    can-pin-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send audios, documents, photos, videos, video notes and voice notes, implies can\_send\_messages
+    can-send-media-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send text messages, contacts, locations and venues
+    can-send-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send animations, games, stickers and use inline bots, implies can\_send\_media\_messages
+    can-send-other-messages: option<bool>,
+    /// *Optional*. True, if the user is allowed to send polls, implies can\_send\_messages
+    can-send-polls: option<bool>
+  }
+
+  record post-set-chat-permissions-params {
+    /// Unique identifier for the target chat or username of the target supergroup (in the format `@supergroupusername`)
+    chat-id: string,
+    permissions: chat-permissions
+  }
+  post-set-chat-permissions: func(params: post-set-chat-permissions-params) -> result<string, string>;
+
+}
+
+interface set-chat-photo {
+  post-set-chat-photo: func() -> result<string, string>;
+
+}
+
+interface set-chat-sticker-set {
+  record post-set-chat-sticker-set-params {
+    /// Unique identifier for the target chat or username of the target supergroup (in the format `@supergroupusername`)
+    chat-id: string,
+    /// Name of the sticker set to be set as the group sticker set
+    sticker-set-name: string
+  }
+  post-set-chat-sticker-set: func(params: post-set-chat-sticker-set-params) -> result<string, string>;
+
+}
+
+interface set-chat-title {
+  record post-set-chat-title-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// New chat title, 1-255 characters
+    title: string
+  }
+  post-set-chat-title: func(params: post-set-chat-title-params) -> result<string, string>;
+
+}
+
+interface set-game-score {
+  record post-set-game-score-params {
+    /// Required if *inline\_message\_id* is not specified. Unique identifier for the target chat
+    chat-id: option<s32>,
+    /// Pass True, if the game message should not be automatically edited to include the current scoreboard
+    disable-edit-message: option<bool>,
+    /// Pass True, if the high score is allowed to decrease. This can be useful when fixing mistakes or banning cheaters
+    force: option<bool>,
+    /// Required if *chat\_id* and *message\_id* are not specified. Identifier of the inline message
+    inline-message-id: option<string>,
+    /// Required if *inline\_message\_id* is not specified. Identifier of the sent message
+    message-id: option<s32>,
+    /// New score, must be non-negative
+    score: s32,
+    /// User identifier
+    user-id: s32
+  }
+  post-set-game-score: func(params: post-set-game-score-params) -> result<string, string>;
+
+}
+
+interface set-my-commands {
+  /// This object represents a bot command.
+  record bot-command {
+    /// Text of the command, 1-32 characters. Can contain only lowercase English letters, digits and underscores.
+    command: string,
+    /// Description of the command, 3-256 characters.
+    description: string
+  }
+
+  record post-set-my-commands-params {
+    /// A JSON-serialized list of bot commands to be set as the list of the bot's commands. At most 100 commands can be specified.
+    commands: list<bot-command>
+  }
+  post-set-my-commands: func(params: post-set-my-commands-params) -> result<string, string>;
+
+}
+
+interface set-passport-data-errors {
+  /// This object represents an error in the Telegram Passport element which was submitted that should be resolved by the user. It should be one of:
+  record passport-element-error {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record post-set-passport-data-errors-params {
+    /// A JSON-serialized array describing the errors
+    errors: list<passport-element-error>,
+    /// User identifier
+    user-id: s32
+  }
+  post-set-passport-data-errors: func(params: post-set-passport-data-errors-params) -> result<string, string>;
+
+}
+
+interface set-sticker-position-in-set {
+  record post-set-sticker-position-in-set-params {
+    /// New sticker position in the set, zero-based
+    position: s32,
+    /// File identifier of the sticker
+    sticker: string
+  }
+  post-set-sticker-position-in-set: func(params: post-set-sticker-position-in-set-params) -> result<string, string>;
+
+}
+
+interface set-sticker-set-thumb {
+  post-set-sticker-set-thumb: func() -> result<string, string>;
+
+}
+
+interface set-webhook {
+  post-set-webhook: func() -> result<string, string>;
+
+}
+
+interface stop-message-live-location {
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-stop-message-live-location-params {
+    /// Required if *inline\_message\_id* is not specified. Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: option<string>,
+    /// Required if *chat\_id* and *message\_id* are not specified. Identifier of the inline message
+    inline-message-id: option<string>,
+    /// Required if *inline\_message\_id* is not specified. Identifier of the message with live location to stop
+    message-id: option<s32>,
+    reply-markup: option<inline-keyboard-markup>
+  }
+  post-stop-message-live-location: func(params: post-stop-message-live-location-params) -> result<string, string>;
+
+}
+
+interface stop-poll {
+  /// This object represents an [inline keyboard](https://core.telegram.org/bots#inline-keyboards-and-on-the-fly-updating) that appears right next to the message it belongs to.
+  record inline-keyboard-markup {
+    /// Array of button rows, each represented by an Array of [InlineKeyboardButton](https://core.telegram.org/bots/api/#inlinekeyboardbutton) objects
+    inline-keyboard: list<list<inline-keyboard-button>>
+  }
+
+  /// This object represents one button of an inline keyboard. You **must** use exactly one of the optional fields.
+  record inline-keyboard-button {
+    /// *Optional*. Data to be sent in a [callback query](https://core.telegram.org/bots/api/#callbackquery) to the bot when button is pressed, 1-64 bytes
+    callback-data: option<string>,
+    callback-game: option<callback-game>,
+    login-url: option<login-url>,
+    /// *Optional*. Specify True, to send a [Pay button](https://core.telegram.org/bots/api/#payments).  
+    /// 
+    pay: option<bool>,
+    /// *Optional*. If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot's username and the specified inline query in the input field. Can be empty, in which case just the bot's username will be inserted.  
+    /// 
+    switch-inline-query: option<string>,
+    /// *Optional*. If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot's username will be inserted.  
+    /// 
+    switch-inline-query-current-chat: option<string>,
+    /// Label text on the button
+    text: string,
+    /// *Optional*. HTTP or tg:// url to be opened when button is pressed
+    url: option<string>
+  }
+
+  /// A placeholder, currently holds no information. Use [BotFather](https://t.me/botfather) to set up your game.
+  record callback-game {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the [Telegram Login Widget](https://core.telegram.org/widgets/login) when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+  /// 
+  /// Telegram apps support these buttons as of [version 5.7](https://telegram.org/blog/privacy-discussions-web-bots#meet-seamless-web-bots).
+  /// 
+  /// Sample bot: [@discussbot](https://t.me/discussbot)
+  record login-url {
+    /// *Optional*. Username of a bot, which will be used for user authorization. See [Setting up a bot](https://core.telegram.org/widgets/login#setting-up-a-bot) for more details. If not specified, the current bot's username will be assumed. The *url*'s domain must be the same as the domain linked with the bot. See [Linking your domain to the bot](https://core.telegram.org/widgets/login#linking-your-domain-to-the-bot) for more details.
+    bot-username: option<string>,
+    /// *Optional*. New text of the button in forwarded messages.
+    forward-text: option<string>,
+    /// *Optional*. Pass True to request the permission for your bot to send messages to the user.
+    request-write-access: option<bool>,
+    /// An HTTP URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in [Receiving authorization data](https://core.telegram.org/widgets/login#receiving-authorization-data).  
+    /// 
+    url: string
+  }
+
+  record post-stop-poll-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Identifier of the original message with the poll
+    message-id: s32,
+    reply-markup: option<inline-keyboard-markup>
+  }
+  post-stop-poll: func(params: post-stop-poll-params) -> result<string, string>;
+
+}
+
+interface unban-chat-member {
+  record post-unban-chat-member-params {
+    /// Unique identifier for the target group or username of the target supergroup or channel (in the format `@username`)
+    chat-id: string,
+    /// Do nothing if the user is not banned
+    only-if-banned: option<bool>,
+    /// Unique identifier of the target user
+    user-id: s32
+  }
+  post-unban-chat-member: func(params: post-unban-chat-member-params) -> result<string, string>;
+
+}
+
+interface unpin-all-chat-messages {
+  record post-unpin-all-chat-messages-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string
+  }
+  post-unpin-all-chat-messages: func(params: post-unpin-all-chat-messages-params) -> result<string, string>;
+
+}
+
+interface unpin-chat-message {
+  record post-unpin-chat-message-params {
+    /// Unique identifier for the target chat or username of the target channel (in the format `@channelusername`)
+    chat-id: string,
+    /// Identifier of a message to unpin. If not specified, the most recent pinned message (by sending date) will be unpinned.
+    message-id: option<s32>
+  }
+  post-unpin-chat-message: func(params: post-unpin-chat-message-params) -> result<string, string>;
+
+}
+
+interface upload-sticker-file {
+  post-upload-sticker-file: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export add-sticker-to-set;
+  export answer-callback-query;
+  export answer-inline-query;
+  export answer-pre-checkout-query;
+  export answer-shipping-query;
+  export close;
+  export copy-message;
+  export create-new-sticker-set;
+  export delete-chat-photo;
+  export delete-chat-sticker-set;
+  export delete-message;
+  export delete-sticker-from-set;
+  export delete-webhook;
+  export edit-message-caption;
+  export edit-message-live-location;
+  export edit-message-media;
+  export edit-message-reply-markup;
+  export edit-message-text;
+  export export-chat-invite-link;
+  export forward-message;
+  export get-chat;
+  export get-chat-administrators;
+  export get-chat-member;
+  export get-chat-members-count;
+  export get-file;
+  export get-game-high-scores;
+  export get-me;
+  export get-my-commands;
+  export get-sticker-set;
+  export get-updates;
+  export get-user-profile-photos;
+  export get-webhook-info;
+  export kick-chat-member;
+  export leave-chat;
+  export log-out;
+  export pin-chat-message;
+  export promote-chat-member;
+  export restrict-chat-member;
+  export send-animation;
+  export send-audio;
+  export send-chat-action;
+  export send-contact;
+  export send-dice;
+  export send-document;
+  export send-game;
+  export send-invoice;
+  export send-location;
+  export send-media-group;
+  export send-message;
+  export send-photo;
+  export send-poll;
+  export send-sticker;
+  export send-venue;
+  export send-video;
+  export send-video-note;
+  export send-voice;
+  export set-chat-administrator-custom-title;
+  export set-chat-description;
+  export set-chat-permissions;
+  export set-chat-photo;
+  export set-chat-sticker-set;
+  export set-chat-title;
+  export set-game-score;
+  export set-my-commands;
+  export set-passport-data-errors;
+  export set-sticker-position-in-set;
+  export set-sticker-set-thumb;
+  export set-webhook;
+  export stop-message-live-location;
+  export stop-poll;
+  export unban-chat-member;
+  export unpin-all-chat-messages;
+  export unpin-chat-message;
+  export upload-sticker-file;
+}

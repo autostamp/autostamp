@@ -1,0 +1,4880 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `OAuth2Security` | `Authorization: Bearer <secret>` |
+package autostamp:box-api@0.2.0;
+
+interface authorization {
+  enum get-authorize-response-type-enum {
+    code,
+  }
+
+  /// Authorize user
+  record get-authorize-params {
+    /// The type of response we'd like to receive.
+    response-type: get-authorize-response-type-enum,
+    /// The Client ID of the application that is requesting to authenticate
+    /// the user. To get the Client ID for your application, log in to your
+    client-id: string,
+    /// The URI to which Box redirects the browser after the user has granted
+    /// or denied the application permission. This URI match one of the redirect
+    redirect-uri: option<string>,
+    /// A custom string of your choice. Box will pass the same string to
+    /// the redirect URL when authentication is complete. This parameter
+    state: option<string>,
+    /// A comma-separated list of application scopes you'd like to
+    /// authenticate the user for. This defaults to all the scopes configured
+    scope: option<string>
+  }
+  get-authorize: func(params: get-authorize-params) -> result<string, string>;
+
+  /// Revoke access token
+  post-oauth2-revoke: func() -> result<string, string>;
+
+  /// Request access token
+  post-oauth2-token: func() -> result<string, string>;
+
+  /// Refresh access token
+  refresh: func() -> result<string, string>;
+
+}
+
+
+interface domain-restrictions-for-collaborations {
+  enum post-collaboration-whitelist-entries-body-direction-enum {
+    inbound,
+    outbound,
+    both,
+  }
+
+  /// List allowed collaboration domains
+  record get-collaboration-whitelist-entries-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-collaboration-whitelist-entries: func(params: get-collaboration-whitelist-entries-params) -> result<string, string>;
+
+  /// Add domain to list of allowed collaboration domains
+  record post-collaboration-whitelist-entries-params {
+    /// The direction in which to allow collaborations.
+    direction: post-collaboration-whitelist-entries-body-direction-enum,
+    /// The domain to add to the list of allowed domains.
+    domain: string
+  }
+  post-collaboration-whitelist-entries: func(params: post-collaboration-whitelist-entries-params) -> result<string, string>;
+
+  /// Get allowed collaboration domain
+  record get-collaboration-whitelist-entries-id-params {
+    /// The ID of the entry in the list.
+    collaboration-whitelist-entry-id: string
+  }
+  get-collaboration-whitelist-entries-id: func(params: get-collaboration-whitelist-entries-id-params) -> result<string, string>;
+
+  /// Remove domain from list of allowed collaboration domains
+  record delete-collaboration-whitelist-entries-id-params {
+    /// The ID of the entry in the list.
+    collaboration-whitelist-entry-id: string
+  }
+  delete-collaboration-whitelist-entries-id: func(params: delete-collaboration-whitelist-entries-id-params) -> result<string, string>;
+
+}
+
+interface domain-restrictions-user-exemptions {
+  /// The user to exempt.
+  record post-collaboration-whitelist-exempt-targets-body-user {
+    /// The ID of the user to exempt.
+    id: string
+  }
+
+  /// List users exempt from collaboration domain restrictions
+  record get-collaboration-whitelist-exempt-targets-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-collaboration-whitelist-exempt-targets: func(params: get-collaboration-whitelist-exempt-targets-params) -> result<string, string>;
+
+  /// Create user exemption from collaboration domain restrictions
+  record post-collaboration-whitelist-exempt-targets-params {
+    /// The user to exempt.
+    user: post-collaboration-whitelist-exempt-targets-body-user
+  }
+  post-collaboration-whitelist-exempt-targets: func(params: post-collaboration-whitelist-exempt-targets-params) -> result<string, string>;
+
+  /// Get user exempt from collaboration domain restrictions
+  record get-collaboration-whitelist-exempt-targets-id-params {
+    /// The ID of the exemption to the list.
+    collaboration-whitelist-exempt-target-id: string
+  }
+  get-collaboration-whitelist-exempt-targets-id: func(params: get-collaboration-whitelist-exempt-targets-id-params) -> result<string, string>;
+
+  /// Remove user from list of users exempt from domain restrictions
+  record delete-collaboration-whitelist-exempt-targets-id-params {
+    /// The ID of the exemption to the list.
+    collaboration-whitelist-exempt-target-id: string
+  }
+  delete-collaboration-whitelist-exempt-targets-id: func(params: delete-collaboration-whitelist-exempt-targets-id-params) -> result<string, string>;
+
+}
+
+interface collaborations-list {
+  enum get-collaborations-status-enum {
+    pending,
+  }
+
+  /// List pending collaborations
+  record get-collaborations-params {
+    /// The status of the collaborations to retrieve
+    status: get-collaborations-status-enum,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-collaborations: func(params: get-collaborations-params) -> result<string, string>;
+
+  /// List file collaborations
+  record get-files-id-collaborations-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>
+  }
+  get-files-id-collaborations: func(params: get-files-id-collaborations-params) -> result<string, string>;
+
+  /// List folder collaborations
+  record get-folders-id-collaborations-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-folders-id-collaborations: func(params: get-folders-id-collaborations-params) -> result<string, string>;
+
+  /// List group collaborations
+  record get-groups-id-collaborations-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>
+  }
+  get-groups-id-collaborations: func(params: get-groups-id-collaborations-params) -> result<string, string>;
+
+}
+
+interface collaborations {
+  enum post-collaborations-body-accessible-by-type-op-enum {
+    user,
+    group,
+  }
+
+  enum post-collaborations-body-item-type-op-enum {
+    file,
+    folder,
+  }
+
+  enum post-collaborations-body-role-enum {
+    editor,
+    viewer,
+    previewer,
+    uploader,
+    previewer-uploader,
+    viewer-uploader,
+    co-owner,
+  }
+
+  enum put-collaborations-id-body-role-enum {
+    editor,
+    viewer,
+    previewer,
+    uploader,
+    previewer-uploader,
+    viewer-uploader,
+    co-owner,
+    owner,
+  }
+
+  enum put-collaborations-id-body-status-enum {
+    pending,
+    accepted,
+    rejected,
+  }
+
+  /// The user or group to give access to the item.
+  record post-collaborations-body-accessible-by {
+    /// The ID of the user or group.
+    /// 
+    id: option<string>,
+    /// The email address of the user to grant access to the item.
+    /// 
+    login: option<string>,
+    /// The type of collaborator to invite.
+    type-op: post-collaborations-body-accessible-by-type-op-enum
+  }
+
+  /// The item to attach the comment to.
+  record post-collaborations-body-item {
+    /// The ID of the item that will be granted access to
+    id: string,
+    /// The type of the item that this collaboration will be
+    /// granted access to
+    type-op: post-collaborations-body-item-type-op-enum
+  }
+
+  /// Create collaboration
+  record post-collaborations-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Determines if users should receive email notification
+    /// for the action performed.
+    notify: option<bool>,
+    /// The user or group to give access to the item.
+    accessible-by: post-collaborations-body-accessible-by,
+    /// Determines if the invited users can see the entire parent path to
+    /// the associated folder. The user will not gain privileges in any
+    can-view-path: option<bool>,
+    /// Set the expiration date for the collaboration. At this date, the
+    /// collaboration will be automatically removed from the item.
+    expires-at: option<string>,
+    /// The item to attach the comment to.
+    item: post-collaborations-body-item,
+    /// The level of access granted.
+    role: post-collaborations-body-role-enum
+  }
+  post-collaborations: func(params: post-collaborations-params) -> result<string, string>;
+
+  /// Get collaboration
+  record get-collaborations-id-params {
+    /// The ID of the collaboration
+    collaboration-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-collaborations-id: func(params: get-collaborations-id-params) -> result<string, string>;
+
+  /// Update collaboration
+  record put-collaborations-id-params {
+    /// The ID of the collaboration
+    collaboration-id: string,
+    /// Determines if the invited users can see the entire parent path to
+    /// the associated folder. The user will not gain privileges in any
+    can-view-path: option<bool>,
+    /// Update the expiration date for the collaboration. At this date,
+    /// the collaboration will be automatically removed from the item.
+    expires-at: option<string>,
+    /// The level of access granted.
+    role: put-collaborations-id-body-role-enum,
+    /// <!--alex ignore reject-->
+    /// Set the status of a `pending` collaboration invitation,
+    status: option<put-collaborations-id-body-status-enum>
+  }
+  put-collaborations-id: func(params: put-collaborations-id-params) -> result<string, string>;
+
+  /// Remove collaboration
+  record delete-collaborations-id-params {
+    /// The ID of the collaboration
+    collaboration-id: string
+  }
+  delete-collaborations-id: func(params: delete-collaborations-id-params) -> result<string, string>;
+
+}
+
+interface collections {
+  /// List all collections
+  record get-collections-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-collections: func(params: get-collections-params) -> result<string, string>;
+
+  /// List collection items
+  record get-collections-id-items-params {
+    /// The ID of the collection.
+    collection-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-collections-id-items: func(params: get-collections-id-items-params) -> result<string, string>;
+
+}
+
+interface comments {
+  enum post-comments-body-item-type-op-enum {
+    file,
+    comment,
+  }
+
+  /// The item to attach the comment to.
+  record post-comments-body-item {
+    /// The ID of the item
+    id: string,
+    /// The type of the item that this comment will be placed on.
+    type-op: post-comments-body-item-type-op-enum
+  }
+
+  /// Create comment
+  record post-comments-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The item to attach the comment to.
+    item: option<post-comments-body-item>,
+    /// The text of the comment.
+    /// 
+    message: string,
+    /// The text of the comment, including `@[user_id:name]`
+    /// somewhere in the message to mention another user, which
+    tagged-message: option<string>
+  }
+  post-comments: func(params: post-comments-params) -> result<string, string>;
+
+  /// Get comment
+  record get-comments-id-params {
+    /// The ID of the comment.
+    comment-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-comments-id: func(params: get-comments-id-params) -> result<string, string>;
+
+  /// Update comment
+  record put-comments-id-params {
+    /// The ID of the comment.
+    comment-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The text of the comment to update
+    message: option<string>
+  }
+  put-comments-id: func(params: put-comments-id-params) -> result<string, string>;
+
+  /// Remove comment
+  record delete-comments-id-params {
+    /// The ID of the comment.
+    comment-id: string
+  }
+  delete-comments-id: func(params: delete-comments-id-params) -> result<string, string>;
+
+  /// List file comments
+  record get-files-id-comments-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>
+  }
+  get-files-id-comments: func(params: get-files-id-comments-params) -> result<string, string>;
+
+}
+
+interface device-pinners {
+  enum get-enterprises-id-device-pinners-direction-enum {
+    asc,
+    desc,
+  }
+
+  /// Get device pin
+  record get-device-pinners-id-params {
+    /// The ID of the device pin
+    device-pinner-id: string
+  }
+  get-device-pinners-id: func(params: get-device-pinners-id-params) -> result<string, string>;
+
+  /// Remove device pin
+  record delete-device-pinners-id-params {
+    /// The ID of the device pin
+    device-pinner-id: string
+  }
+  delete-device-pinners-id: func(params: delete-device-pinners-id-params) -> result<string, string>;
+
+  /// List enterprise device pins
+  record get-enterprises-id-device-pinners-params {
+    /// The ID of the enterprise
+    enterprise-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The direction to sort results in. This can be either in alphabetical ascending
+    /// (`ASC`) or descending (`DESC`) order.
+    direction: option<get-enterprises-id-device-pinners-direction-enum>
+  }
+  get-enterprises-id-device-pinners: func(params: get-enterprises-id-device-pinners-params) -> result<string, string>;
+
+}
+
+interface events {
+  enum get-events-stream-type-enum {
+    all,
+    changes,
+    sync,
+    admin-logs,
+    admin-logs-streaming,
+  }
+
+  enum get-events-event-type-item-enum {
+    access-granted,
+    access-revoked,
+    add-device-association,
+    add-login-activity-device,
+    admin-login,
+    application-created,
+    application-public-key-added,
+    application-public-key-deleted,
+    change-admin-role,
+    change-folder-permission,
+    collaboration-accept,
+    collaboration-expiration,
+    collaboration-invite,
+    collaboration-remove,
+    collaboration-role-change,
+    comment-create,
+    comment-delete,
+    content-workflow-abnormal-download-activity,
+    content-workflow-automation-add,
+    content-workflow-automation-delete,
+    content-workflow-policy-add,
+    content-workflow-sharing-policy-violation,
+    content-workflow-upload-policy-violation,
+    copy,
+    data-retention-create-retention,
+    data-retention-remove-retention,
+    delete,
+    delete-user,
+    device-trust-check-failed,
+    download,
+    edit,
+    edit-user,
+    email-alias-confirm,
+    email-alias-remove,
+    enterprise-app-authorization-update,
+    external-collab-security-settings,
+    failed-login,
+    file-marked-malicious,
+    file-watermarked-download,
+    group-add-item,
+    group-add-user,
+    group-creation,
+    group-deletion,
+    group-edited,
+    group-remove-item,
+    group-remove-user,
+    item-modify,
+    item-open,
+    item-shared-update,
+    item-sync,
+    item-unsync,
+    legal-hold-assignment-create,
+    legal-hold-assignment-delete,
+    legal-hold-policy-create,
+    legal-hold-policy-delete,
+    legal-hold-policy-update,
+    lock,
+    login,
+    metadata-instance-create,
+    metadata-instance-delete,
+    metadata-instance-update,
+    metadata-template-create,
+    metadata-template-delete,
+    metadata-template-update,
+    move,
+    new-user,
+    oauth2-access-token-revoke,
+    preview,
+    remove-device-association,
+    remove-login-activity-device,
+    rename,
+    retention-policy-assignment-add,
+    share,
+    share-expiration,
+    shield-alert,
+    shield-external-collab-access-blocked,
+    shield-external-collab-access-blocked-missing-justification,
+    shield-external-collab-invite-blocked,
+    shield-external-collab-invite-blocked-missing-justification,
+    shield-justification-approval,
+    sign-document-assigned,
+    sign-document-cancelled,
+    sign-document-completed,
+    sign-document-converted,
+    sign-document-created,
+    sign-document-declined,
+    sign-document-expired,
+    sign-document-signed,
+    sign-document-viewed-by-signed,
+    signer-downloaded,
+    signer-forwarded,
+    storage-expiration,
+    task-assignment-create,
+    task-assignment-delete,
+    task-assignment-update,
+    task-create,
+    task-update,
+    terms-of-service-accept,
+    terms-of-service-reject,
+    undelete,
+    unlock,
+    unshare,
+    update-collaboration-expiration,
+    update-share-expiration,
+    upload,
+    user-authenticate-oauth2-access-token-create,
+    watermark-label-create,
+    watermark-label-delete,
+  }
+
+  /// List user and enterprise events
+  record get-events-params {
+    /// Defines the type of events that are returned
+    /// 
+    stream-type: option<get-events-stream-type-enum>,
+    /// The location in the event stream to start receiving events from.
+    /// 
+    stream-position: option<string>,
+    /// Limits the number of events returned
+    /// 
+    limit: option<s64>,
+    /// A comma-separated list of events to filter by. This can only be used when
+    /// requesting the events with a `stream_type` of `admin_logs` or
+    event-type: option<list<get-events-event-type-item-enum>>,
+    /// The lower bound date and time to return events for. This can only be used
+    /// when requesting the events with a `stream_type` of `admin_logs`. For any
+    created-after: option<string>,
+    /// The upper bound date and time to return events for. This can only be used
+    /// when requesting the events with a `stream_type` of `admin_logs`. For any
+    created-before: option<string>
+  }
+  get-events: func(params: get-events-params) -> result<string, string>;
+
+}
+
+interface file-requests {
+  enum file-request-update-request-status-enum {
+    active,
+    inactive,
+  }
+
+  /// Get file request
+  record get-file-requests-id-params {
+    /// The unique identifier that represent a file request.
+    /// 
+    file-request-id: string
+  }
+  get-file-requests-id: func(params: get-file-requests-id-params) -> result<string, string>;
+
+  /// Update file request
+  record put-file-requests-id-params {
+    /// The unique identifier that represent a file request.
+    /// 
+    file-request-id: string,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>,
+    /// An optional new description for the file request. This can be
+    /// used to change the description of the file request.
+    description: option<string>,
+    /// The date after which a file request will no longer accept new
+    /// submissions.
+    expires-at: option<string>,
+    /// Whether a file request submitter is required to provide
+    /// a description of the files they are submitting.
+    is-description-required: option<bool>,
+    /// Whether a file request submitter is required to provide
+    /// their email address.
+    is-email-required: option<bool>,
+    /// An optional new status of the file request.
+    /// 
+    status: option<file-request-update-request-status-enum>,
+    /// An optional new title for the file request. This can be
+    /// used to change the title of the file request.
+    title: option<string>
+  }
+  put-file-requests-id: func(params: put-file-requests-id-params) -> result<string, string>;
+
+  /// Delete file request
+  record delete-file-requests-id-params {
+    /// The unique identifier that represent a file request.
+    /// 
+    file-request-id: string
+  }
+  delete-file-requests-id: func(params: delete-file-requests-id-params) -> result<string, string>;
+
+  /// Copy file request
+  record post-file-requests-id-copy-params {
+    /// The unique identifier that represent a file request.
+    /// 
+    file-request-id: string,
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+  post-file-requests-id-copy: func(params: post-file-requests-id-copy-params) -> result<string, string>;
+
+}
+
+interface file-version-legal-holds {
+  /// List file version legal holds
+  record get-file-version-legal-holds-params {
+    /// The ID of the legal hold policy to get the file version legal
+    /// holds for.
+    policy-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-file-version-legal-holds: func(params: get-file-version-legal-holds-params) -> result<string, string>;
+
+  /// Get file version legal hold
+  record get-file-version-legal-holds-id-params {
+    /// The ID of the file version legal hold
+    file-version-legal-hold-id: string
+  }
+  get-file-version-legal-holds-id: func(params: get-file-version-legal-holds-id-params) -> result<string, string>;
+
+}
+
+interface file-version-retentions {
+  enum get-file-version-retentions-disposition-action-enum {
+    permanently-delete,
+    remove-retention,
+  }
+
+  /// List file version retentions
+  record get-file-version-retentions-params {
+    /// Filters results by files with this ID.
+    file-id: option<string>,
+    /// Filters results by file versions with this ID.
+    file-version-id: option<string>,
+    /// Filters results by the retention policy with this ID.
+    policy-id: option<string>,
+    /// Filters results by the retention policy with this disposition
+    /// action.
+    disposition-action: option<get-file-version-retentions-disposition-action-enum>,
+    /// Filters results by files that will have their disposition
+    /// come into effect before this date.
+    disposition-before: option<string>,
+    /// Filters results by files that will have their disposition
+    /// come into effect after this date.
+    disposition-after: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>
+  }
+  get-file-version-retentions: func(params: get-file-version-retentions-params) -> result<string, string>;
+
+  /// Get retention on file
+  record get-file-version-retentions-id-params {
+    /// The ID of the file version retention
+    file-version-retention-id: string
+  }
+  get-file-version-retentions-id: func(params: get-file-version-retentions-id-params) -> result<string, string>;
+
+}
+
+interface uploads {
+  /// Upload file
+  record post-files-content-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// An optional header containing the SHA1 hash of the file to
+    /// ensure that the file was not corrupted in transit.
+    content-md5: option<string>
+  }
+  post-files-content: func(params: post-files-content-params) -> result<string, string>;
+
+  /// Upload file version
+  record post-files-id-content-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// An optional header containing the SHA1 hash of the file to
+    /// ensure that the file was not corrupted in transit.
+    content-md5: option<string>
+  }
+  post-files-id-content: func(params: post-files-id-content-params) -> result<string, string>;
+
+}
+
+interface uploads-chunked {
+  /// The representation of an upload
+  /// session chunk.
+  record upload-part {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Create upload session
+  record post-files-upload-sessions-params {
+    /// The name of new file
+    file-name: string,
+    /// The total number of bytes of the file to be uploaded
+    file-size: s64,
+    /// The ID of the folder to upload the new file to.
+    folder-id: string
+  }
+  post-files-upload-sessions: func(params: post-files-upload-sessions-params) -> result<string, string>;
+
+  /// Get upload session
+  record get-files-upload-sessions-id-params {
+    /// The ID of the upload session.
+    upload-session-id: string
+  }
+  get-files-upload-sessions-id: func(params: get-files-upload-sessions-id-params) -> result<string, string>;
+
+  /// Upload part of file
+  record put-files-upload-sessions-id-params {
+    /// The ID of the upload session.
+    upload-session-id: string,
+    /// The [RFC3230][1] message digest of the chunk uploaded.
+    /// 
+    digest: string,
+    /// The byte range of the chunk.
+    /// 
+    content-range: string
+  }
+  put-files-upload-sessions-id: func(params: put-files-upload-sessions-id-params) -> result<string, string>;
+
+  /// Remove upload session
+  record delete-files-upload-sessions-id-params {
+    /// The ID of the upload session.
+    upload-session-id: string
+  }
+  delete-files-upload-sessions-id: func(params: delete-files-upload-sessions-id-params) -> result<string, string>;
+
+  /// Commit upload session
+  record post-files-upload-sessions-id-commit-params {
+    /// The ID of the upload session.
+    upload-session-id: string,
+    /// The [RFC3230][1] message digest of the whole file.
+    /// 
+    digest: string,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>,
+    /// Ensures an item is only returned if it has changed.
+    /// 
+    if-none-match: option<string>,
+    /// The list details for the uploaded parts
+    parts: list<upload-part>
+  }
+  post-files-upload-sessions-id-commit: func(params: post-files-upload-sessions-id-commit-params) -> result<string, string>;
+
+  /// List parts
+  record get-files-upload-sessions-id-parts-params {
+    /// The ID of the upload session.
+    upload-session-id: string,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-files-upload-sessions-id-parts: func(params: get-files-upload-sessions-id-parts-params) -> result<string, string>;
+
+  /// Create upload session for existing file
+  record post-files-id-upload-sessions-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The optional new name of new file
+    file-name: option<string>,
+    /// The total number of bytes of the file to be uploaded
+    file-size: s64
+  }
+  post-files-id-upload-sessions: func(params: post-files-id-upload-sessions-params) -> result<string, string>;
+
+}
+
+interface files {
+  enum put-files-id-body-lock-access-enum {
+    lock,
+  }
+
+  enum put-files-id-body-permissions-can-download-enum {
+    open,
+    company,
+  }
+
+  /// Defines a lock on an item. This prevents the item from being
+  /// moved, renamed, or otherwise changed by anyone other than the user
+  /// who created the lock.
+  /// 
+  /// Set this to `null` to remove the lock.
+  record put-files-id-body-lock {
+    /// The type of this object.
+    access: option<put-files-id-body-lock-access-enum>,
+    /// Defines the time at which the lock expires.
+    expires-at: option<string>,
+    /// Defines if the file can be downloaded while it is locked.
+    is-download-prevented: option<bool>
+  }
+
+  /// Defines who can download a file.
+  record put-files-id-body-permissions {
+    /// Defines who is allowed to download this file. The possible
+    /// values are either `open` for everyone or `company` for
+    can-download: option<put-files-id-body-permissions-can-download-enum>
+  }
+
+  /// The destination folder to copy the file to.
+  record post-files-id-copy-body-parent {
+    /// The ID of folder to copy the file to.
+    id: string
+  }
+
+  /// Get file information
+  record get-files-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Ensures an item is only returned if it has changed.
+    /// 
+    if-none-match: option<string>,
+    /// The URL, and optional password, for the shared link of this item.
+    /// 
+    boxapi: option<string>,
+    /// A header required to request specific `representations`
+    /// of a file. Use this in combination with the `fields` query
+    x-rep-hints: option<string>
+  }
+  get-files-id: func(params: get-files-id-params) -> result<string, string>;
+
+  /// Update file
+  record put-files-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>,
+    /// The description for a file. This can be seen in the right-hand sidebar panel
+    /// when viewing a file in the Box web app. Additionally, this index is used in
+    description: option<string>,
+    /// The retention expiration timestamp for the given file. This
+    /// date cannot be shortened once set on a file.
+    disposition-at: option<string>,
+    /// Defines a lock on an item. This prevents the item from being
+    /// moved, renamed, or otherwise changed by anyone other than the user
+    lock: option<put-files-id-body-lock>,
+    /// An optional different name for the file. This can be used to
+    /// rename the file.
+    name: option<string>,
+    parent: option<string>,
+    /// Defines who can download a file.
+    permissions: option<put-files-id-body-permissions>,
+    shared-link: option<string>,
+    /// The tags for this item. These tags are shown in
+    /// the Box web app and mobile apps next to an item.
+    tags: option<list<string>>
+  }
+  put-files-id: func(params: put-files-id-params) -> result<string, string>;
+
+  /// Delete file
+  record delete-files-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>
+  }
+  delete-files-id: func(params: delete-files-id-params) -> result<string, string>;
+
+  /// Copy file
+  record post-files-id-copy-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// An optional new name for the copied file.
+    /// 
+    name: option<string>,
+    /// The destination folder to copy the file to.
+    parent: post-files-id-copy-body-parent,
+    /// An optional ID of the specific file version to copy.
+    version: option<string>
+  }
+  post-files-id-copy: func(params: post-files-id-copy-params) -> result<string, string>;
+
+  /// Get file thumbnail
+  record get-files-id-thumbnail-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The file format for the thumbnail
+    extension: string,
+    /// The minimum height of the thumbnail
+    min-height: option<s32>,
+    /// The minimum width of the thumbnail
+    min-width: option<s32>,
+    /// The maximum height of the thumbnail
+    max-height: option<s32>,
+    /// The maximum width of the thumbnail
+    max-width: option<s32>
+  }
+  get-files-id-thumbnail-id: func(params: get-files-id-thumbnail-id-params) -> result<string, string>;
+
+}
+
+interface trashed-files {
+  /// Restore file
+  record post-files-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// An optional new name for the file.
+    name: option<string>,
+    parent: option<string>
+  }
+  post-files-id: func(params: post-files-id-params) -> result<string, string>;
+
+  /// Get trashed file
+  record get-files-id-trash-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-files-id-trash: func(params: get-files-id-trash-params) -> result<string, string>;
+
+  /// Permanently remove file
+  record delete-files-id-trash-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  delete-files-id-trash: func(params: delete-files-id-trash-params) -> result<string, string>;
+
+}
+
+interface shared-links-files {
+  enum add-shared-link-body-shared-link-access-enum {
+    open,
+    company,
+    collaborators,
+  }
+
+  /// The settings for the shared link to create on the file.
+  /// Use an empty object (`{}`) to use the default settings for shared
+  /// links.
+  record add-shared-link-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<add-shared-link-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    permissions: option<add-shared-link-body-shared-link-permissions>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  record add-shared-link-body-shared-link-permissions {
+    /// If the shared link allows for downloading of files.
+    /// This can only be set when `access` is set to
+    can-download: option<bool>,
+    /// If the shared link allows for editing of files.
+    /// This can only be set when `access` is set to
+    can-edit: option<bool>,
+    /// If the shared link allows for previewing of files.
+    /// This value is always `true`. For shared links on folders
+    can-preview: option<bool>
+  }
+
+  /// By setting this value to `null`, the shared link
+  /// is removed from the file.
+  record remove-shared-link-body-shared-link {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// The settings for the shared link to update.
+  record update-shared-link-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<add-shared-link-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    permissions: option<update-shared-link-body-shared-link-permissions>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  record update-shared-link-body-shared-link-permissions {
+    /// If the shared link allows for downloading of files.
+    /// This can only be set when `access` is set to
+    can-download: option<bool>,
+    /// If the shared link allows for editing of files.
+    /// This can only be set when `access` is set to
+    can-edit: option<bool>,
+    /// If the shared link allows for previewing of files.
+    /// This value is always `true`. For shared links on folders
+    can-preview: option<bool>
+  }
+
+  /// Add shared link to file
+  record add-shared-link-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// The settings for the shared link to create on the file.
+    /// Use an empty object (`{}`) to use the default settings for shared
+    shared-link: option<add-shared-link-body-shared-link>
+  }
+  add-shared-link: func(params: add-shared-link-params) -> result<string, string>;
+
+  /// Get shared link for file
+  record get-shared-link-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string
+  }
+  get-shared-link: func(params: get-shared-link-params) -> result<string, string>;
+
+  /// Remove shared link from file
+  record remove-shared-link-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// By setting this value to `null`, the shared link
+    /// is removed from the file.
+    shared-link: option<remove-shared-link-body-shared-link>
+  }
+  remove-shared-link: func(params: remove-shared-link-params) -> result<string, string>;
+
+  /// Update shared link on file
+  record update-shared-link-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// The settings for the shared link to update.
+    shared-link: option<update-shared-link-body-shared-link>
+  }
+  update-shared-link: func(params: update-shared-link-params) -> result<string, string>;
+
+  /// Find file for shared link
+  record get-shared-items-params {
+    /// Ensures an item is only returned if it has changed.
+    /// 
+    if-none-match: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// A header containing the shared link and optional password for the
+    /// shared link.
+    boxapi: string
+  }
+  get-shared-items: func(params: get-shared-items-params) -> result<string, string>;
+
+}
+
+interface downloads {
+  /// Download file
+  record get-files-id-content-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The byte range of the content to download.
+    /// 
+    range: option<string>,
+    /// The URL, and optional password, for the shared link of this item.
+    /// 
+    boxapi: option<string>,
+    /// The file version to download
+    version: option<string>,
+    /// An optional access token that can be used to pre-authenticate this request, which means that a download link can be shared with a browser or a third party service without them needing to know how to handle the authentication.
+    /// When using this parameter, please make sure that the access token is sufficiently scoped down to only allow read access to that file and no other files or folders.
+    access-token: option<string>
+  }
+  get-files-id-content: func(params: get-files-id-content-params) -> result<string, string>;
+
+}
+
+interface metadata-instances-files {
+  /// List metadata instances on file
+  record get-files-id-metadata-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  get-files-id-metadata: func(params: get-files-id-metadata-params) -> result<string, string>;
+
+  /// Get metadata instance on file
+  record get-files-id-metadata-id-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  get-files-id-metadata-id-id: func(params: get-files-id-metadata-id-id-params) -> result<string, string>;
+
+  /// Create metadata instance on file
+  record post-files-id-metadata-id-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string,
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+  post-files-id-metadata-id-id: func(params: post-files-id-metadata-id-id-params) -> result<string, string>;
+
+  /// Update metadata instance on file
+  record put-files-id-metadata-id-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  put-files-id-metadata-id-id: func(params: put-files-id-metadata-id-id-params) -> result<string, string>;
+
+  /// Remove metadata instance from file
+  record delete-files-id-metadata-id-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  delete-files-id-metadata-id-id: func(params: delete-files-id-metadata-id-id-params) -> result<string, string>;
+
+}
+
+interface classifications-on-files {
+  /// Get classification on file
+  record get-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  get-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: get-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+  /// Add classification to file
+  record post-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The name of the classification to apply to this file.
+    /// 
+    box-security-classification-key: option<string>
+  }
+  post-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: post-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+  /// Update classification on file
+  record put-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  put-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: put-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+  /// Remove classification from file
+  record delete-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  delete-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: delete-files-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+}
+
+interface skills {
+  enum put-skill-invocations-id-body-file-type-op-enum {
+    file,
+  }
+
+  enum put-skill-invocations-id-body-file-version-type-op-enum {
+    file-version,
+  }
+
+  enum put-skill-invocations-id-body-status-enum {
+    invoked,
+    processing,
+    success,
+    transient-failure,
+    permanent-failure,
+  }
+
+  /// The file to assign the cards to.
+  record put-skill-invocations-id-body-file {
+    /// The ID of the file
+    id: option<string>,
+    /// `file`
+    type-op: option<put-skill-invocations-id-body-file-type-op-enum>
+  }
+
+  /// The optional file version to assign the cards to.
+  record put-skill-invocations-id-body-file-version {
+    /// The ID of the file version
+    id: option<string>,
+    /// `file_version`
+    type-op: option<put-skill-invocations-id-body-file-version-type-op-enum>
+  }
+
+  /// The metadata to set for this skill. This is a list of
+  /// Box Skills cards. These cards will overwrite any existing Box
+  /// skill cards on the file.
+  record put-skill-invocations-id-body-metadata {
+    /// A list of Box Skill cards to apply to this file.
+    cards: option<list<string>>
+  }
+
+  /// A descriptor that defines what items are affected by this call.
+  /// 
+  /// Set this to the default values when setting a card to a `success`
+  /// state, and leave it out in most other situations.
+  record put-skill-invocations-id-body-usage {
+    /// `file`
+    unit: option<string>,
+    /// `1`
+    value: option<f64>
+  }
+
+  /// List Box Skill cards on file
+  record get-files-id-metadata-global-box-skills-cards-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  get-files-id-metadata-global-box-skills-cards: func(params: get-files-id-metadata-global-box-skills-cards-params) -> result<string, string>;
+
+  /// Create Box Skill cards on file
+  record post-files-id-metadata-global-box-skills-cards-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A list of Box Skill cards to apply to this file.
+    cards: list<string>
+  }
+  post-files-id-metadata-global-box-skills-cards: func(params: post-files-id-metadata-global-box-skills-cards-params) -> result<string, string>;
+
+  /// Update Box Skill cards on file
+  record put-files-id-metadata-global-box-skills-cards-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  put-files-id-metadata-global-box-skills-cards: func(params: put-files-id-metadata-global-box-skills-cards-params) -> result<string, string>;
+
+  /// Remove Box Skill cards from file
+  record delete-files-id-metadata-global-box-skills-cards-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  delete-files-id-metadata-global-box-skills-cards: func(params: delete-files-id-metadata-global-box-skills-cards-params) -> result<string, string>;
+
+  /// Update all Box Skill cards on file
+  record put-skill-invocations-id-params {
+    /// The ID of the skill to apply this metadata for.
+    skill-id: string,
+    /// The file to assign the cards to.
+    file: put-skill-invocations-id-body-file,
+    /// The optional file version to assign the cards to.
+    file-version: option<put-skill-invocations-id-body-file-version>,
+    /// The metadata to set for this skill. This is a list of
+    /// Box Skills cards. These cards will overwrite any existing Box
+    metadata: put-skill-invocations-id-body-metadata,
+    /// Defines the status of this invocation. Set this to `success` when setting Skill cards.
+    status: put-skill-invocations-id-body-status-enum,
+    /// A descriptor that defines what items are affected by this call.
+    /// 
+    usage: option<put-skill-invocations-id-body-usage>
+  }
+  put-skill-invocations-id: func(params: put-skill-invocations-id-params) -> result<string, string>;
+
+}
+
+interface tasks {
+  enum post-tasks-body-action-enum {
+    review,
+    complete,
+  }
+
+  enum post-tasks-body-completion-rule-enum {
+    all-assignees,
+    any-assignee,
+  }
+
+  enum post-tasks-body-item-type-op-enum {
+    file,
+  }
+
+  /// The file to attach the task to.
+  record post-tasks-body-item {
+    /// The ID of the file
+    id: string,
+    /// `file`
+    type-op: post-tasks-body-item-type-op-enum
+  }
+
+  /// List tasks on file
+  record get-files-id-tasks-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  get-files-id-tasks: func(params: get-files-id-tasks-params) -> result<string, string>;
+
+  /// Create task
+  record post-tasks-params {
+    /// The action the task assignee will be prompted to do. Must be
+    /// 
+    action: option<post-tasks-body-action-enum>,
+    /// Defines which assignees need to complete this task before the task
+    /// is considered completed.
+    completion-rule: option<post-tasks-body-completion-rule-enum>,
+    /// Defines when the task is due. Defaults to `null` if not
+    /// provided.
+    due-at: option<string>,
+    /// The file to attach the task to.
+    item: post-tasks-body-item,
+    /// An optional message to include with the task.
+    message: option<string>
+  }
+  post-tasks: func(params: post-tasks-params) -> result<string, string>;
+
+  /// Get task
+  record get-tasks-id-params {
+    /// The ID of the task.
+    task-id: string
+  }
+  get-tasks-id: func(params: get-tasks-id-params) -> result<string, string>;
+
+  /// Update task
+  record put-tasks-id-params {
+    /// The ID of the task.
+    task-id: string,
+    /// The action the task assignee will be prompted to do. Must be
+    /// 
+    action: option<post-tasks-body-action-enum>,
+    /// Defines which assignees need to complete this task before the task
+    /// is considered completed.
+    completion-rule: option<post-tasks-body-completion-rule-enum>,
+    /// When the task is due at.
+    due-at: option<string>,
+    /// The message included with the task.
+    message: option<string>
+  }
+  put-tasks-id: func(params: put-tasks-id-params) -> result<string, string>;
+
+  /// Remove task
+  record delete-tasks-id-params {
+    /// The ID of the task.
+    task-id: string
+  }
+  delete-tasks-id: func(params: delete-tasks-id-params) -> result<string, string>;
+
+}
+
+interface file-versions {
+  enum post-files-id-versions-current-body-type-op-enum {
+    file-version,
+  }
+
+  /// List all file versions
+  record get-files-id-versions-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>
+  }
+  get-files-id-versions: func(params: get-files-id-versions-params) -> result<string, string>;
+
+  /// Promote file version
+  record post-files-id-versions-current-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The file version ID
+    id: option<string>,
+    /// The type to promote
+    type-op: option<post-files-id-versions-current-body-type-op-enum>
+  }
+  post-files-id-versions-current: func(params: post-files-id-versions-current-params) -> result<string, string>;
+
+  /// Get file version
+  record get-files-id-versions-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The ID of the file version
+    file-version-id: string
+  }
+  get-files-id-versions-id: func(params: get-files-id-versions-id-params) -> result<string, string>;
+
+  /// Restore file version
+  record put-files-id-versions-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The ID of the file version
+    file-version-id: string,
+    /// Set this to `null` to clear
+    /// the date and restore the file.
+    trashed-at: option<string>
+  }
+  put-files-id-versions-id: func(params: put-files-id-versions-id-params) -> result<string, string>;
+
+  /// Remove file version
+  record delete-files-id-versions-id-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The ID of the file version
+    file-version-id: string,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>
+  }
+  delete-files-id-versions-id: func(params: delete-files-id-versions-id-params) -> result<string, string>;
+
+}
+
+interface watermarks-files {
+  enum put-files-id-watermark-body-watermark-imprint-enum {
+    default,
+  }
+
+  /// The watermark to imprint on the file
+  record put-files-id-watermark-body-watermark {
+    /// The type of watermark to apply.
+    /// 
+    imprint: put-files-id-watermark-body-watermark-imprint-enum
+  }
+
+  /// Get watermark on file
+  record get-files-id-watermark-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  get-files-id-watermark: func(params: get-files-id-watermark-params) -> result<string, string>;
+
+  /// Apply watermark to file
+  record put-files-id-watermark-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string,
+    /// The watermark to imprint on the file
+    watermark: put-files-id-watermark-body-watermark
+  }
+  put-files-id-watermark: func(params: put-files-id-watermark-params) -> result<string, string>;
+
+  /// Remove watermark from file
+  record delete-files-id-watermark-params {
+    /// The unique identifier that represents a file.
+    /// 
+    file-id: string
+  }
+  delete-files-id-watermark: func(params: delete-files-id-watermark-params) -> result<string, string>;
+
+}
+
+interface folder-locks {
+  /// The folder to apply the lock to.
+  record post-folder-locks-body-folder {
+    /// The ID of the folder.
+    id: string,
+    /// The content type the lock is being applied to. Only `folder`
+    /// is supported.
+    type-op: string
+  }
+
+  /// The operations to lock for the folder. If `locked_operations` is
+  /// included in the request, both `move` and `delete` must also be
+  /// included and both set to `true`.
+  record post-folder-locks-body-locked-operations {
+    /// Whether deleting the folder should be locked.
+    delete: bool,
+    /// Whether moving the folder should be locked.
+    move: bool
+  }
+
+  /// List folder locks
+  record get-folder-locks-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  get-folder-locks: func(params: get-folder-locks-params) -> result<string, string>;
+
+  /// Create folder lock
+  record post-folder-locks-params {
+    /// The folder to apply the lock to.
+    folder: post-folder-locks-body-folder,
+    /// The operations to lock for the folder. If `locked_operations` is
+    /// included in the request, both `move` and `delete` must also be
+    locked-operations: option<post-folder-locks-body-locked-operations>
+  }
+  post-folder-locks: func(params: post-folder-locks-params) -> result<string, string>;
+
+  /// Delete folder lock
+  record delete-folder-locks-id-params {
+    /// The ID of the folder lock.
+    folder-lock-id: string
+  }
+  delete-folder-locks-id: func(params: delete-folder-locks-id-params) -> result<string, string>;
+
+}
+
+interface folders {
+  enum post-folders-body-sync-state-enum {
+    synced,
+    not-synced,
+    partially-synced,
+  }
+
+  enum get-folders-id-items-sort-enum {
+    id,
+    name,
+    date,
+    size,
+  }
+
+  enum get-folders-id-items-direction-enum {
+    asc,
+    desc,
+  }
+
+  /// The parent folder to create the new folder within.
+  record post-folders-body-parent {
+    /// The ID of parent folder
+    id: string
+  }
+
+  /// The bare basic reference for an object
+  record put-folders-id-body-collections-item {
+    /// The unique identifier for this object
+    id: option<string>,
+    /// The type for this object
+    type-op: option<string>
+  }
+
+  /// The parent folder for this folder. Use this to move
+  /// the folder or to restore it out of the trash.
+  record put-folders-id-body-parent {
+    /// The ID of the new parent folder
+    id: option<string>
+  }
+
+  /// The destination folder to copy the folder to.
+  record post-folders-id-copy-body-parent {
+    /// The ID of parent folder
+    id: string
+  }
+
+  /// Create folder
+  record post-folders-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    folder-upload-email: option<string>,
+    /// The name for the new folder.
+    /// 
+    name: string,
+    /// The parent folder to create the new folder within.
+    parent: post-folders-body-parent,
+    /// Specifies whether a folder should be synced to a
+    /// user's device or not. This is used by Box Sync
+    sync-state: option<post-folders-body-sync-state-enum>
+  }
+  post-folders: func(params: post-folders-params) -> result<string, string>;
+
+  /// Get folder information
+  record get-folders-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Ensures an item is only returned if it has changed.
+    /// 
+    if-none-match: option<string>,
+    /// The URL, and optional password, for the shared link of this item.
+    /// 
+    boxapi: option<string>
+  }
+  get-folders-id: func(params: get-folders-id-params) -> result<string, string>;
+
+  /// Update folder
+  record put-folders-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>,
+    /// Specifies if users who are not the owner
+    /// of the folder can invite new collaborators to the folder.
+    can-non-owners-invite: option<bool>,
+    /// Restricts collaborators who are not the owner of
+    /// this folder from viewing other collaborations on
+    can-non-owners-view-collaborators: option<bool>,
+    /// An array of collections to make this folder
+    /// a member of. Currently
+    collections: option<list<put-folders-id-body-collections-item>>,
+    /// The optional description of this folder
+    description: option<string>,
+    folder-upload-email: option<string>,
+    /// Specifies if new invites to this folder are restricted to users
+    /// within the enterprise. This does not affect existing
+    is-collaboration-restricted-to-enterprise: option<bool>,
+    /// The optional new name for this folder.
+    name: option<string>,
+    /// The parent folder for this folder. Use this to move
+    /// the folder or to restore it out of the trash.
+    parent: option<put-folders-id-body-parent>,
+    shared-link: option<string>,
+    /// Specifies whether a folder should be synced to a
+    /// user's device or not. This is used by Box Sync
+    sync-state: option<post-folders-body-sync-state-enum>,
+    /// The tags for this item. These tags are shown in
+    /// the Box web app and mobile apps next to an item.
+    tags: option<list<string>>
+  }
+  put-folders-id: func(params: put-folders-id-params) -> result<string, string>;
+
+  /// Delete folder
+  record delete-folders-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// Ensures this item hasn't recently changed before
+    /// making changes.
+    if-match: option<string>,
+    /// Delete a folder that is not empty by recursively deleting the
+    /// folder and all of its content.
+    recursive: option<bool>
+  }
+  delete-folders-id: func(params: delete-folders-id-params) -> result<string, string>;
+
+  /// Copy folder
+  record post-folders-id-copy-params {
+    /// The unique identifier of the folder to copy.
+    /// 
+    folder-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// An optional new name for the copied folder.
+    /// 
+    name: option<string>,
+    /// The destination folder to copy the folder to.
+    parent: post-folders-id-copy-body-parent
+  }
+  post-folders-id-copy: func(params: post-folders-id-copy-params) -> result<string, string>;
+
+  /// List items in folder
+  record get-folders-id-items-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Specifies whether to use marker-based pagination instead of
+    /// offset-based pagination. Only one pagination method can
+    usemarker: option<bool>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The URL, and optional password, for the shared link of this item.
+    /// 
+    boxapi: option<string>,
+    /// Defines the **second** attribute by which items
+    /// are sorted.
+    sort: option<get-folders-id-items-sort-enum>,
+    /// The direction to sort results in. This can be either in alphabetical ascending
+    /// (`ASC`) or descending (`DESC`) order.
+    direction: option<get-folders-id-items-direction-enum>
+  }
+  get-folders-id-items: func(params: get-folders-id-items-params) -> result<string, string>;
+
+}
+
+interface trashed-items {
+  enum get-folders-trash-items-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-folders-trash-items-sort-enum {
+    id,
+    name,
+    date,
+    size,
+  }
+
+  /// List trashed items
+  record get-folders-trash-items-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// Specifies whether to use marker-based pagination instead of
+    /// offset-based pagination. Only one pagination method can
+    usemarker: option<bool>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The direction to sort results in. This can be either in alphabetical ascending
+    /// (`ASC`) or descending (`DESC`) order.
+    direction: option<get-folders-trash-items-direction-enum>,
+    /// Defines the **second** attribute by which items
+    /// are sorted.
+    sort: option<get-folders-trash-items-sort-enum>
+  }
+  get-folders-trash-items: func(params: get-folders-trash-items-params) -> result<string, string>;
+
+}
+
+interface trashed-folders {
+  /// Restore folder
+  record post-folders-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// An optional new name for the folder.
+    name: option<string>,
+    parent: option<string>
+  }
+  post-folders-id: func(params: post-folders-id-params) -> result<string, string>;
+
+  /// Get trashed folder
+  record get-folders-id-trash-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-folders-id-trash: func(params: get-folders-id-trash-params) -> result<string, string>;
+
+  /// Permanently remove folder
+  record delete-folders-id-trash-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  delete-folders-id-trash: func(params: delete-folders-id-trash-params) -> result<string, string>;
+
+}
+
+interface shared-links-folders {
+  enum add-shared-link-body-shared-link-access-enum {
+    open,
+    company,
+    collaborators,
+  }
+
+  /// The settings for the shared link to create on the folder.
+  /// 
+  /// Use an empty object (`{}`) to use the default settings for shared
+  /// links.
+  record add-shared-link-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<add-shared-link-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    permissions: option<add-shared-link-body-shared-link-permissions>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  record add-shared-link-body-shared-link-permissions {
+    /// If the shared link allows for downloading of files.
+    /// This can only be set when `access` is set to
+    can-download: option<bool>,
+    /// This value can only be `false` for items
+    /// with a `type` of `folder`.
+    can-edit: option<bool>,
+    /// If the shared link allows for previewing of files.
+    /// This value is always `true`. For shared links on folders
+    can-preview: option<bool>
+  }
+
+  /// By setting this value to `null`, the shared link
+  /// is removed from the folder.
+  record remove-shared-link-body-shared-link {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// The settings for the shared link to update.
+  record update-shared-link-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<add-shared-link-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    permissions: option<update-shared-link-body-shared-link-permissions>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  record update-shared-link-body-shared-link-permissions {
+    /// If the shared link allows for downloading of files.
+    /// This can only be set when `access` is set to
+    can-download: option<bool>,
+    /// This value can only be `false` for items
+    /// with a `type` of `folder`.
+    can-edit: option<bool>,
+    /// If the shared link allows for previewing of files.
+    /// This value is always `true`. For shared links on folders
+    can-preview: option<bool>
+  }
+
+  /// Add shared link to folder
+  record add-shared-link-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// The settings for the shared link to create on the folder.
+    /// 
+    shared-link: option<add-shared-link-body-shared-link>
+  }
+  add-shared-link: func(params: add-shared-link-params) -> result<string, string>;
+
+  /// Get shared link for folder
+  record get-shared-link-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string
+  }
+  get-shared-link: func(params: get-shared-link-params) -> result<string, string>;
+
+  /// Remove shared link from folder
+  record remove-shared-link-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// By setting this value to `null`, the shared link
+    /// is removed from the folder.
+    shared-link: option<remove-shared-link-body-shared-link>
+  }
+  remove-shared-link: func(params: remove-shared-link-params) -> result<string, string>;
+
+  /// Update shared link on folder
+  record update-shared-link-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// The settings for the shared link to update.
+    shared-link: option<update-shared-link-body-shared-link>
+  }
+  update-shared-link: func(params: update-shared-link-params) -> result<string, string>;
+
+  /// Find folder for shared link
+  record folders-params {
+    /// Ensures an item is only returned if it has changed.
+    /// 
+    if-none-match: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// A header containing the shared link and optional password for the
+    /// shared link.
+    boxapi: string
+  }
+  folders: func(params: folders-params) -> result<string, string>;
+
+}
+
+interface metadata-instances-folders {
+  /// List metadata instances on folder
+  record get-folders-id-metadata-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  get-folders-id-metadata: func(params: get-folders-id-metadata-params) -> result<string, string>;
+
+  /// Get metadata instance on folder
+  record get-folders-id-metadata-id-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  get-folders-id-metadata-id-id: func(params: get-folders-id-metadata-id-id-params) -> result<string, string>;
+
+  /// Create metadata instance on folder
+  record post-folders-id-metadata-id-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string,
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+  post-folders-id-metadata-id-id: func(params: post-folders-id-metadata-id-id-params) -> result<string, string>;
+
+  /// Update metadata instance on folder
+  record put-folders-id-metadata-id-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  put-folders-id-metadata-id-id: func(params: put-folders-id-metadata-id-id-params) -> result<string, string>;
+
+  /// Remove metadata instance from folder
+  record delete-folders-id-metadata-id-id-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  delete-folders-id-metadata-id-id: func(params: delete-folders-id-metadata-id-id-params) -> result<string, string>;
+
+}
+
+interface classifications-on-folders {
+  /// Get classification on folder
+  record get-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  get-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: get-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+  /// Add classification to folder
+  record post-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// The name of the classification to apply to this folder.
+    /// 
+    box-security-classification-key: option<string>
+  }
+  post-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: post-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+  /// Update classification on folder
+  record put-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  put-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: put-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+  /// Remove classification from folder
+  record delete-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  delete-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo: func(params: delete-folders-id-metadata-enterprise-security-classification-v6vm-vochw-u-wo-params) -> result<string, string>;
+
+}
+
+interface watermarks-folders {
+  enum put-folders-id-watermark-body-watermark-imprint-enum {
+    default,
+  }
+
+  /// The watermark to imprint on the folder
+  record put-folders-id-watermark-body-watermark {
+    /// The type of watermark to apply.
+    /// 
+    imprint: put-folders-id-watermark-body-watermark-imprint-enum
+  }
+
+  /// Get watermark for folder
+  record get-folders-id-watermark-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  get-folders-id-watermark: func(params: get-folders-id-watermark-params) -> result<string, string>;
+
+  /// Apply watermark to folder
+  record put-folders-id-watermark-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// The watermark to imprint on the folder
+    watermark: put-folders-id-watermark-body-watermark
+  }
+  put-folders-id-watermark: func(params: put-folders-id-watermark-params) -> result<string, string>;
+
+  /// Remove watermark from folder
+  record delete-folders-id-watermark-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string
+  }
+  delete-folders-id-watermark: func(params: delete-folders-id-watermark-params) -> result<string, string>;
+
+}
+
+interface group-memberships {
+  enum post-group-memberships-body-role-enum {
+    member,
+    admin,
+  }
+
+  /// Custom configuration for the permissions an admin
+  /// if a group will receive. This option has no effect
+  /// on members with a role of `member`.
+  /// 
+  /// Setting these permissions overwrites the default
+  /// access levels of an admin.
+  /// 
+  /// Specifying a value of "null" for this object will disable
+  /// all configurable permissions. Specifying permissions will set
+  /// them accordingly, omitted permissions will be enabled by default.
+  record post-group-memberships-body-configurable-permissions {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// The group to add the user to.
+  record post-group-memberships-body-group {
+    /// The ID of the group to add the user to
+    id: string
+  }
+
+  /// The user to add to the group.
+  record post-group-memberships-body-user {
+    /// The ID of the user to add to the group
+    id: string
+  }
+
+  /// Custom configuration for the permissions an admin
+  /// if a group will receive. This option has no effect
+  /// on members with a role of `member`.
+  /// 
+  /// Setting these permissions overwrites the default
+  /// access levels of an admin.
+  /// 
+  /// Specifying a value of "null" for this object will disable
+  /// all configurable permissions. Specifying permissions will set
+  /// them accordingly, omitted permissions will be enabled by default.
+  record put-group-memberships-id-body-configurable-permissions {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Add user to group
+  record post-group-memberships-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Custom configuration for the permissions an admin
+    /// if a group will receive. This option has no effect
+    configurable-permissions: option<post-group-memberships-body-configurable-permissions>,
+    /// The group to add the user to.
+    group: post-group-memberships-body-group,
+    /// The role of the user in the group.
+    role: option<post-group-memberships-body-role-enum>,
+    /// The user to add to the group.
+    user: post-group-memberships-body-user
+  }
+  post-group-memberships: func(params: post-group-memberships-params) -> result<string, string>;
+
+  /// Get group membership
+  record get-group-memberships-id-params {
+    /// The ID of the group membership.
+    group-membership-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-group-memberships-id: func(params: get-group-memberships-id-params) -> result<string, string>;
+
+  /// Update group membership
+  record put-group-memberships-id-params {
+    /// The ID of the group membership.
+    group-membership-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Custom configuration for the permissions an admin
+    /// if a group will receive. This option has no effect
+    configurable-permissions: option<put-group-memberships-id-body-configurable-permissions>,
+    /// The role of the user in the group.
+    role: option<post-group-memberships-body-role-enum>
+  }
+  put-group-memberships-id: func(params: put-group-memberships-id-params) -> result<string, string>;
+
+  /// Remove user from group
+  record delete-group-memberships-id-params {
+    /// The ID of the group membership.
+    group-membership-id: string
+  }
+  delete-group-memberships-id: func(params: delete-group-memberships-id-params) -> result<string, string>;
+
+  /// List members of group
+  record get-groups-id-memberships-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>
+  }
+  get-groups-id-memberships: func(params: get-groups-id-memberships-params) -> result<string, string>;
+
+  /// List user's groups
+  record get-users-id-memberships-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>
+  }
+  get-users-id-memberships: func(params: get-users-id-memberships-params) -> result<string, string>;
+
+}
+
+interface groups {
+  enum post-groups-body-invitability-level-enum {
+    admins-only,
+    admins-and-members,
+    all-managed-users,
+  }
+
+  /// List groups for enterprise
+  record get-groups-params {
+    /// Limits the results to only groups whose `name` starts
+    /// with the search term.
+    filter-term: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>
+  }
+  get-groups: func(params: get-groups-params) -> result<string, string>;
+
+  /// Create group
+  record post-groups-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// A human readable description of the group.
+    description: option<string>,
+    /// An arbitrary identifier that can be used by
+    /// external group sync tools to link this Box Group to
+    external-sync-identifier: option<string>,
+    /// Specifies who can invite the group to collaborate
+    /// on folders.
+    invitability-level: option<post-groups-body-invitability-level-enum>,
+    /// Specifies who can see the members of the group.
+    /// 
+    member-viewability-level: option<post-groups-body-invitability-level-enum>,
+    /// The name of the new group to be created. This name must be unique
+    /// within the enterprise.
+    name: string,
+    /// Keeps track of which external source this group is
+    /// coming, for example `Active Directory`, or `Okta`.
+    provenance: option<string>
+  }
+  post-groups: func(params: post-groups-params) -> result<string, string>;
+
+  /// Create jobs to terminate user group session
+  record post-groups-terminate-sessions-params {
+    /// A list of group IDs
+    group-ids: list<string>
+  }
+  post-groups-terminate-sessions: func(params: post-groups-terminate-sessions-params) -> result<string, string>;
+
+  /// Get group
+  record get-groups-id-params {
+    /// The ID of the group.
+    group-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-groups-id: func(params: get-groups-id-params) -> result<string, string>;
+
+  /// Update group
+  record put-groups-id-params {
+    /// The ID of the group.
+    group-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// A human readable description of the group.
+    description: option<string>,
+    /// An arbitrary identifier that can be used by
+    /// external group sync tools to link this Box Group to
+    external-sync-identifier: option<string>,
+    /// Specifies who can invite the group to collaborate
+    /// on folders.
+    invitability-level: option<post-groups-body-invitability-level-enum>,
+    /// Specifies who can see the members of the group.
+    /// 
+    member-viewability-level: option<post-groups-body-invitability-level-enum>,
+    /// The name of the new group to be created. Must be unique within the
+    /// enterprise.
+    name: option<string>,
+    /// Keeps track of which external source this group is
+    /// coming, for example `Active Directory`, or `Okta`.
+    provenance: option<string>
+  }
+  put-groups-id: func(params: put-groups-id-params) -> result<string, string>;
+
+  /// Remove group
+  record delete-groups-id-params {
+    /// The ID of the group.
+    group-id: string
+  }
+  delete-groups-id: func(params: delete-groups-id-params) -> result<string, string>;
+
+}
+
+interface invites {
+  /// The user to invite
+  record post-invites-body-actionable-by {
+    /// The login of the invited user
+    login: option<string>
+  }
+
+  /// The enterprise to invite the user to
+  record post-invites-body-enterprise {
+    /// The ID of the enterprise
+    id: string
+  }
+
+  /// Create user invite
+  record post-invites-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The user to invite
+    actionable-by: post-invites-body-actionable-by,
+    /// The enterprise to invite the user to
+    enterprise: post-invites-body-enterprise
+  }
+  post-invites: func(params: post-invites-params) -> result<string, string>;
+
+  /// Get user invite status
+  record get-invites-id-params {
+    /// The ID of an invite.
+    invite-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-invites-id: func(params: get-invites-id-params) -> result<string, string>;
+
+}
+
+interface legal-hold-policies {
+  /// List all legal hold policies
+  record get-legal-hold-policies-params {
+    /// Limits results to policies for which the names start with
+    /// this search term. This is a case-insensitive prefix.
+    policy-name: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-legal-hold-policies: func(params: get-legal-hold-policies-params) -> result<string, string>;
+
+  /// Create legal hold policy
+  record post-legal-hold-policies-params {
+    /// A description for the policy.
+    description: option<string>,
+    /// The filter end date.
+    /// 
+    filter-ended-at: option<string>,
+    /// The filter start date.
+    /// 
+    filter-started-at: option<string>,
+    /// Whether new assignments under this policy should
+    /// continue applying to files even after initialization.
+    is-ongoing: option<bool>,
+    /// The name of the policy.
+    policy-name: string
+  }
+  post-legal-hold-policies: func(params: post-legal-hold-policies-params) -> result<string, string>;
+
+  /// Get legal hold policy
+  record get-legal-hold-policies-id-params {
+    /// The ID of the legal hold policy
+    legal-hold-policy-id: string
+  }
+  get-legal-hold-policies-id: func(params: get-legal-hold-policies-id-params) -> result<string, string>;
+
+  /// Update legal hold policy
+  record put-legal-hold-policies-id-params {
+    /// The ID of the legal hold policy
+    legal-hold-policy-id: string,
+    /// A description for the policy.
+    description: option<string>,
+    /// The name of the policy.
+    policy-name: option<string>,
+    /// Notes around why the policy was released.
+    release-notes: option<string>
+  }
+  put-legal-hold-policies-id: func(params: put-legal-hold-policies-id-params) -> result<string, string>;
+
+  /// Remove legal hold policy
+  record delete-legal-hold-policies-id-params {
+    /// The ID of the legal hold policy
+    legal-hold-policy-id: string
+  }
+  delete-legal-hold-policies-id: func(params: delete-legal-hold-policies-id-params) -> result<string, string>;
+
+}
+
+interface legal-hold-policy-assignments {
+  enum get-legal-hold-policy-assignments-assign-to-type-enum {
+    file,
+    file-version,
+    folder,
+    user,
+  }
+
+  /// The item to assign the policy to
+  record post-legal-hold-policy-assignments-body-assign-to {
+    /// The ID of item to assign the policy to
+    id: string,
+    /// The type of item to assign the policy to
+    type-op: get-legal-hold-policy-assignments-assign-to-type-enum
+  }
+
+  /// List legal hold policy assignments
+  record get-legal-hold-policy-assignments-params {
+    /// The ID of the legal hold policy
+    policy-id: string,
+    /// Filters the results by the type of item the
+    /// policy was applied to.
+    assign-to-type: option<get-legal-hold-policy-assignments-assign-to-type-enum>,
+    /// Filters the results by the ID of item the
+    /// policy was applied to.
+    assign-to-id: option<string>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-legal-hold-policy-assignments: func(params: get-legal-hold-policy-assignments-params) -> result<string, string>;
+
+  /// Assign legal hold policy
+  record post-legal-hold-policy-assignments-params {
+    /// The item to assign the policy to
+    assign-to: post-legal-hold-policy-assignments-body-assign-to,
+    /// The ID of the policy to assign.
+    policy-id: string
+  }
+  post-legal-hold-policy-assignments: func(params: post-legal-hold-policy-assignments-params) -> result<string, string>;
+
+  /// Get legal hold policy assignment
+  record get-legal-hold-policy-assignments-id-params {
+    /// The ID of the legal hold policy assignment
+    legal-hold-policy-assignment-id: string
+  }
+  get-legal-hold-policy-assignments-id: func(params: get-legal-hold-policy-assignments-id-params) -> result<string, string>;
+
+  /// Unassign legal hold policy
+  record delete-legal-hold-policy-assignments-id-params {
+    /// The ID of the legal hold policy assignment
+    legal-hold-policy-assignment-id: string
+  }
+  delete-legal-hold-policy-assignments-id: func(params: delete-legal-hold-policy-assignments-id-params) -> result<string, string>;
+
+  /// List previous file versions for legal hold policy assignment
+  record get-legal-hold-policy-assignments-id-file-versions-on-hold-params {
+    /// The ID of the legal hold policy assignment
+    legal-hold-policy-assignment-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-legal-hold-policy-assignments-id-file-versions-on-hold: func(params: get-legal-hold-policy-assignments-id-file-versions-on-hold-params) -> result<string, string>;
+
+  /// List current file versions for legal hold policy assignment
+  record get-legal-hold-policy-assignments-id-files-on-hold-params {
+    /// The ID of the legal hold policy assignment
+    legal-hold-policy-assignment-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-legal-hold-policy-assignments-id-files-on-hold: func(params: get-legal-hold-policy-assignments-id-files-on-hold-params) -> result<string, string>;
+
+}
+
+interface metadata-cascade-policies {
+  enum post-metadata-cascade-policies-body-scope-enum {
+    global,
+    enterprise,
+  }
+
+  enum post-metadata-cascade-policies-id-apply-body-conflict-resolution-enum {
+    none,
+    overwrite,
+  }
+
+  /// List metadata cascade policies
+  record get-metadata-cascade-policies-params {
+    /// Specifies which folder to return policies for. This can not be used on the
+    /// root folder with ID `0`.
+    folder-id: string,
+    /// The ID of the enterprise ID for which to find metadata
+    /// cascade policies. If not specified, it defaults to the
+    owner-enterprise-id: option<string>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>
+  }
+  get-metadata-cascade-policies: func(params: get-metadata-cascade-policies-params) -> result<string, string>;
+
+  /// Create metadata cascade policy
+  record post-metadata-cascade-policies-params {
+    /// The ID of the folder to apply the policy to. This folder will
+    /// need to already have an instance of the targeted metadata
+    folder-id: string,
+    /// The scope of the targeted metadata template. This template will
+    /// need to already have an instance applied to the targeted folder.
+    scope: post-metadata-cascade-policies-body-scope-enum,
+    /// The key of the targeted metadata template. This template will
+    /// need to already have an instance applied to the targeted folder.
+    template-key: string
+  }
+  post-metadata-cascade-policies: func(params: post-metadata-cascade-policies-params) -> result<string, string>;
+
+  /// Get metadata cascade policy
+  record get-metadata-cascade-policies-id-params {
+    /// The ID of the metadata cascade policy.
+    metadata-cascade-policy-id: string
+  }
+  get-metadata-cascade-policies-id: func(params: get-metadata-cascade-policies-id-params) -> result<string, string>;
+
+  /// Remove metadata cascade policy
+  record delete-metadata-cascade-policies-id-params {
+    /// The ID of the metadata cascade policy.
+    metadata-cascade-policy-id: string
+  }
+  delete-metadata-cascade-policies-id: func(params: delete-metadata-cascade-policies-id-params) -> result<string, string>;
+
+  /// Force-apply metadata cascade policy to folder
+  record post-metadata-cascade-policies-id-apply-params {
+    /// The ID of the cascade policy to force-apply.
+    metadata-cascade-policy-id: string,
+    /// Describes the desired behavior when dealing with the conflict
+    /// where a metadata template already has an instance applied
+    conflict-resolution: post-metadata-cascade-policies-id-apply-body-conflict-resolution-enum
+  }
+  post-metadata-cascade-policies-id-apply: func(params: post-metadata-cascade-policies-id-apply-params) -> result<string, string>;
+
+}
+
+interface search {
+  enum metadata-query-order-by-item-direction-enum {
+    asc,
+    desc,
+    asc-v2,
+    desc-v2,
+  }
+
+  enum get-metadata-query-indices-scope-enum {
+    global,
+    enterprise,
+  }
+
+  enum get-search-scope-enum {
+    user-content,
+    enterprise-content,
+  }
+
+  enum get-search-content-types-item-enum {
+    name,
+    description,
+    file-content,
+    comments,
+    tag,
+  }
+
+  enum get-search-type-op-enum {
+    file,
+    folder,
+    web-link,
+  }
+
+  enum get-search-trash-content-enum {
+    non-trashed-only,
+    trashed-only,
+  }
+
+  enum metadata-filter-scope-enum {
+    global,
+    enterprise,
+    enterprise-enterprise-id,
+  }
+
+  enum get-search-sort-enum {
+    modified-at,
+    relevance,
+  }
+
+  enum get-search-direction-enum {
+    desc,
+    asc,
+  }
+
+  /// An object representing one of the metadata template fields to sort the
+  /// metadata query results by.
+  record metadata-query-order-by-item {
+    /// The direction to order by, either ascending or descending.
+    /// 
+    direction: option<metadata-query-order-by-item-direction-enum>,
+    /// The metadata template field to order by.
+    /// 
+    field-key: option<string>
+  }
+
+  /// Set of arguments corresponding to the parameters specified in the
+  /// `query`. The type of each parameter used in the `query_params` must match
+  /// the type of the corresponding metadata template field.
+  record metadata-query-query-params {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// A metadata template to filter the search results by.
+  record metadata-filter {
+    filters: option<string>,
+    /// Specifies the scope of the template to filter search results by.
+    /// 
+    scope: option<metadata-filter-scope-enum>,
+    /// The key of the template to filter search results by.
+    /// 
+    template-key: option<string>
+  }
+
+  /// Query files/folders by metadata
+  record post-metadata-queries-execute-read-params {
+    /// The ID of the folder that you are restricting the query to. A
+    /// value of zero will return results from all folders you have access
+    ancestor-folder-id: string,
+    /// By default, this endpoint returns only the most basic info about the items for
+    /// which the query matches. This attribute can be used to specify a list of
+    fields: option<list<string>>,
+    /// Specifies the template used in the query. Must be in the form
+    /// `scope.templateKey`. Not all templates can be used in this field,
+    from-op: string,
+    /// A value between 0 and 100 that indicates the maximum number of results
+    /// to return for a single request. This only specifies a maximum
+    limit: option<s32>,
+    /// Marker to use for requesting the next page.
+    marker: option<string>,
+    /// A list of template fields and directions to sort the metadata query
+    /// results by.
+    order-by: option<list<metadata-query-order-by-item>>,
+    /// The query to perform. A query is a logical expression that is very similar
+    /// to a SQL `SELECT` statement. Values in the search query can be turned into
+    query: option<string>,
+    /// Set of arguments corresponding to the parameters specified in the
+    /// `query`. The type of each parameter used in the `query_params` must match
+    query-params: option<metadata-query-query-params>
+  }
+  post-metadata-queries-execute-read: func(params: post-metadata-queries-execute-read-params) -> result<string, string>;
+
+  /// List metadata query indices
+  record get-metadata-query-indices-params {
+    /// The scope of the metadata template
+    scope: get-metadata-query-indices-scope-enum,
+    /// The name of the metadata template
+    template-key: string
+  }
+  get-metadata-query-indices: func(params: get-metadata-query-indices-params) -> result<string, string>;
+
+  /// Search for content
+  record get-search-params {
+    /// The string to search for. This query is matched against item names,
+    /// descriptions, text content of files, and various other fields of
+    query: option<string>,
+    /// Limits the search results to either the files that the user has
+    /// access to, or to files available to the entire enterprise.
+    scope: option<get-search-scope-enum>,
+    /// Limits the search results to any files that match any of the provided
+    /// file extensions. This list is a comma-separated list of file extensions
+    file-extensions: option<list<string>>,
+    /// Limits the search results to any items created within
+    /// a given date range.
+    created-at-range: option<list<string>>,
+    /// Limits the search results to any items updated within
+    /// a given date range.
+    updated-at-range: option<list<string>>,
+    /// Limits the search results to any items with a size within
+    /// a given file size range. This applied to files and folders.
+    size-range: option<list<s32>>,
+    /// Limits the search results to any items that are owned
+    /// by the given list of owners, defined as a list of comma separated
+    owner-user-ids: option<list<string>>,
+    /// Limits the search results to any items that have been updated
+    /// by the given list of users, defined as a list of comma separated
+    recent-updater-user-ids: option<list<string>>,
+    /// Limits the search results to items within the given
+    /// list of folders, defined as a comma separated lists
+    ancestor-folder-ids: option<list<string>>,
+    /// Limits the search results to any items that match the search query
+    /// for a specific part of the file, for example the file description.
+    content-types: option<list<get-search-content-types-item-enum>>,
+    /// Limits the search results to any items of this type. This
+    /// parameter only takes one value. By default the API returns
+    type-op: option<get-search-type-op-enum>,
+    /// Determines if the search should look in the trash for items.
+    /// 
+    trash-content: option<get-search-trash-content-enum>,
+    /// Limits the search results to any items for which the metadata matches
+    /// the provided filter.
+    mdfilters: option<list<metadata-filter>>,
+    /// Defines the order in which search results are returned. This API
+    /// defaults to returning items by relevance unless this parameter is
+    sort: option<get-search-sort-enum>,
+    /// Defines the direction in which search results are ordered. This API
+    /// defaults to returning items in descending (`DESC`) order unless this
+    direction: option<get-search-direction-enum>,
+    /// Defines the maximum number of items to return as part of a page of
+    /// results.
+    limit: option<s64>,
+    /// Defines whether the search results should include any items
+    /// that the user recently accessed through a shared link.
+    include-recent-shared-links: option<bool>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// Limits the search results to items that were deleted by the given
+    /// list of users, defined as a list of comma separated user IDs.
+    deleted-user-ids: option<list<string>>,
+    /// Limits the search results to any items deleted within a given
+    /// date range.
+    deleted-at-range: option<list<string>>
+  }
+  get-search: func(params: get-search-params) -> result<string, string>;
+
+}
+
+interface metadata-templates {
+  enum post-metadata-templates-schema-body-fields-item-type-op-enum {
+    string-op,
+    float,
+    date,
+    enum-op,
+    multi-select,
+  }
+
+  /// A field within a metadata template. Fields can be a basic text, date, or
+  /// number field, or a list of options.
+  record post-metadata-templates-schema-body-fields-item {
+    /// A description of the field. This is not shown to the user.
+    description: option<string>,
+    /// The display name of the field as it is shown to the user in the web and
+    /// mobile apps.
+    display-name: string,
+    /// Whether this field is hidden in the UI for the user and can only be set
+    /// through the API instead.
+    hidden: option<bool>,
+    /// A unique identifier for the field. The identifier must
+    /// be unique within the template to which it belongs.
+    key: string,
+    /// A list of options for this field. This is used in combination with the
+    /// `enum` and `multiSelect` field types.
+    options: option<list<post-metadata-templates-schema-body-fields-item-options-item>>,
+    /// The type of field. The basic fields are a `string` field for text, a
+    /// `float` field for numbers, and a `date` fields to present the user with a
+    type-op: post-metadata-templates-schema-body-fields-item-type-op-enum
+  }
+
+  /// An option for a Metadata Template Field.
+  /// 
+  /// Options only need to be provided for fields of type `enum` and `multiSelect`.
+  /// Options represent the value(s) a user can select for the field either through
+  /// the UI or through the API.
+  record post-metadata-templates-schema-body-fields-item-options-item {
+    /// The text value of the option. This represents both the display name of the
+    /// option and the internal key used when updating templates.
+    key: string
+  }
+
+  /// Find metadata template by instance ID
+  record get-metadata-templates-params {
+    /// The ID of an instance of the metadata template to find.
+    metadata-instance-id: string
+  }
+  get-metadata-templates: func(params: get-metadata-templates-params) -> result<string, string>;
+
+  /// List all metadata templates for enterprise
+  record get-metadata-templates-enterprise-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-metadata-templates-enterprise: func(params: get-metadata-templates-enterprise-params) -> result<string, string>;
+
+  /// List all global metadata templates
+  record get-metadata-templates-global-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-metadata-templates-global: func(params: get-metadata-templates-global-params) -> result<string, string>;
+
+  /// Create metadata template
+  record post-metadata-templates-schema-params {
+    /// Whether or not to copy any metadata attached to a file or folder
+    /// when it is copied. By default, metadata is not copied along with a
+    copy-instance-on-item-copy: option<bool>,
+    /// The display name of the template.
+    display-name: string,
+    /// An ordered list of template fields which are part of the template.
+    /// Each field can be a regular text field, date field, number field,
+    fields: option<list<post-metadata-templates-schema-body-fields-item>>,
+    /// Defines if this template is visible in the Box web app UI, or if
+    /// it is purely intended for usage through the API.
+    hidden: option<bool>,
+    /// The scope of the metadata template to create. Applications can
+    /// only create templates for use within the authenticated user's
+    scope: string,
+    /// A unique identifier for the template. This identifier needs to be
+    /// unique across the enterprise for which the metadata template is
+    template-key: option<string>
+  }
+  post-metadata-templates-schema: func(params: post-metadata-templates-schema-params) -> result<string, string>;
+
+  /// Get metadata template by name
+  record get-metadata-templates-id-id-schema-params {
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  get-metadata-templates-id-id-schema: func(params: get-metadata-templates-id-id-schema-params) -> result<string, string>;
+
+  /// Update metadata template
+  record put-metadata-templates-id-id-schema-params {
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  put-metadata-templates-id-id-schema: func(params: put-metadata-templates-id-id-schema-params) -> result<string, string>;
+
+  /// Remove metadata template
+  record delete-metadata-templates-id-id-schema-params {
+    /// The scope of the metadata template
+    scope: string,
+    /// The name of the metadata template
+    template-key: string
+  }
+  delete-metadata-templates-id-id-schema: func(params: delete-metadata-templates-id-id-schema-params) -> result<string, string>;
+
+  /// Get metadata template by ID
+  record get-metadata-templates-id-params {
+    /// The ID of the template
+    template-id: string
+  }
+  get-metadata-templates-id: func(params: get-metadata-templates-id-params) -> result<string, string>;
+
+}
+
+interface classifications {
+  enum classifications-body-display-name-enum {
+    classification,
+  }
+
+  enum classifications-body-fields-item-key-enum {
+    box-security-classification-key,
+  }
+
+  enum classifications-body-fields-item-type-op-enum {
+    enum-op,
+  }
+
+  enum classifications-body-scope-enum {
+    enterprise,
+  }
+
+  enum classifications-body-template-key-enum {
+    security-classification-v6vm-vochw-u-wo,
+  }
+
+  /// The `enum` field which holds all the valid classification
+  /// values.
+  record classifications-body-fields-item {
+    /// `Classification`
+    display-name: option<classifications-body-display-name-enum>,
+    /// `false`
+    hidden: option<bool>,
+    /// `Box__Security__Classification__Key`
+    key: option<classifications-body-fields-item-key-enum>,
+    /// The actual list of classifications that are present on
+    /// this template.
+    options: option<list<classifications-body-fields-item-options-item>>,
+    /// `enum`
+    type-op: option<classifications-body-fields-item-type-op-enum>
+  }
+
+  /// An individual classification.
+  record classifications-body-fields-item-options-item {
+    /// The display name and key this classification. This
+    /// will be show in the Box UI.
+    key: option<string>,
+    /// Additional information about the classification.
+    static-config: option<classifications-body-fields-item-options-item-static-config>
+  }
+
+  /// Additional information about the classification.
+  record classifications-body-fields-item-options-item-static-config {
+    /// Additional information about the classification.
+    classification: option<classifications-body-fields-item-options-item-static-config-classification>
+  }
+
+  /// Additional information about the classification.
+  record classifications-body-fields-item-options-item-static-config-classification {
+    /// A longer description of the classification.
+    classification-definition: option<string>,
+    /// An identifier used to assign a color to
+    /// a classification label.
+    color-id: option<f64>
+  }
+
+  /// List all classifications
+  get-metadata-templates-enterprise-security-classification-v6vm-vochw-u-wo-schema: func() -> result<string, string>;
+
+  /// Delete all classifications
+  delete-metadata-templates-enterprise-security-classification-v6vm-vochw-u-wo-schema: func() -> result<string, string>;
+
+  /// Add classification
+  add: func() -> result<string, string>;
+
+  /// Delete classification
+  delete: func() -> result<string, string>;
+
+  /// Update classification
+  update: func() -> result<string, string>;
+
+  /// Add initial classifications
+  record classifications-params {
+    /// `false`
+    copy-instance-on-item-copy: option<bool>,
+    /// `Classification`
+    display-name: classifications-body-display-name-enum,
+    /// The classification template holds one field, which holds
+    /// all the valid classification values.
+    fields: option<list<classifications-body-fields-item>>,
+    /// `false`
+    hidden: option<bool>,
+    /// The scope in which to create the classifications. This should
+    /// be `enterprise` or `enterprise_{id}` where `id` is the unique
+    scope: classifications-body-scope-enum,
+    /// `securityClassification-6VMVochwUWo`
+    template-key: option<classifications-body-template-key-enum>
+  }
+  classifications: func(params: classifications-params) -> result<string, string>;
+
+}
+
+interface recent-items {
+  /// List recently accessed items
+  record get-recent-items-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>
+  }
+  get-recent-items: func(params: get-recent-items-params) -> result<string, string>;
+
+}
+
+interface retention-policies {
+  enum get-retention-policies-policy-type-enum {
+    finite,
+    indefinite,
+  }
+
+  enum post-retention-policies-body-disposition-action-enum {
+    permanently-delete,
+    remove-retention,
+  }
+
+  enum post-retention-policies-body-retention-type-enum {
+    modifiable,
+    non-modifiable,
+  }
+
+  /// A mini representation of a user, as can be returned when nested within other
+  /// resources.
+  record user-mini {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List retention policies
+  record get-retention-policies-params {
+    /// Filters results by a case sensitive prefix of the name of
+    /// retention policies.
+    policy-name: option<string>,
+    /// Filters results by the type of retention policy.
+    policy-type: option<get-retention-policies-policy-type-enum>,
+    /// Filters results by the ID of the user who created policy.
+    created-by-user-id: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>
+  }
+  get-retention-policies: func(params: get-retention-policies-params) -> result<string, string>;
+
+  /// Create retention policy
+  record post-retention-policies-params {
+    /// Whether owner and co-owners of a file are notified
+    /// when the policy nears expiration.
+    are-owners-notified: option<bool>,
+    /// Whether the owner of a file will be allowed to
+    /// extend the retention.
+    can-owner-extend-retention: option<bool>,
+    /// A list of users notified when
+    /// the retention policy duration is about to end.
+    custom-notification-recipients: option<list<user-mini>>,
+    /// The additional text description of the retention policy.
+    description: option<string>,
+    /// The disposition action of the retention policy.
+    /// `permanently_delete` deletes the content
+    disposition-action: post-retention-policies-body-disposition-action-enum,
+    /// The name for the retention policy
+    policy-name: string,
+    /// The type of the retention policy. A retention
+    /// policy type can either be `finite`, where a
+    policy-type: get-retention-policies-policy-type-enum,
+    /// The length of the retention policy. This value
+    /// specifies the duration in days that the retention
+    retention-length: option<string>,
+    /// Specifies the retention type:
+    /// 
+    retention-type: option<post-retention-policies-body-retention-type-enum>
+  }
+  post-retention-policies: func(params: post-retention-policies-params) -> result<string, string>;
+
+  /// Get retention policy
+  record get-retention-policies-id-params {
+    /// The ID of the retention policy.
+    retention-policy-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-retention-policies-id: func(params: get-retention-policies-id-params) -> result<string, string>;
+
+  /// Update retention policy
+  record put-retention-policies-id-params {
+    /// The ID of the retention policy.
+    retention-policy-id: string,
+    /// Determines if owners and co-owners of items
+    /// under the policy are notified when
+    are-owners-notified: option<bool>,
+    /// Determines if the owner of items under the policy
+    /// can extend the retention when the original retention
+    can-owner-extend-retention: option<bool>,
+    /// A list of users notified when the retention duration is about to end.
+    custom-notification-recipients: option<list<user-mini>>,
+    /// The additional text description of the retention policy.
+    description: option<string>,
+    /// The disposition action of the retention policy.
+    /// `permanently_delete` deletes the content
+    disposition-action: option<post-retention-policies-body-disposition-action-enum>,
+    /// The name for the retention policy
+    policy-name: option<string>,
+    /// The length of the retention policy. This value
+    /// specifies the duration in days that the retention
+    retention-length: option<string>,
+    /// Specifies the retention type:
+    /// 
+    retention-type: option<string>,
+    /// Used to retire a retention policy.
+    /// 
+    status: option<string>
+  }
+  put-retention-policies-id: func(params: put-retention-policies-id-params) -> result<string, string>;
+
+  /// Delete retention policy
+  record delete-retention-policies-id-params {
+    /// The ID of the retention policy.
+    retention-policy-id: string
+  }
+  delete-retention-policies-id: func(params: delete-retention-policies-id-params) -> result<string, string>;
+
+}
+
+interface retention-policy-assignments {
+  enum get-retention-policies-id-assignments-type-op-enum {
+    folder,
+    enterprise,
+    metadata-template,
+  }
+
+  enum post-retention-policy-assignments-body-assign-to-type-op-enum {
+    enterprise,
+    folder,
+    metadata-template,
+  }
+
+  /// The item to assign the policy to
+  record post-retention-policy-assignments-body-assign-to {
+    /// The ID of item to assign the policy to.
+    /// Set to `null` or omit when `type` is set to
+    id: string,
+    /// The type of item to assign the policy to.
+    type-op: post-retention-policy-assignments-body-assign-to-type-op-enum
+  }
+
+  record post-retention-policy-assignments-body-filter-fields-item {
+    /// The metadata attribute key id.
+    field: option<string>,
+    /// The metadata attribute field id. For value, only
+    /// enum and multiselect types are supported.
+    value: option<string>
+  }
+
+  /// List retention policy assignments
+  record get-retention-policies-id-assignments-params {
+    /// The ID of the retention policy.
+    retention-policy-id: string,
+    /// The type of the retention policy assignment to retrieve.
+    type-op: option<get-retention-policies-id-assignments-type-op-enum>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-retention-policies-id-assignments: func(params: get-retention-policies-id-assignments-params) -> result<string, string>;
+
+  /// Assign retention policy
+  record post-retention-policy-assignments-params {
+    /// The item to assign the policy to
+    assign-to: post-retention-policy-assignments-body-assign-to,
+    /// If the `assign_to` type is `metadata_template`,
+    /// then optionally add the `filter_fields` parameter which will
+    filter-fields: option<list<post-retention-policy-assignments-body-filter-fields-item>>,
+    /// The ID of the retention policy to assign
+    policy-id: string,
+    /// The date the retention policy assignment begins.
+    /// 
+    start-date-field: option<string>
+  }
+  post-retention-policy-assignments: func(params: post-retention-policy-assignments-params) -> result<string, string>;
+
+  /// Get retention policy assignment
+  record get-retention-policy-assignments-id-params {
+    /// The ID of the retention policy assignment.
+    retention-policy-assignment-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-retention-policy-assignments-id: func(params: get-retention-policy-assignments-id-params) -> result<string, string>;
+
+  /// Remove retention policy assignment
+  record delete-retention-policy-assignments-id-params {
+    /// The ID of the retention policy assignment.
+    retention-policy-assignment-id: string
+  }
+  delete-retention-policy-assignments-id: func(params: delete-retention-policy-assignments-id-params) -> result<string, string>;
+
+  /// Get file versions under retention
+  record get-retention-policy-assignments-id-file-versions-under-retention-params {
+    /// The ID of the retention policy assignment.
+    retention-policy-assignment-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-retention-policy-assignments-id-file-versions-under-retention: func(params: get-retention-policy-assignments-id-file-versions-under-retention-params) -> result<string, string>;
+
+  /// Get files under retention
+  record get-retention-policy-assignments-id-files-under-retention-params {
+    /// The ID of the retention policy assignment.
+    retention-policy-assignment-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-retention-policy-assignments-id-files-under-retention: func(params: get-retention-policy-assignments-id-files-under-retention-params) -> result<string, string>;
+
+}
+
+interface shared-links-web-links {
+  enum add-shared-link-body-shared-link-access-enum {
+    open,
+    company,
+    collaborators,
+  }
+
+  /// The settings for the shared link to create on the web link.
+  /// 
+  /// Use an empty object (`{}`) to use the default settings for shared
+  /// links.
+  record add-shared-link-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<add-shared-link-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    permissions: option<add-shared-link-body-shared-link-permissions>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  record add-shared-link-body-shared-link-permissions {
+    /// If the shared link allows for downloading of files.
+    /// This can only be set when `access` is set to
+    can-download: option<bool>,
+    /// This value can only be `true` is `type` is `file`.
+    can-edit: option<bool>,
+    /// If the shared link allows for previewing of files.
+    /// This value is always `true`. For shared links on folders
+    can-preview: option<bool>
+  }
+
+  /// By setting this value to `null`, the shared link
+  /// is removed from the web link.
+  record remove-shared-link-body-shared-link {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// The settings for the shared link to update.
+  record update-shared-link-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<add-shared-link-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    permissions: option<update-shared-link-body-shared-link-permissions>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  record update-shared-link-body-shared-link-permissions {
+    /// If the shared link allows for downloading of files.
+    /// This can only be set when `access` is set to
+    can-download: option<bool>,
+    /// This value can only be `true` is `type` is `file`.
+    can-edit: option<bool>,
+    /// If the shared link allows for previewing of files.
+    /// This value is always `true`. For shared links on folders
+    can-preview: option<bool>
+  }
+
+  /// Find web link for shared link
+  record web-links-params {
+    /// Ensures an item is only returned if it has changed.
+    /// 
+    if-none-match: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// A header containing the shared link and optional password for the
+    /// shared link.
+    boxapi: string
+  }
+  web-links: func(params: web-links-params) -> result<string, string>;
+
+  /// Add shared link to web link
+  record add-shared-link-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// The settings for the shared link to create on the web link.
+    /// 
+    shared-link: option<add-shared-link-body-shared-link>
+  }
+  add-shared-link: func(params: add-shared-link-params) -> result<string, string>;
+
+  /// Get shared link for web link
+  record get-shared-link-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string
+  }
+  get-shared-link: func(params: get-shared-link-params) -> result<string, string>;
+
+  /// Remove shared link from web link
+  record remove-shared-link-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// By setting this value to `null`, the shared link
+    /// is removed from the web link.
+    shared-link: option<remove-shared-link-body-shared-link>
+  }
+  remove-shared-link: func(params: remove-shared-link-params) -> result<string, string>;
+
+  /// Update shared link on web link
+  record update-shared-link-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// Explicitly request the `shared_link` fields
+    /// to be returned for this item.
+    fields: string,
+    /// The settings for the shared link to update.
+    shared-link: option<update-shared-link-body-shared-link>
+  }
+  update-shared-link: func(params: update-shared-link-params) -> result<string, string>;
+
+}
+
+interface shield-information-barrier-reports {
+  enum shield-information-barrier-base-type-op-enum {
+    shield-information-barrier,
+  }
+
+  /// A base representation of a
+  /// shield information barrier object
+  record shield-information-barrier-base {
+    /// The unique identifier for the shield information barrier
+    id: option<string>,
+    /// The type of the shield information barrier
+    type-op: option<shield-information-barrier-base-type-op-enum>
+  }
+
+  /// List shield information barrier reports
+  record get-shield-information-barrier-reports-params {
+    /// The ID of the shield information barrier.
+    shield-information-barrier-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-shield-information-barrier-reports: func(params: get-shield-information-barrier-reports-params) -> result<string, string>;
+
+  /// Create shield information barrier report
+  record post-shield-information-barrier-reports-params {
+    shield-information-barrier: option<shield-information-barrier-base>
+  }
+  post-shield-information-barrier-reports: func(params: post-shield-information-barrier-reports-params) -> result<string, string>;
+
+  /// Get shield information barrier report by ID
+  record get-shield-information-barrier-reports-id-params {
+    /// The ID of the shield information barrier Report.
+    shield-information-barrier-report-id: string
+  }
+  get-shield-information-barrier-reports-id: func(params: get-shield-information-barrier-reports-id-params) -> result<string, string>;
+
+}
+
+interface shield-information-barrier-segment-members {
+  enum shield-information-barrier-base-type-op-enum {
+    shield-information-barrier,
+  }
+
+  enum post-shield-information-barrier-segment-members-body-shield-information-barrier-segment-type-op-enum {
+    shield-information-barrier-segment,
+  }
+
+  enum post-shield-information-barrier-segment-members-body-type-op-enum {
+    shield-information-barrier-segment-member,
+  }
+
+  /// A base representation of a
+  /// shield information barrier object
+  record shield-information-barrier-base {
+    /// The unique identifier for the shield information barrier
+    id: option<string>,
+    /// The type of the shield information barrier
+    type-op: option<shield-information-barrier-base-type-op-enum>
+  }
+
+  /// The `type` and `id` of the
+  /// requested shield information barrier segment.
+  record post-shield-information-barrier-segment-members-body-shield-information-barrier-segment {
+    /// The ID reference of the
+    /// requesting shield information barrier segment.
+    id: option<string>,
+    /// The type of the shield barrier segment for this member.
+    type-op: option<post-shield-information-barrier-segment-members-body-shield-information-barrier-segment-type-op-enum>
+  }
+
+  /// List shield information barrier segment members
+  record get-shield-information-barrier-segment-members-params {
+    /// The ID of the shield information barrier segment.
+    shield-information-barrier-segment-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-shield-information-barrier-segment-members: func(params: get-shield-information-barrier-segment-members-params) -> result<string, string>;
+
+  /// Create shield information barrier segment member
+  record post-shield-information-barrier-segment-members-params {
+    shield-information-barrier: option<shield-information-barrier-base>,
+    /// The `type` and `id` of the
+    /// requested shield information barrier segment.
+    shield-information-barrier-segment: post-shield-information-barrier-segment-members-body-shield-information-barrier-segment,
+    /// -| A type of the shield barrier segment member.
+    type-op: option<post-shield-information-barrier-segment-members-body-type-op-enum>,
+    user: string
+  }
+  post-shield-information-barrier-segment-members: func(params: post-shield-information-barrier-segment-members-params) -> result<string, string>;
+
+  /// Get shield information barrier segment member by ID
+  record get-shield-information-barrier-segment-members-id-params {
+    /// The ID of the shield information barrier segment Member.
+    shield-information-barrier-segment-member-id: string
+  }
+  get-shield-information-barrier-segment-members-id: func(params: get-shield-information-barrier-segment-members-id-params) -> result<string, string>;
+
+  /// Delete shield information barrier segment member by ID
+  record delete-shield-information-barrier-segment-members-id-params {
+    /// The ID of the shield information barrier segment Member.
+    shield-information-barrier-segment-member-id: string
+  }
+  delete-shield-information-barrier-segment-members-id: func(params: delete-shield-information-barrier-segment-members-id-params) -> result<string, string>;
+
+}
+
+interface shield-information-barrier-segment-restrictions {
+  enum post-shield-information-barrier-segment-restrictions-body-restricted-segment-type-op-enum {
+    shield-information-barrier-segment,
+  }
+
+  enum shield-information-barrier-base-type-op-enum {
+    shield-information-barrier,
+  }
+
+  enum post-shield-information-barrier-segment-restrictions-body-type-op-enum {
+    shield-information-barrier-segment-restriction,
+  }
+
+  /// The `type` and `id` of the restricted
+  /// shield information barrier segment.
+  record post-shield-information-barrier-segment-restrictions-body-restricted-segment {
+    /// The ID reference of the restricted
+    /// shield information barrier segment.
+    id: option<string>,
+    /// The type of the restricted shield
+    /// information barrier segment.
+    type-op: option<post-shield-information-barrier-segment-restrictions-body-restricted-segment-type-op-enum>
+  }
+
+  /// A base representation of a
+  /// shield information barrier object
+  record shield-information-barrier-base {
+    /// The unique identifier for the shield information barrier
+    id: option<string>,
+    /// The type of the shield information barrier
+    type-op: option<shield-information-barrier-base-type-op-enum>
+  }
+
+  /// The `type` and `id` of the requested
+  /// shield information barrier segment.
+  record post-shield-information-barrier-segment-restrictions-body-shield-information-barrier-segment {
+    /// The ID reference of the requesting
+    /// shield information barrier segment.
+    id: option<string>,
+    /// The type of the shield barrier segment for this member.
+    type-op: option<post-shield-information-barrier-segment-restrictions-body-restricted-segment-type-op-enum>
+  }
+
+  /// List shield information barrier segment restrictions
+  record get-shield-information-barrier-segment-restrictions-params {
+    /// The ID of the shield information barrier segment.
+    shield-information-barrier-segment-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-shield-information-barrier-segment-restrictions: func(params: get-shield-information-barrier-segment-restrictions-params) -> result<string, string>;
+
+  /// Create shield information barrier segment restriction
+  record post-shield-information-barrier-segment-restrictions-params {
+    /// The `type` and `id` of the restricted
+    /// shield information barrier segment.
+    restricted-segment: post-shield-information-barrier-segment-restrictions-body-restricted-segment,
+    shield-information-barrier: option<shield-information-barrier-base>,
+    /// The `type` and `id` of the requested
+    /// shield information barrier segment.
+    shield-information-barrier-segment: post-shield-information-barrier-segment-restrictions-body-shield-information-barrier-segment,
+    /// The type of the shield barrier segment
+    /// restriction for this member.
+    type-op: post-shield-information-barrier-segment-restrictions-body-type-op-enum
+  }
+  post-shield-information-barrier-segment-restrictions: func(params: post-shield-information-barrier-segment-restrictions-params) -> result<string, string>;
+
+  /// Get shield information barrier segment restriction by ID
+  record get-shield-information-barrier-segment-restrictions-id-params {
+    /// The ID of the shield information barrier segment Restriction.
+    shield-information-barrier-segment-restriction-id: string
+  }
+  get-shield-information-barrier-segment-restrictions-id: func(params: get-shield-information-barrier-segment-restrictions-id-params) -> result<string, string>;
+
+  /// Delete shield information barrier segment restriction by ID
+  record delete-shield-information-barrier-segment-restrictions-id-params {
+    /// The ID of the shield information barrier segment Restriction.
+    shield-information-barrier-segment-restriction-id: string
+  }
+  delete-shield-information-barrier-segment-restrictions-id: func(params: delete-shield-information-barrier-segment-restrictions-id-params) -> result<string, string>;
+
+}
+
+interface shield-information-barrier-segments {
+  enum shield-information-barrier-base-type-op-enum {
+    shield-information-barrier,
+  }
+
+  /// A base representation of a
+  /// shield information barrier object
+  record shield-information-barrier-base {
+    /// The unique identifier for the shield information barrier
+    id: option<string>,
+    /// The type of the shield information barrier
+    type-op: option<shield-information-barrier-base-type-op-enum>
+  }
+
+  /// List shield information barrier segments
+  record get-shield-information-barrier-segments-params {
+    /// The ID of the shield information barrier.
+    shield-information-barrier-id: string,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-shield-information-barrier-segments: func(params: get-shield-information-barrier-segments-params) -> result<string, string>;
+
+  /// Create shield information barrier segment
+  record post-shield-information-barrier-segments-params {
+    /// Description of the shield information barrier segment
+    description: option<string>,
+    /// Name of the shield information barrier segment
+    name: string,
+    shield-information-barrier: shield-information-barrier-base
+  }
+  post-shield-information-barrier-segments: func(params: post-shield-information-barrier-segments-params) -> result<string, string>;
+
+  /// Get shield information barrier segment with specified ID
+  record get-shield-information-barrier-segments-id-params {
+    /// The ID of the shield information barrier segment.
+    shield-information-barrier-segment-id: string
+  }
+  get-shield-information-barrier-segments-id: func(params: get-shield-information-barrier-segments-id-params) -> result<string, string>;
+
+  /// Update shield information barrier segment with specified ID
+  record put-shield-information-barrier-segments-id-params {
+    /// The ID of the shield information barrier segment.
+    shield-information-barrier-segment-id: string,
+    /// The updated description for
+    /// the shield information barrier segment.
+    description: option<string>,
+    /// The updated name for the shield information barrier segment.
+    name: option<string>
+  }
+  put-shield-information-barrier-segments-id: func(params: put-shield-information-barrier-segments-id-params) -> result<string, string>;
+
+  /// Delete shield information barrier segment
+  record delete-shield-information-barrier-segments-id-params {
+    /// The ID of the shield information barrier segment.
+    shield-information-barrier-segment-id: string
+  }
+  delete-shield-information-barrier-segments-id: func(params: delete-shield-information-barrier-segments-id-params) -> result<string, string>;
+
+}
+
+interface shield-information-barriers {
+  enum shield-information-barrier-status-enum {
+    draft,
+    pending,
+    disabled,
+    enabled,
+    invalid,
+  }
+
+  enum shield-information-barrier-type-op-enum {
+    shield-information-barrier,
+  }
+
+  enum post-shield-information-barriers-change-status-body-status-enum {
+    pending,
+    disabled,
+  }
+
+  /// List shield information barriers
+  record get-shield-information-barriers-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-shield-information-barriers: func(params: get-shield-information-barriers-params) -> result<string, string>;
+
+  /// Create shield information barrier
+  record post-shield-information-barriers-params {
+    /// ISO date time string when this
+    /// shield information barrier object was created.
+    created-at: option<string>,
+    created-by: option<string>,
+    /// ISO date time string when this shield information barrier was enabled.
+    enabled-at: option<string>,
+    enabled-by: option<string>,
+    enterprise: option<string>,
+    /// The unique identifier for the shield information barrier
+    id: option<string>,
+    /// Status of the shield information barrier
+    status: option<shield-information-barrier-status-enum>,
+    /// The type of the shield information barrier
+    type-op: option<shield-information-barrier-type-op-enum>,
+    /// ISO date time string when this shield information barrier was updated.
+    updated-at: option<string>,
+    updated-by: option<string>
+  }
+  post-shield-information-barriers: func(params: post-shield-information-barriers-params) -> result<string, string>;
+
+  /// Add changed status of shield information barrier with specified ID
+  record post-shield-information-barriers-change-status-params {
+    /// The ID of the shield information barrier.
+    id: string,
+    /// The desired status for the shield information barrier.
+    status: post-shield-information-barriers-change-status-body-status-enum
+  }
+  post-shield-information-barriers-change-status: func(params: post-shield-information-barriers-change-status-params) -> result<string, string>;
+
+  /// Get shield information barrier with specified ID
+  record get-shield-information-barriers-id-params {
+    /// The ID of the shield information barrier.
+    shield-information-barrier-id: string
+  }
+  get-shield-information-barriers-id: func(params: get-shield-information-barriers-id-params) -> result<string, string>;
+
+}
+
+interface box-sign {
+  /// List sign requests
+  record get-sign-requests-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-sign-requests: func(params: get-sign-requests-params) -> result<string, string>;
+
+  /// Create sign request
+  record post-sign-requests-params {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+  post-sign-requests: func(params: post-sign-requests-params) -> result<string, string>;
+
+  /// Get sign request by ID
+  record get-sign-requests-id-params {
+    /// The ID of the sign request
+    sign-request-id: string
+  }
+  get-sign-requests-id: func(params: get-sign-requests-id-params) -> result<string, string>;
+
+  /// Cancel sign request
+  record post-sign-requests-id-cancel-params {
+    /// The ID of the sign request
+    sign-request-id: string
+  }
+  post-sign-requests-id-cancel: func(params: post-sign-requests-id-cancel-params) -> result<string, string>;
+
+  /// Resend sign request
+  record post-sign-requests-id-resend-params {
+    /// The ID of the sign request
+    sign-request-id: string
+  }
+  post-sign-requests-id-resend: func(params: post-sign-requests-id-resend-params) -> result<string, string>;
+
+}
+
+interface storage-policies {
+  /// List storage policies
+  record get-storage-policies-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-storage-policies: func(params: get-storage-policies-params) -> result<string, string>;
+
+  /// Get storage policy
+  record get-storage-policies-id-params {
+    /// The ID of the storage policy.
+    storage-policy-id: string
+  }
+  get-storage-policies-id: func(params: get-storage-policies-id-params) -> result<string, string>;
+
+}
+
+interface storage-policy-assignments {
+  enum get-storage-policy-assignments-resolved-for-type-enum {
+    user,
+    enterprise,
+  }
+
+  enum post-storage-policy-assignments-body-storage-policy-type-op-enum {
+    storage-policy,
+  }
+
+  /// The user or enterprise to assign the storage
+  /// policy to.
+  record post-storage-policy-assignments-body-assigned-to {
+    /// The ID of the user or enterprise
+    id: string,
+    /// The type to assign the policy to.
+    type-op: get-storage-policy-assignments-resolved-for-type-enum
+  }
+
+  /// The storage policy to assign to the user or
+  /// enterprise
+  record post-storage-policy-assignments-body-storage-policy {
+    /// The ID of the storage policy to assign.
+    id: string,
+    /// The type to assign.
+    type-op: post-storage-policy-assignments-body-storage-policy-type-op-enum
+  }
+
+  /// The storage policy to assign to the user or
+  /// enterprise
+  record put-storage-policy-assignments-id-body-storage-policy {
+    /// The ID of the storage policy to assign.
+    id: string,
+    /// The type to assign.
+    type-op: post-storage-policy-assignments-body-storage-policy-type-op-enum
+  }
+
+  /// List storage policy assignments
+  record get-storage-policy-assignments-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The target type to return assignments for
+    resolved-for-type: get-storage-policy-assignments-resolved-for-type-enum,
+    /// The ID of the user or enterprise to return assignments for
+    resolved-for-id: string
+  }
+  get-storage-policy-assignments: func(params: get-storage-policy-assignments-params) -> result<string, string>;
+
+  /// Assign storage policy
+  record post-storage-policy-assignments-params {
+    /// The user or enterprise to assign the storage
+    /// policy to.
+    assigned-to: post-storage-policy-assignments-body-assigned-to,
+    /// The storage policy to assign to the user or
+    /// enterprise
+    storage-policy: post-storage-policy-assignments-body-storage-policy
+  }
+  post-storage-policy-assignments: func(params: post-storage-policy-assignments-params) -> result<string, string>;
+
+  /// Get storage policy assignment
+  record get-storage-policy-assignments-id-params {
+    /// The ID of the storage policy assignment.
+    storage-policy-assignment-id: string
+  }
+  get-storage-policy-assignments-id: func(params: get-storage-policy-assignments-id-params) -> result<string, string>;
+
+  /// Update storage policy assignment
+  record put-storage-policy-assignments-id-params {
+    /// The ID of the storage policy assignment.
+    storage-policy-assignment-id: string,
+    /// The storage policy to assign to the user or
+    /// enterprise
+    storage-policy: put-storage-policy-assignments-id-body-storage-policy
+  }
+  put-storage-policy-assignments-id: func(params: put-storage-policy-assignments-id-params) -> result<string, string>;
+
+  /// Unassign storage policy
+  record delete-storage-policy-assignments-id-params {
+    /// The ID of the storage policy assignment.
+    storage-policy-assignment-id: string
+  }
+  delete-storage-policy-assignments-id: func(params: delete-storage-policy-assignments-id-params) -> result<string, string>;
+
+}
+
+interface task-assignments {
+  enum post-task-assignments-body-task-type-op-enum {
+    task,
+  }
+
+  enum put-task-assignments-id-body-resolution-state-enum {
+    completed,
+    incomplete,
+    approved,
+    rejected,
+  }
+
+  /// The user to assign the task to.
+  record post-task-assignments-body-assign-to {
+    /// The ID of the user to assign to the
+    /// task.
+    id: option<string>,
+    /// The email address of the user to assign to the task.
+    /// To specify a user by their user ID please use the `id` parameter.
+    login: option<string>
+  }
+
+  /// The task to assign to a user.
+  record post-task-assignments-body-task {
+    /// The ID of the task
+    id: string,
+    /// The type of the item to assign.
+    type-op: post-task-assignments-body-task-type-op-enum
+  }
+
+  /// Assign task
+  record post-task-assignments-params {
+    /// The user to assign the task to.
+    assign-to: post-task-assignments-body-assign-to,
+    /// The task to assign to a user.
+    task: post-task-assignments-body-task
+  }
+  post-task-assignments: func(params: post-task-assignments-params) -> result<string, string>;
+
+  /// Get task assignment
+  record get-task-assignments-id-params {
+    /// The ID of the task assignment.
+    task-assignment-id: string
+  }
+  get-task-assignments-id: func(params: get-task-assignments-id-params) -> result<string, string>;
+
+  /// Update task assignment
+  record put-task-assignments-id-params {
+    /// The ID of the task assignment.
+    task-assignment-id: string,
+    /// An optional message by the assignee that can be added to the task.
+    message: option<string>,
+    /// The state of the task assigned to the user.
+    /// 
+    resolution-state: option<put-task-assignments-id-body-resolution-state-enum>
+  }
+  put-task-assignments-id: func(params: put-task-assignments-id-params) -> result<string, string>;
+
+  /// Unassign task
+  record delete-task-assignments-id-params {
+    /// The ID of the task assignment.
+    task-assignment-id: string
+  }
+  delete-task-assignments-id: func(params: delete-task-assignments-id-params) -> result<string, string>;
+
+  /// List task assignments
+  record get-tasks-id-assignments-params {
+    /// The ID of the task.
+    task-id: string
+  }
+  get-tasks-id-assignments: func(params: get-tasks-id-assignments-params) -> result<string, string>;
+
+}
+
+interface terms-of-service-user-statuses {
+  enum post-terms-of-service-user-statuses-body-tos-type-op-enum {
+    terms-of-service,
+  }
+
+  enum post-terms-of-service-user-statuses-body-user-type-op-enum {
+    user,
+  }
+
+  /// The terms of service to set the status for.
+  record post-terms-of-service-user-statuses-body-tos {
+    /// The ID of terms of service
+    id: string,
+    /// The type of object.
+    type-op: post-terms-of-service-user-statuses-body-tos-type-op-enum
+  }
+
+  /// The user to set the status for.
+  record post-terms-of-service-user-statuses-body-user {
+    /// The ID of user
+    id: string,
+    /// The type of object.
+    type-op: post-terms-of-service-user-statuses-body-user-type-op-enum
+  }
+
+  /// List terms of service user statuses
+  record get-terms-of-service-user-statuses-params {
+    /// The ID of the terms of service.
+    tos-id: string,
+    /// Limits results to the given user ID.
+    user-id: option<string>
+  }
+  get-terms-of-service-user-statuses: func(params: get-terms-of-service-user-statuses-params) -> result<string, string>;
+
+  /// Create terms of service status for new user
+  record post-terms-of-service-user-statuses-params {
+    /// Whether the user has accepted the terms.
+    is-accepted: bool,
+    /// The terms of service to set the status for.
+    tos: post-terms-of-service-user-statuses-body-tos,
+    /// The user to set the status for.
+    user: post-terms-of-service-user-statuses-body-user
+  }
+  post-terms-of-service-user-statuses: func(params: post-terms-of-service-user-statuses-params) -> result<string, string>;
+
+  /// Update terms of service status for existing user
+  record put-terms-of-service-user-statuses-id-params {
+    /// The ID of the terms of service status.
+    terms-of-service-user-status-id: string,
+    /// Whether the user has accepted the terms.
+    is-accepted: bool
+  }
+  put-terms-of-service-user-statuses-id: func(params: put-terms-of-service-user-statuses-id-params) -> result<string, string>;
+
+}
+
+interface terms-of-service {
+  enum get-terms-of-services-tos-type-enum {
+    external,
+    managed,
+  }
+
+  enum post-terms-of-services-body-status-enum {
+    enabled,
+    disabled,
+  }
+
+  /// List terms of services
+  record get-terms-of-services-params {
+    /// Limits the results to the terms of service of the given type.
+    tos-type: option<get-terms-of-services-tos-type-enum>
+  }
+  get-terms-of-services: func(params: get-terms-of-services-params) -> result<string, string>;
+
+  /// Create terms of service
+  record post-terms-of-services-params {
+    /// Whether this terms of service is active.
+    status: post-terms-of-services-body-status-enum,
+    /// The terms of service text to display to users.
+    /// 
+    text: string,
+    /// The type of user to set the terms of
+    /// service for.
+    tos-type: option<get-terms-of-services-tos-type-enum>
+  }
+  post-terms-of-services: func(params: post-terms-of-services-params) -> result<string, string>;
+
+  /// Get terms of service
+  record get-terms-of-services-id-params {
+    /// The ID of the terms of service.
+    terms-of-service-id: string
+  }
+  get-terms-of-services-id: func(params: get-terms-of-services-id-params) -> result<string, string>;
+
+  /// Update terms of service
+  record put-terms-of-services-id-params {
+    /// The ID of the terms of service.
+    terms-of-service-id: string,
+    /// Whether this terms of service is active.
+    status: post-terms-of-services-body-status-enum,
+    /// The terms of service text to display to users.
+    /// 
+    text: string
+  }
+  put-terms-of-services-id: func(params: put-terms-of-services-id-params) -> result<string, string>;
+
+}
+
+interface users {
+  enum get-users-user-type-enum {
+    all,
+    managed,
+    external,
+  }
+
+  enum post-users-body-role-enum {
+    coadmin,
+    user,
+  }
+
+  enum post-users-body-status-enum {
+    active,
+    inactive,
+    cannot-delete-edit,
+    cannot-delete-edit-upload,
+  }
+
+  enum tracking-code-type-op-enum {
+    tracking-code,
+  }
+
+  /// Tracking codes allow an admin to generate reports from the admin console
+  /// and assign an attribute to a specific group of users.
+  /// This setting must be enabled for an enterprise before it can be used.
+  record tracking-code {
+    /// The name of the tracking code, which must be preconfigured in
+    /// the Admin Console
+    name: option<string>,
+    /// `tracking_code`
+    type-op: option<tracking-code-type-op-enum>,
+    /// The value of the tracking code
+    value: option<string>
+  }
+
+  /// An alternate notification email address to which email
+  /// notifications are sent. When it's confirmed, this will be
+  /// the email address to which notifications are sent instead of
+  /// to the primary email address.
+  /// 
+  /// Set this value to `null` to remove the notification email.
+  record put-users-id-body-notification-email {
+    /// The email address to send the notifications to.
+    email: option<string>
+  }
+
+  /// List enterprise users
+  record get-users-params {
+    /// Limits the results to only users who's `name` or
+    /// `login` start with the search term.
+    filter-term: option<string>,
+    /// Limits the results to the kind of user specified.
+    /// 
+    user-type: option<get-users-user-type-enum>,
+    /// Limits the results to app users with the given
+    /// `external_app_user_id` value.
+    external-app-user-id: option<string>,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The offset of the item at which to begin the response.
+    /// 
+    offset: option<s64>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// Specifies whether to use marker-based pagination instead of
+    /// offset-based pagination. Only one pagination method can
+    usemarker: option<bool>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>
+  }
+  get-users: func(params: get-users-params) -> result<string, string>;
+
+  /// Create user
+  record post-users-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The user’s address
+    address: option<string>,
+    /// Whether the user can see other enterprise users in their
+    /// contact list
+    can-see-managed-users: option<bool>,
+    /// An external identifier for an app user, which can be used to look
+    /// up the user. This can be used to tie user IDs from external
+    external-app-user-id: option<string>,
+    /// Whether to exempt the user from enterprise device limits
+    is-exempt-from-device-limits: option<bool>,
+    /// Whether the user must use two-factor authentication
+    is-exempt-from-login-verification: option<bool>,
+    /// Whether the user is allowed to collaborate with users outside
+    /// their enterprise
+    is-external-collab-restricted: option<bool>,
+    /// Specifies that the user is an app user.
+    is-platform-access-only: option<bool>,
+    /// Whether the user can use Box Sync
+    is-sync-enabled: option<bool>,
+    /// The user’s job title
+    job-title: option<string>,
+    /// The language of the user, formatted in modified version of the
+    /// [ISO 639-1](/guides/api-calls/language-codes) format.
+    language: option<string>,
+    /// The email address the user uses to log in
+    /// 
+    login: option<string>,
+    /// The name of the user
+    name: string,
+    /// The user’s phone number
+    phone: option<string>,
+    /// The user’s enterprise role
+    role: option<post-users-body-role-enum>,
+    /// The user’s total available space in bytes. Set this to `-1` to
+    /// indicate unlimited storage.
+    space-amount: option<s64>,
+    /// The user's account status
+    status: option<post-users-body-status-enum>,
+    /// The user's timezone
+    timezone: option<string>,
+    /// Tracking codes allow an admin to generate reports from the
+    /// admin console and assign an attribute to a specific group
+    tracking-codes: option<list<tracking-code>>
+  }
+  post-users: func(params: post-users-params) -> result<string, string>;
+
+  /// Get current user
+  record get-users-me-params {
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-users-me: func(params: get-users-me-params) -> result<string, string>;
+
+  /// Create jobs to terminate users session
+  record post-users-terminate-sessions-params {
+    /// A list of user IDs
+    user-ids: list<string>,
+    /// A list of user logins
+    user-logins: list<string>
+  }
+  post-users-terminate-sessions: func(params: post-users-terminate-sessions-params) -> result<string, string>;
+
+  /// Get user
+  record get-users-id-params {
+    /// The ID of the user.
+    user-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-users-id: func(params: get-users-id-params) -> result<string, string>;
+
+  /// Update user
+  record put-users-id-params {
+    /// The ID of the user.
+    user-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// The user’s address
+    address: option<string>,
+    /// Whether the user can see other enterprise users in their
+    /// contact list
+    can-see-managed-users: option<bool>,
+    /// Set this to `null` to roll the user out of the enterprise
+    /// and make them a free user
+    enterprise: option<string>,
+    /// An external identifier for an app user, which can be used to look
+    /// up the user. This can be used to tie user IDs from external
+    external-app-user-id: option<string>,
+    /// Whether to exempt the user from enterprise device limits
+    is-exempt-from-device-limits: option<bool>,
+    /// Whether the user must use two-factor authentication
+    is-exempt-from-login-verification: option<bool>,
+    /// Whether the user is allowed to collaborate with users outside
+    /// their enterprise
+    is-external-collab-restricted: option<bool>,
+    /// Whether the user is required to reset their password
+    is-password-reset-required: option<bool>,
+    /// Whether the user can use Box Sync
+    is-sync-enabled: option<bool>,
+    /// The user’s job title
+    job-title: option<string>,
+    /// The language of the user, formatted in modified version of the
+    /// [ISO 639-1](/guides/api-calls/language-codes) format.
+    language: option<string>,
+    /// The email address the user uses to log in
+    /// 
+    login: option<string>,
+    /// The name of the user
+    name: option<string>,
+    /// An alternate notification email address to which email
+    /// notifications are sent. When it's confirmed, this will be
+    notification-email: option<put-users-id-body-notification-email>,
+    /// Whether the user should receive an email when they
+    /// are rolled out of an enterprise
+    notify: option<bool>,
+    /// The user’s phone number
+    phone: option<string>,
+    /// The user’s enterprise role
+    role: option<post-users-body-role-enum>,
+    /// The user’s total available space in bytes. Set this to `-1` to
+    /// indicate unlimited storage.
+    space-amount: option<s64>,
+    /// The user's account status
+    status: option<post-users-body-status-enum>,
+    /// The user's timezone
+    timezone: option<string>,
+    /// Tracking codes allow an admin to generate reports from the
+    /// admin console and assign an attribute to a specific group
+    tracking-codes: option<list<tracking-code>>
+  }
+  put-users-id: func(params: put-users-id-params) -> result<string, string>;
+
+  /// Delete user
+  record delete-users-id-params {
+    /// The ID of the user.
+    user-id: string,
+    /// Whether the user will receive email notification of
+    /// the deletion
+    notify: option<bool>,
+    /// Whether the user should be deleted even if this user
+    /// still own files
+    force: option<bool>
+  }
+  delete-users-id: func(params: delete-users-id-params) -> result<string, string>;
+
+}
+
+interface user-avatars {
+  /// Get user avatar
+  record get-users-id-avatar-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  get-users-id-avatar: func(params: get-users-id-avatar-params) -> result<string, string>;
+
+  /// Add or update user avatar
+  record post-users-id-avatar-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  post-users-id-avatar: func(params: post-users-id-avatar-params) -> result<string, string>;
+
+  /// Delete user avatar
+  record delete-users-id-avatar-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  delete-users-id-avatar: func(params: delete-users-id-avatar-params) -> result<string, string>;
+
+}
+
+interface email-aliases {
+  /// List user's email aliases
+  record get-users-id-email-aliases-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  get-users-id-email-aliases: func(params: get-users-id-email-aliases-params) -> result<string, string>;
+
+  /// Create email alias
+  record post-users-id-email-aliases-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The email address to add to the account as an alias.
+    /// 
+    email: string
+  }
+  post-users-id-email-aliases: func(params: post-users-id-email-aliases-params) -> result<string, string>;
+
+  /// Remove email alias
+  record delete-users-id-email-aliases-id-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the email alias.
+    email-alias-id: string
+  }
+  delete-users-id-email-aliases-id: func(params: delete-users-id-email-aliases-id-params) -> result<string, string>;
+
+}
+
+interface transfer-folders {
+  /// The user who the folder will be transferred to
+  record put-users-id-folders-v0-body-owned-by {
+    /// The ID of the user who the folder will be
+    /// transferred to
+    id: string
+  }
+
+  /// Transfer owned folders
+  record put-users-id-folders-v0-params {
+    /// The ID of the user.
+    user-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// Determines if users should receive email notification
+    /// for the action performed.
+    notify: option<bool>,
+    /// The user who the folder will be transferred to
+    owned-by: put-users-id-folders-v0-body-owned-by
+  }
+  put-users-id-folders-v0: func(params: put-users-id-folders-v0-params) -> result<string, string>;
+
+}
+
+interface web-links {
+  enum post-web-links-body-shared-link-access-enum {
+    open,
+    company,
+    collaborators,
+  }
+
+  /// The parent folder to create the web link within.
+  record post-web-links-body-parent {
+    /// The ID of parent folder
+    id: string
+  }
+
+  /// The settings for the shared link to update.
+  record post-web-links-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<post-web-links-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  /// The settings for the shared link to update.
+  record put-web-links-id-body-shared-link {
+    /// The level of access for the shared link. This can be
+    /// restricted to anyone with the link (`open`), only people
+    access: option<post-web-links-body-shared-link-access-enum>,
+    /// The password required to access the shared link. Set the
+    /// password to `null` to remove it.
+    password: option<string>,
+    /// The timestamp at which this shared link will
+    /// expire. This field can only be set by
+    unshared-at: option<string>,
+    /// Defines a custom vanity name to use in the shared link URL,
+    /// for example `https://app.box.com/v/my-shared-link`.
+    vanity-name: option<string>
+  }
+
+  /// Create web link
+  record post-web-links-params {
+    /// Description of the web link.
+    description: option<string>,
+    /// Name of the web link. Defaults to the URL if not set.
+    name: option<string>,
+    /// The parent folder to create the web link within.
+    parent: post-web-links-body-parent,
+    /// The settings for the shared link to update.
+    shared-link: option<post-web-links-body-shared-link>,
+    /// The URL that this web link links to. Must start with
+    /// `"http://"` or `"https://"`.
+    url: string
+  }
+  post-web-links: func(params: post-web-links-params) -> result<string, string>;
+
+  /// Get web link
+  record get-web-links-id-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// The URL, and optional password, for the shared link of this item.
+    /// 
+    boxapi: option<string>
+  }
+  get-web-links-id: func(params: get-web-links-id-params) -> result<string, string>;
+
+  /// Update web link
+  record put-web-links-id-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// A new description of the web link.
+    description: option<string>,
+    /// A new name for the web link. Defaults to the URL if not set.
+    name: option<string>,
+    parent: option<string>,
+    /// The settings for the shared link to update.
+    shared-link: option<put-web-links-id-body-shared-link>,
+    /// The new URL that the web link links to. Must start with
+    /// `"http://"` or `"https://"`.
+    url: option<string>
+  }
+  put-web-links-id: func(params: put-web-links-id-params) -> result<string, string>;
+
+  /// Remove web link
+  record delete-web-links-id-params {
+    /// The ID of the web link.
+    web-link-id: string
+  }
+  delete-web-links-id: func(params: delete-web-links-id-params) -> result<string, string>;
+
+}
+
+interface trashed-web-links {
+  /// Restore web link
+  record post-web-links-id-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>,
+    /// An optional new name for the web link.
+    name: option<string>,
+    parent: option<string>
+  }
+  post-web-links-id: func(params: post-web-links-id-params) -> result<string, string>;
+
+  /// Get trashed web link
+  record get-web-links-id-trash-params {
+    /// The ID of the web link.
+    web-link-id: string,
+    /// A comma-separated list of attributes to include in the
+    /// response. This can be used to request fields that are
+    fields: option<list<string>>
+  }
+  get-web-links-id-trash: func(params: get-web-links-id-trash-params) -> result<string, string>;
+
+  /// Permanently remove web link
+  record delete-web-links-id-trash-params {
+    /// The ID of the web link.
+    web-link-id: string
+  }
+  delete-web-links-id-trash: func(params: delete-web-links-id-trash-params) -> result<string, string>;
+
+}
+
+interface webhooks {
+  enum post-webhooks-body-target-type-op-enum {
+    file,
+    folder,
+  }
+
+  enum post-webhooks-body-triggers-item-enum {
+    file-uploaded,
+    file-previewed,
+    file-downloaded,
+    file-trashed,
+    file-deleted,
+    file-restored,
+    file-copied,
+    file-moved,
+    file-locked,
+    file-unlocked,
+    file-renamed,
+    comment-created,
+    comment-updated,
+    comment-deleted,
+    task-assignment-created,
+    task-assignment-updated,
+    metadata-instance-created,
+    metadata-instance-updated,
+    metadata-instance-deleted,
+    folder-created,
+    folder-renamed,
+    folder-downloaded,
+    folder-restored,
+    folder-deleted,
+    folder-copied,
+    folder-moved,
+    folder-trashed,
+    webhook-deleted,
+    collaboration-created,
+    collaboration-accepted,
+    collaboration-rejected,
+    collaboration-removed,
+    collaboration-updated,
+    shared-link-deleted,
+    shared-link-created,
+    shared-link-updated,
+    sign-request-completed,
+    sign-request-declined,
+    sign-request-expired,
+  }
+
+  /// The item that will trigger the webhook
+  record post-webhooks-body-target {
+    /// The ID of the item to trigger a webhook
+    id: option<string>,
+    /// The type of item to trigger a webhook
+    type-op: option<post-webhooks-body-target-type-op-enum>
+  }
+
+  /// The item that will trigger the webhook
+  record put-webhooks-id-body-target {
+    /// The ID of the item to trigger a webhook
+    id: option<string>,
+    /// The type of item to trigger a webhook
+    type-op: option<post-webhooks-body-target-type-op-enum>
+  }
+
+  /// List all webhooks
+  record get-webhooks-params {
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>
+  }
+  get-webhooks: func(params: get-webhooks-params) -> result<string, string>;
+
+  /// Create webhook
+  record post-webhooks-params {
+    /// The URL that is notified by this webhook
+    address: string,
+    /// The item that will trigger the webhook
+    target: post-webhooks-body-target,
+    /// An array of event names that this webhook is
+    /// to be triggered for
+    triggers: list<post-webhooks-body-triggers-item-enum>
+  }
+  post-webhooks: func(params: post-webhooks-params) -> result<string, string>;
+
+  /// Get webhook
+  record get-webhooks-id-params {
+    /// The ID of the webhook.
+    webhook-id: string
+  }
+  get-webhooks-id: func(params: get-webhooks-id-params) -> result<string, string>;
+
+  /// Update webhook
+  record put-webhooks-id-params {
+    /// The ID of the webhook.
+    webhook-id: string,
+    /// The URL that is notified by this webhook
+    address: option<string>,
+    /// The item that will trigger the webhook
+    target: option<put-webhooks-id-body-target>,
+    /// An array of event names that this webhook is
+    /// to be triggered for
+    triggers: option<list<post-webhooks-body-triggers-item-enum>>
+  }
+  put-webhooks-id: func(params: put-webhooks-id-params) -> result<string, string>;
+
+  /// Remove webhook
+  record delete-webhooks-id-params {
+    /// The ID of the webhook.
+    webhook-id: string
+  }
+  delete-webhooks-id: func(params: delete-webhooks-id-params) -> result<string, string>;
+
+}
+
+interface workflows {
+  enum post-workflows-id-start-body-files-item-type-op-enum {
+    file,
+  }
+
+  enum post-workflows-id-start-body-folder-type-op-enum {
+    folder,
+  }
+
+  enum post-workflows-id-start-body-outcomes-item-type-op-enum {
+    outcome,
+  }
+
+  enum post-workflows-id-start-body-type-op-enum {
+    workflow-parameters,
+  }
+
+  /// A file the workflow should start for
+  record post-workflows-id-start-body-files-item {
+    /// The id of the file
+    id: option<string>,
+    /// The type of the file object
+    type-op: option<post-workflows-id-start-body-files-item-type-op-enum>
+  }
+
+  /// The flow that will be triggered
+  record post-workflows-id-start-body-flow {
+    /// The id of the flow
+    id: option<string>,
+    /// The type of the flow object
+    type-op: option<string>
+  }
+
+  /// The folder object for which the workflow is configured.
+  record post-workflows-id-start-body-folder {
+    /// The id of the folder
+    id: option<string>,
+    /// The type of the folder object
+    type-op: option<post-workflows-id-start-body-folder-type-op-enum>
+  }
+
+  /// A configurable outcome the workflow should complete. If you
+  /// have a `task_completion_rule`, you may input `all_assignees` or
+  /// `any_assignee` in the `variable_value` field. Similarly, if you
+  /// have a `collaborator_role`, you may input `editor`, `viewer`,
+  /// `previewer`, `uploader`, `previewer uploader`, `viewer uploader`
+  /// , `co-owner` in the `variable_value` field.
+  record post-workflows-id-start-body-outcomes-item {
+    /// The id of the outcome
+    id: option<string>,
+    /// This is a placeholder example for various objects that
+    /// can be passed in - refer to the guides section to find
+    parameter: option<string>,
+    /// The type of the outcome object
+    type-op: option<post-workflows-id-start-body-outcomes-item-type-op-enum>
+  }
+
+  /// List workflows
+  record get-workflows-params {
+    /// The unique identifier that represent a folder.
+    /// 
+    folder-id: string,
+    /// Type of trigger to search for.
+    trigger-type: option<string>,
+    /// The maximum number of items to return per page.
+    limit: option<s64>,
+    /// Defines the position marker at which to begin returning results. This is
+    /// used when paginating using marker-based pagination.
+    marker: option<string>
+  }
+  get-workflows: func(params: get-workflows-params) -> result<string, string>;
+
+  /// Starts workflow based on request body
+  record post-workflows-id-start-params {
+    /// The ID of the workflow.
+    workflow-id: string,
+    /// The array of files for which the workflow should start. All files
+    /// must be in the workflow's configured folder.
+    files: list<post-workflows-id-start-body-files-item>,
+    /// The flow that will be triggered
+    flow: post-workflows-id-start-body-flow,
+    /// The folder object for which the workflow is configured.
+    folder: post-workflows-id-start-body-folder,
+    /// A list of outcomes required to be configured at start time.
+    outcomes: option<list<post-workflows-id-start-body-outcomes-item>>,
+    /// The type of the parameters object
+    type-op: option<post-workflows-id-start-body-type-op-enum>
+  }
+  post-workflows-id-start: func(params: post-workflows-id-start-params) -> result<string, string>;
+
+}
+
+interface zip-downloads {
+  enum zip-download-request-items-item-type-op-enum {
+    file,
+    folder,
+  }
+
+  /// An item to add to the `zip` archive. This can be a file or a folder.
+  record zip-download-request-items-item {
+    /// The identifier of the item to add to the archive. When this item is
+    /// a folder then this can not be the root folder with ID `0`.
+    id: string,
+    /// The type of the item to add to the archive.
+    type-op: zip-download-request-items-item-type-op-enum
+  }
+
+  /// Create zip download
+  record post-zip-downloads-params {
+    /// The optional name of the `zip` archive. This name will be appended by the
+    /// `.zip` file extension, for example `January Financials.zip`.
+    download-file-name: option<string>,
+    /// A list of items to add to the `zip` archive. These can
+    /// be folders or files.
+    items: list<zip-download-request-items-item>
+  }
+  post-zip-downloads: func(params: post-zip-downloads-params) -> result<string, string>;
+
+  /// Download zip archive
+  record get-zip-downloads-id-content-params {
+    /// The unique identifier that represent this `zip` archive.
+    zip-download-id: string
+  }
+  get-zip-downloads-id-content: func(params: get-zip-downloads-id-content-params) -> result<string, string>;
+
+  /// Get zip download status
+  record get-zip-downloads-id-status-params {
+    /// The unique identifier that represent this `zip` archive.
+    zip-download-id: string
+  }
+  get-zip-downloads-id-status: func(params: get-zip-downloads-id-status-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export authorization;
+  export domain-restrictions-for-collaborations;
+  export domain-restrictions-user-exemptions;
+  export collaborations-list;
+  export collaborations;
+  export collections;
+  export comments;
+  export device-pinners;
+  export events;
+  export file-requests;
+  export file-version-legal-holds;
+  export file-version-retentions;
+  export uploads;
+  export uploads-chunked;
+  export files;
+  export trashed-files;
+  export shared-links-files;
+  export downloads;
+  export metadata-instances-files;
+  export classifications-on-files;
+  export skills;
+  export tasks;
+  export file-versions;
+  export watermarks-files;
+  export folder-locks;
+  export folders;
+  export trashed-items;
+  export trashed-folders;
+  export shared-links-folders;
+  export metadata-instances-folders;
+  export classifications-on-folders;
+  export watermarks-folders;
+  export group-memberships;
+  export groups;
+  export invites;
+  export legal-hold-policies;
+  export legal-hold-policy-assignments;
+  export metadata-cascade-policies;
+  export search;
+  export metadata-templates;
+  export classifications;
+  export recent-items;
+  export retention-policies;
+  export retention-policy-assignments;
+  export shared-links-web-links;
+  export shield-information-barrier-reports;
+  export shield-information-barrier-segment-members;
+  export shield-information-barrier-segment-restrictions;
+  export shield-information-barrier-segments;
+  export shield-information-barriers;
+  export box-sign;
+  export storage-policies;
+  export storage-policy-assignments;
+  export task-assignments;
+  export terms-of-service-user-statuses;
+  export terms-of-service;
+  export users;
+  export user-avatars;
+  export email-aliases;
+  export transfer-folders;
+  export web-links;
+  export trashed-web-links;
+  export webhooks;
+  export workflows;
+  export zip-downloads;
+}

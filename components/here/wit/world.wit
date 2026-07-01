@@ -1,0 +1,393 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `APIKey` | query `apiKey` |
+package autostamp:here@0.2.0;
+
+interface api-information {
+  /// Service health
+  get-health: func() -> result<string, string>;
+
+  /// API version
+  get-api-version: func() -> result<string, string>;
+
+}
+
+
+interface location {
+  /// CDMA measurement
+  record cdma {
+    base-lat: option<base-lat>,
+    base-lng: option<base-lng>,
+    bsid: bsid,
+    local-id: option<cdma-local-id>,
+    nid: nid,
+    nmr: option<cdma-nmr-array>,
+    pilot-power: option<pilot-power>,
+    rz: option<registration-zone>,
+    sid: sid
+  }
+
+  /// Base station latitude
+  record base-lat {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Base station longitude
+  record base-lng {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Base Station ID (CDMA BSID, BID)
+  record bsid {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Local identification parameters of CDMA serving cell
+  record cdma-local-id {
+    channel: channel,
+    pn-offset: pn-offset
+  }
+
+  /// CDMA channel frequency
+  record channel {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Pseudonoise offset. This field and CDMA channel frequency together allow for the locally unique identification of the cell.
+  record pn-offset {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Network ID (NID)
+  record nid {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// CDMA Network measurements
+  record cdma-nmr-array {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Pilot Power (dBm). If Pilot Power is not available directly, it needs to be calculated from Total Power in the band and Pilot Strength with respect to the Total Power. Pilot power less than -142dBm should be mapped to -142. Pilot power greater than -49dBm should be mapped to -49.
+  record pilot-power {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// CDMA Registration Zone (RZ)
+  record registration-zone {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// System ID (SID)
+  record sid {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Information about the client
+  record client-info {
+    /// Device firmware version information
+    firmware: option<string>,
+    /// Manufacturer of the device (hardware)
+    manufacturer: string,
+    /// Model of the device (hardware)
+    model: string,
+    /// Name of the client software accessing the HERE API
+    name: string,
+    /// Software platform information of the device, for example operating system name and version.
+    platform: option<string>,
+    /// Version of the client software in format X.Y.Z, where X [0..255] is a major, Y [0..255] is a minor, and Z [0..65535] is a build version number. Increase the version/build number for each release of the client.
+    version: string
+  }
+
+  /// GSM measurement
+  record gsm {
+    cid: geran-cid,
+    lac: lac,
+    local-id: option<gsm-local-id>,
+    mcc: mcc,
+    mnc: mnc,
+    nmr: option<gsm-nmr-array>,
+    rx-level: option<rx-level>,
+    ta: option<gsm-timing-advance>
+  }
+
+  /// Cell identifier (GERAN CID)
+  record geran-cid {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Location Area Code (LAC). Note, value 65534 is invalid.
+  record lac {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Local identification parameters of GSM serving cell
+  record gsm-local-id {
+    bcch: bcch,
+    bsic: bsic
+  }
+
+  /// Broadcast Control Channel (BCCH, synonymous to ARFCN = Absolute Radio Frequency Channel)
+  record bcch {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Base Station Identity Code (BSIC, for instance, color code)
+  record bsic {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Mobile Country Code (MCC). Note: 0xx is for test networks, 1xx and 8xx are not used
+  record mcc {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Mobile Network Code (MNC).
+  record mnc {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// GSM Network measurements
+  record gsm-nmr-array {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Received Signal power (dBm). Power less than -110dBm should be mapped to -110. Power greater than -25dBm should be mapped to -25.
+  record rx-level {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Timing advance (TA). Expressed in the units of GSM bits equaling to 48/13 μs ~ 1107 meters.
+  record gsm-timing-advance {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// LTE measurement
+  record lte {
+    cid: eutran-cid,
+    local-id: option<lte-local-id>,
+    mcc: mcc,
+    mnc: mnc,
+    nmr: option<lte-nmr-array>,
+    rsrp: option<rsrp>,
+    rsrq: option<rsrq>,
+    ta: option<lte-timing-advance>,
+    tac: option<tac>
+  }
+
+  /// E-UTRA Cell Identifier (UC-Id), 28 bits (20 bits eNodeB and 8 bits Cell ID). MCC + MNC + CID uniquely identifies the LTE cell, TAC is optional.
+  record eutran-cid {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Local identification parameters of LTE serving cell
+  record lte-local-id {
+    earfcn: earfcn,
+    pci: pci
+  }
+
+  /// Evolved Absolute Radio Frequency Channel (E-ARFCN)
+  record earfcn {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Physical Cell Identity (PCI)
+  record pci {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// LTE Network measurements
+  record lte-nmr-array {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Reference Signal Received Power (RSRP) in dBm. Power less than -140dBm should be mapped to -140. Power greater than -44dBm should be mapped to -44.
+  record rsrp {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Reference Signal Received Quality (RSRQ) in dBm. Values less than -19.5dB should be mapped to -19.5, and values greater than -3dB should be mapped to -3dB.
+  record rsrq {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Timing Advance. Expressed in the units of 16*Ts (16 Basic time units) = 16/(15000*2048) seconds ~ 156meters. For reference see 3GPP TS 36.213 and 36.211.
+  record lte-timing-advance {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Tracking Area Code (TAC)
+  record tac {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// TD-SCDMA measurement.
+  record tdscdma {
+    cid: utran-cid,
+    lac: option<lac>,
+    local-id: option<tdscdma-local-id>,
+    mcc: mcc,
+    mnc: mnc,
+    nmr: option<tdscdma-nmr-array>,
+    pathloss: option<pathloss>,
+    rscp: option<rscp>,
+    ta: option<tdscdma-timing-advance>
+  }
+
+  /// UTRAN Cell Identifier (UC-Id), 28 bits (12 bits RNC and 16 bits Cell ID). MCC + MNC + CID uniquely identifies the WCDMA cell, LAC is optional.
+  record utran-cid {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Local identification parameters of TD-SCDMA serving cell
+  record tdscdma-local-id {
+    cell-params: cell-params,
+    uarfcn: uarfcn
+  }
+
+  /// Cell Parameters ID (CDMA Spreading Code ID)
+  record cell-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// UTRAN Absolute Radio Frequency (U-ARFCN)
+  record uarfcn {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// TD-SCDMA Network measurements. Maximum of 8 distinct uarfcn frequencies.
+  record tdscdma-nmr-array {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// UTRAN pathloss (dBm)
+  record pathloss {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Received Signal Code Power (RSCP) in dBm. Power less than -120dBm should be mapped to -120. Power greater than -25dBm should be mapped to -25.
+  record rscp {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Timing advance (TA). Round-Trip distance presented in the units of 4*c/7.68e6 ~156 meters. That is, the scaling factor is 4 times the chip length at chip rate of 7.68 Mchips/s. Note that at chip rates 1.28 Mchips/s and 3.84 Mchips/s you need to scale according to chip length of 7.68 Mchips/s, that is, multiply by 6 or 2 if needed.
+  record tdscdma-timing-advance {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// WCDMA measurement
+  record wcdma {
+    cid: utran-cid,
+    lac: option<lac>,
+    local-id: option<wcdma-local-id>,
+    mcc: mcc,
+    mnc: mnc,
+    nmr: option<wcdma-nmr-array>,
+    pathloss: option<pathloss>,
+    rscp: option<rscp>
+  }
+
+  /// Local identification parameters of WCDMA serving cell
+  record wcdma-local-id {
+    psc: psc,
+    uarfcndl: uarfcndl
+  }
+
+  /// Primary Scrambling Code (PSC, Primary CPICH, Primary Control Pilot Channel).
+  record psc {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// UTRAN Absolute Radio Frequency Downlink (UARFCN-DL)
+  record uarfcndl {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// WCDMA Network measurements. Maximum of 8 distinct uarfcndl frequencies.
+  record wcdma-nmr-array {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// WLAN measurement
+  record wlan-locate {
+    /// The MAC address of the WLAN access point. MAC-48 address with colon (:) or hyphen (-) separators, upper or lower case hex digits. Note that if the SSID contains postfix "_nomap", the AP should not be used for positioning.
+    mac: string,
+    rss: option<rss>
+  }
+
+  /// Received signal level (dBm) at the terminal
+  record rss {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Location query
+  record post-locate-params {
+    /// CDMA cells (CDMA2000)
+    cdma: option<list<cdma>>,
+    client: option<client-info>,
+    /// GSM cells (GERAN)
+    gsm: option<list<gsm>>,
+    /// LTE cells (E-UTRA, 4G)
+    lte: option<list<lte>>,
+    /// TD-SCDMA cells (UTRA-TDD, 3G UMTS TDD)
+    tdscdma: option<list<tdscdma>>,
+    /// WCDMA cells (UTRA-FDD, 3G UMTS)
+    wcdma: option<list<wcdma>>,
+    /// WLAN access positions. For privacy reasons positioning based on a single WLAN AP is not possible; there has to be at least one other matching wlan or cell. Alternatively, you can allow fallbacks to less accurate single WLAN AP location estimates by using the setting `fallback=singleWifi`.
+    wlan: option<list<wlan-locate>>
+  }
+  post-locate: func(params: post-locate-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export api-information;
+  export location;
+}

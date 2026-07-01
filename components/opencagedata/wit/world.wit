@@ -1,0 +1,55 @@
+package autostamp:opencagedata@0.2.0;
+
+interface v-version {
+  record get-v-version-format-params {
+    /// API version.
+    version: string,
+    /// format of the response. One of 'json', 'xml' or 'map'.
+    format: string,
+    /// string or lat,lng to be geocoded.
+    q: string,
+    /// an application key.
+    key: string,
+    /// when true we attempt to abbreviate the formatted field of results.
+    abbrv: option<bool>,
+    /// when true we include only address details in the formatted field of results.
+    address-only: option<bool>,
+    /// if true the request is included in the response.
+    add-request: option<bool>,
+    /// four coordinate points forming the south-west and north-east corners of a bounding box (min long, min lat, max long, max lat).
+    bounds: option<string>,
+    /// two letter code ISO 3166-1 Alpha 2 code to limit results to that country.
+    countrycode: option<string>,
+    /// wraps the returned JSON with a function name.
+    jsonp: option<string>,
+    /// an IETF format language code (ex: 'es' or 'pt-BR').
+    language: option<string>,
+    /// maximum number of results to return. Default is 10. Maximum is 100.
+    limit: option<s32>,
+    /// integer from 1-10. Only results with at least this confidence are returned.
+    min-confidence: option<s32>,
+    /// when true annotations are not added to results.
+    no-annotations: option<bool>,
+    /// when true results are not deduplicated.
+    no-dedupe: option<bool>,
+    /// when true query content is not logged.
+    no-record: option<bool>,
+    /// when true results are pretty printed. Useful for debugging.
+    pretty: option<bool>,
+    /// lat,lng to bias results.
+    proximity: option<string>,
+    /// match nearest road, include roadinfo annotation
+    roadinfo: option<bool>
+  }
+  get-v-version-format: func(params: get-v-version-format-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export v-version;
+}

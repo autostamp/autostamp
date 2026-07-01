@@ -1,0 +1,524 @@
+package autostamp:braze@0.2.0;
+
+interface export-op {
+  /// Campaign Analytics
+  record campaign-analytics-params {
+    /// (Required) String
+    /// 
+    campaign-id: option<string>,
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>
+  }
+  campaign-analytics: func(params: campaign-analytics-params) -> result<string, string>;
+
+  /// Campaign Details
+  record campaign-details-params {
+    /// (Required) String
+    /// 
+    campaign-id: option<string>
+  }
+  campaign-details: func(params: campaign-details-params) -> result<string, string>;
+
+  /// Campaign List
+  record campaign-list-params {
+    /// (Optional) Integer
+    /// 
+    page: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-archived: option<string>,
+    /// (Optional) String
+    /// 
+    sort-direction: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    last-edit-time-gt: option<string>
+  }
+  campaign-list: func(params: campaign-list-params) -> result<string, string>;
+
+  /// Canvas Data Series Analytics
+  record canvas-data-series-analytics-params {
+    /// (Required) String
+    /// 
+    canvas-id: option<string>,
+    /// (Required) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) DateTime (ISO 8601 string) 
+    /// 
+    starting-at: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    length: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-variant-breakdown: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-step-breakdown: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-deleted-step-data: option<string>
+  }
+  canvas-data-series-analytics: func(params: canvas-data-series-analytics-params) -> result<string, string>;
+
+  /// Canvas Data Analytics Summary
+  record canvas-data-analytics-summary-params {
+    /// (Required) String 
+    /// 
+    canvas-id: option<string>,
+    /// (Required) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    starting-at: option<string>,
+    /// (Optional) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-variant-breakdown: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-step-breakdown: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-deleted-step-data: option<string>
+  }
+  canvas-data-analytics-summary: func(params: canvas-data-analytics-summary-params) -> result<string, string>;
+
+  /// Canvas Details
+  record canvas-details-params {
+    /// (Required) String
+    /// 
+    canvas-id: option<string>
+  }
+  canvas-details: func(params: canvas-details-params) -> result<string, string>;
+
+  /// Canvas List
+  record canvas-list-params {
+    /// (Optional) Integer
+    /// 
+    page: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-archived: option<string>,
+    /// (Optional) String
+    /// 
+    sort-direction: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    last-edit-time-gt: option<string>
+  }
+  canvas-list: func(params: canvas-list-params) -> result<string, string>;
+
+  /// Custom Events Analytics
+  record custom-events-analytics-params {
+    /// (Required) String
+    /// 
+    event: option<string>,
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) String
+    /// 
+    unit: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) String
+    /// 
+    app-id: option<string>,
+    /// (Optional) String
+    /// 
+    segment-id: option<string>
+  }
+  custom-events-analytics: func(params: custom-events-analytics-params) -> result<string, string>;
+
+  /// Custom Events List
+  record custom-events-list-params {
+    /// (Optional) Integer
+    /// 
+    page: option<string>
+  }
+  custom-events-list: func(params: custom-events-list-params) -> result<string, string>;
+
+  /// News Feed Card Analytics
+  record news-feed-card-analytics-params {
+    /// (Required) String
+    /// 
+    card-id: option<string>,
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) String
+    /// 
+    unit: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>
+  }
+  news-feed-card-analytics: func(params: news-feed-card-analytics-params) -> result<string, string>;
+
+  /// News Feed Cards Details
+  record news-feed-cards-details-params {
+    /// (Required) String
+    /// 
+    card-id: option<string>
+  }
+  news-feed-cards-details: func(params: news-feed-cards-details-params) -> result<string, string>;
+
+  /// News Feed Cards List
+  record news-feed-cards-list-params {
+    /// (Optional) Integer
+    /// 
+    page: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-archived: option<string>,
+    /// (Optional) String
+    /// 
+    sort-direction: option<string>
+  }
+  news-feed-cards-list: func(params: news-feed-cards-list-params) -> result<string, string>;
+
+  /// Daily Active Users by Date
+  record daily-active-users-by-date-params {
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) String
+    /// 
+    app-id: option<string>
+  }
+  daily-active-users-by-date: func(params: daily-active-users-by-date-params) -> result<string, string>;
+
+  /// Monthly Active Users for Last 30 Days
+  record monthly-active-users-for-last30-days-params {
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) String
+    /// 
+    app-id: option<string>
+  }
+  monthly-active-users-for-last30-days: func(params: monthly-active-users-for-last30-days-params) -> result<string, string>;
+
+  /// Daily New Users by Date
+  record daily-new-users-by-date-params {
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) String
+    /// 
+    app-id: option<string>
+  }
+  daily-new-users-by-date: func(params: daily-new-users-by-date-params) -> result<string, string>;
+
+  /// KPIs for Daily App Uninstalls by Date
+  record kp-is-for-daily-app-uninstalls-by-date-params {
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) String
+    /// 
+    app-id: option<string>
+  }
+  kp-is-for-daily-app-uninstalls-by-date: func(params: kp-is-for-daily-app-uninstalls-by-date-params) -> result<string, string>;
+
+  /// Segment Analytics
+  record segment-analytics-params {
+    /// (Required) String
+    /// 
+    segment-id: option<string>,
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>
+  }
+  segment-analytics: func(params: segment-analytics-params) -> result<string, string>;
+
+  /// Segment Details
+  record segment-details-params {
+    /// (Required) String
+    /// 
+    segment-id: option<string>
+  }
+  segment-details: func(params: segment-details-params) -> result<string, string>;
+
+  /// Segment List
+  record segment-list-params {
+    /// (Optional) Integer
+    /// 
+    page: option<string>,
+    /// (Optional) String
+    /// 
+    sort-direction: option<string>
+  }
+  segment-list: func(params: segment-list-params) -> result<string, string>;
+
+  /// Send Analytics
+  record send-analytics-params {
+    /// (Required) String
+    /// 
+    campaign-id: option<string>,
+    /// (Required) String
+    /// 
+    send-id: option<string>,
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) Datetime ISO 8601 string
+    /// 
+    ending-at: option<string>
+  }
+  send-analytics: func(params: send-analytics-params) -> result<string, string>;
+
+  /// App Sessions by Time
+  record app-sessions-by-time-params {
+    /// (Required) Integer
+    /// 
+    length: option<string>,
+    /// (Optional) String
+    /// 
+    unit: option<string>,
+    /// (Optional) DateTime (ISO 8601 string)
+    /// 
+    ending-at: option<string>,
+    /// (Optional) String
+    /// 
+    app-id: option<string>,
+    /// (Optional) String
+    /// 
+    segment-id: option<string>
+  }
+  app-sessions-by-time: func(params: app-sessions-by-time-params) -> result<string, string>;
+
+}
+
+
+interface messaging {
+  record schedule-api-triggered-canvases-body-audience {
+    and: option<list<schedule-api-triggered-canvases-body-audience-and-item>>
+  }
+
+  record schedule-api-triggered-canvases-body-audience-and-item {
+    custom-attribute: option<schedule-api-triggered-canvases-body-audience-and-item-custom-attribute>
+  }
+
+  record schedule-api-triggered-canvases-body-audience-and-item-custom-attribute {
+    comparison: option<string>,
+    custom-attribute-name: option<string>,
+    value: option<string>
+  }
+
+  record schedule-api-triggered-canvases-body-canvas-entry-properties {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record schedule-api-triggered-canvases-body-recipients-item {
+    canvas-entry-properties: option<schedule-api-triggered-canvases-body-recipients-item-canvas-entry-properties>,
+    external-user-id: option<string>,
+    trigger-properties: option<string>,
+    user-alias: option<string>
+  }
+
+  record schedule-api-triggered-canvases-body-recipients-item-canvas-entry-properties {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record schedule-api-triggered-canvases-body-schedule {
+    at-optimal-time: option<bool>,
+    in-local-time: option<bool>,
+    time: option<string>
+  }
+
+  /// Schedule API Triggered Canvases
+  record schedule-api-triggered-canvases-params {
+    audience: option<schedule-api-triggered-canvases-body-audience>,
+    broadcast: option<bool>,
+    canvas-entry-properties: option<schedule-api-triggered-canvases-body-canvas-entry-properties>,
+    canvas-id: option<string>,
+    recipients: option<list<schedule-api-triggered-canvases-body-recipients-item>>,
+    schedule: option<schedule-api-triggered-canvases-body-schedule>
+  }
+  schedule-api-triggered-canvases: func(params: schedule-api-triggered-canvases-params) -> result<string, string>;
+
+  /// Get Upcoming Scheduled Campaigns and Canvases
+  record get-upcoming-scheduled-campaigns-and-canvases-params {
+    /// (Required) String in ISO 8601 format
+    /// 
+    end-time: option<string>
+  }
+  get-upcoming-scheduled-campaigns-and-canvases: func(params: get-upcoming-scheduled-campaigns-and-canvases-params) -> result<string, string>;
+
+}
+
+interface templates {
+  /// See Content Block Information
+  record see-content-block-information-params {
+    /// (Required) String
+    /// 
+    content-block-id: option<string>,
+    /// (Optional) Boolean
+    /// 
+    include-inclusion-data: option<string>
+  }
+  see-content-block-information: func(params: see-content-block-information-params) -> result<string, string>;
+
+  /// List Available Content Blocks
+  record list-available-content-blocks-params {
+    /// (Optional) String in ISO 8601
+    /// 
+    modified-after: option<string>,
+    /// (Optional) String in ISO 8601
+    /// 
+    modified-before: option<string>,
+    /// (Optional) Positive Number
+    /// 
+    limit: option<string>,
+    /// (Optional) Positive Number
+    /// 
+    offset: option<string>
+  }
+  list-available-content-blocks: func(params: list-available-content-blocks-params) -> result<string, string>;
+
+  /// See Email Template Information
+  record see-email-template-information-params {
+    /// (Required) String
+    /// 
+    email-template-id: option<string>
+  }
+  see-email-template-information: func(params: see-email-template-information-params) -> result<string, string>;
+
+  /// List Available Email Templates
+  record list-available-email-templates-params {
+    /// (Optional) String in ISO 8601
+    /// 
+    modified-after: option<string>,
+    /// (Optional) String in ISO 8601
+    /// 
+    modified-before: option<string>,
+    /// (Optional) Positive Number
+    /// 
+    limit: option<string>,
+    /// (Optional) Positive Number
+    /// 
+    offset: option<string>
+  }
+  list-available-email-templates: func(params: list-available-email-templates-params) -> result<string, string>;
+
+}
+
+interface email-lists-addresses {
+  /// Query Hard Bounced Emails
+  record query-hard-bounced-emails-params {
+    /// (Optional*) String in YYYY-MM-DD format 
+    /// 
+    start-date: option<string>,
+    /// (Optional*) String in YYYY-MM-DD format
+    /// 
+    end-date: option<string>,
+    /// (Optional) Integer
+    /// 
+    limit: option<string>,
+    /// (Optional) Integer
+    /// 
+    offset: option<string>,
+    /// (Optional*) String
+    /// 
+    email: option<string>
+  }
+  query-hard-bounced-emails: func(params: query-hard-bounced-emails-params) -> result<string, string>;
+
+  /// Query List of Unsubscribed Email Addresses
+  record query-list-of-unsubscribed-email-addresses-params {
+    /// (Optional*) String in YYYY-MM-DD format
+    /// 
+    start-date: option<string>,
+    /// (Optional*)  String in YYYY-MM-DD format
+    /// 
+    end-date: option<string>,
+    /// (Optional) Integer
+    /// 
+    limit: option<string>,
+    /// (Optional) Integer 
+    /// 
+    offset: option<string>,
+    /// (Optional) String
+    /// 
+    sort-direction: option<string>,
+    /// (Optional*) String
+    /// 
+    email: option<string>
+  }
+  query-list-of-unsubscribed-email-addresses: func(params: query-list-of-unsubscribed-email-addresses-params) -> result<string, string>;
+
+}
+
+interface subscription-groups {
+  /// List User's  Subscription Group Status - SMS
+  record list-user-s-subscription-group-status-sms-params {
+    /// (Required) String
+    /// 
+    subscription-group-id: option<string>,
+    /// (Required*) String
+    /// 
+    external-id: option<string>,
+    /// (Required*) String
+    /// 
+    phone: option<string>
+  }
+  list-user-s-subscription-group-status-sms: func(params: list-user-s-subscription-group-status-sms-params) -> result<string, string>;
+
+  /// List User's Subscription Group - SMS
+  record list-user-s-subscription-group-sms-params {
+    /// (Required*) String
+    /// 
+    external-id: option<string>,
+    /// (Optional) Integer
+    /// 
+    limit: option<string>,
+    /// (Optional) Integer
+    /// 
+    offset: option<string>,
+    /// (Required*) String
+    /// 
+    phone: option<string>
+  }
+  list-user-s-subscription-group-sms: func(params: list-user-s-subscription-group-sms-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export export-op;
+  export messaging;
+  export templates;
+  export email-lists-addresses;
+  export subscription-groups;
+}

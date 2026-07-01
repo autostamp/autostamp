@@ -1,0 +1,23 @@
+[package]
+name = "autostamp:stripe"
+version = "0.2.0+stripe-2022-11-15"
+registry = "ghcr.io/autostamp/stripe"
+kind = "component"
+file = "build/stripe.wasm"
+description = "WebAssembly component bindings for the stripe API, generated from an OpenAPI document."
+source = "https://github.com/yoshuawuyts/openapi-bindgen"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies.components]
+
+[dependencies.interfaces."wasi:http"]
+registry = "ghcr.io"
+namespace = "webassembly"
+package = "wasi/http"
+version = "0.2.3"
+
+[dependencies.interfaces."wasmcloud:secrets"]
+registry = "ghcr.io"
+namespace = "wasmcloud"
+package = "interfaces/wasmcloud/secrets"
+version = "1.0.0"

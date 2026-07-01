@@ -1,0 +1,3822 @@
+package autostamp:zuora@0.2.0;
+
+interface charge-metrics {
+  /// List charge metrics by time range
+  record get-charge-metrics-params {
+    /// The starting date and time of a time range when changes are made to charge metrics, in `yyyy-mm-ddThh:mm:ssZ` format. For example, `2020-08-18T09:01:11Z`. The timestamp maps to the `UpdatedOn` timestamp of the to-be-exported object.
+    from-timestamp: string,
+    /// The end date and time of a time range when changes are made to charge metrics, in `yyyy-mm-ddThh:mm:ssZ` format. For example, `2020-08-20T09:01:11Z`. The timestamp maps to the `UpdatedOn` timestamp of the to-be-exported object.
+    to-timestamp: string
+  }
+  get-charge-metrics: func(params: get-charge-metrics-params) -> result<string, string>;
+
+  /// List discount allocation details by time range
+  record get-charge-metrics-discount-allocation-details-params {
+    /// The starting date and time of a time range when changes are made to charge metrics, in `yyyy-mm-ddThh:mm:ssZ` format. For example, `2020-08-18T09:01:11Z`. The timestamp maps to the `UpdatedOn` timestamp of the to-be-exported object.
+    from-timestamp: string,
+    /// The end date and time of a time range when changes are made to charge metrics, in `yyyy-mm-ddThh:mm:ssZ` format. For example, `2020-08-20T09:01:11Z`. The timestamp maps to the `UpdatedOn` timestamp of the to-be-exported object.
+    to-timestamp: string
+  }
+  get-charge-metrics-discount-allocation-details: func(params: get-charge-metrics-discount-allocation-details-params) -> result<string, string>;
+
+}
+
+
+interface event-triggers {
+  /// List event triggers
+  record get-event-triggers-params {
+    /// The Zuora object that trigger condition is defined upon. Should be specified in the pattern: ^[A-Z][\\w\\-]*$
+    base-object: option<string>,
+    /// The event type name. Should be specified in the pattern: ^[A-Za-z]{1,}[\w\-]*$
+    event-type-name: option<string>,
+    /// The status of the event trigger.
+    active: option<string>,
+    /// The first index of the query result. Default to 0 if absent, and the minimum is 0.
+    start: option<s32>,
+    /// The maximum number of data records to be returned. Default to 10 if absent.
+    limit: option<s32>
+  }
+  get-event-triggers: func(params: get-event-triggers-params) -> result<string, string>;
+
+  /// Create an event trigger
+  post-event-trigger: func() -> result<string, string>;
+
+  /// Retrieve an event trigger
+  record get-event-trigger-params {
+    id: string
+  }
+  get-event-trigger: func(params: get-event-trigger-params) -> result<string, string>;
+
+  /// Update an event trigger
+  record put-event-trigger-params {
+    id: string
+  }
+  put-event-trigger: func(params: put-event-trigger-params) -> result<string, string>;
+
+  /// Delete an event trigger
+  record delete-event-trigger-params {
+    id: string
+  }
+  delete-event-trigger: func(params: delete-event-trigger-params) -> result<string, string>;
+
+}
+
+interface notifications {
+  /// List email templates
+  record get-query-email-templates-params {
+    /// The first index of the query result.
+    start: option<s32>,
+    /// The maximum number of results the query should return.
+    limit: option<s32>,
+    /// The name of the event.
+    event-type-name: option<string>,
+    /// The name of the email template.
+    name: option<string>
+  }
+  get-query-email-templates: func(params: get-query-email-templates-params) -> result<string, string>;
+
+  /// Create an email template
+  post-create-email-template: func() -> result<string, string>;
+
+  /// Retrieve an email template
+  record get-get-email-template-params {
+    /// The ID of the email template.
+    id: string
+  }
+  get-get-email-template: func(params: get-get-email-template-params) -> result<string, string>;
+
+  /// Update an email template
+  record put-update-email-template-params {
+    /// The ID of the email template to be updated.
+    id: string
+  }
+  put-update-email-template: func(params: put-update-email-template-params) -> result<string, string>;
+
+  /// Delete an email template
+  record delete-delete-email-template-params {
+    /// The ID of the email template to be deleted.
+    id: string
+  }
+  delete-delete-email-template: func(params: delete-delete-email-template-params) -> result<string, string>;
+
+  /// Delete notification histories for an account
+  record delete-delete-notification-history-for-account-params {
+    /// The ID of the account whose notification histories are to be deleted.
+    account-id: string
+  }
+  delete-delete-notification-history-for-account: func(params: delete-delete-notification-history-for-account-params) -> result<string, string>;
+
+  /// Retrieve a notification history deletion task
+  record get-get-notification-history-deletion-task-params {
+    /// The ID of the notification history deletion task. You can get the deletion task ID from the 202 response body of the [Delete notification histories for an account](https://www.zuora.com/developer/api-reference/#operation/DELETE_Delete_Notification_History_For_Account) operation.
+    id: string
+  }
+  get-get-notification-history-deletion-task: func(params: get-get-notification-history-deletion-task-params) -> result<string, string>;
+
+  /// List notification definitions
+  record get-query-notification-definitions-params {
+    /// The first index of the query result.
+    start: option<s32>,
+    /// The maximum number of results the query should return.
+    limit: option<s32>,
+    /// Id of the profile.
+    profile-id: option<string>,
+    /// The name of the event.
+    event-type-name: option<string>,
+    /// The ID of the email template.
+    email-template-id: option<string>
+  }
+  get-query-notification-definitions: func(params: get-query-notification-definitions-params) -> result<string, string>;
+
+  /// Create a notification definition
+  post-create-notification-definition: func() -> result<string, string>;
+
+  /// Retrieve a notification definition
+  record get-get-notification-definition-params {
+    /// The ID of the notification definition.
+    id: string
+  }
+  get-get-notification-definition: func(params: get-get-notification-definition-params) -> result<string, string>;
+
+  /// Update a notification definition
+  record put-update-notification-definition-params {
+    /// The ID of the notification definition to be updated.
+    id: string
+  }
+  put-update-notification-definition: func(params: put-update-notification-definition-params) -> result<string, string>;
+
+  /// Delete a notification definition
+  record delete-delete-notification-definition-params {
+    /// The ID of the notification definition to be deleted.
+    id: string
+  }
+  delete-delete-notification-definition: func(params: delete-delete-notification-definition-params) -> result<string, string>;
+
+  /// List callout notification histories
+  record get-callout-history-params {
+    /// The final date and time of records to be returned. Defaults to now. Use format yyyy-MM-ddTHH:mm:ss.
+    end-time: option<string>,
+    /// The initial date and time of records to be returned. Defaults to (end time - 1 day). Use format yyyy-MM-ddTHH:mm:ss.
+    start-time: option<string>,
+    /// The ID of an object that triggered a callout notification. 
+    /// 
+    object-id: option<string>,
+    /// If `true`, only return failed records. If `false`, return all records in the given date range. The default value is `true`.
+    /// 
+    failed-only: option<bool>,
+    /// Category of records to be returned by event category.
+    /// 
+    event-category: option<string>,
+    include-response-content: option<bool>
+  }
+  get-callout-history: func(params: get-callout-history-params) -> result<string, string>;
+
+  /// List email notification histories
+  record get-email-history-params {
+    /// The end date and time of records to be returned. Defaults to now. Use format yyyy-MM-ddTHH:mm:ss. The maximum date range (endTime - startTime) is three days.
+    end-time: option<string>,
+    /// The initial date and time of records to be returned. Defaults to (end time - 1 day). Use format yyyy-MM-ddTHH:mm:ss. The maximum date range (endTime - startTime) is three days.
+    start-time: option<string>,
+    /// The Id of an object that triggered an email notification.
+    /// 
+    object-id: option<string>,
+    /// If `true`, only returns failed records. When `false`, returns all records in the given date range. Defaults to `true` when not specified.
+    /// 
+    failed-only: option<bool>,
+    /// Category of records to be returned by event category.
+    /// 
+    event-category: option<string>
+  }
+  get-email-history: func(params: get-email-history-params) -> result<string, string>;
+
+}
+
+interface o-auth {
+  /// Create an OAuth token
+  create-token: func() -> result<string, string>;
+
+}
+
+interface custom-object-records {
+  /// Update or delete custom object records
+  record post-custom-object-records-batch-update-or-delete-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string
+  }
+  post-custom-object-records-batch-update-or-delete: func(params: post-custom-object-records-batch-update-or-delete-params) -> result<string, string>;
+
+  /// List records for a custom object
+  record get-all-records-for-custom-object-type-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string,
+    /// The query string to filter the records of a custom object. See the [Query syntax of custom object records](https://knowledgecenter.zuora.com/BB_Introducing_Z_Business/Data_Model/Custom_object_records/Query_syntax_of_custom_object_records) for more information.
+    /// 
+    q: option<string>,
+    /// UUIDs of the records to be queried. For example:
+    /// 
+    ids: option<string>,
+    /// Page size. The value must be between 1 and 1000.
+    page-size: option<s32>,
+    /// The `cursor` points to the last record of the previous result set. The cursor record is not included in the query result. The call returns the first page if `cursor` is not provided and `pageSize` is valid.
+    cursor: option<string>
+  }
+  get-all-records-for-custom-object-type: func(params: get-all-records-for-custom-object-type-params) -> result<string, string>;
+
+  /// Create custom object records
+  record post-custom-object-records-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string
+  }
+  post-custom-object-records: func(params: post-custom-object-records-params) -> result<string, string>;
+
+  /// Retrieve a custom object record
+  record get-custom-object-record-by-id-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string,
+    /// Id identifier in uuid form
+    id: string
+  }
+  get-custom-object-record-by-id: func(params: get-custom-object-record-by-id-params) -> result<string, string>;
+
+  /// Update a custom object record
+  record put-custom-object-record-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string,
+    /// Id identifier in uuid form
+    id: string
+  }
+  put-custom-object-record: func(params: put-custom-object-record-params) -> result<string, string>;
+
+  /// Partially update a custom object record
+  record patch-partial-update-custom-object-record-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string,
+    /// Id identifier in uuid form
+    id: string
+  }
+  patch-partial-update-custom-object-record: func(params: patch-partial-update-custom-object-record-params) -> result<string, string>;
+
+  /// Delete a custom object record
+  record delete-custom-object-record-by-id-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string,
+    /// Id identifier in uuid form
+    id: string
+  }
+  delete-custom-object-record-by-id: func(params: delete-custom-object-record-by-id-params) -> result<string, string>;
+
+}
+
+interface custom-object-definitions {
+  enum get-all-custom-object-definitions-in-namespace-select-enum {
+    type-op,
+  }
+
+  /// List custom object definitions
+  record get-all-custom-object-definitions-in-namespace-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// If you set `select` to `type`, the response will only contain the `type` of each custom object.
+    select: option<get-all-custom-object-definitions-in-namespace-select-enum>
+  }
+  get-all-custom-object-definitions-in-namespace: func(params: get-all-custom-object-definitions-in-namespace-params) -> result<string, string>;
+
+  /// Create custom object definitions
+  record post-custom-object-definitions-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>
+  }
+  post-custom-object-definitions: func(params: post-custom-object-definitions-params) -> result<string, string>;
+
+  /// Retrieve a custom object definition
+  record get-custom-object-definition-by-type-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string
+  }
+  get-custom-object-definition-by-type: func(params: get-custom-object-definition-by-type-params) -> result<string, string>;
+
+  /// Delete a custom object definition
+  record delete-custom-object-definition-by-type-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Specifies the custom object's API name as object. It is case-sensitive.
+    object: string
+  }
+  delete-custom-object-definition-by-type: func(params: delete-custom-object-definition-by-type-params) -> result<string, string>;
+
+  /// Update a custom object definition
+  record post-update-custom-object-definition-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>
+  }
+  post-update-custom-object-definition: func(params: post-update-custom-object-definition-params) -> result<string, string>;
+
+}
+
+interface custom-object-jobs {
+  /// List all custom object bulk jobs
+  record get-all-custom-object-bulk-jobs-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// Page size of the result. The maximum page size is 100. The defaut page size is 25.
+    page-size: option<s32>,
+    /// The `cursor` points to the last job of the previous result set. The cursor job is not included in this query result. The call returns the first page if `cursor` is not provided and `pageSize` is valid.
+    cursor: option<string>
+  }
+  get-all-custom-object-bulk-jobs: func(params: get-all-custom-object-bulk-jobs-params) -> result<string, string>;
+
+  /// Submit a custom object bulk job
+  record post-custom-object-bulk-job-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>
+  }
+  post-custom-object-bulk-job: func(params: post-custom-object-bulk-job-params) -> result<string, string>;
+
+  /// Retrieve a custom object bulk job
+  record get-custom-object-bulk-job-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// The ID of the custom object bulk job to be retrieved.
+    id: string
+  }
+  get-custom-object-bulk-job: func(params: get-custom-object-bulk-job-params) -> result<string, string>;
+
+  /// List all errors for a custom object bulk job
+  record get-custom-object-bulk-job-errors-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// The ID of the custom object bulk job that you retrieve errors for.
+    id: string
+  }
+  get-custom-object-bulk-job-errors: func(params: get-custom-object-bulk-job-errors-params) -> result<string, string>;
+
+  /// Upload a file for a custom object bulk job
+  record post-upload-file-for-custom-object-bulk-job-params {
+    /// API version that determines the response schema. The default version is used if this parameter is not included. Specify `Zuora-Version` in the request header if you expect a specific response schema.
+    zuora-version: option<string>,
+    /// The `Content-Type` of the request must be `text/csv`.
+    content-type: string,
+    /// The ID of the custom object bulk job that the file is uploaded to.
+    id: string
+  }
+  post-upload-file-for-custom-object-bulk-job: func(params: post-upload-file-for-custom-object-bulk-job-params) -> result<string, string>;
+
+}
+
+interface data-queries {
+  enum get-data-query-jobs-query-status-enum {
+    accepted,
+    in-progress,
+    completed,
+    failed,
+    cancelled,
+  }
+
+  /// List data query jobs
+  record get-data-query-jobs-params {
+    /// Filters the list of query jobs by status.
+    query-status: option<get-data-query-jobs-query-status-enum>,
+    /// Specifies the maximum number of query jobs to return.
+    page-size: option<s32>
+  }
+  get-data-query-jobs: func(params: get-data-query-jobs-params) -> result<string, string>;
+
+  /// Submit a data query
+  post-data-query-job: func() -> result<string, string>;
+
+  /// Retrieve a data query job
+  record get-data-query-job-params {
+    /// Internal identifier of the query job.
+    job-id: string
+  }
+  get-data-query-job: func(params: get-data-query-job-params) -> result<string, string>;
+
+  /// Cancel a data query job
+  record delete-data-query-job-params {
+    /// Internal identifier of the query job.
+    job-id: string
+  }
+  delete-data-query-job: func(params: delete-data-query-job-params) -> result<string, string>;
+
+}
+
+interface settings {
+  enum children-setting-value-request-method-enum {
+    get,
+    head,
+    post,
+    put,
+    patch,
+    delete,
+    options,
+    trace,
+  }
+
+  record setting-value-request {
+    body: option<body-in-setting-value-request>,
+    /// An array of requests that can only be executed after its parent request has been executed successfully.
+    children: option<list<children-setting-value-request>>,
+    /// The id of the request. You can set it to any string. It must be unique within the whole batch.
+    id: option<string>,
+    /// One of the HTTP methods supported by the setting endpoint, for example, GET,PUT,POST or DELETE.
+    method: option<children-setting-value-request-method-enum>,
+    /// The relative URL of the setting. It is the same as in the `pathPattern` field in the response body of [Listing all Settings](https://www.zuora.com/developer/api-reference/#operation/GET_ListAllSettings). For example, `/billing-rules`.
+    url: option<string>
+  }
+
+  /// Request payload if any
+  record body-in-setting-value-request {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record children-setting-value-request {
+    body: option<body-in-setting-value-request>,
+    /// The id of the request. You can set it to any string. It must be unique within the whole batch.
+    id: option<string>,
+    /// One of the HTTP methods supported by the setting endpoint, for example, GET,PUT,POST or DELETE.
+    method: option<children-setting-value-request-method-enum>,
+    /// The relative URL of the setting. It is the same as in the `pathPattern` field in the response body of [Listing all settings](https://www.zuora.com/developer/api-reference/#operation/GET_ListAllSettings). For example, `/billing-rules`.
+    url: option<string>
+  }
+
+  /// Submit settings requests
+  record post-process-settings-batch-request-params {
+    requests: option<list<setting-value-request>>
+  }
+  post-process-settings-batch-request: func(params: post-process-settings-batch-request-params) -> result<string, string>;
+
+  /// List all settings
+  record get-list-all-settings-params {
+    /// Specifies response media type. If you omit the `Accept` header parameter, the response body is by default in JSON format. If you include `Accept` header parameter and set it to `application/csv`, the response body is in csv format.
+    accept: option<string>
+  }
+  get-list-all-settings: func(params: get-list-all-settings-params) -> result<string, string>;
+
+}
+
+interface accounting-codes {
+  /// List all accounting codes
+  get-all-accounting-codes: func() -> result<string, string>;
+
+  /// Create an accounting code
+  post-accounting-code: func() -> result<string, string>;
+
+  /// Retrieve an accounting code
+  record get-accounting-code-params {
+    /// ID of the accounting code you want to query.
+    ac-id: string
+  }
+  get-accounting-code: func(params: get-accounting-code-params) -> result<string, string>;
+
+  /// Update an accounting code
+  record put-accounting-code-params {
+    /// ID of the accounting code you want to update.
+    ac-id: string
+  }
+  put-accounting-code: func(params: put-accounting-code-params) -> result<string, string>;
+
+  /// Delete an accounting code
+  record delete-accounting-code-params {
+    /// ID of the accounting code you want to delete.
+    ac-id: string
+  }
+  delete-accounting-code: func(params: delete-accounting-code-params) -> result<string, string>;
+
+  /// Activate an accounting code
+  record put-activate-accounting-code-params {
+    /// ID of the accounting code you want to activate.
+    ac-id: string
+  }
+  put-activate-accounting-code: func(params: put-activate-accounting-code-params) -> result<string, string>;
+
+  /// Deactivate an accounting code
+  record put-deactivate-accounting-code-params {
+    /// ID of the accounting code you want to deactivate.
+    ac-id: string
+  }
+  put-deactivate-accounting-code: func(params: put-deactivate-accounting-code-params) -> result<string, string>;
+
+}
+
+interface accounting-periods {
+  /// List all accounting periods
+  get-all-accounting-periods: func() -> result<string, string>;
+
+  /// Create an accounting period
+  post-accounting-period: func() -> result<string, string>;
+
+  /// Retrieve an accounting period
+  record get-accounting-period-params {
+    /// ID of the accounting period you want to get.
+    ap-id: string
+  }
+  get-accounting-period: func(params: get-accounting-period-params) -> result<string, string>;
+
+  /// Update an accounting period
+  record put-update-accounting-period-params {
+    /// ID of the accounting period you want to update.
+    ap-id: string
+  }
+  put-update-accounting-period: func(params: put-update-accounting-period-params) -> result<string, string>;
+
+  /// Delete an accounting period
+  record delete-accounting-period-params {
+    /// ID of the accounting period you want to delete.
+    ap-id: string
+  }
+  delete-accounting-period: func(params: delete-accounting-period-params) -> result<string, string>;
+
+  /// Close an accounting period
+  record put-close-accounting-period-params {
+    /// ID of the accounting period you want to close.
+    ap-id: string
+  }
+  put-close-accounting-period: func(params: put-close-accounting-period-params) -> result<string, string>;
+
+  /// Set an accounting period to pending close
+  record put-pending-close-accounting-period-params {
+    /// ID of the accounting period you want to set to pending close.
+    ap-id: string
+  }
+  put-pending-close-accounting-period: func(params: put-pending-close-accounting-period-params) -> result<string, string>;
+
+  /// Reopen an accounting period
+  record put-reopen-accounting-period-params {
+    /// ID of the accounting period that you want to re-open.
+    ap-id: string
+  }
+  put-reopen-accounting-period: func(params: put-reopen-accounting-period-params) -> result<string, string>;
+
+  /// Run trial balance
+  record put-run-trial-balance-params {
+    /// ID of the accounting period for which you want to run a trial balance.
+    ap-id: string
+  }
+  put-run-trial-balance: func(params: put-run-trial-balance-params) -> result<string, string>;
+
+}
+
+interface accounts {
+  /// Create an account
+  record post-account-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>
+  }
+  post-account: func(params: post-account-params) -> result<string, string>;
+
+  /// Retrieve an account
+  record get-account-params {
+    /// Account number or account ID.
+    account-key: string
+  }
+  get-account: func(params: get-account-params) -> result<string, string>;
+
+  /// Update an account
+  record put-account-params {
+    /// Account number or account ID.
+    account-key: string
+  }
+  put-account: func(params: put-account-params) -> result<string, string>;
+
+  /// Retrieve an account summary
+  record get-account-summary-params {
+    /// Account number or account ID.
+    account-key: string
+  }
+  get-account-summary: func(params: get-account-summary-params) -> result<string, string>;
+
+  /// CRUD: Create an account
+  object-post-account: func() -> result<string, string>;
+
+  /// CRUD: Retrieve an account
+  record object-get-account-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-account: func(params: object-get-account-params) -> result<string, string>;
+
+  /// CRUD: Update an account
+  record object-put-account-params {
+    /// Object id
+    id: string
+  }
+  object-put-account: func(params: object-put-account-params) -> result<string, string>;
+
+  /// CRUD: Delete an account
+  record object-delete-account-params {
+    /// Object id
+    id: string
+  }
+  object-delete-account: func(params: object-delete-account-params) -> result<string, string>;
+
+}
+
+interface billing-documents {
+  enum get-billing-documents-status-enum {
+    draft,
+    posted,
+    canceled,
+    error,
+  }
+
+  /// Create a job to hard delete billing document files
+  post-billing-document-files-deletion-job: func() -> result<string, string>;
+
+  /// Retrieve a job of hard deleting billing document files
+  record get-billing-document-files-deletion-job-params {
+    /// The unique ID of a billing document file deletion job. For example, 2c92c8f83dc4f752013dc72c24ee016c.
+    job-id: string
+  }
+  get-billing-document-files-deletion-job: func(params: get-billing-document-files-deletion-job-params) -> result<string, string>;
+
+  /// Generate billing documents by account ID
+  record post-generate-billing-documents-params {
+    /// The ID of the customer account that billing documents are generated for. For example, 8a8082e65b27f6c3015ba3e326b26419.
+    id: string
+  }
+  post-generate-billing-documents: func(params: post-generate-billing-documents-params) -> result<string, string>;
+
+  /// List billing documents for an account
+  record get-billing-documents-params {
+    /// The ID of the customer account that the billing documents are associated with. 
+    account-id: string,
+    /// The date of the billing document. It represents the invoice date for invoices, credit memo date for credit memos, and debit memo date for debit memos.
+    document-date: option<string>,
+    /// The status of the billing document.
+    status: option<get-billing-documents-status-enum>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-billing-documents: func(params: get-billing-documents-params) -> result<string, string>;
+
+}
+
+interface actions {
+  /// Amend
+  action-pos-tamend: func() -> result<string, string>;
+
+  /// Create
+  action-pos-tcreate: func() -> result<string, string>;
+
+  /// Delete
+  action-pos-tdelete: func() -> result<string, string>;
+
+  /// Execute
+  action-pos-texecute: func() -> result<string, string>;
+
+  /// Generate
+  action-pos-tgenerate: func() -> result<string, string>;
+
+  /// Query
+  action-pos-tquery: func() -> result<string, string>;
+
+  /// QueryMore
+  action-pos-tquery-more: func() -> result<string, string>;
+
+  /// Subscribe
+  action-pos-tsubscribe: func() -> result<string, string>;
+
+  /// Update
+  action-pos-tupdate: func() -> result<string, string>;
+
+}
+
+interface amendments {
+  /// List all amendments of a subscription
+  record get-amendments-by-subscription-id-params {
+    /// The ID of the subscription whose amendment changes you want to retrieve.
+    subscription-id: string
+  }
+  get-amendments-by-subscription-id: func(params: get-amendments-by-subscription-id-params) -> result<string, string>;
+
+  /// Retrieve an amendment
+  record get-amendments-by-key-params {
+    /// Can be the amendment ID or the amendment code.
+    amendment-key: string
+  }
+  get-amendments-by-key: func(params: get-amendments-by-key-params) -> result<string, string>;
+
+  /// CRUD: Retrieve an amendment
+  record object-get-amendment-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-amendment: func(params: object-get-amendment-params) -> result<string, string>;
+
+  /// CRUD: Update an amendment
+  record object-put-amendment-params {
+    /// Object id
+    id: string
+  }
+  object-put-amendment: func(params: object-put-amendment-params) -> result<string, string>;
+
+  /// CRUD: Delete an amendment
+  record object-delete-amendment-params {
+    /// Object id
+    id: string
+  }
+  object-delete-amendment: func(params: object-delete-amendment-params) -> result<string, string>;
+
+}
+
+interface orders {
+  /// Retrieve the status and response of a job
+  record get-job-status-and-response-params {
+    /// UUID of the asynchronous job created by an asynchronous API operation.
+    job-id: string
+  }
+  get-job-status-and-response: func(params: get-job-status-and-response-params) -> result<string, string>;
+
+  /// Create an order asynchronously
+  record post-create-order-asynchronously-params {
+    /// Specify whether to return IDs for the [Get job status and response](https://www.zuora.com/developer/api-reference/#operation/GET_JobStatusAndResponse) operation. If you set this query parameter to `true`, the corresponding IDs, which are associated with the numbers returned in this operation, can be returned in the "Get job status and response" response body.
+    return-ids: option<bool>,
+    /// 
+    /// The minor version of the Zuora REST API. 
+    zuora-version: option<string>
+  }
+  post-create-order-asynchronously: func(params: post-create-order-asynchronously-params) -> result<string, string>;
+
+  /// Preview an order asynchronously
+  post-preview-order-asynchronously: func() -> result<string, string>;
+
+  /// List orders
+  record get-all-orders-params {
+    /// The page number of the orders retrieved. 
+    page: option<s32>,
+    /// The date type to filter on. This field value can be orderDate or updatedDate. Default is orderDate.
+    date-filter-option: option<string>,
+    /// The result will only contain the orders with the date of dateFilterOption later than or equal to this date.
+    start-date: option<string>,
+    /// The result will only contains orders with the date of dateFilterOption earlier than or equal to this date.
+    end-date: option<string>
+  }
+  get-all-orders: func(params: get-all-orders-params) -> result<string, string>;
+
+  /// Create an order
+  record post-order-params {
+    /// Specify whether to return IDs associated with the numbers returned in the "Create an order" operation.
+    return-ids: option<bool>,
+    /// 
+    /// The minor version of the Zuora REST API. 
+    zuora-version: option<string>
+  }
+  post-order: func(params: post-order-params) -> result<string, string>;
+
+  /// List orders of an invoice owner
+  record get-orders-by-invoice-owner-params {
+    /// The invoice owner account number.
+    account-number: string,
+    /// The page number of the orders retrieved. The default is 1.
+    page: option<s32>,
+    /// The date type to filter on. This field value can be orderDate or updatedDate. Default is orderDate.
+    date-filter-option: option<string>,
+    /// The result will only contain the orders with the date of dateFilterOption later than or equal to this date.
+    start-date: option<string>,
+    /// The result will only contain the orders with the date of dateFilterOption earlier than or equal to this date.
+    end-date: option<string>
+  }
+  get-orders-by-invoice-owner: func(params: get-orders-by-invoice-owner-params) -> result<string, string>;
+
+  /// Preview an order
+  post-preview-order: func() -> result<string, string>;
+
+  /// List orders by subscription number
+  record get-orders-by-subscription-number-params {
+    /// The subscription number.
+    subscription-number: string,
+    /// The page number of the orders retrieved. The default is '1'.
+    page: option<s32>,
+    /// The date type to filter on. This field value can be 'orderDate' or 'updatedDate'. Default is orderDate.
+    date-filter-option: option<string>,
+    /// The result will only contain the orders with the date of 'dateFilterOption' later than or equal to this date.
+    start-date: option<string>,
+    /// The result will only contain the orders with the date of 'dateFilterOption' earlier than or equal to this date.
+    end-date: option<string>
+  }
+  get-orders-by-subscription-number: func(params: get-orders-by-subscription-number-params) -> result<string, string>;
+
+  /// List orders of a subscription owner
+  record get-orders-by-subscription-owner-params {
+    /// The subscription owner account number.
+    account-number: string,
+    /// The page number of the orders retrieved. The default is 1.
+    page: option<s32>,
+    /// The date type to filter on.
+    /// This field value can be 'orderDate' or 'updatedDate'. Default is orderDate.
+    date-filter-option: option<string>,
+    /// The result will only contain the orders with the date of 'dateFilterOption' later than or equal to this date.
+    start-date: option<string>,
+    /// The result will only contain the orders with the date of 'dateFilterOption' earlier than or equal to this date.
+    end-date: option<string>
+  }
+  get-orders-by-subscription-owner: func(params: get-orders-by-subscription-owner-params) -> result<string, string>;
+
+  /// List subscription terms
+  record get-subscription-term-info-params {
+    /// The number of the subscription to retrieve terms for. For example, A-S00000001.
+    subscription-number: string,
+    /// The version of the subscription to retrieve terms for. If you do not specify this parameter, Zuora returns the terms for the latest version of the subscription.
+    version: option<s32>,
+    /// The page number of the terms retrieved.
+    page: option<s32>
+  }
+  get-subscription-term-info: func(params: get-subscription-term-info-params) -> result<string, string>;
+
+  /// Retrieve an order
+  record get-order-params {
+    /// The order number to be retrieved.
+    order-number: string
+  }
+  get-order: func(params: get-order-params) -> result<string, string>;
+
+  /// Delete an order
+  record delete-order-params {
+    /// The number of the order to be deleted.
+    order-number: string
+  }
+  delete-order: func(params: delete-order-params) -> result<string, string>;
+
+  /// Update order custom fields
+  record put-update-order-custom-fields-params {
+    /// The order number.
+    order-number: string
+  }
+  put-update-order-custom-fields: func(params: put-update-order-custom-fields-params) -> result<string, string>;
+
+  /// List order metrics for an evergreen subscription
+  record get-order-metricsfor-evergreen-subscription-params {
+    /// The order number.
+    order-number: string,
+    /// The subscription number you want to get the metrics for.
+    subscription-number: string,
+    /// The start date of the date range for which you want to get the metrics. The date must be in yyyy-mm-dd format. For example, 2017-12-03.
+    start-date: string,
+    /// The end date of the date range for which you want to get the metrics. The date must be in yyyy-mm-dd format. For example, 2017-12-03.
+    end-date: string
+  }
+  get-order-metricsfor-evergreen-subscription: func(params: get-order-metricsfor-evergreen-subscription-params) -> result<string, string>;
+
+  /// Update order action trigger dates
+  record put-order-trigger-dates-params {
+    /// Order number of a pending order in which you are to update an order action's triggering dates.
+    order-number: string
+  }
+  put-order-trigger-dates: func(params: put-order-trigger-dates-params) -> result<string, string>;
+
+  /// Update subscription custom fields
+  record put-update-subscription-custom-fields-params {
+    /// The subscription number to be updated.
+    subscription-number: string
+  }
+  put-update-subscription-custom-fields: func(params: put-update-subscription-custom-fields-params) -> result<string, string>;
+
+}
+
+interface attachments {
+  enum post-attachments-associated-object-type-enum {
+    account,
+    invoice,
+    subscription,
+    credit-memo,
+    debit-memo,
+  }
+
+  /// Create an attachment
+  record post-attachments-params {
+    /// Description of the attachment document.
+    description: option<string>,
+    /// The type of the object to add attachements for. 
+    associated-object-type: post-attachments-associated-object-type-enum,
+    /// For the Subscription type, specify the Subscription Number. An attachment is tied to the Subscription Number and thus viewable with every subscription version.
+    /// 
+    associated-object-key: string
+  }
+  post-attachments: func(params: post-attachments-params) -> result<string, string>;
+
+  /// Retrieve an attachment
+  record get-attachments-params {
+    /// Id of the attachment you want to view.
+    attachment-id: string
+  }
+  get-attachments: func(params: get-attachments-params) -> result<string, string>;
+
+  /// Update an attachment
+  record put-attachments-params {
+    /// Id of the attachment to be updated.
+    attachment-id: string
+  }
+  put-attachments: func(params: put-attachments-params) -> result<string, string>;
+
+  /// Delete an attachment
+  record delete-attachments-params {
+    /// Id of the attachment to be deleted.
+    attachment-id: string
+  }
+  delete-attachments: func(params: delete-attachments-params) -> result<string, string>;
+
+  /// List attachments by object type and key
+  record get-attachments-list-params {
+    /// The type of the object to list attachements for.
+    object-type: string,
+    /// ID of the object to list attachements for.
+    ///  - If `object-type` is `account`, specify an account ID.
+    object-key: string
+  }
+  get-attachments-list: func(params: get-attachments-list-params) -> result<string, string>;
+
+}
+
+interface bill-run {
+  /// Email billing documents generated from a bill run
+  record post-email-billing-documentsfrom-bill-run-params {
+    /// The ID of the bill run. For example, 2c92c8f95d0c886e015d11287a8f0f8b.
+    bill-run-id: string
+  }
+  post-email-billing-documentsfrom-bill-run: func(params: post-email-billing-documentsfrom-bill-run-params) -> result<string, string>;
+
+  /// CRUD: Create a bill run
+  object-post-bill-run: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a bill run
+  record object-get-bill-run-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-bill-run: func(params: object-get-bill-run-params) -> result<string, string>;
+
+  /// CRUD: Post or cancel a bill run
+  record object-put-bill-run-params {
+    /// Object id
+    id: string
+  }
+  object-put-bill-run: func(params: object-put-bill-run-params) -> result<string, string>;
+
+  /// CRUD: Delete a bill run
+  record object-delete-bill-run-params {
+    /// Object id
+    id: string
+  }
+  object-delete-bill-run: func(params: object-delete-bill-run-params) -> result<string, string>;
+
+}
+
+interface billing-preview-run {
+  /// Create a billing preview run
+  post-billing-preview-run: func() -> result<string, string>;
+
+  /// Retrieve a billing preview run
+  record get-billing-preview-run-params {
+    /// Id of the billing preview run.
+    billing-preview-run-id: string
+  }
+  get-billing-preview-run: func(params: get-billing-preview-run-params) -> result<string, string>;
+
+}
+
+interface mass-updater {
+  /// Perform a mass action
+  post-mass-updater: func() -> result<string, string>;
+
+  /// List all results of a mass action
+  record get-mass-updater-params {
+    /// String of 32 characters that identifies a mass action. You get the bulk-key after performing a mass action through the REST API.
+    bulk-key: string
+  }
+  get-mass-updater: func(params: get-mass-updater-params) -> result<string, string>;
+
+  /// Stop a mass action
+  record put-mass-updater-params {
+    /// String of 32 characters that identifies a mass action. You get the bulk-key after performing a mass action through the REST API.
+    bulk-key: string
+  }
+  put-mass-updater: func(params: put-mass-updater-params) -> result<string, string>;
+
+}
+
+interface catalog {
+  /// Retrieve a product
+  record get-product-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>,
+    /// The unique ID of the product you want to retrieve. For example, 8a808255575bdae4015774e9602e16fe.
+    product-id: string
+  }
+  get-product: func(params: get-product-params) -> result<string, string>;
+
+  /// List all products
+  record get-catalog-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>
+  }
+  get-catalog: func(params: get-catalog-params) -> result<string, string>;
+
+  /// Multi-entity: Share a product with an entity
+  record post-catalog-params {
+    /// The unique ID of the product you want to share. For example, 8a808255575bdae4015774e9602e16fe.
+    product-id: string
+  }
+  post-catalog: func(params: post-catalog-params) -> result<string, string>;
+
+}
+
+interface charge-revenue-summaries {
+  /// Retrieve a charge revenue summary by charge ID
+  record get-crs-by-charge-id-params {
+    /// ID of the subscription rate plan charge; for example, 402892793e173340013e173b81000012.
+    charge-key: string
+  }
+  get-crs-by-charge-id: func(params: get-crs-by-charge-id-params) -> result<string, string>;
+
+  /// List all details of a charge revenue summary
+  record get-crs-by-crs-number-params {
+    /// The charge revenue summary number.
+    crs-number: string
+  }
+  get-crs-by-crs-number: func(params: get-crs-by-crs-number-params) -> result<string, string>;
+
+}
+
+interface connections {
+  /// Establish a connection to Zuora REST API
+  record post-connections-params {
+    /// Account username
+    api-access-key-id: string,
+    /// Account password
+    api-secret-access-key: string,
+    /// Must be set to "application/json"
+    content-type: string
+  }
+  post-connections: func(params: post-connections-params) -> result<string, string>;
+
+}
+
+interface contacts {
+  /// Scrub a contact
+  record put-scrub-contact-params {
+    /// The ID of the contact that you want to scrub sensitive data from.
+    contact-id: string
+  }
+  put-scrub-contact: func(params: put-scrub-contact-params) -> result<string, string>;
+
+  /// CRUD: Create a contact
+  object-post-contact: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a contact
+  record object-get-contact-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-contact: func(params: object-get-contact-params) -> result<string, string>;
+
+  /// CRUD: Update a contact
+  record object-put-contact-params {
+    /// Object id
+    id: string
+  }
+  object-put-contact: func(params: object-put-contact-params) -> result<string, string>;
+
+  /// CRUD: Delete a contact
+  record object-delete-contact-params {
+    /// Object id
+    id: string
+  }
+  object-delete-contact: func(params: object-delete-contact-params) -> result<string, string>;
+
+}
+
+interface credit-memos {
+  enum get-credit-memos-status-enum {
+    draft,
+    posted,
+    canceled,
+    error,
+    pending-for-tax,
+    generating,
+    cancel-in-progress,
+  }
+
+  enum get-credit-memos-transferred-to-accounting-enum {
+    processing,
+    yes,
+    no,
+    error,
+    ignore,
+  }
+
+  /// List credit memos
+  record get-credit-memos-params {
+    /// This parameter filters the response based on the `accountId` field. 
+    account-id: option<string>,
+    /// This parameter filters the response based on the `amount` field. 
+    amount: option<f64>,
+    /// This parameter filters the response based on the `appliedAmount` field. 
+    applied-amount: option<f64>,
+    /// This parameter filters the response based on the `autoApplyUponPosting` field. 
+    auto-apply-upon-posting: option<bool>,
+    /// This parameter filters the response based on the `createdById` field. 
+    created-by-id: option<string>,
+    /// This parameter filters the response based on the `createdDate` field. 
+    created-date: option<string>,
+    /// This parameter filters the response based on the `creditMemoDate` field. 
+    credit-memo-date: option<string>,
+    /// This parameter filters the response based on the `currency` field. 
+    currency: option<string>,
+    /// This parameter filters the response based on the `excludeFromAutoApplyRules` field. 
+    exclude-from-auto-apply-rules: option<bool>,
+    /// This parameter filters the response based on the `number` field. 
+    number: option<string>,
+    /// This parameter filters the response based on the `referredInvoiceId` field. 
+    referred-invoice-id: option<string>,
+    /// This parameter filters the response based on the `refundAmount` field. 
+    refund-amount: option<f64>,
+    /// This parameter filters the response based on the `status` field. 
+    status: option<get-credit-memos-status-enum>,
+    /// This parameter filters the response based on the `targetDate` field. 
+    target-date: option<string>,
+    /// This parameter filters the response based on the `taxAmount` field. 
+    tax-amount: option<f64>,
+    /// This parameter filters the response based on the `totalTaxExemptAmount` field.
+    total-tax-exempt-amount: option<f64>,
+    /// This parameter filters the response based on the `transferredToAccounting` field. 
+    transferred-to-accounting: option<get-credit-memos-transferred-to-accounting-enum>,
+    /// This parameter filters the response based on the `unappliedAmount` field. 
+    unapplied-amount: option<f64>,
+    /// This parameter filters the response based on the `updatedById` field. 
+    updated-by-id: option<string>,
+    /// This parameter filters the response based on the `updatedDate` field.
+    updated-date: option<string>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-credit-memos: func(params: get-credit-memos-params) -> result<string, string>;
+
+  /// Create a credit memo from a charge
+  record post-credit-memo-from-prpc-params {
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>
+  }
+  post-credit-memo-from-prpc: func(params: post-credit-memo-from-prpc-params) -> result<string, string>;
+
+  /// Retrieve a credit memo
+  record get-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  get-credit-memo: func(params: get-credit-memo-params) -> result<string, string>;
+
+  /// Update a credit memo
+  record put-update-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172. 
+    credit-memo-id: string
+  }
+  put-update-credit-memo: func(params: put-update-credit-memo-params) -> result<string, string>;
+
+  /// Delete a credit memo
+  record delete-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  delete-credit-memo: func(params: delete-credit-memo-params) -> result<string, string>;
+
+  /// Apply a credit memo
+  record put-apply-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  put-apply-credit-memo: func(params: put-apply-credit-memo-params) -> result<string, string>;
+
+  /// Cancel a credit memo
+  record put-cancel-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  put-cancel-credit-memo: func(params: put-cancel-credit-memo-params) -> result<string, string>;
+
+  /// Email a credit memo
+  record post-email-credit-memo-params {
+    /// The ID of a posted credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  post-email-credit-memo: func(params: post-email-credit-memo-params) -> result<string, string>;
+
+  /// Upload a file for a credit memo
+  record post-upload-file-for-credit-memo-params {
+    /// The ID of the credit memo that you want to upload a PDF file for. For example, 402890555a7e9791015a879f064a0054.
+    credit-memo-id: string
+  }
+  post-upload-file-for-credit-memo: func(params: post-upload-file-for-credit-memo-params) -> result<string, string>;
+
+  /// List credit memo items
+  record get-credit-memo-items-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string,
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>,
+    /// This parameter filters the response based on the `amount` field. 
+    amount: option<f64>,
+    /// This parameter filters the response based on the `appliedAmount` field.
+    applied-amount: option<f64>,
+    /// This parameter filters the response based on the `createdById` field. 
+    created-by-id: option<string>,
+    /// This parameter filters the response based on the `createdDate` field. 
+    created-date: option<string>,
+    /// This parameter filters the response based on the `id` field. 
+    id: option<string>,
+    /// This parameter filters the response based on the `refundAmount` field. 
+    refund-amount: option<f64>,
+    /// This parameter filters the response based on the `serviceEndDate` field. 
+    service-end-date: option<string>,
+    /// This parameter filters the response based on the `serviceStartDate` field. 
+    service-start-date: option<string>,
+    /// This parameter filters the response based on the `sku` field. 
+    sku: option<string>,
+    /// This parameter filters the response based on the `skuName` field. 
+    sku-name: option<string>,
+    /// This parameter filters the response based on the `sourceItemId` field. 
+    source-item-id: option<string>,
+    /// This parameter filters the response based on the `subscriptionId` field.
+    subscription-id: option<string>,
+    /// This parameter filters the response based on the `updatedById` field. 
+    updated-by-id: option<string>,
+    /// This parameter filters the response based on the `updatedDate` field.
+    updated-date: option<string>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-credit-memo-items: func(params: get-credit-memo-items-params) -> result<string, string>;
+
+  /// Retrieve a credit memo item
+  record get-credit-memo-item-params {
+    /// The unique ID of a credit memo item. You can get the credit memo item ID from the response of [List credit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoItems).
+    cmitemid: string,
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string,
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>
+  }
+  get-credit-memo-item: func(params: get-credit-memo-item-params) -> result<string, string>;
+
+  /// List all taxation items of a credit memo item
+  record get-taxation-items-of-credit-memo-item-params {
+    /// The unique ID of a credit memo item. You can get the credit memo item ID from the response of [List credit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoItems).
+    cmitemid: string,
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  get-taxation-items-of-credit-memo-item: func(params: get-taxation-items-of-credit-memo-item-params) -> result<string, string>;
+
+  /// List all parts of a credit memo
+  record get-credit-memo-parts-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  get-credit-memo-parts: func(params: get-credit-memo-parts-params) -> result<string, string>;
+
+  /// Retrieve a credit memo part
+  record get-credit-memo-part-params {
+    /// The unique ID of a specific credit memo part. You can get the credit memo part ID from the response of [List all parts of a credit memo](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoParts).
+    partid: string,
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  get-credit-memo-part: func(params: get-credit-memo-part-params) -> result<string, string>;
+
+  /// List all credit memo part items
+  record get-credit-memo-item-parts-params {
+    /// The unique ID of a specific credit memo part. You can get the credit memo part ID from the response of [List all parts of a credit memo](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoParts). .
+    partid: string,
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  get-credit-memo-item-parts: func(params: get-credit-memo-item-parts-params) -> result<string, string>;
+
+  /// Retrieve a credit memo part item
+  record get-credit-memo-item-part-params {
+    /// The unique ID of a specific credit memo part. You can get the credit memo part ID from the response of [List all parts of a credit memo](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoParts).
+    partid: string,
+    /// The unique ID of a specific credit memo part item. You can get the credit memo part item ID from the response of [List all credit memo part items](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoItemParts).
+    itempartid: string,
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  get-credit-memo-item-part: func(params: get-credit-memo-item-part-params) -> result<string, string>;
+
+  /// Generate a credit memo PDF file
+  record post-credit-memo-pdf-params {
+    /// The unique ID of the credit memo that you want to create a PDF file for. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  post-credit-memo-pdf: func(params: post-credit-memo-pdf-params) -> result<string, string>;
+
+  /// Post a credit memo
+  record put-post-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  put-post-credit-memo: func(params: put-post-credit-memo-params) -> result<string, string>;
+
+  /// Create taxation items for a credit memo
+  record post-cm-taxation-items-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  post-cm-taxation-items: func(params: post-cm-taxation-items-params) -> result<string, string>;
+
+  /// Unapply a credit memo
+  record put-unapply-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  put-unapply-credit-memo: func(params: put-unapply-credit-memo-params) -> result<string, string>;
+
+  /// Unpost a credit memo
+  record put-unpost-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    credit-memo-id: string
+  }
+  put-unpost-credit-memo: func(params: put-unpost-credit-memo-params) -> result<string, string>;
+
+  /// Refund a credit memo
+  record post-refund-credit-memo-params {
+    /// The unique ID of a credit memo. For example, 8a8082e65b27f6c3015ba45ff82c7172.
+    creditmemo-id: string
+  }
+  post-refund-credit-memo: func(params: post-refund-credit-memo-params) -> result<string, string>;
+
+}
+
+interface custom-exchange-rates {
+  /// List custom exchange rates by currency
+  record get-custom-exchange-rates-params {
+    /// The target base currency of the tenant. The exchange rates in the response are calculated in relation to the target currency.
+    /// 
+    currency: string,
+    /// Start date of the date range for which you want to get exchange rates.
+    /// 
+    start-date: string,
+    /// End date of the date range for which you want to get exchange rates.
+    /// 
+    end-date: string
+  }
+  get-custom-exchange-rates: func(params: get-custom-exchange-rates-params) -> result<string, string>;
+
+}
+
+interface debit-memos {
+  enum get-debit-memos-status-enum {
+    draft,
+    posted,
+    canceled,
+    error,
+    pending-for-tax,
+    generating,
+    cancel-in-progress,
+  }
+
+  /// List debit memos
+  record get-debit-memos-params {
+    /// This parameter filters the response based on the `accountId` field.
+    account-id: option<string>,
+    /// This parameter filters the response based on the `amount` field.
+    amount: option<f64>,
+    /// This parameter filters the response based on the `balance` field.
+    balance: option<f64>,
+    /// This parameter filters the response based on the `beAppliedAmount` field.
+    be-applied-amount: option<f64>,
+    /// This parameter filters the response based on the `createdById` field.
+    created-by-id: option<string>,
+    /// This parameter filters the response based on the `createdDate` field.
+    created-date: option<string>,
+    /// This parameter filters the response based on the `currency` field.
+    currency: option<string>,
+    /// This parameter filters the response based on the `debitMemoDate` field.
+    debit-memo-date: option<string>,
+    /// This parameter filters the response based on the `dueDate` field.
+    due-date: option<string>,
+    /// This parameter filters the response based on the `number` field.
+    number: option<string>,
+    /// This parameter filters the response based on the `referredInvoiceId` field.
+    referred-invoice-id: option<string>,
+    /// This parameter filters the response based on the `status` field.
+    status: option<get-debit-memos-status-enum>,
+    /// This parameter filters the response based on the `targetDate` field.
+    target-date: option<string>,
+    /// This parameter filters the response based on the `taxAmount` field.
+    tax-amount: option<f64>,
+    /// This parameter filters the response based on the `totalTaxExemptAmount` field.
+    total-tax-exempt-amount: option<f64>,
+    /// This parameter filters the response based on the `updatedById` field.
+    updated-by-id: option<string>,
+    /// This parameter filters the response based on the `updatedDate` field.
+    updated-date: option<string>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-debit-memos: func(params: get-debit-memos-params) -> result<string, string>;
+
+  /// Create a debit memo from a charge
+  record post-debit-memo-from-prpc-params {
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>
+  }
+  post-debit-memo-from-prpc: func(params: post-debit-memo-from-prpc-params) -> result<string, string>;
+
+  /// Update debit memos
+  put-batch-update-debit-memos: func() -> result<string, string>;
+
+  /// Retrieve a debit memo
+  record get-debit-memo-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  get-debit-memo: func(params: get-debit-memo-params) -> result<string, string>;
+
+  /// Update a debit memo
+  record put-debit-memo-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  put-debit-memo: func(params: put-debit-memo-params) -> result<string, string>;
+
+  /// Delete a debit memo
+  record delete-debit-memo-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  delete-debit-memo: func(params: delete-debit-memo-params) -> result<string, string>;
+
+  /// List all application parts of a debit memo
+  record get-debit-memo-application-parts-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  get-debit-memo-application-parts: func(params: get-debit-memo-application-parts-params) -> result<string, string>;
+
+  /// Cancel a debit memo
+  record put-cancel-debit-memo-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  put-cancel-debit-memo: func(params: put-cancel-debit-memo-params) -> result<string, string>;
+
+  /// Collect a posted debit memo
+  record post-debit-memo-collect-params {
+    /// The ID of a posted debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  post-debit-memo-collect: func(params: post-debit-memo-collect-params) -> result<string, string>;
+
+  /// Email a debit memo
+  record post-email-debit-memo-params {
+    /// The ID of a posted debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  post-email-debit-memo: func(params: post-email-debit-memo-params) -> result<string, string>;
+
+  /// Upload a file for a debit memo
+  record post-upload-file-for-debit-memo-params {
+    /// The ID of the debit memo that you want to upload a PDF file for. For example, 402890555a87d7f5015a8919e4fe002e.
+    debit-memo-id: string
+  }
+  post-upload-file-for-debit-memo: func(params: post-upload-file-for-debit-memo-params) -> result<string, string>;
+
+  /// List debit memo items
+  record get-debit-memo-items-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string,
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>,
+    /// This parameter filters the response based on the `amount` field.
+    amount: option<f64>,
+    /// This parameter filters the response based on the `beAppliedAmount` field.
+    be-applied-amount: option<f64>,
+    /// This parameter filters the response based on the `createdById` field.
+    created-by-id: option<string>,
+    /// This parameter filters the response based on the `createdDate` field.
+    created-date: option<string>,
+    /// This parameter filters the response based on the `id` field.
+    id: option<string>,
+    /// This parameter filters the response based on the `serviceEndDate` field.
+    service-end-date: option<string>,
+    /// This parameter filters the response based on the `serviceStartDate` field.
+    service-start-date: option<string>,
+    /// This parameter filters the response based on the `sku` field.
+    sku: option<string>,
+    /// This parameter filters the response based on the `skuName` field.
+    sku-name: option<string>,
+    /// This parameter filters the response based on the `sourceItemId` field.
+    source-item-id: option<string>,
+    /// This parameter filters the response based on the `subscriptionId` field.
+    subscription-id: option<string>,
+    /// This parameter filters the response based on the `updatedById` field.
+    updated-by-id: option<string>,
+    /// This parameter filters the response based on the `updatedDate` field.
+    updated-date: option<string>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-debit-memo-items: func(params: get-debit-memo-items-params) -> result<string, string>;
+
+  /// Retrieve a debit memo item
+  record get-debit-memo-item-params {
+    /// The unique ID of a debit memo item. You can get the debit memo item ID from the response of [List debit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_DebitMemoItems).
+    dmitemid: string,
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string,
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>
+  }
+  get-debit-memo-item: func(params: get-debit-memo-item-params) -> result<string, string>;
+
+  /// List all taxation items of a debit memo item
+  record get-taxation-items-of-debit-memo-item-params {
+    /// The unique ID of a debit memo item. You can get the debit memo item ID from the response of [List debit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_DebitMemoItems).
+    dmitemid: string,
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  get-taxation-items-of-debit-memo-item: func(params: get-taxation-items-of-debit-memo-item-params) -> result<string, string>;
+
+  /// Generate a debit memo PDF file
+  record post-debit-memo-pdf-params {
+    /// The unique ID of the debit memo that you want to create a PDF file for. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  post-debit-memo-pdf: func(params: post-debit-memo-pdf-params) -> result<string, string>;
+
+  /// Post a debit memo
+  record put-post-debit-memo-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  put-post-debit-memo: func(params: put-post-debit-memo-params) -> result<string, string>;
+
+  /// Create taxation items for a debit memo
+  record post-dm-taxation-items-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  post-dm-taxation-items: func(params: post-dm-taxation-items-params) -> result<string, string>;
+
+  /// Unpost a debit memo
+  record put-unpost-debit-memo-params {
+    /// The unique ID of a debit memo. For example, 8a8082e65b27f6c3015ba419f3c2644e.
+    debit-memo-id: string
+  }
+  put-unpost-debit-memo: func(params: put-unpost-debit-memo-params) -> result<string, string>;
+
+}
+
+interface describe {
+  /// Describe an object
+  record get-describe-params {
+    /// API name of an object in your Zuora tenant. For example, `InvoiceItem`. See [Zuora Object Model](https://www.zuora.com/developer/api-reference/#section/Zuora-Object-Model) for the list of valid object names.
+    /// 
+    object: string
+  }
+  get-describe: func(params: get-describe-params) -> result<string, string>;
+
+}
+
+interface document-properties {
+  /// Create document properties
+  post-document-properties: func() -> result<string, string>;
+
+  /// Update document properties
+  record put-document-properties-params {
+    /// The unique ID of document properties to be updated. For example, 402892c74c9193cd014c96bbe7c101f9.
+    document-properties-id: string
+  }
+  put-document-properties: func(params: put-document-properties-params) -> result<string, string>;
+
+  /// Delete document properties
+  record delete-document-properties-params {
+    /// The unique ID of document properties. For example, 402892c74c9193cd014c96bbe7c101f9.
+    document-properties-id: string
+  }
+  delete-document-properties: func(params: delete-document-properties-params) -> result<string, string>;
+
+  /// List all properties of a billing document
+  record get-document-properies-params {
+    /// The type of the billing document. 
+    document-type: string,
+    /// The unique ID of document properties to be retrieved. For example, 402892c74c9193cd014c96bbe7c101f9.
+    document-id: string
+  }
+  get-document-properies: func(params: get-document-properies-params) -> result<string, string>;
+
+}
+
+interface entities {
+  /// Multi-entity: List entities
+  record get-entities-params {
+    /// Specify whether to retrieve provisioned or unprovisioned entities:
+    /// 
+    provisioned: option<string>
+  }
+  get-entities: func(params: get-entities-params) -> result<string, string>;
+
+  /// Multi-entity: Create an entity
+  post-entities: func() -> result<string, string>;
+
+  /// Multi-entity: Retrieve an entity
+  record get-entity-by-id-params {
+    /// Specify the Id of the entity that you want to retrieve. You can get the entity Id from the GET Entities call.
+    id: string
+  }
+  get-entity-by-id: func(params: get-entity-by-id-params) -> result<string, string>;
+
+  /// Multi-entity: Update an entity
+  record put-entities-params {
+    /// The Id of the entity that you want to edit. You can get the entity Id from the GET Entities call.
+    id: string
+  }
+  put-entities: func(params: put-entities-params) -> result<string, string>;
+
+  /// Multi-entity: Delete an entity
+  record delete-entities-params {
+    /// Specify the Id of the entity that you want to delete. You can get the entity Id from the GET Entities call.
+    id: string
+  }
+  delete-entities: func(params: delete-entities-params) -> result<string, string>;
+
+  /// Multi-entity: Provision an entity
+  record put-provision-entity-params {
+    /// Specify the Id of the entity that you want to provision.  You can get the entity Id from the GET Entities call.
+    id: string
+  }
+  put-provision-entity: func(params: put-provision-entity-params) -> result<string, string>;
+
+}
+
+interface entity-connections {
+  enum get-entity-connections-type-op-enum {
+    inbound,
+    outbound,
+  }
+
+  /// Multi-entity: List connections
+  record get-entity-connections-params {
+    /// Specifies whether to retrieve inbound or outbound connections for an entity.
+    /// 
+    type-op: option<get-entity-connections-type-op-enum>
+  }
+  get-entity-connections: func(params: get-entity-connections-params) -> result<string, string>;
+
+  /// Multi-entity: Initiate a connection request
+  post-entity-connections: func() -> result<string, string>;
+
+  /// Multi-entity: Accept a connection request
+  record put-entity-connections-accept-params {
+    /// The ID of the connection that you want to accept.
+    connection-id: string
+  }
+  put-entity-connections-accept: func(params: put-entity-connections-accept-params) -> result<string, string>;
+
+  /// Multi-entity: Deny a connection request
+  record put-entity-connections-deny-params {
+    /// The ID of the connection that you want to deny.
+    connection-id: string
+  }
+  put-entity-connections-deny: func(params: put-entity-connections-deny-params) -> result<string, string>;
+
+  /// Multi-entity: Disconnect a connection
+  record put-entity-connections-disconnect-params {
+    /// The ID of the connection that you want to disconnect.
+    connection-id: string
+  }
+  put-entity-connections-disconnect: func(params: put-entity-connections-disconnect-params) -> result<string, string>;
+
+}
+
+interface files {
+  /// Retrieve a file
+  record get-files-params {
+    /// The Zuora ID of the file to retrieve.
+    file-id: string
+  }
+  get-files: func(params: get-files-params) -> result<string, string>;
+
+}
+
+interface payment-gateway-reconciliation {
+  /// Reverse a payment
+  record post-reverse-payment-params {
+    /// Unique ID of the payment.
+    payment-id: string
+  }
+  post-reverse-payment: func(params: post-reverse-payment-params) -> result<string, string>;
+
+  /// Reject a payment
+  record post-reject-payment-params {
+    /// Unique ID of the payment.
+    payment-id: string
+  }
+  post-reject-payment: func(params: post-reject-payment-params) -> result<string, string>;
+
+  /// Settle a payment
+  record post-settle-payment-params {
+    /// Unique ID of the payment.
+    payment-id: string
+  }
+  post-settle-payment: func(params: post-settle-payment-params) -> result<string, string>;
+
+  /// Reconcile a refund
+  record post-reconcile-refund-params {
+    /// Unique ID of the refund.
+    refund-id: string
+  }
+  post-reconcile-refund: func(params: post-reconcile-refund-params) -> result<string, string>;
+
+}
+
+interface hmac-signatures {
+  /// Generate an HMAC signature
+  post-hmac-signatures: func() -> result<string, string>;
+
+}
+
+interface hosted-pages {
+  /// List hosted pages
+  record get-hosted-pages-params {
+    /// Version of the Payment Pages for which you want to retrieve the configuration information. Specify 1 for Payment Pages 1.0 or 2 for Payment Pages 2.0. If omitted, information for all versions of Payment Pages are returned.
+    /// 
+    version-number: option<string>
+  }
+  get-hosted-pages: func(params: get-hosted-pages-params) -> result<string, string>;
+
+}
+
+interface invoices {
+  /// Create a standalone invoice
+  post-standalone-invoice: func() -> result<string, string>;
+
+  /// Update invoices
+  put-batch-update-invoices: func() -> result<string, string>;
+
+  /// Update an invoice
+  record put-update-invoice-params {
+    /// The ID of the invoice. For example,
+    /// 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  put-update-invoice: func(params: put-update-invoice-params) -> result<string, string>;
+
+  /// List all application parts of an invoice
+  record get-invoice-application-parts-params {
+    /// The unique ID of an invoice. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  get-invoice-application-parts: func(params: get-invoice-application-parts-params) -> result<string, string>;
+
+  /// Create a credit memo from an invoice
+  record post-credit-memo-from-invoice-params {
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>,
+    /// The ID of an invoice that you want to create a credit memo from.
+    invoice-id: string
+  }
+  post-credit-memo-from-invoice: func(params: post-credit-memo-from-invoice-params) -> result<string, string>;
+
+  /// Create a debit memo from an invoice
+  record post-debit-memo-from-invoice-params {
+    /// The ID of an invoice that you want to create a debit memo from.
+    invoice-id: string,
+    /// 
+    /// The minor version of the Zuora REST API. See [Minor Version](https://www.zuora.com/developer/api-reference/#section/API-Versions/Minor-Version) for information about REST API version control. 
+    zuora-version: option<string>
+  }
+  post-debit-memo-from-invoice: func(params: post-debit-memo-from-invoice-params) -> result<string, string>;
+
+  /// Email an invoice
+  record post-email-invoice-params {
+    /// The ID of the invoice. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  post-email-invoice: func(params: post-email-invoice-params) -> result<string, string>;
+
+  /// List all files of an invoice
+  record get-invoice-files-params {
+    /// The unique ID of an invoice. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  get-invoice-files: func(params: get-invoice-files-params) -> result<string, string>;
+
+  /// Upload a file for an invoice
+  record post-upload-file-for-invoice-params {
+    /// The ID of the invoice that you want to upload a PDF file for. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  post-upload-file-for-invoice: func(params: post-upload-file-for-invoice-params) -> result<string, string>;
+
+  /// List all items of an invoice
+  record get-invoice-items-params {
+    /// The unique ID of an invoice. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  get-invoice-items: func(params: get-invoice-items-params) -> result<string, string>;
+
+  /// List all taxation items of an invoice item
+  record get-taxation-items-of-invoice-item-params {
+    /// The unique ID of an invoice. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string,
+    /// The unique ID of an invoice item. For example, 2c86c8955bd63cc1015bd7c151af02ef.
+    item-id: string
+  }
+  get-taxation-items-of-invoice-item: func(params: get-taxation-items-of-invoice-item-params) -> result<string, string>;
+
+  /// Reverse an invoice
+  record put-reverse-invoice-params {
+    /// The ID of the invoice. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  put-reverse-invoice: func(params: put-reverse-invoice-params) -> result<string, string>;
+
+  /// Write off an invoice
+  record put-write-off-invoice-params {
+    /// The unique ID of an invoice. For example, 2c92c8955bd63cc1015bd7c151af02ab.
+    invoice-id: string
+  }
+  put-write-off-invoice: func(params: put-write-off-invoice-params) -> result<string, string>;
+
+  /// CRUD: Retrieve an invoice
+  record object-get-invoice-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-invoice: func(params: object-get-invoice-params) -> result<string, string>;
+
+  /// CRUD: Update an invoice
+  record object-put-invoice-params {
+    /// Object id
+    id: string
+  }
+  object-put-invoice: func(params: object-put-invoice-params) -> result<string, string>;
+
+  /// CRUD: Delete an invoice
+  record object-delete-invoice-params {
+    /// Object id
+    id: string
+  }
+  object-delete-invoice: func(params: object-delete-invoice-params) -> result<string, string>;
+
+}
+
+interface summary-journal-entries {
+  /// Create a summary journal entry
+  post-summary-journal-entry: func() -> result<string, string>;
+
+  /// List all summary journal entries in a journal run
+  record get-all-summary-journal-entries-params {
+    /// Journal run number.
+    jr-number: string
+  }
+  get-all-summary-journal-entries: func(params: get-all-summary-journal-entries-params) -> result<string, string>;
+
+  /// Retrieve a summary journal entry
+  record get-summary-journal-entry-params {
+    je-number: string
+  }
+  get-summary-journal-entry: func(params: get-summary-journal-entry-params) -> result<string, string>;
+
+  /// Delete a summary journal entry
+  record delete-summary-journal-entry-params {
+    /// Journal entry number in the format JE-00000001.
+    je-number: string
+  }
+  delete-summary-journal-entry: func(params: delete-summary-journal-entry-params) -> result<string, string>;
+
+  /// Update a summary journal entry
+  record put-basic-summary-journal-entry-params {
+    /// Journal entry number in the format JE-00000001.
+    je-number: string
+  }
+  put-basic-summary-journal-entry: func(params: put-basic-summary-journal-entry-params) -> result<string, string>;
+
+  /// Cancel a summary journal entry
+  record put-summary-journal-entry-params {
+    /// Journal entry number in the format JE-00000001.
+    je-number: string
+  }
+  put-summary-journal-entry: func(params: put-summary-journal-entry-params) -> result<string, string>;
+
+}
+
+interface journal-runs {
+  /// Create a journal run
+  post-journal-run: func() -> result<string, string>;
+
+  /// Retrieve a journal run
+  record get-journal-run-params {
+    /// Journal run number. Must be a valid journal run number in the format `JR-00000001`.
+    jr-number: string
+  }
+  get-journal-run: func(params: get-journal-run-params) -> result<string, string>;
+
+  /// Delete a journal run
+  record delete-journal-run-params {
+    /// Journal run number. Must be a valid journal run number in the format `JR-00000001`.
+    jr-number: string
+  }
+  delete-journal-run: func(params: delete-journal-run-params) -> result<string, string>;
+
+  /// Cancel a journal run
+  record put-journal-run-params {
+    /// Journal run number. Must be a valid journal run number in the format JR-00000001. 
+    /// You can only cancel a journal run whose status is "Pending", "Error", or "Completed".
+    jr-number: string
+  }
+  put-journal-run: func(params: put-journal-run-params) -> result<string, string>;
+
+}
+
+interface communication-profiles {
+  /// CRUD: Retrieve a communication profile
+  record object-get-communication-profile-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-communication-profile: func(params: object-get-communication-profile-params) -> result<string, string>;
+
+}
+
+interface credit-balance-adjustments {
+  /// CRUD: Create a credit balance adjustment
+  object-post-credit-balance-adjustment: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a credit balance adjustment
+  record object-get-credit-balance-adjustment-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-credit-balance-adjustment: func(params: object-get-credit-balance-adjustment-params) -> result<string, string>;
+
+  /// CRUD: Update a credit balance adjustment
+  record object-put-credit-balance-adjustment-params {
+    /// Object id
+    id: string
+  }
+  object-put-credit-balance-adjustment: func(params: object-put-credit-balance-adjustment-params) -> result<string, string>;
+
+}
+
+interface exports {
+  /// CRUD: Create an export
+  object-post-export: func() -> result<string, string>;
+
+  /// CRUD: Retrieve an export
+  record object-get-export-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-export: func(params: object-get-export-params) -> result<string, string>;
+
+}
+
+interface features {
+  /// CRUD: Create a feature
+  object-post-feature: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a feature
+  record object-get-feature-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-feature: func(params: object-get-feature-params) -> result<string, string>;
+
+  /// CRUD: Update a feature
+  record object-put-feature-params {
+    /// Object id
+    id: string
+  }
+  object-put-feature: func(params: object-put-feature-params) -> result<string, string>;
+
+  /// CRUD: Delete a feature
+  record object-delete-feature-params {
+    /// Object id
+    id: string
+  }
+  object-delete-feature: func(params: object-delete-feature-params) -> result<string, string>;
+
+}
+
+interface imports {
+  /// CRUD: Create an import
+  object-post-import: func() -> result<string, string>;
+
+  /// CRUD: Retrieve an import
+  record object-get-import-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-import: func(params: object-get-import-params) -> result<string, string>;
+
+}
+
+interface invoice-adjustments {
+  /// CRUD: Create an invoice adjustment
+  object-post-invoice-adjustment: func() -> result<string, string>;
+
+  /// CRUD: Retrieve an invoice adjustment
+  record object-get-invoice-adjustment-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-invoice-adjustment: func(params: object-get-invoice-adjustment-params) -> result<string, string>;
+
+  /// CRUD: Update an invoice adjustment
+  record object-put-invoice-adjustment-params {
+    /// Object id
+    id: string
+  }
+  object-put-invoice-adjustment: func(params: object-put-invoice-adjustment-params) -> result<string, string>;
+
+  /// CRUD: Delete an invoice adjustment
+  record object-delete-invoice-adjustment-params {
+    /// Object id
+    id: string
+  }
+  object-delete-invoice-adjustment: func(params: object-delete-invoice-adjustment-params) -> result<string, string>;
+
+}
+
+interface invoice-item-adjustments {
+  /// CRUD: Retrieve an invoice item adjustment
+  record object-get-invoice-item-adjustment-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-invoice-item-adjustment: func(params: object-get-invoice-item-adjustment-params) -> result<string, string>;
+
+  /// CRUD: Delete an invoice item adjustment
+  record object-delete-invoice-item-adjustment-params {
+    /// Object id
+    id: string
+  }
+  object-delete-invoice-item-adjustment: func(params: object-delete-invoice-item-adjustment-params) -> result<string, string>;
+
+}
+
+interface invoice-items {
+  /// CRUD: Retrieve an invoice item
+  record object-get-invoice-item-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-invoice-item: func(params: object-get-invoice-item-params) -> result<string, string>;
+
+}
+
+interface invoice-payments {
+  /// CRUD: Create an invoice payment
+  object-post-invoice-payment: func() -> result<string, string>;
+
+  /// CRUD: Retrieve an invoice payment
+  record object-get-invoice-payment-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-invoice-payment: func(params: object-get-invoice-payment-params) -> result<string, string>;
+
+  /// CRUD: Update an invoice payment
+  record object-put-invoice-payment-params {
+    /// Object id
+    id: string
+  }
+  object-put-invoice-payment: func(params: object-put-invoice-payment-params) -> result<string, string>;
+
+}
+
+interface invoice-split-items {
+  /// CRUD: Retrieve an invoice split item
+  record object-get-invoice-split-item-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-invoice-split-item: func(params: object-get-invoice-split-item-params) -> result<string, string>;
+
+}
+
+interface invoice-splits {
+  /// CRUD: Retrieve an invoice split
+  record object-get-invoice-split-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-invoice-split: func(params: object-get-invoice-split-params) -> result<string, string>;
+
+}
+
+interface payments {
+  enum get-retrieve-all-payments-status-enum {
+    draft,
+    processing,
+    processed,
+    error,
+    canceled,
+    posted,
+  }
+
+  enum get-retrieve-all-payments-type-op-enum {
+    external,
+    electronic,
+  }
+
+  /// CRUD: Create a payment
+  object-post-payment: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a payment
+  record object-get-payment-params {
+    /// The unique ID of a payment. For example, 2c92c095592623ea01596621ada84352.
+    id: string
+  }
+  object-get-payment: func(params: object-get-payment-params) -> result<string, string>;
+
+  /// CRUD: Update a payment
+  record object-put-payment-params {
+    /// The unique ID of a payment. For example, 2c92c095592623ea01596621ada84352.
+    id: string
+  }
+  object-put-payment: func(params: object-put-payment-params) -> result<string, string>;
+
+  /// CRUD: Delete a payment
+  record object-delete-payment-params {
+    /// The unique ID of the payment to be deleted. For example, 2c92c0f85d4e95ae015d4f7e5d690622.
+    id: string
+  }
+  object-delete-payment: func(params: object-delete-payment-params) -> result<string, string>;
+
+  /// List payments
+  record get-retrieve-all-payments-params {
+    /// This parameter filters the response based on the `accountId` field.
+    account-id: option<string>,
+    /// This parameter filters the response based on the `amount` field.
+    amount: option<f64>,
+    /// This parameter filters the response based on the `appliedAmount` field.
+    applied-amount: option<f64>,
+    /// This parameter filters the response based on the `createdById` field.
+    created-by-id: option<string>,
+    /// This parameter filters the response based on the `createdDate` field.
+    created-date: option<string>,
+    /// This parameter filters the response based on the `creditBalanceAmount` field.
+    credit-balance-amount: option<f64>,
+    /// This parameter filters the response based on the `currency` field.
+    currency: option<string>,
+    /// This parameter filters the response based on the `effectiveDate` field.
+    effective-date: option<string>,
+    /// This parameter filters the response based on the `number` field.
+    number: option<string>,
+    /// This parameter filters the response based on the `refundAmount` field.
+    refund-amount: option<f64>,
+    /// This parameter filters the response based on the `status` field.
+    status: option<get-retrieve-all-payments-status-enum>,
+    /// This parameter filters the response based on the `type` field.
+    type-op: option<get-retrieve-all-payments-type-op-enum>,
+    /// This parameter filters the response based on the `unappliedAmount` field.
+    unapplied-amount: option<f64>,
+    /// This parameter filters the response based on the `updatedById` field.
+    updated-by-id: option<string>,
+    /// This parameter filters the response based on the `updatedDate` field.
+    updated-date: option<string>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-retrieve-all-payments: func(params: get-retrieve-all-payments-params) -> result<string, string>;
+
+  /// Create a payment
+  post-create-payment: func() -> result<string, string>;
+
+  /// Retrieve a payment
+  record get-payment-params {
+    /// The unique ID of a payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  get-payment: func(params: get-payment-params) -> result<string, string>;
+
+  /// Update a payment
+  record put-update-payment-params {
+    /// The unique ID of an unapplied payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  put-update-payment: func(params: put-update-payment-params) -> result<string, string>;
+
+  /// Delete a payment
+  record delete-payment-params {
+    /// The unique ID of an unapplied payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  delete-payment: func(params: delete-payment-params) -> result<string, string>;
+
+  /// Apply a payment
+  record put-apply-payment-params {
+    /// The unique ID of an unapplied payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  put-apply-payment: func(params: put-apply-payment-params) -> result<string, string>;
+
+  /// Cancel a payment
+  record put-cancel-payment-params {
+    /// The unique ID of an unapplied payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  put-cancel-payment: func(params: put-cancel-payment-params) -> result<string, string>;
+
+  /// List all parts of a payment
+  record get-payment-parts-params {
+    /// The unique ID of a payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  get-payment-parts: func(params: get-payment-parts-params) -> result<string, string>;
+
+  /// Retrieve a payment part
+  record get-payment-part-params {
+    /// The unique ID of a specific payment part. You can get the payment part ID from the response of [List all parts of a payment](https://www.zuora.com/developer/api-reference/#operation/GET_PaymentParts).
+    partid: string,
+    /// The unique ID of a payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  get-payment-part: func(params: get-payment-part-params) -> result<string, string>;
+
+  /// List all payment part items
+  record get-payment-item-parts-params {
+    /// The unique ID of a specific payment part. You can get the payment part ID from the response of [List all parts of a payment](https://www.zuora.com/developer/api-reference/#operation/GET_PaymentParts).
+    partid: string,
+    /// The unique ID of a payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  get-payment-item-parts: func(params: get-payment-item-parts-params) -> result<string, string>;
+
+  /// Retrieve a payment part item
+  record get-payment-item-part-params {
+    /// The unique ID of a specific payment part. You can get the payment part ID from the response of [List all parts of a payment](https://www.zuora.com/developer/api-reference/#operation/GET_PaymentParts).
+    partid: string,
+    /// The unique ID of a specific payment part item. You can get the payment part item ID from the response of [List all payment part items](https://www.zuora.com/developer/api-reference/#operation/GET_PaymentItemParts).
+    itempartid: string,
+    /// The unique ID of a payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  get-payment-item-part: func(params: get-payment-item-part-params) -> result<string, string>;
+
+  /// Refund a payment
+  record post-refund-payment-params {
+    /// The unique ID of an unapplied payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  post-refund-payment: func(params: post-refund-payment-params) -> result<string, string>;
+
+  /// Transfer a payment
+  record put-transfer-payment-params {
+    /// The unique ID of an unapplied payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  put-transfer-payment: func(params: put-transfer-payment-params) -> result<string, string>;
+
+  /// Unapply a payment
+  record put-unapply-payment-params {
+    /// The unique ID of an applied payment. For example, 8a8082e65b27f6c3015b89e4344c16b1.
+    payment-id: string
+  }
+  put-unapply-payment: func(params: put-unapply-payment-params) -> result<string, string>;
+
+}
+
+interface payment-methods {
+  /// CRUD: Create a payment method
+  object-post-payment-method: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a payment method
+  record object-get-payment-method-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-payment-method: func(params: object-get-payment-method-params) -> result<string, string>;
+
+  /// CRUD: Update a payment method
+  record object-put-payment-method-params {
+    /// Object id
+    id: string
+  }
+  object-put-payment-method: func(params: object-put-payment-method-params) -> result<string, string>;
+
+  /// CRUD: Delete a payment method
+  record object-delete-payment-method-params {
+    /// Object id
+    id: string
+  }
+  object-delete-payment-method: func(params: object-delete-payment-method-params) -> result<string, string>;
+
+  /// Create a payment method
+  post-payment-methods: func() -> result<string, string>;
+
+  /// Create a credit card payment method
+  post-payment-methods-credit-card: func() -> result<string, string>;
+
+  /// List all credit card payment methods of an account
+  record get-payment-methods-credit-card-params {
+    /// Account number or account ID.
+    account-key: string
+  }
+  get-payment-methods-credit-card: func(params: get-payment-methods-credit-card-params) -> result<string, string>;
+
+  /// Update a credit card payment method
+  record put-payment-methods-credit-card-params {
+    /// Unique ID of the payment method to update.
+    payment-method-id: string
+  }
+  put-payment-methods-credit-card: func(params: put-payment-methods-credit-card-params) -> result<string, string>;
+
+  /// Create an Apple Pay payment method
+  post-payment-methods-decryption: func() -> result<string, string>;
+
+  /// Retrieve a payment method
+  record get-payment-method-params {
+    /// Unique ID of the payment method to update.
+    payment-method-id: string
+  }
+  get-payment-method: func(params: get-payment-method-params) -> result<string, string>;
+
+  /// Update a payment method
+  record put-payment-method-params {
+    /// Unique ID of the payment method to update.
+    payment-method-id: string
+  }
+  put-payment-method: func(params: put-payment-method-params) -> result<string, string>;
+
+  /// Delete a payment method
+  record delete-payment-methods-params {
+    /// Unique identifier of a payment method. (Since this ID is unique, and linked to a customer account in the system, no customer identifier is needed.)
+    payment-method-id: string
+  }
+  delete-payment-methods: func(params: delete-payment-methods-params) -> result<string, string>;
+
+  /// Create authorization
+  record post-create-authorization-params {
+    /// The unique ID of the payment method where the authorization is created.
+    payment-method-id: string
+  }
+  post-create-authorization: func(params: post-create-authorization-params) -> result<string, string>;
+
+  /// List stored credential profiles of a payment method
+  record get-stored-credential-profiles-params {
+    /// ID of a payment method.
+    payment-method-id: string,
+    /// Specifies whether to retrieve all the stored credential profiles within the payment method.
+    /// 
+    include-all: option<bool>
+  }
+  get-stored-credential-profiles: func(params: get-stored-credential-profiles-params) -> result<string, string>;
+
+  /// Create a stored credential profile
+  record post-create-stored-credential-profile-params {
+    /// ID of a payment method.
+    payment-method-id: string
+  }
+  post-create-stored-credential-profile: func(params: post-create-stored-credential-profile-params) -> result<string, string>;
+
+  /// Cancel a stored credential profile
+  record post-cancel-stored-credential-profile-params {
+    /// ID of a payment method.
+    payment-method-id: string,
+    /// Number that identifies a stored credential profile within the payment method.
+    profile-number: string
+  }
+  post-cancel-stored-credential-profile: func(params: post-cancel-stored-credential-profile-params) -> result<string, string>;
+
+  /// Expire a stored credential profile
+  record post-expire-stored-credential-profile-params {
+    /// ID of a payment method.
+    payment-method-id: string,
+    /// Number that identifies a stored credential profile within the payment method.
+    profile-number: string
+  }
+  post-expire-stored-credential-profile: func(params: post-expire-stored-credential-profile-params) -> result<string, string>;
+
+  /// Scrub a payment method
+  record put-scrub-payment-methods-params {
+    /// The ID of the payment method where you want to scrub the sensitive data.
+    payment-method-id: string
+  }
+  put-scrub-payment-methods: func(params: put-scrub-payment-methods-params) -> result<string, string>;
+
+  /// Verify a payment method
+  record put-verify-payment-methods-params {
+    /// The ID of the payment method to be verified.
+    payment-method-id: string
+  }
+  put-verify-payment-methods: func(params: put-verify-payment-methods-params) -> result<string, string>;
+
+  /// Cancel authorization
+  record post-cancel-authorization-params {
+    /// The unique ID of the payment method where the authorization is cancelled.
+    payment-method-id: string
+  }
+  post-cancel-authorization: func(params: post-cancel-authorization-params) -> result<string, string>;
+
+}
+
+interface payment-method-snapshots {
+  /// CRUD: Retrieve a payment method snapshot
+  record object-get-payment-method-snapshot-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-payment-method-snapshot: func(params: object-get-payment-method-snapshot-params) -> result<string, string>;
+
+}
+
+interface payment-method-transaction-logs {
+  /// CRUD: Retrieve a payment method transaction log
+  record object-get-payment-method-transaction-log-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-payment-method-transaction-log: func(params: object-get-payment-method-transaction-log-params) -> result<string, string>;
+
+}
+
+interface payment-transaction-logs {
+  /// CRUD: Retrieve a payment transaction log
+  record object-get-payment-transaction-log-params {
+    /// The ID of a payment transaction log.
+    id: string
+  }
+  object-get-payment-transaction-log: func(params: object-get-payment-transaction-log-params) -> result<string, string>;
+
+}
+
+interface products {
+  /// CRUD: Create a product
+  object-post-product: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a product
+  record object-get-product-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-product: func(params: object-get-product-params) -> result<string, string>;
+
+  /// CRUD: Update a product
+  record object-put-product-params {
+    /// Object id
+    id: string
+  }
+  object-put-product: func(params: object-put-product-params) -> result<string, string>;
+
+  /// CRUD: Delete a product
+  record object-delete-product-params {
+    /// Object id
+    id: string
+  }
+  object-delete-product: func(params: object-delete-product-params) -> result<string, string>;
+
+}
+
+interface product-features {
+  /// CRUD: Retrieve a product feature
+  record object-get-product-feature-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-product-feature: func(params: object-get-product-feature-params) -> result<string, string>;
+
+  /// CRUD: Delete a product feature
+  record object-delete-product-feature-params {
+    /// Object id
+    id: string
+  }
+  object-delete-product-feature: func(params: object-delete-product-feature-params) -> result<string, string>;
+
+}
+
+interface product-rate-plans {
+  /// CRUD: Create a product rate plan
+  object-post-product-rate-plan: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a product rate plan
+  record object-get-product-rate-plan-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-product-rate-plan: func(params: object-get-product-rate-plan-params) -> result<string, string>;
+
+  /// CRUD: Update a product rate plan
+  record object-put-product-rate-plan-params {
+    /// Object id
+    id: string
+  }
+  object-put-product-rate-plan: func(params: object-put-product-rate-plan-params) -> result<string, string>;
+
+  /// CRUD: Delete a product rate plan
+  record object-delete-product-rate-plan-params {
+    /// Object id
+    id: string
+  }
+  object-delete-product-rate-plan: func(params: object-delete-product-rate-plan-params) -> result<string, string>;
+
+  /// List all product rate plans of a product
+  record get-product-rate-plans-params {
+    /// The unique ID of a product. For example, 2c92c0f96487e16a016487f663c71a61.
+    product-id: string
+  }
+  get-product-rate-plans: func(params: get-product-rate-plans-params) -> result<string, string>;
+
+}
+
+interface product-rate-plan-charges {
+  /// CRUD: Create a product rate plan charge
+  object-post-product-rate-plan-charge: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a product rate plan charge
+  record object-get-product-rate-plan-charge-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// The unique ID of a product rate plan charge to be retrieved. For example, 2c93808457d787030157e031fcd34e19.
+    id: string
+  }
+  object-get-product-rate-plan-charge: func(params: object-get-product-rate-plan-charge-params) -> result<string, string>;
+
+  /// CRUD: Update a product rate plan charge
+  record object-put-product-rate-plan-charge-params {
+    /// The unique ID of the product rate plan charge to be updated. For example, 2c93808457d787030157e031fcd34e19.
+    id: string
+  }
+  object-put-product-rate-plan-charge: func(params: object-put-product-rate-plan-charge-params) -> result<string, string>;
+
+  /// CRUD: Delete a product rate plan charge
+  record object-delete-product-rate-plan-charge-params {
+    /// The unique ID of the product rate plan charge to be deleted. For example, 2c93808457d787030157e031fcd34e19.
+    id: string
+  }
+  object-delete-product-rate-plan-charge: func(params: object-delete-product-rate-plan-charge-params) -> result<string, string>;
+
+}
+
+interface product-rate-plan-charge-tiers {
+  /// CRUD: Retrieve a product rate plan charge tier
+  record object-get-product-rate-plan-charge-tier-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-product-rate-plan-charge-tier: func(params: object-get-product-rate-plan-charge-tier-params) -> result<string, string>;
+
+  /// CRUD: Update a product rate plan charge tier
+  record object-put-product-rate-plan-charge-tier-params {
+    /// The unique ID of the product rate plan charge tier to be updated. For example, 2c92c0f86c85891e016c88d55a6e543b.
+    id: string
+  }
+  object-put-product-rate-plan-charge-tier: func(params: object-put-product-rate-plan-charge-tier-params) -> result<string, string>;
+
+}
+
+interface rate-plan-charge-tiers {
+  /// CRUD: Retrieve a rate plan charge tier
+  record object-get-rate-plan-charge-tier-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-rate-plan-charge-tier: func(params: object-get-rate-plan-charge-tier-params) -> result<string, string>;
+
+}
+
+interface rate-plan-charges {
+  /// CRUD: Retrieve a rate plan charge
+  record object-get-rate-plan-charge-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-rate-plan-charge: func(params: object-get-rate-plan-charge-params) -> result<string, string>;
+
+  /// CRUD: Update a rate plan charge
+  record object-put-rate-plan-charge-params {
+    /// Object id
+    id: string
+  }
+  object-put-rate-plan-charge: func(params: object-put-rate-plan-charge-params) -> result<string, string>;
+
+}
+
+interface rate-plans {
+  /// CRUD: Retrieve a rate plan
+  record object-get-rate-plan-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-rate-plan: func(params: object-get-rate-plan-params) -> result<string, string>;
+
+}
+
+interface refunds {
+  enum get-refunds-method-type-enum {
+    ach,
+    cash,
+    check,
+    credit-card,
+    pay-pal,
+    wire-transfer,
+    debit-card,
+    credit-card-reference-transaction,
+    bank-transfer,
+    other,
+  }
+
+  enum get-refunds-status-enum {
+    processed,
+    canceled,
+    error,
+    processing,
+  }
+
+  enum get-refunds-type-op-enum {
+    external,
+    electronic,
+  }
+
+  /// CRUD: Create a refund
+  object-post-refund: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a refund
+  record object-get-refund-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-refund: func(params: object-get-refund-params) -> result<string, string>;
+
+  /// CRUD: Update a refund
+  record object-put-refund-params {
+    /// Object id
+    id: string
+  }
+  object-put-refund: func(params: object-put-refund-params) -> result<string, string>;
+
+  /// CRUD: Delete a refund
+  record object-delete-refund-params {
+    /// Object id
+    id: string
+  }
+  object-delete-refund: func(params: object-delete-refund-params) -> result<string, string>;
+
+  /// List refunds
+  record get-refunds-params {
+    /// This parameter filters the response based on the `accountId` field.
+    account-id: option<string>,
+    /// This parameter filters the response based on the `amount` field.
+    amount: option<f64>,
+    /// This parameter filters the response based on the `createdById` field.
+    created-by-id: option<string>,
+    /// This parameter filters the response based on the `createdDate` field.
+    created-date: option<string>,
+    /// This parameter filters the response based on the `methodType` field.
+    method-type: option<get-refunds-method-type-enum>,
+    /// This parameter filters the response based on the `number` field.
+    number: option<string>,
+    /// This parameter filters the response based on the `paymentId` field.
+    payment-id: option<string>,
+    /// This parameter filters the response based on the `refundDate` field.
+    refund-date: option<string>,
+    /// This parameter filters the response based on the `status` field.
+    status: option<get-refunds-status-enum>,
+    /// This parameter filters the response based on the `type` field.
+    type-op: option<get-refunds-type-op-enum>,
+    /// This parameter filters the response based on the `updatedById` field.
+    updated-by-id: option<string>,
+    /// This parameter filters the response based on the `updatedDate` field.
+    updated-date: option<string>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-refunds: func(params: get-refunds-params) -> result<string, string>;
+
+  /// Retrieve a refund
+  record get-refund-params {
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.
+    refund-id: string
+  }
+  get-refund: func(params: get-refund-params) -> result<string, string>;
+
+  /// Update a refund
+  record put-update-refund-params {
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.
+    refund-id: string
+  }
+  put-update-refund: func(params: put-update-refund-params) -> result<string, string>;
+
+  /// Delete a refund
+  record delete-refund-params {
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.
+    refund-id: string
+  }
+  delete-refund: func(params: delete-refund-params) -> result<string, string>;
+
+  /// Cancel a refund
+  record put-cancel-refund-params {
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.      
+    refund-id: string
+  }
+  put-cancel-refund: func(params: put-cancel-refund-params) -> result<string, string>;
+
+  /// List all parts of a refund
+  record get-refund-parts-params {
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.
+    refund-id: string
+  }
+  get-refund-parts: func(params: get-refund-parts-params) -> result<string, string>;
+
+  /// Retrieve a refund part
+  record get-refund-part-params {
+    /// The unique ID of a specific refund part. You can get the refund part ID from the response of [List all parts of a refund](https://www.zuora.com/developer/api-reference/#operation/GET_RefundParts).
+    refundpartid: string,
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.
+    refund-id: string
+  }
+  get-refund-part: func(params: get-refund-part-params) -> result<string, string>;
+
+  /// List all refund part items
+  record get-refund-item-parts-params {
+    /// The unique ID of a specific refund part. You can get the refund part ID from the response of [List all parts of a refund](https://www.zuora.com/developer/api-reference/#operation/GET_RefundParts).
+    refundpartid: string,
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.
+    refund-id: string
+  }
+  get-refund-item-parts: func(params: get-refund-item-parts-params) -> result<string, string>;
+
+  /// Retrieve a refund part item
+  record get-refund-item-part-params {
+    /// The unique ID of a specific refund part item. You can get the refund part item ID from the response of [Get refund part items](https://www.zuora.com/developer/api-reference/#operation/GET_RefundItemParts).
+    itempartid: string,
+    /// The unique ID of a specific refund part. You can get the refund part ID from the response of [List all parts of a refund](https://www.zuora.com/developer/api-reference/#operation/GET_RefundParts).
+    refundpartid: string,
+    /// The unique ID of a refund. For example, 4028905f5a87c0ff015a889e590e00c9.
+    refund-id: string
+  }
+  get-refund-item-part: func(params: get-refund-item-part-params) -> result<string, string>;
+
+}
+
+interface refund-invoice-payments {
+  /// CRUD: Retrieve a refund invoice payment
+  record object-get-refund-invoice-payment-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-refund-invoice-payment: func(params: object-get-refund-invoice-payment-params) -> result<string, string>;
+
+}
+
+interface refund-transaction-logs {
+  /// CRUD: Retrieve a refund transaction log
+  record object-get-refund-transaction-log-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-refund-transaction-log: func(params: object-get-refund-transaction-log-params) -> result<string, string>;
+
+}
+
+interface subscription-product-features {
+  /// CRUD: Retrieve a subscription product feature
+  record object-get-subscription-product-feature-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-subscription-product-feature: func(params: object-get-subscription-product-feature-params) -> result<string, string>;
+
+}
+
+interface subscriptions {
+  /// CRUD: Retrieve a subscription
+  record object-get-subscription-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-subscription: func(params: object-get-subscription-params) -> result<string, string>;
+
+  /// CRUD: Update a subscription
+  record object-put-subscription-params {
+    /// Object id
+    id: string
+  }
+  object-put-subscription: func(params: object-put-subscription-params) -> result<string, string>;
+
+  /// CRUD: Delete a subscription
+  record object-delete-subscription-params {
+    /// Object id
+    id: string
+  }
+  object-delete-subscription: func(params: object-delete-subscription-params) -> result<string, string>;
+
+  /// Create a subscription
+  record post-subscription-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>
+  }
+  post-subscription: func(params: post-subscription-params) -> result<string, string>;
+
+  /// List subscriptions by account key
+  record get-subscriptions-by-account-params {
+    /// 
+    /// Possible values are:
+    account-key: string,
+    /// The segmented rate plan charges.
+    /// 
+    charge-detail: option<string>
+  }
+  get-subscriptions-by-account: func(params: get-subscriptions-by-account-params) -> result<string, string>;
+
+  /// Preview a subscription
+  record post-preview-subscription-params {
+    /// 
+    /// The minor version of the Zuora REST API. 
+    zuora-version: option<string>
+  }
+  post-preview-subscription: func(params: post-preview-subscription-params) -> result<string, string>;
+
+  /// Retrieve a subscription by key
+  record get-subscriptions-by-key-params {
+    /// Possible values are:
+    ///   * a subscription number
+    subscription-key: string,
+    /// 
+    /// The segmented rate plan charges. When an amendment results in a change to a charge, Zuora creates a segmented rate plan charge. Use this field to track segment charges.
+    charge-detail: option<string>
+  }
+  get-subscriptions-by-key: func(params: get-subscriptions-by-key-params) -> result<string, string>;
+
+  /// Update a subscription
+  record put-subscription-params {
+    /// 
+    /// The minor version of the Zuora REST API. 
+    zuora-version: option<string>,
+    /// Subscription number or ID.
+    subscription-key: string
+  }
+  put-subscription: func(params: put-subscription-params) -> result<string, string>;
+
+  /// Cancel a subscription
+  record put-cancel-subscription-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>,
+    /// Subscription number or ID. Subscription status must be `Active`.
+    subscription-key: string
+  }
+  put-cancel-subscription: func(params: put-cancel-subscription-params) -> result<string, string>;
+
+  /// Renew a subscription
+  record put-renew-subscription-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>,
+    /// Subscription number or ID
+    subscription-key: string
+  }
+  put-renew-subscription: func(params: put-renew-subscription-params) -> result<string, string>;
+
+  /// Resume a subscription
+  record put-resume-subscription-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>,
+    /// Subscription number or ID. Subscription status must be Suspended.
+    subscription-key: string
+  }
+  put-resume-subscription: func(params: put-resume-subscription-params) -> result<string, string>;
+
+  /// Suspend a subscription
+  record put-suspend-subscription-params {
+    /// The minor version of the Zuora REST API. 
+    /// 
+    zuora-version: option<string>,
+    /// Subscription number or ID. Subscription status must be Active.
+    subscription-key: string
+  }
+  put-suspend-subscription: func(params: put-suspend-subscription-params) -> result<string, string>;
+
+  /// Retrieve a subscription by key and version
+  record get-subscriptions-by-key-and-version-params {
+    /// Subscription number. For example, A-S00000135.
+    subscription-key: string,
+    /// Subscription version. For example, 1.
+    version: string,
+    /// 
+    /// The segmented rate plan charges. When an amendment results in a change to a charge, Zuora creates a segmented rate plan charge. Use this field to track segment charges.
+    charge-detail: option<string>
+  }
+  get-subscriptions-by-key-and-version: func(params: get-subscriptions-by-key-and-version-params) -> result<string, string>;
+
+  /// Update subscription custom fields of a subscription version
+  record put-update-subscription-custom-fields-of-a-specified-version-params {
+    /// The subscription number to be updated.
+    subscription-number: string,
+    /// The subscription version to be updated.
+    version: string
+  }
+  put-update-subscription-custom-fields-of-a-specified-version: func(params: put-update-subscription-custom-fields-of-a-specified-version-params) -> result<string, string>;
+
+}
+
+interface taxation-items {
+  /// CRUD: Create a taxation item
+  object-post-taxation-item: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a taxation item
+  record object-get-taxation-item-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-taxation-item: func(params: object-get-taxation-item-params) -> result<string, string>;
+
+  /// CRUD: Update a taxation item
+  record object-put-taxation-item-params {
+    /// Object id
+    id: string
+  }
+  object-put-taxation-item: func(params: object-put-taxation-item-params) -> result<string, string>;
+
+  /// CRUD: Delete a taxation item
+  record object-delete-taxation-item-params {
+    /// Object id
+    id: string
+  }
+  object-delete-taxation-item: func(params: object-delete-taxation-item-params) -> result<string, string>;
+
+  /// Retrieve a taxation item
+  record get-taxation-item-params {
+    /// The unique ID of a taxation item.
+    id: string
+  }
+  get-taxation-item: func(params: get-taxation-item-params) -> result<string, string>;
+
+  /// Update a taxation item
+  record put-taxation-item-params {
+    /// The unique ID of a taxation item.
+    id: string
+  }
+  put-taxation-item: func(params: put-taxation-item-params) -> result<string, string>;
+
+  /// Delete a taxation item
+  record delete-taxation-item-params {
+    /// The unique ID of a taxation item.
+    id: string
+  }
+  delete-taxation-item: func(params: delete-taxation-item-params) -> result<string, string>;
+
+}
+
+interface unit-of-measure {
+  /// CRUD: Create a unit of measure
+  object-post-unit-of-measure: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a unit of measure
+  record object-get-unit-of-measure-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-unit-of-measure: func(params: object-get-unit-of-measure-params) -> result<string, string>;
+
+  /// CRUD: Update a unit of measure
+  record object-put-unit-of-measure-params {
+    /// Object id
+    id: string
+  }
+  object-put-unit-of-measure: func(params: object-put-unit-of-measure-params) -> result<string, string>;
+
+  /// CRUD: Delete a unit of measure
+  record object-delete-unit-of-measure-params {
+    /// Object id
+    id: string
+  }
+  object-delete-unit-of-measure: func(params: object-delete-unit-of-measure-params) -> result<string, string>;
+
+}
+
+interface usage {
+  /// CRUD: Create a usage record
+  object-post-usage: func() -> result<string, string>;
+
+  /// CRUD: Retrieve a usage record
+  record object-get-usage-params {
+    /// Object fields to return
+    fields: option<string>,
+    /// Object id
+    id: string
+  }
+  object-get-usage: func(params: object-get-usage-params) -> result<string, string>;
+
+  /// CRUD: Update a usage record
+  record object-put-usage-params {
+    /// Object id
+    id: string
+  }
+  object-put-usage: func(params: object-put-usage-params) -> result<string, string>;
+
+  /// CRUD: Delete a usage record
+  record object-delete-usage-params {
+    /// Object id
+    id: string
+  }
+  object-delete-usage: func(params: object-delete-usage-params) -> result<string, string>;
+
+  /// Upload a usage file
+  post-usage: func() -> result<string, string>;
+
+  /// Retrieve a usage record
+  record get-usage-params {
+    /// Account number or account ID.
+    account-key: string
+  }
+  get-usage: func(params: get-usage-params) -> result<string, string>;
+
+}
+
+interface operations {
+  /// Generate a billing preview
+  post-billing-preview: func() -> result<string, string>;
+
+  /// Invoice and collect
+  record post-transaction-invoice-payment-params {
+    /// 
+    /// The minor version of the Zuora REST API. 
+    zuora-version: option<string>
+  }
+  post-transaction-invoice-payment: func(params: post-transaction-invoice-payment-params) -> result<string, string>;
+
+}
+
+interface order-line-items {
+  /// Update order line items
+  post-order-line-items: func() -> result<string, string>;
+
+  /// Retrieve an order line item
+  record get-order-line-item-params {
+    /// The id of the Order Line Item to retrieve.
+    item-id: string
+  }
+  get-order-line-item: func(params: get-order-line-item-params) -> result<string, string>;
+
+  /// Update an order line item
+  record put-order-line-item-params {
+    /// The id of the Order Line Item to update.
+    item-id: string
+  }
+  put-order-line-item: func(params: put-order-line-item-params) -> result<string, string>;
+
+}
+
+interface ramps {
+  /// List ramp metrics by order number
+  record get-ramp-metrics-by-order-number-params {
+    /// The number of the existing order.
+    order-number: string
+  }
+  get-ramp-metrics-by-order-number: func(params: get-ramp-metrics-by-order-number-params) -> result<string, string>;
+
+  /// Retrieve a ramp
+  record get-ramp-by-ramp-number-params {
+    /// The automatically generated number of a ramp. For example, R-00000268.
+    ramp-number: string
+  }
+  get-ramp-by-ramp-number: func(params: get-ramp-by-ramp-number-params) -> result<string, string>;
+
+  /// List all ramp metrics of a ramp
+  record get-ramp-metrics-by-ramp-number-params {
+    /// The automatically generated number of a ramp. For example, R-00000268.
+    ramp-number: string
+  }
+  get-ramp-metrics-by-ramp-number: func(params: get-ramp-metrics-by-ramp-number-params) -> result<string, string>;
+
+  /// List ramp metrics by subscription key
+  record get-ramp-metrics-by-subscription-key-params {
+    /// The ID or number of an existing subscription.
+    subscription-key: string
+  }
+  get-ramp-metrics-by-subscription-key: func(params: get-ramp-metrics-by-subscription-key-params) -> result<string, string>;
+
+  /// Retrieve a ramp by subscription key
+  record get-ramps-by-subscription-key-params {
+    /// The ID or number of an existing subscription.
+    subscription-key: string
+  }
+  get-ramps-by-subscription-key: func(params: get-ramps-by-subscription-key-params) -> result<string, string>;
+
+}
+
+interface payment-runs {
+  enum get-payment-runs-status-enum {
+    pending,
+    processing,
+    completed,
+    error,
+    canceled,
+  }
+
+  /// List payment runs
+  record get-payment-runs-params {
+    /// This parameter filters the response based on the `createdById` field.
+    created-by-id: option<string>,
+    /// This parameter filters the response based on the `createdDate` field.
+    created-date: option<string>,
+    /// This parameter filters the response based on the `status` field.
+    status: option<get-payment-runs-status-enum>,
+    /// This parameter filters the response based on the `targetDate` field.
+    target-date: option<string>,
+    /// This parameter filters the response based on the `updatedById` field.
+    updated-by-id: option<string>,
+    /// This parameter filters the response based on the `updatedDate` field.
+    updated-date: option<string>,
+    /// This parameter restricts the order of the data returned in the response. You can use this parameter to supply a dimension you want to sort on.
+    /// 
+    sort: option<string>
+  }
+  get-payment-runs: func(params: get-payment-runs-params) -> result<string, string>;
+
+  /// Create a payment run
+  post-payment-run: func() -> result<string, string>;
+
+  /// Retrieve a payment run
+  record get-payment-run-params {
+    /// The unique ID of a payment run. For example, 402890245f097f39015f0f074a2e0566.
+    payment-run-id: string
+  }
+  get-payment-run: func(params: get-payment-run-params) -> result<string, string>;
+
+  /// Update a payment run
+  record put-payment-run-params {
+    /// The unique ID of a payment run. For example, 402890245f097f39015f0f074a2e0566.
+    payment-run-id: string
+  }
+  put-payment-run: func(params: put-payment-run-params) -> result<string, string>;
+
+  /// Delete a payment run
+  record delete-payment-run-params {
+    /// The unique ID of a payment run. For example, 402890245f097f39015f0f074a2e0566.
+    payment-run-id: string
+  }
+  delete-payment-run: func(params: delete-payment-run-params) -> result<string, string>;
+
+  /// Retrieve payment run data
+  record get-payment-run-data-params {
+    /// The unique ID of a payment run. For example, 402890245f097f39015f0f074a2e0566.
+    payment-run-id: string
+  }
+  get-payment-run-data: func(params: get-payment-run-data-params) -> result<string, string>;
+
+  /// Retrieve a payment run summary
+  record get-payment-run-summary-params {
+    /// The unique ID of a payment run. For example, 402890245f097f39015f0f074a2e0566.
+    payment-run-id: string
+  }
+  get-payment-run-summary: func(params: get-payment-run-summary-params) -> result<string, string>;
+
+}
+
+interface payment-gateways {
+  /// List all payment gateways
+  get-paymentgateways: func() -> result<string, string>;
+
+}
+
+interface quotes-document {
+  /// Generate a quote document
+  post-quotes-document: func() -> result<string, string>;
+
+}
+
+interface revenue-events {
+  /// List all revenue events of a revenue schedule
+  record get-revenue-event-for-revenue-schedule-params {
+    /// Revenue schedule number. The revenue schedule number is always prefixed with "RS", for example, "RS-00000001".
+    rs-number: string
+  }
+  get-revenue-event-for-revenue-schedule: func(params: get-revenue-event-for-revenue-schedule-params) -> result<string, string>;
+
+  /// Retrieve a revenue event
+  record get-revenue-event-details-params {
+    /// The number associated with the revenue event.
+    event-number: string
+  }
+  get-revenue-event-details: func(params: get-revenue-event-details-params) -> result<string, string>;
+
+}
+
+interface revenue-items {
+  /// List revenue items by charge revenue summary number
+  record get-revenue-items-by-charge-revenue-summary-number-params {
+    /// The charge revenue summary number.
+    crs-number: string
+  }
+  get-revenue-items-by-charge-revenue-summary-number: func(params: get-revenue-items-by-charge-revenue-summary-number-params) -> result<string, string>;
+
+  /// List revenue items by revenue event number
+  record get-revenue-items-by-charge-revenue-event-number-params {
+    /// The number associated with the revenue event.
+    event-number: string
+  }
+  get-revenue-items-by-charge-revenue-event-number: func(params: get-revenue-items-by-charge-revenue-event-number-params) -> result<string, string>;
+
+  /// Update custom fields on revenue items by revenue event number
+  record put-custom-fieldson-revenue-items-by-revenue-event-params {
+    /// The number associated with the revenue event.
+    event-number: string
+  }
+  put-custom-fieldson-revenue-items-by-revenue-event: func(params: put-custom-fieldson-revenue-items-by-revenue-event-params) -> result<string, string>;
+
+  /// List all revenue items of a revenue schedule
+  record get-revenue-items-by-revenue-schedule-params {
+    /// Revenue schedule number. The revenue schedule number is always prefixed with "RS", for example, "RS-00000001".
+    rs-number: string
+  }
+  get-revenue-items-by-revenue-schedule: func(params: get-revenue-items-by-revenue-schedule-params) -> result<string, string>;
+
+  /// Update custom fields on revenue items by revenue schedule number
+  record put-custom-fieldson-revenue-items-by-revenue-schedule-params {
+    /// Revenue schedule number. The revenue schedule number is always prefixed with "RS", for example, "RS-00000001".
+    rs-number: string
+  }
+  put-custom-fieldson-revenue-items-by-revenue-schedule: func(params: put-custom-fieldson-revenue-items-by-revenue-schedule-params) -> result<string, string>;
+
+}
+
+interface revenue-rules {
+  /// Retrieve a revenue recognition rule by product rate plan charge ID
+  record get-revenue-rec-ruleby-product-rate-plan-charge-params {
+    /// The unique ID of a product rate plan charge. For example, 8a8082e65ba86084015bb323d3c61d82.
+    charge-key: string
+  }
+  get-revenue-rec-ruleby-product-rate-plan-charge: func(params: get-revenue-rec-ruleby-product-rate-plan-charge-params) -> result<string, string>;
+
+  /// Retrieve a revenue recognition rule by subscription charge ID
+  record get-revenue-rec-rules-params {
+    /// The unique ID of the subscription rate plan charge. For example, 402892793e173340013e173b81000012.
+    charge-key: string
+  }
+  get-revenue-rec-rules: func(params: get-revenue-rec-rules-params) -> result<string, string>;
+
+  /// Retrieve a revenue automation start date
+  get-revenue-automation-start-date: func() -> result<string, string>;
+
+}
+
+interface revenue-schedules {
+  /// Retrieve a revenue schedule by credit memo item ID
+  record get-r-sby-credit-memo-item-params {
+    /// The unique ID of a credit memo item. You can get the credit memo item ID from the response of [Get credit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoItems).
+    cmi-id: string
+  }
+  get-r-sby-credit-memo-item: func(params: get-r-sby-credit-memo-item-params) -> result<string, string>;
+
+  /// Create a revenue schedule for a credit memo item (manual distribution)
+  record post-r-sfor-credit-memo-item-manual-distribution-params {
+    /// The unique ID of a credit memo item. You can get the credit memo item ID from the response of [Get credit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoItems).
+    cmi-id: string
+  }
+  post-r-sfor-credit-memo-item-manual-distribution: func(params: post-r-sfor-credit-memo-item-manual-distribution-params) -> result<string, string>;
+
+  /// Create a revenue schedule for a credit memo item (distribute by date range)
+  record post-r-sfor-credit-memo-item-distribute-by-date-range-params {
+    /// The unique ID of a credit memo item. You can get the credit memo item ID from the response of [Get credit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_CreditMemoItems).
+    cmi-id: string
+  }
+  post-r-sfor-credit-memo-item-distribute-by-date-range: func(params: post-r-sfor-credit-memo-item-distribute-by-date-range-params) -> result<string, string>;
+
+  /// Retrieve a revenue schedule by debit memo item ID
+  record get-r-sby-debit-memo-item-params {
+    /// The unique ID of a debit memo item. You can get the debit memo item ID from the response of [Get debit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_DebitMemoItems).
+    dmi-id: string
+  }
+  get-r-sby-debit-memo-item: func(params: get-r-sby-debit-memo-item-params) -> result<string, string>;
+
+  /// Create a revenue schedule for a debit memo item (distribute by date range)
+  record post-r-sfor-debit-memo-item-manual-distribution-params {
+    /// The unique ID of a debit memo item. You can get the debit memo item ID from the response of [Get debit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_DebitMemoItems).
+    dmi-id: string
+  }
+  post-r-sfor-debit-memo-item-manual-distribution: func(params: post-r-sfor-debit-memo-item-manual-distribution-params) -> result<string, string>;
+
+  /// Create a revenue schedule for a debit memo item (distribute by date range)
+  record post-r-sfor-debit-memo-item-distribute-by-date-range-params {
+    /// The unique ID of a debit memo item. You can get the debit memo item ID from the response of [Get debit memo items](https://www.zuora.com/developer/api-reference/#operation/GET_DebitMemoItems).
+    dmi-id: string
+  }
+  post-r-sfor-debit-memo-item-distribute-by-date-range: func(params: post-r-sfor-debit-memo-item-distribute-by-date-range-params) -> result<string, string>;
+
+  /// Retrieve a revenue schedule by invoice item adjustment key
+  record get-r-sby-invoice-item-adjustment-params {
+    /// ID of the Invoice Item Adjustment, for example, e20b07fd416dcfcf0141c81164fd0a72.
+    invoice-item-adj-key: string
+  }
+  get-r-sby-invoice-item-adjustment: func(params: get-r-sby-invoice-item-adjustment-params) -> result<string, string>;
+
+  /// Create a revenue schedule for an invoice item adjustment (manual distribution)
+  record post-r-sfor-invoice-item-adjustment-manual-distribution-params {
+    /// ID or number of the Invoice Item Adjustment, for example, e20b07fd416dcfcf0141c81164fd0a72.
+    /// If the specified Invoice Item Adjustment is already associated with a revenue schedule, the call will fail.
+    invoice-item-adj-key: string
+  }
+  post-r-sfor-invoice-item-adjustment-manual-distribution: func(params: post-r-sfor-invoice-item-adjustment-manual-distribution-params) -> result<string, string>;
+
+  /// Create a revenue schedule for an invoice item adjustment (distribute by date range)
+  record post-r-sfor-invoice-item-adjustment-distribute-by-date-range-params {
+    /// ID or number of the Invoice Item Adjustment, for example, e20b07fd416dcfcf0141c81164fd0a72.
+    /// If the specified Invoice Item Adjustment is already associated with a revenue schedule, the call will fail.
+    invoice-item-adj-key: string
+  }
+  post-r-sfor-invoice-item-adjustment-distribute-by-date-range: func(params: post-r-sfor-invoice-item-adjustment-distribute-by-date-range-params) -> result<string, string>;
+
+  /// Retrieve a revenue schedule by invoice item ID
+  record get-r-sby-invoice-item-params {
+    /// A valid Invoice Item ID.
+    invoice-item-id: string
+  }
+  get-r-sby-invoice-item: func(params: get-r-sby-invoice-item-params) -> result<string, string>;
+
+  /// Create a revenue schedule for an invoice item (manual distribution)
+  record post-r-sfor-invoice-item-manual-distribution-params {
+    /// ID of the Invoice Item, for example, e20b07fd416dcfcf0141c81164fd0a75.
+    /// If the specified Invoice Item is already associated with a revenue schedule, the call will fail.
+    invoice-item-id: string
+  }
+  post-r-sfor-invoice-item-manual-distribution: func(params: post-r-sfor-invoice-item-manual-distribution-params) -> result<string, string>;
+
+  /// Create a revenue schedule for an invoice item (distribute by date range)
+  record post-r-sfor-invoice-item-distribute-by-date-range-params {
+    /// ID of the Invoice Item, for example, e20b07fd416dcfcf0141c81164fd0a75.
+    /// If the specified Invoice Item is already associated with a revenue schedule, the call will fail.
+    invoice-item-id: string
+  }
+  post-r-sfor-invoice-item-distribute-by-date-range: func(params: post-r-sfor-invoice-item-distribute-by-date-range-params) -> result<string, string>;
+
+  /// List revenue schedules of a product charge by charge ID and account key
+  record get-r-sby-product-charge-and-billing-account-params {
+    /// The account number or account ID.
+    account-key: string,
+    /// The unique ID of a product rate plan charge. For example, 8a8082e65ba86084015bb323d3c61d82.
+    charge-key: string
+  }
+  get-r-sby-product-charge-and-billing-account: func(params: get-r-sby-product-charge-and-billing-account-params) -> result<string, string>;
+
+  /// List revenue schedules by subscription charge key
+  record get-r-sfor-subsc-charge-params {
+    /// ID of the subscription rate plan charge; for example, 402892793e173340013e173b81000012.
+    charge-key: string
+  }
+  get-r-sfor-subsc-charge: func(params: get-r-sfor-subsc-charge-params) -> result<string, string>;
+
+  /// Create a revenue schedule by subscription charge key
+  record post-r-sfor-subsc-charge-params {
+    /// ID of the subscription rate plan charge; for example, 402892793e173340013e173b81000012.
+    charge-key: string
+  }
+  post-r-sfor-subsc-charge: func(params: post-r-sfor-subsc-charge-params) -> result<string, string>;
+
+  /// List all details of a revenue schedule
+  record get-rs-params {
+    /// Revenue schedule number. The revenue schedule number is always prefixed with "RS", for example, "RS-00000001".
+    rs-number: string
+  }
+  get-rs: func(params: get-rs-params) -> result<string, string>;
+
+  /// Delete a revenue schedule
+  record delete-rs-params {
+    /// 
+    /// Revenue schedule number of the revenue schedule you want to delete, for example, RS-00000256. To be deleted, the revenue schedule:
+    rs-number: string
+  }
+  delete-rs: func(params: delete-rs-params) -> result<string, string>;
+
+  /// Update a revenue schedule
+  record put-rs-basic-info-params {
+    /// Revenue schedule number. The revenue schedule number is always prefixed with "RS", for example, "RS-00000001".
+    rs-number: string
+  }
+  put-rs-basic-info: func(params: put-rs-basic-info-params) -> result<string, string>;
+
+  /// Distribute revenue across accounting periods
+  record put-revenue-across-ap-params {
+    /// Revenue schedule number. The revenue schedule number is always prefixed with "RS", for example, "RS-00000001".
+    rs-number: string
+  }
+  put-revenue-across-ap: func(params: put-revenue-across-ap-params) -> result<string, string>;
+
+  /// Distribute revenue on a specific date
+  record put-revenue-specific-date-params {
+    /// Revenue schedule number. The revenue schedule number is always prefixed with "RS", for example, "RS-00000001".
+    rs-number: string
+  }
+  put-revenue-specific-date: func(params: put-revenue-specific-date-params) -> result<string, string>;
+
+  /// Distribute revenue in a recognition period
+  record put-revenue-by-recognition-startand-end-dates-params {
+    /// Revenue schedule number. Specify the revenue schedule whose revenue you want to distribute.
+    ///   
+    rs-number: string
+  }
+  put-revenue-by-recognition-startand-end-dates: func(params: put-revenue-by-recognition-startand-end-dates-params) -> result<string, string>;
+
+}
+
+interface zuora-revenue-integration {
+  /// Update a Zuora Revenue accounting code
+  put-rev-pro-accounting-codes: func() -> result<string, string>;
+
+}
+
+interface rsa-signatures {
+  /// Generate an RSA signature
+  post-rsa-signatures: func() -> result<string, string>;
+
+  /// Decrypt an RSA signature
+  post-decrypt-rsa-signatures: func() -> result<string, string>;
+
+}
+
+interface sequence-sets {
+  /// List sequence sets
+  record get-sequence-sets-params {
+    /// The name of a specific sequence set.
+    name: option<string>
+  }
+  get-sequence-sets: func(params: get-sequence-sets-params) -> result<string, string>;
+
+  /// Create sequence sets
+  post-sequence-sets: func() -> result<string, string>;
+
+  /// Retrieve a sequence set
+  record get-sequence-set-params {
+    /// The ID of the sequence set to retrieve information about.
+    id: string
+  }
+  get-sequence-set: func(params: get-sequence-set-params) -> result<string, string>;
+
+  /// Update a sequence set
+  record put-sequence-set-params {
+    /// The ID of the sequence set to update.
+    id: string
+  }
+  put-sequence-set: func(params: put-sequence-set-params) -> result<string, string>;
+
+  /// Delete a sequence set
+  record delete-sequence-set-params {
+    /// The ID of the sequence set to delete.
+    id: string
+  }
+  delete-sequence-set: func(params: delete-sequence-set-params) -> result<string, string>;
+
+}
+
+interface transactions {
+  /// List all invoices for an account
+  record get-transaction-invoice-params {
+    /// Account number or account ID.
+    account-key: string
+  }
+  get-transaction-invoice: func(params: get-transaction-invoice-params) -> result<string, string>;
+
+  /// List all payments for an account
+  record get-transaction-payment-params {
+    /// Account number or account ID.
+    account-key: string
+  }
+  get-transaction-payment: func(params: get-transaction-payment-params) -> result<string, string>;
+
+}
+
+interface users {
+  /// Multi-entity: Accept user access
+  record put-accept-user-access-params {
+    /// Specify the login name of the user that you want to accept the access request for.
+    username: string
+  }
+  put-accept-user-access: func(params: put-accept-user-access-params) -> result<string, string>;
+
+  /// Multi-entity: List all entities that a user can access
+  record get-entities-user-accessible-params {
+    /// Specify the login user name that you want to retrieve.
+    username: string
+  }
+  get-entities-user-accessible: func(params: get-entities-user-accessible-params) -> result<string, string>;
+
+  /// Multi-entity: Deny user access
+  record put-deny-user-access-params {
+    /// Specify the login name of the user that you want to deny the access.
+    username: string
+  }
+  put-deny-user-access: func(params: put-deny-user-access-params) -> result<string, string>;
+
+  /// Multi-entity: Send user access requests
+  record put-send-user-access-requests-params {
+    /// Specify the login name of the user who wants to access other entities.
+    username: string
+  }
+  put-send-user-access-requests: func(params: put-send-user-access-requests-params) -> result<string, string>;
+
+}
+
+interface workflows {
+  /// List workflows
+  record get-workflows-params {
+    /// If set to true, the operation retrieves workflows that have the callout trigger enabled. If set to false, the operation retrieves workflows that have the callout trigger disabled. If not specified, the operation will not use this filter.
+    callout-trigger: option<bool>,
+    /// A CRON expession that specifies a schedule (for example, `0 0 * * *`). If specified, the operation retrieves the workflow that is run based on the specified schedule.
+    interval: option<string>,
+    /// If specified, the operation retrieves the workflow that is in the specified name.
+    name: option<string>,
+    /// If set to true, the operation retrieves workflows that have the ondemand trigger enabled. If set to false, the operation retrieves workflows that have the ondemand trigger disabled. If not specified, the operation will not use this filter.
+    ondemand-trigger: option<bool>,
+    /// If set to true, the operation retrieves workflows that have the scheduled trigger enabled. If set to false, the operation retrieves workflows that have the scheduled trigger disabled. If not specfied, the operation will not use this filter.
+    scheduled-trigger: option<bool>,
+    /// If you want to retrieve only the workflows on a specific page, you can specify the `page` number in the query.
+    page: option<s32>,
+    /// The number of workflows shown in a single call. If the `page` parameter is not specified, the operation will return only the first page of results. If there are multiple pages of results, use it with the `page` parameter to get the results on subsequent pages.
+    page-length: option<s32>
+  }
+  get-workflows: func(params: get-workflows-params) -> result<string, string>;
+
+  /// Import a workflow
+  post-workflow-import: func() -> result<string, string>;
+
+  /// Retrieve workflow task usage
+  record get-workflows-usages-params {
+    /// The start date of the usage data that you want to get. For example, 2019-01-01.
+    start-date: string,
+    /// The end date of the usage data that you want to get. For example, 2019-12-31.
+    end-date: string,
+    /// The type of metric that you want to get. Currently, only `taskCount` is supported. `taskCount` is the amount of task runs.
+    metrics: string
+  }
+  get-workflows-usages: func(params: get-workflows-usages-params) -> result<string, string>;
+
+  /// List workflow tasks
+  record get-workflows-tasks-params {
+    /// If specified, the operation retrieves the task that is with specified id.
+    id: option<string>,
+    /// If specified, the operation retrieves tasks that is in the specified name.
+    name: option<string>,
+    /// If set to true, the operation retrieves workflows that have the scheduled trigger enabled. If set to false, the operation retrieves workflows that have the scheduled trigger disabled. If not specfied, the operation will not use this filter.
+    instance: option<bool>,
+    /// If specified, the operation retrieves tasks that is the specified type.
+    action-type: option<string>,
+    /// If specified, the operation retrieves tasks with the specified object.
+    object: option<string>,
+    /// If specified, the operation retrieves tasks with the specified object id.
+    object-id: option<string>,
+    /// If specified, the operation retrieves tasks with the specified api call type used.
+    call-type: option<string>,
+    /// If specified, the operation retrieves tasks that for the specified workflow id.
+    workflow-id: option<string>,
+    /// If specified, the operation retrieves tasks that with the specified filter tags.
+    tags: option<string>,
+    /// If you want to retrieve only the workflows on a specific page, you can specify the `page` number in the query.
+    page: option<s32>,
+    /// The number of workflows shown in a single call. If the `page` parameter is not specified, the operation will return only the first page of results. If there are multiple pages of results, use it with the `page` parameter to get the results on subsequent pages.
+    page-length: option<s32>
+  }
+  get-workflows-tasks: func(params: get-workflows-tasks-params) -> result<string, string>;
+
+  /// Update workflow tasks
+  put-workflows-tasks-update: func() -> result<string, string>;
+
+  /// Retrieve a workflow task
+  record get-workflows-task-params {
+    /// The unique ID of the task.
+    task-id: string
+  }
+  get-workflows-task: func(params: get-workflows-task-params) -> result<string, string>;
+
+  /// Rerun a workflow task
+  record post-workflows-task-rerun-params {
+    /// The unique ID of the task.
+    task-id: string
+  }
+  post-workflows-task-rerun: func(params: post-workflows-task-rerun-params) -> result<string, string>;
+
+  /// Retrieve a workflow
+  record get-workflow-params {
+    /// The unique ID of a workflow. For example, 19080.
+    workflow-id: string
+  }
+  get-workflow: func(params: get-workflow-params) -> result<string, string>;
+
+  /// Update a workflow definition
+  record patch-update-workflow-params {
+    /// The unique ID of a workflow. For example, 19080.
+    workflow-id: string
+  }
+  patch-update-workflow: func(params: patch-update-workflow-params) -> result<string, string>;
+
+  /// Delete a workflow
+  record delete-workflow-params {
+    /// The unique ID of a workflow. For example, 19080.
+    workflow-id: string
+  }
+  delete-workflow: func(params: delete-workflow-params) -> result<string, string>;
+
+  /// Export a workflow
+  record get-workflow-export-params {
+    /// The ID of the workflow to export.
+    workflow-id: string
+  }
+  get-workflow-export: func(params: get-workflow-export-params) -> result<string, string>;
+
+  /// Run a workflow
+  record post-run-workflow-params {
+    /// The ID of the workflow you want to run.
+    workflow-id: string
+  }
+  post-run-workflow: func(params: post-run-workflow-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export charge-metrics;
+  export event-triggers;
+  export notifications;
+  export o-auth;
+  export custom-object-records;
+  export custom-object-definitions;
+  export custom-object-jobs;
+  export data-queries;
+  export settings;
+  export accounting-codes;
+  export accounting-periods;
+  export accounts;
+  export billing-documents;
+  export actions;
+  export amendments;
+  export orders;
+  export attachments;
+  export bill-run;
+  export billing-preview-run;
+  export mass-updater;
+  export catalog;
+  export charge-revenue-summaries;
+  export connections;
+  export contacts;
+  export credit-memos;
+  export custom-exchange-rates;
+  export debit-memos;
+  export describe;
+  export document-properties;
+  export entities;
+  export entity-connections;
+  export files;
+  export payment-gateway-reconciliation;
+  export hmac-signatures;
+  export hosted-pages;
+  export invoices;
+  export summary-journal-entries;
+  export journal-runs;
+  export communication-profiles;
+  export credit-balance-adjustments;
+  export exports;
+  export features;
+  export imports;
+  export invoice-adjustments;
+  export invoice-item-adjustments;
+  export invoice-items;
+  export invoice-payments;
+  export invoice-split-items;
+  export invoice-splits;
+  export payments;
+  export payment-methods;
+  export payment-method-snapshots;
+  export payment-method-transaction-logs;
+  export payment-transaction-logs;
+  export products;
+  export product-features;
+  export product-rate-plans;
+  export product-rate-plan-charges;
+  export product-rate-plan-charge-tiers;
+  export rate-plan-charge-tiers;
+  export rate-plan-charges;
+  export rate-plans;
+  export refunds;
+  export refund-invoice-payments;
+  export refund-transaction-logs;
+  export subscription-product-features;
+  export subscriptions;
+  export taxation-items;
+  export unit-of-measure;
+  export usage;
+  export operations;
+  export order-line-items;
+  export ramps;
+  export payment-runs;
+  export payment-gateways;
+  export quotes-document;
+  export revenue-events;
+  export revenue-items;
+  export revenue-rules;
+  export revenue-schedules;
+  export zuora-revenue-integration;
+  export rsa-signatures;
+  export sequence-sets;
+  export transactions;
+  export users;
+  export workflows;
+}

@@ -1,0 +1,3202 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `oauth2` | `Authorization: Bearer <secret>` |
+package autostamp:trakt@0.2.0;
+
+interface calendars {
+  /// Get DVD releases
+  record get-calendars-all-dvd-start-date-days-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-calendars-all-dvd-start-date-days: func(params: get-calendars-all-dvd-start-date-days-params) -> result<string, string>;
+
+  /// Get movies
+  record get-calendars-all-movies-start-date-days-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-calendars-all-movies-start-date-days: func(params: get-calendars-all-movies-start-date-days-params) -> result<string, string>;
+
+  /// Get new shows
+  record get-calendars-all-shows-new-start-date-days-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-calendars-all-shows-new-start-date-days: func(params: get-calendars-all-shows-new-start-date-days-params) -> result<string, string>;
+
+  /// Get season premieres
+  record get-calendars-all-shows-premieres-start-date-days-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-calendars-all-shows-premieres-start-date-days: func(params: get-calendars-all-shows-premieres-start-date-days-params) -> result<string, string>;
+
+  /// Get shows
+  record get-calendars-all-shows-start-date-days-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-calendars-all-shows-start-date-days: func(params: get-calendars-all-shows-start-date-days-params) -> result<string, string>;
+
+  /// Get DVD releases
+  record get-dvd-releases-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-dvd-releases: func(params: get-dvd-releases-params) -> result<string, string>;
+
+  /// Get movies
+  record get-movies-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-movies: func(params: get-movies-params) -> result<string, string>;
+
+  /// Get new shows
+  record get-new-shows-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-new-shows: func(params: get-new-shows-params) -> result<string, string>;
+
+  /// Get season premieres
+  record get-season-premieres-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-season-premieres: func(params: get-season-premieres-params) -> result<string, string>;
+
+  /// Get shows
+  record get-shows-params {
+    /// Start the calendar on this date.
+    start-date: string,
+    /// Number of days to display.
+    days: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-shows: func(params: get-shows-params) -> result<string, string>;
+
+}
+
+
+interface certifications {
+  /// Get certifications
+  record get-certifications-params {
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-certifications: func(params: get-certifications-params) -> result<string, string>;
+
+}
+
+interface checkin {
+  record check-into-an-item-body-movie {
+    ids: option<check-into-an-item-body-movie-ids>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record check-into-an-item-body-movie-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record check-into-an-item-body-sharing {
+    mastodon: option<bool>,
+    tumblr: option<bool>,
+    twitter: option<bool>
+  }
+
+  /// Check into an item
+  record check-into-an-item-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    app-date: option<string>,
+    app-version: option<string>,
+    message: option<string>,
+    movie: option<check-into-an-item-body-movie>,
+    sharing: option<check-into-an-item-body-sharing>
+  }
+  check-into-an-item: func(params: check-into-an-item-params) -> result<string, string>;
+
+  /// Delete any active checkins
+  record delete-any-active-checkins-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  delete-any-active-checkins: func(params: delete-any-active-checkins-params) -> result<string, string>;
+
+}
+
+interface comments {
+  record post-a-comment-body-movie {
+    ids: option<post-a-comment-body-movie-ids>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record post-a-comment-body-movie-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record post-a-comment-body-sharing {
+    medium: option<bool>,
+    tumblr: option<bool>,
+    twitter: option<bool>
+  }
+
+  /// Post a comment
+  record post-a-comment-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    comment: option<string>,
+    movie: option<post-a-comment-body-movie>,
+    sharing: option<post-a-comment-body-sharing>,
+    spoiler: option<bool>
+  }
+  post-a-comment: func(params: post-a-comment-params) -> result<string, string>;
+
+  /// Get recently created comments
+  record get-recently-created-comments-params {
+    comment-type: string,
+    type-op: string,
+    /// include comment replies
+    include-replies: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-created-comments: func(params: get-recently-created-comments-params) -> result<string, string>;
+
+  /// Get trending comments
+  record get-trending-comments-params {
+    comment-type: string,
+    type-op: string,
+    /// include comment replies
+    include-replies: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-trending-comments: func(params: get-trending-comments-params) -> result<string, string>;
+
+  /// Get recently updated comments
+  record get-recently-updated-comments-params {
+    comment-type: string,
+    type-op: string,
+    /// include comment replies
+    include-replies: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-updated-comments: func(params: get-recently-updated-comments-params) -> result<string, string>;
+
+  /// Get a comment or reply
+  record get-a-comment-or-reply-params {
+    /// A specific comment ID.
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-a-comment-or-reply: func(params: get-a-comment-or-reply-params) -> result<string, string>;
+
+  /// Update a comment or reply
+  record update-a-comment-or-reply-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string,
+    comment: option<string>,
+    spoiler: option<bool>
+  }
+  update-a-comment-or-reply: func(params: update-a-comment-or-reply-params) -> result<string, string>;
+
+  /// Delete a comment or reply
+  record delete-a-comment-or-reply-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string
+  }
+  delete-a-comment-or-reply: func(params: delete-a-comment-or-reply-params) -> result<string, string>;
+
+  /// Get the attached media item
+  record get-the-attached-media-item-params {
+    /// A specific comment ID.
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-attached-media-item: func(params: get-the-attached-media-item-params) -> result<string, string>;
+
+  /// Like a comment
+  record like-a-comment-params {
+    /// A specific comment ID.
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  like-a-comment: func(params: like-a-comment-params) -> result<string, string>;
+
+  /// Remove like on a comment
+  record remove-like-on-a-comment-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string
+  }
+  remove-like-on-a-comment: func(params: remove-like-on-a-comment-params) -> result<string, string>;
+
+  /// Get all users who liked a comment
+  record get-all-users-who-liked-a-comment-params {
+    /// A specific comment ID.
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-users-who-liked-a-comment: func(params: get-all-users-who-liked-a-comment-params) -> result<string, string>;
+
+  /// Get replies for a comment
+  record get-replies-for-a-comment-params {
+    /// A specific comment ID.
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-replies-for-a-comment: func(params: get-replies-for-a-comment-params) -> result<string, string>;
+
+  /// Post a reply for a comment
+  record post-a-reply-for-a-comment-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string,
+    comment: option<string>,
+    spoiler: option<bool>
+  }
+  post-a-reply-for-a-comment: func(params: post-a-reply-for-a-comment-params) -> result<string, string>;
+
+}
+
+interface countries {
+  /// Get countries
+  record get-countries-params {
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-countries: func(params: get-countries-params) -> result<string, string>;
+
+}
+
+interface genres {
+  /// Get genres
+  record get-genres-params {
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-genres: func(params: get-genres-params) -> result<string, string>;
+
+}
+
+interface languages {
+  /// Get languages
+  record get-languages-params {
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-languages: func(params: get-languages-params) -> result<string, string>;
+
+}
+
+interface lists {
+  /// Get popular lists
+  record get-popular-lists-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-popular-lists: func(params: get-popular-lists-params) -> result<string, string>;
+
+  /// Get trending lists
+  record get-trending-lists-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-trending-lists: func(params: get-trending-lists-params) -> result<string, string>;
+
+  /// Get list
+  record get-list-params {
+    /// Trakt ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-list: func(params: get-list-params) -> result<string, string>;
+
+  /// Get all list comments
+  record get-all-list-comments-params {
+    /// Trakt ID
+    id: string,
+    /// how to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-list-comments: func(params: get-all-list-comments-params) -> result<string, string>;
+
+  /// Get items on a list
+  record get-items-on-a-list-params {
+    /// Trakt ID
+    id: string,
+    /// Filter for a specific item type
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-items-on-a-list: func(params: get-items-on-a-list-params) -> result<string, string>;
+
+  /// Get all users who liked a list
+  record get-all-users-who-liked-a-list-params {
+    /// Trakt ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-users-who-liked-a-list: func(params: get-all-users-who-liked-a-list-params) -> result<string, string>;
+
+}
+
+interface movies {
+  /// Get the most anticipated movies
+  record get-the-most-anticipated-movies-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-anticipated-movies: func(params: get-the-most-anticipated-movies-params) -> result<string, string>;
+
+  /// Get the weekend box office
+  record get-the-weekend-box-office-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-weekend-box-office: func(params: get-the-weekend-box-office-params) -> result<string, string>;
+
+  /// Get the most Collected movies
+  record get-the-most-collected-movies-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-collected-movies: func(params: get-the-most-collected-movies-params) -> result<string, string>;
+
+  /// Get the most played movies
+  record get-the-most-played-movies-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-played-movies: func(params: get-the-most-played-movies-params) -> result<string, string>;
+
+  /// Get popular movies
+  record get-popular-movies-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-popular-movies: func(params: get-popular-movies-params) -> result<string, string>;
+
+  /// Get the most recommended movies
+  record get-the-most-recommended-movies-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-recommended-movies: func(params: get-the-most-recommended-movies-params) -> result<string, string>;
+
+  /// Get trending movies
+  record get-trending-movies-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-trending-movies: func(params: get-trending-movies-params) -> result<string, string>;
+
+  /// Get recently updated movie Trakt IDs
+  record get-recently-updated-movie-trakt-i-ds-params {
+    /// Updated since this date and time.
+    start-date: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-updated-movie-trakt-i-ds: func(params: get-recently-updated-movie-trakt-i-ds-params) -> result<string, string>;
+
+  /// Get recently updated movies
+  record get-recently-updated-movies-params {
+    /// Updated since this date and time.
+    start-date: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-updated-movies: func(params: get-recently-updated-movies-params) -> result<string, string>;
+
+  /// Get the most watched movies
+  record get-the-most-watched-movies-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-watched-movies: func(params: get-the-most-watched-movies-params) -> result<string, string>;
+
+  /// Get a movie
+  record get-a-movie-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-a-movie: func(params: get-a-movie-params) -> result<string, string>;
+
+  /// Get all movie aliases
+  record get-all-movie-aliases-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-movie-aliases: func(params: get-all-movie-aliases-params) -> result<string, string>;
+
+  /// Get all movie comments
+  record get-all-movie-comments-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// how to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-movie-comments: func(params: get-all-movie-comments-params) -> result<string, string>;
+
+  /// Get lists containing this movie
+  record get-lists-containing-this-movie-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// Filter for a specific list type
+    type-op: string,
+    /// How to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-lists-containing-this-movie: func(params: get-lists-containing-this-movie-params) -> result<string, string>;
+
+  /// Get all people for a movie
+  record get-all-people-for-a-movie-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-people-for-a-movie: func(params: get-all-people-for-a-movie-params) -> result<string, string>;
+
+  /// Get movie ratings
+  record get-movie-ratings-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-movie-ratings: func(params: get-movie-ratings-params) -> result<string, string>;
+
+  /// Get related movies
+  record get-related-movies-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-related-movies: func(params: get-related-movies-params) -> result<string, string>;
+
+  /// Get all movie releases
+  record get-all-movie-releases-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// 2 character country code
+    country: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-movie-releases: func(params: get-all-movie-releases-params) -> result<string, string>;
+
+  /// Get movie stats
+  record get-movie-stats-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-movie-stats: func(params: get-movie-stats-params) -> result<string, string>;
+
+  /// Get movie studios
+  record get-movie-studios-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-movie-studios: func(params: get-movie-studios-params) -> result<string, string>;
+
+  /// Get all movie translations
+  record get-all-movie-translations-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// 2 character language code
+    language: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-movie-translations: func(params: get-all-movie-translations-params) -> result<string, string>;
+
+  /// Get users watching right now
+  record get-users-watching-right-now-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-watching-right-now: func(params: get-users-watching-right-now-params) -> result<string, string>;
+
+}
+
+interface networks {
+  /// Get networks
+  record get-networks-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-networks: func(params: get-networks-params) -> result<string, string>;
+
+}
+
+interface authentication-o-auth {
+  /// Authorize Application
+  record authorize-application-params {
+    /// Must be set to code.
+    response-type: string,
+    /// Get this from your app settings.
+    client-id: string,
+    /// URI specified in your app settings.
+    redirect-uri: string,
+    /// State variable for CSRF purposes.
+    state: option<string>,
+    body: option<string>
+  }
+  authorize-application: func(params: authorize-application-params) -> result<string, string>;
+
+  /// Revoke an access_token
+  record revoke-an-access-token-params {
+    client-id: option<string>,
+    client-secret: option<string>,
+    token: option<string>
+  }
+  revoke-an-access-token: func(params: revoke-an-access-token-params) -> result<string, string>;
+
+  /// Exchange refresh_token for access_token
+  record exchange-refresh-token-for-access-token-params {
+    client-id: option<string>,
+    client-secret: option<string>,
+    grant-type: option<string>,
+    redirect-uri: option<string>,
+    refresh-token: option<string>
+  }
+  exchange-refresh-token-for-access-token: func(params: exchange-refresh-token-for-access-token-params) -> result<string, string>;
+
+}
+
+interface authentication-devices {
+  /// Generate new device codes
+  record generate-new-device-codes-params {
+    client-id: option<string>
+  }
+  generate-new-device-codes: func(params: generate-new-device-codes-params) -> result<string, string>;
+
+  /// Poll for the access_token
+  record poll-for-the-access-token-params {
+    client-id: option<string>,
+    client-secret: option<string>,
+    code: option<string>
+  }
+  poll-for-the-access-token: func(params: poll-for-the-access-token-params) -> result<string, string>;
+
+}
+
+interface people {
+  /// Get recently updated people Trakt IDs
+  record get-recently-updated-people-trakt-i-ds-params {
+    /// Updated since this date and time.
+    start-date: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-updated-people-trakt-i-ds: func(params: get-recently-updated-people-trakt-i-ds-params) -> result<string, string>;
+
+  /// Get recently updated people
+  record get-recently-updated-people-params {
+    /// Updated since this date and time.
+    start-date: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-updated-people: func(params: get-recently-updated-people-params) -> result<string, string>;
+
+  /// Get a single person
+  record get-a-single-person-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-a-single-person: func(params: get-a-single-person-params) -> result<string, string>;
+
+  /// Get lists containing this person
+  record get-lists-containing-this-person-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// Filter for a specific list type
+    type-op: string,
+    /// How to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-lists-containing-this-person: func(params: get-lists-containing-this-person-params) -> result<string, string>;
+
+  /// Get movie credits
+  record get-movie-credits-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-movie-credits: func(params: get-movie-credits-params) -> result<string, string>;
+
+  /// Get show credits
+  record get-show-credits-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-show-credits: func(params: get-show-credits-params) -> result<string, string>;
+
+}
+
+interface recommendations {
+  enum get-movie-recommendations-ignore-collected-enum {
+    true,
+    false,
+  }
+
+  /// Get movie recommendations
+  record get-movie-recommendations-params {
+    /// filter out collected movies
+    ignore-collected: option<get-movie-recommendations-ignore-collected-enum>,
+    /// filter out watchlisted movies
+    ignore-watchlisted: option<get-movie-recommendations-ignore-collected-enum>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-movie-recommendations: func(params: get-movie-recommendations-params) -> result<string, string>;
+
+  /// Hide a movie recommendation
+  record hide-a-movie-recommendation-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  hide-a-movie-recommendation: func(params: hide-a-movie-recommendation-params) -> result<string, string>;
+
+  /// Get show recommendations
+  record get-show-recommendations-params {
+    /// filter out collected shows
+    ignore-collected: option<get-movie-recommendations-ignore-collected-enum>,
+    /// filter out watchlisted movies
+    ignore-watchlisted: option<get-movie-recommendations-ignore-collected-enum>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-show-recommendations: func(params: get-show-recommendations-params) -> result<string, string>;
+
+  /// Hide a show recommendation
+  record hide-a-show-recommendation-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  hide-a-show-recommendation: func(params: hide-a-show-recommendation-params) -> result<string, string>;
+
+}
+
+interface scrobble {
+  record pause-watching-in-a-media-center-body-movie {
+    ids: option<pause-watching-in-a-media-center-body-movie-ids>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record pause-watching-in-a-media-center-body-movie-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record start-watching-in-a-media-center-body-movie {
+    ids: option<start-watching-in-a-media-center-body-movie-ids>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record start-watching-in-a-media-center-body-movie-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record stop-or-finish-watching-in-a-media-center-body-movie {
+    ids: option<stop-or-finish-watching-in-a-media-center-body-movie-ids>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record stop-or-finish-watching-in-a-media-center-body-movie-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  /// Pause watching in a media center
+  record pause-watching-in-a-media-center-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    app-date: option<string>,
+    app-version: option<string>,
+    movie: option<pause-watching-in-a-media-center-body-movie>,
+    progress: option<f64>
+  }
+  pause-watching-in-a-media-center: func(params: pause-watching-in-a-media-center-params) -> result<string, string>;
+
+  /// Start watching in a media center
+  record start-watching-in-a-media-center-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    app-date: option<string>,
+    app-version: option<string>,
+    movie: option<start-watching-in-a-media-center-body-movie>,
+    progress: option<f64>
+  }
+  start-watching-in-a-media-center: func(params: start-watching-in-a-media-center-params) -> result<string, string>;
+
+  /// Stop or finish watching in a media center
+  record stop-or-finish-watching-in-a-media-center-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    app-date: option<string>,
+    app-version: option<string>,
+    movie: option<stop-or-finish-watching-in-a-media-center-body-movie>,
+    progress: option<f64>
+  }
+  stop-or-finish-watching-in-a-media-center: func(params: stop-or-finish-watching-in-a-media-center-params) -> result<string, string>;
+
+}
+
+interface search {
+  enum get-id-lookup-results-type-op-enum {
+    movie,
+    show,
+    episode,
+    person,
+    list-op,
+  }
+
+  enum get-text-query-results-body-enum {
+    title,
+    tagline,
+    overview,
+    people,
+    translations,
+    aliases,
+    name,
+    biography,
+    description,
+  }
+
+  /// Get ID lookup results
+  record get-id-lookup-results-params {
+    /// Type of ID to lookup.
+    id-type: string,
+    /// ID that matches with the type.
+    id: string,
+    /// Search type.
+    type-op: option<get-id-lookup-results-type-op-enum>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-id-lookup-results: func(params: get-id-lookup-results-params) -> result<string, string>;
+
+  /// Get text query results
+  record get-text-query-results-params {
+    /// Search type.
+    type-op: string,
+    /// Search all text based fields.
+    query: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-text-query-results: func(params: get-text-query-results-params) -> result<string, string>;
+
+}
+
+interface shows {
+  enum get-show-collection-progress-body-enum {
+    aired,
+    collected,
+  }
+
+  enum get-show-watched-progress-body-enum {
+    aired,
+    watched,
+  }
+
+  /// Get the most anticipated shows
+  record get-the-most-anticipated-shows-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-anticipated-shows: func(params: get-the-most-anticipated-shows-params) -> result<string, string>;
+
+  /// Get the most collected shows
+  record get-the-most-collected-shows-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-collected-shows: func(params: get-the-most-collected-shows-params) -> result<string, string>;
+
+  /// Get the most played shows
+  record get-the-most-played-shows-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-played-shows: func(params: get-the-most-played-shows-params) -> result<string, string>;
+
+  /// Get popular shows
+  record get-popular-shows-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-popular-shows: func(params: get-popular-shows-params) -> result<string, string>;
+
+  /// Get the most recommended shows
+  record get-the-most-recommended-shows-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-recommended-shows: func(params: get-the-most-recommended-shows-params) -> result<string, string>;
+
+  /// Get trending shows
+  record get-trending-shows-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-trending-shows: func(params: get-trending-shows-params) -> result<string, string>;
+
+  /// Get recently updated show Trakt IDs
+  record get-recently-updated-show-trakt-i-ds-params {
+    /// Updated since this date and time.
+    start-date: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-updated-show-trakt-i-ds: func(params: get-recently-updated-show-trakt-i-ds-params) -> result<string, string>;
+
+  /// Get recently updated shows
+  record get-recently-updated-shows-params {
+    /// Updated since this date and time.
+    start-date: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-recently-updated-shows: func(params: get-recently-updated-shows-params) -> result<string, string>;
+
+  /// Get the most watched shows
+  record get-the-most-watched-shows-params {
+    /// Time period.
+    period: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-the-most-watched-shows: func(params: get-the-most-watched-shows-params) -> result<string, string>;
+
+  /// Get a single show
+  record get-a-single-show-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-a-single-show: func(params: get-a-single-show-params) -> result<string, string>;
+
+  /// Get all show aliases
+  record get-all-show-aliases-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-show-aliases: func(params: get-all-show-aliases-params) -> result<string, string>;
+
+  /// Get all show certifications
+  record get-all-show-certifications-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-show-certifications: func(params: get-all-show-certifications-params) -> result<string, string>;
+
+  /// Get all show comments
+  record get-all-show-comments-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// how to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-show-comments: func(params: get-all-show-comments-params) -> result<string, string>;
+
+  /// Get last episode
+  record get-last-episode-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-last-episode: func(params: get-last-episode-params) -> result<string, string>;
+
+  /// Get lists containing this show
+  record get-lists-containing-this-show-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// Filter for a specific list type
+    type-op: string,
+    /// How to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-lists-containing-this-show: func(params: get-lists-containing-this-show-params) -> result<string, string>;
+
+  /// Get next episode
+  record get-next-episode-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-next-episode: func(params: get-next-episode-params) -> result<string, string>;
+
+  /// Get all people for a show
+  record get-all-people-for-a-show-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-people-for-a-show: func(params: get-all-people-for-a-show-params) -> result<string, string>;
+
+  /// Get show collection progress
+  record get-show-collection-progress-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// include any hidden seasons
+    hidden: option<string>,
+    /// include specials as season 0
+    specials: option<string>,
+    /// count specials in the overall stats (only applies if specials are included)
+    count-specials: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-show-collection-progress: func(params: get-show-collection-progress-params) -> result<string, string>;
+
+  /// Get show watched progress
+  record get-show-watched-progress-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// include any hidden seasons
+    hidden: option<string>,
+    /// include specials as season 0
+    specials: option<string>,
+    /// count specials in the overall stats (only applies if specials are included)
+    count-specials: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-show-watched-progress: func(params: get-show-watched-progress-params) -> result<string, string>;
+
+  /// Reset show progress
+  record reset-show-progress-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  reset-show-progress: func(params: reset-show-progress-params) -> result<string, string>;
+
+  /// Undo reset show progress
+  record undo-reset-show-progress-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string
+  }
+  undo-reset-show-progress: func(params: undo-reset-show-progress-params) -> result<string, string>;
+
+  /// Get show ratings
+  record get-show-ratings-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-show-ratings: func(params: get-show-ratings-params) -> result<string, string>;
+
+  /// Get related shows
+  record get-related-shows-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-related-shows: func(params: get-related-shows-params) -> result<string, string>;
+
+  /// Get show stats
+  record get-show-stats-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-show-stats: func(params: get-show-stats-params) -> result<string, string>;
+
+  /// Get show studios
+  record get-show-studios-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-show-studios: func(params: get-show-studios-params) -> result<string, string>;
+
+  /// Get all show translations
+  record get-all-show-translations-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// 2 character language code
+    language: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-show-translations: func(params: get-all-show-translations-params) -> result<string, string>;
+
+  /// Get users watching right now
+  record get-shows-id-watching-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-shows-id-watching: func(params: get-shows-id-watching-params) -> result<string, string>;
+
+}
+
+interface seasons {
+  /// Get all seasons for a show
+  record get-all-seasons-for-a-show-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-seasons-for-a-show: func(params: get-all-seasons-for-a-show-params) -> result<string, string>;
+
+  /// Get single season for a show
+  record get-single-season-for-a-show-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// include episode translations
+    translations: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-single-season-for-a-show: func(params: get-single-season-for-a-show-params) -> result<string, string>;
+
+  /// Get all season comments
+  record get-all-season-comments-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// how to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-season-comments: func(params: get-all-season-comments-params) -> result<string, string>;
+
+  /// Get lists containing this season
+  record get-lists-containing-this-season-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// Filter for a specific list type
+    type-op: string,
+    /// How to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-lists-containing-this-season: func(params: get-lists-containing-this-season-params) -> result<string, string>;
+
+  /// Get all people for a season
+  record get-all-people-for-a-season-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-people-for-a-season: func(params: get-all-people-for-a-season-params) -> result<string, string>;
+
+  /// Get season ratings
+  record get-season-ratings-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-season-ratings: func(params: get-season-ratings-params) -> result<string, string>;
+
+  /// Get season stats
+  record get-season-stats-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-season-stats: func(params: get-season-stats-params) -> result<string, string>;
+
+  /// Get all season translations
+  record get-all-season-translations-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// 2 character language code
+    language: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-season-translations: func(params: get-all-season-translations-params) -> result<string, string>;
+
+  /// Get users watching right now
+  record get-shows-id-seasons-season-watching-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-shows-id-seasons-season-watching: func(params: get-shows-id-seasons-season-watching-params) -> result<string, string>;
+
+}
+
+interface episodes {
+  /// Get a single episode for a show
+  record get-a-single-episode-for-a-show-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-a-single-episode-for-a-show: func(params: get-a-single-episode-for-a-show-params) -> result<string, string>;
+
+  /// Get all episode comments
+  record get-all-episode-comments-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// how to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-episode-comments: func(params: get-all-episode-comments-params) -> result<string, string>;
+
+  /// Get lists containing this episode
+  record get-lists-containing-this-episode-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// Filter for a specific list type
+    type-op: string,
+    /// How to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-lists-containing-this-episode: func(params: get-lists-containing-this-episode-params) -> result<string, string>;
+
+  /// Get all people for an episode
+  record get-all-people-for-an-episode-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-people-for-an-episode: func(params: get-all-people-for-an-episode-params) -> result<string, string>;
+
+  /// Get episode ratings
+  record get-episode-ratings-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-episode-ratings: func(params: get-episode-ratings-params) -> result<string, string>;
+
+  /// Get episode stats
+  record get-episode-stats-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-episode-stats: func(params: get-episode-stats-params) -> result<string, string>;
+
+  /// Get all episode translations
+  record get-all-episode-translations-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// 2 character language code
+    language: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-episode-translations: func(params: get-all-episode-translations-params) -> result<string, string>;
+
+  /// Get users watching right now
+  record get-shows-id-seasons-season-episodes-episode-watching-params {
+    /// Trakt ID, Trakt slug, or IMDB ID
+    id: string,
+    /// season number
+    season: string,
+    /// episode number
+    episode: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-shows-id-seasons-season-episodes-episode-watching: func(params: get-shows-id-seasons-season-episodes-episode-watching-params) -> result<string, string>;
+
+}
+
+interface sync {
+  record add-items-to-collection-body-episodes-item {
+    ids: option<add-items-to-collection-body-episodes-item-ids>
+  }
+
+  record add-items-to-collection-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-collection-body-movies-item {
+    audio: option<string>,
+    audio-channels: option<string>,
+    collected-at: option<string>,
+    hdr: option<string>,
+    ids: add-items-to-collection-body-movies-item-ids,
+    media-type: option<string>,
+    resolution: option<string>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record add-items-to-collection-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record add-items-to-collection-body-seasons-item {
+    ids: option<add-items-to-collection-body-seasons-item-ids>
+  }
+
+  record add-items-to-collection-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-collection-body-shows-item {
+    ids: add-items-to-collection-body-shows-item-ids,
+    seasons: list<add-items-to-collection-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record add-items-to-collection-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-collection-body-shows-item-seasons-item {
+    episodes: option<list<add-items-to-collection-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record add-items-to-collection-body-shows-item-seasons-item-episodes-item {
+    audio: option<string>,
+    audio-channels: option<string>,
+    media-type: option<string>,
+    number: f64,
+    resolution: option<string>
+  }
+
+  record remove-items-from-collection-body-episodes-item {
+    ids: option<remove-items-from-collection-body-episodes-item-ids>
+  }
+
+  record remove-items-from-collection-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-collection-body-movies-item {
+    ids: remove-items-from-collection-body-movies-item-ids,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record remove-items-from-collection-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record remove-items-from-collection-body-seasons-item {
+    ids: option<remove-items-from-collection-body-seasons-item-ids>
+  }
+
+  record remove-items-from-collection-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-collection-body-shows-item {
+    ids: remove-items-from-collection-body-shows-item-ids,
+    seasons: list<remove-items-from-collection-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record remove-items-from-collection-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-collection-body-shows-item-seasons-item {
+    episodes: option<list<remove-items-from-collection-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record remove-items-from-collection-body-shows-item-seasons-item-episodes-item {
+    number: f64
+  }
+
+  record add-items-to-watched-history-body-episodes-item {
+    ids: option<add-items-to-watched-history-body-episodes-item-ids>,
+    watched-at: option<string>
+  }
+
+  record add-items-to-watched-history-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-watched-history-body-movies-item {
+    ids: add-items-to-watched-history-body-movies-item-ids,
+    title: option<string>,
+    watched-at: option<string>,
+    year: option<f64>
+  }
+
+  record add-items-to-watched-history-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record add-items-to-watched-history-body-seasons-item {
+    ids: option<add-items-to-watched-history-body-seasons-item-ids>,
+    watched-at: option<string>
+  }
+
+  record add-items-to-watched-history-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-watched-history-body-shows-item {
+    ids: add-items-to-watched-history-body-shows-item-ids,
+    seasons: list<add-items-to-watched-history-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record add-items-to-watched-history-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-watched-history-body-shows-item-seasons-item {
+    episodes: option<list<add-items-to-watched-history-body-shows-item-seasons-item-episodes-item>>,
+    number: f64,
+    watched-at: option<string>
+  }
+
+  record add-items-to-watched-history-body-shows-item-seasons-item-episodes-item {
+    number: f64,
+    watched-at: option<string>
+  }
+
+  record remove-items-from-history-body-episodes-item {
+    ids: option<remove-items-from-history-body-episodes-item-ids>
+  }
+
+  record remove-items-from-history-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-history-body-movies-item {
+    ids: remove-items-from-history-body-movies-item-ids,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record remove-items-from-history-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record remove-items-from-history-body-seasons-item {
+    ids: option<remove-items-from-history-body-seasons-item-ids>
+  }
+
+  record remove-items-from-history-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-history-body-shows-item {
+    ids: remove-items-from-history-body-shows-item-ids,
+    seasons: list<remove-items-from-history-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record remove-items-from-history-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-history-body-shows-item-seasons-item {
+    episodes: option<list<remove-items-from-history-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record remove-items-from-history-body-shows-item-seasons-item-episodes-item {
+    number: f64
+  }
+
+  record add-new-ratings-body-episodes-item {
+    ids: option<add-new-ratings-body-episodes-item-ids>,
+    rating: option<f64>
+  }
+
+  record add-new-ratings-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-new-ratings-body-movies-item {
+    ids: add-new-ratings-body-movies-item-ids,
+    rated-at: option<string>,
+    rating: f64,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record add-new-ratings-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record add-new-ratings-body-seasons-item {
+    ids: option<add-new-ratings-body-seasons-item-ids>,
+    rating: option<f64>
+  }
+
+  record add-new-ratings-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-new-ratings-body-shows-item {
+    ids: add-new-ratings-body-shows-item-ids,
+    rating: option<f64>,
+    seasons: list<add-new-ratings-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record add-new-ratings-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-new-ratings-body-shows-item-seasons-item {
+    episodes: option<list<add-new-ratings-body-shows-item-seasons-item-episodes-item>>,
+    number: f64,
+    rating: option<f64>
+  }
+
+  record add-new-ratings-body-shows-item-seasons-item-episodes-item {
+    number: f64,
+    rating: f64
+  }
+
+  record remove-ratings-body-episodes-item {
+    ids: option<remove-ratings-body-episodes-item-ids>
+  }
+
+  record remove-ratings-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-ratings-body-movies-item {
+    ids: remove-ratings-body-movies-item-ids,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record remove-ratings-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record remove-ratings-body-seasons-item {
+    ids: option<remove-ratings-body-seasons-item-ids>
+  }
+
+  record remove-ratings-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-ratings-body-shows-item {
+    ids: remove-ratings-body-shows-item-ids,
+    seasons: list<remove-ratings-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record remove-ratings-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-ratings-body-shows-item-seasons-item {
+    episodes: option<list<remove-ratings-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record remove-ratings-body-shows-item-seasons-item-episodes-item {
+    number: f64
+  }
+
+  record add-items-to-personal-recommendations-body-movies-item {
+    ids: add-items-to-personal-recommendations-body-movies-item-ids,
+    notes: option<string>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record add-items-to-personal-recommendations-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record add-items-to-personal-recommendations-body-shows-item {
+    ids: add-items-to-personal-recommendations-body-shows-item-ids,
+    notes: option<string>,
+    title: string,
+    year: f64
+  }
+
+  record add-items-to-personal-recommendations-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-personal-recommendations-body-movies-item {
+    ids: remove-items-from-personal-recommendations-body-movies-item-ids,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record remove-items-from-personal-recommendations-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record remove-items-from-personal-recommendations-body-shows-item {
+    ids: option<remove-items-from-personal-recommendations-body-shows-item-ids>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record remove-items-from-personal-recommendations-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-watchlist-body-episodes-item {
+    ids: option<add-items-to-watchlist-body-episodes-item-ids>
+  }
+
+  record add-items-to-watchlist-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-watchlist-body-movies-item {
+    ids: add-items-to-watchlist-body-movies-item-ids,
+    notes: option<string>,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record add-items-to-watchlist-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record add-items-to-watchlist-body-seasons-item {
+    ids: option<add-items-to-watchlist-body-seasons-item-ids>
+  }
+
+  record add-items-to-watchlist-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-watchlist-body-shows-item {
+    ids: add-items-to-watchlist-body-shows-item-ids,
+    notes: option<string>,
+    seasons: list<add-items-to-watchlist-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record add-items-to-watchlist-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-watchlist-body-shows-item-seasons-item {
+    episodes: option<list<add-items-to-watchlist-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record add-items-to-watchlist-body-shows-item-seasons-item-episodes-item {
+    number: f64
+  }
+
+  record remove-items-from-watchlist-body-episodes-item {
+    ids: option<remove-items-from-watchlist-body-episodes-item-ids>
+  }
+
+  record remove-items-from-watchlist-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-watchlist-body-movies-item {
+    ids: remove-items-from-watchlist-body-movies-item-ids,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record remove-items-from-watchlist-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record remove-items-from-watchlist-body-seasons-item {
+    ids: option<remove-items-from-watchlist-body-seasons-item-ids>
+  }
+
+  record remove-items-from-watchlist-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-watchlist-body-shows-item {
+    ids: remove-items-from-watchlist-body-shows-item-ids,
+    seasons: list<remove-items-from-watchlist-body-shows-item-seasons-item>,
+    title: string,
+    year: f64
+  }
+
+  record remove-items-from-watchlist-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-watchlist-body-shows-item-seasons-item {
+    episodes: option<list<remove-items-from-watchlist-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record remove-items-from-watchlist-body-shows-item-seasons-item-episodes-item {
+    number: f64
+  }
+
+  /// Add items to collection
+  record add-items-to-collection-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<add-items-to-collection-body-episodes-item>>,
+    movies: option<list<add-items-to-collection-body-movies-item>>,
+    seasons: option<list<add-items-to-collection-body-seasons-item>>,
+    shows: option<list<add-items-to-collection-body-shows-item>>
+  }
+  add-items-to-collection: func(params: add-items-to-collection-params) -> result<string, string>;
+
+  /// Remove items from collection
+  record remove-items-from-collection-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<remove-items-from-collection-body-episodes-item>>,
+    movies: option<list<remove-items-from-collection-body-movies-item>>,
+    seasons: option<list<remove-items-from-collection-body-seasons-item>>,
+    shows: option<list<remove-items-from-collection-body-shows-item>>
+  }
+  remove-items-from-collection: func(params: remove-items-from-collection-params) -> result<string, string>;
+
+  /// Get collection
+  record get-collection-params {
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-collection: func(params: get-collection-params) -> result<string, string>;
+
+  /// Add items to watched history
+  record add-items-to-watched-history-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<add-items-to-watched-history-body-episodes-item>>,
+    movies: option<list<add-items-to-watched-history-body-movies-item>>,
+    seasons: option<list<add-items-to-watched-history-body-seasons-item>>,
+    shows: option<list<add-items-to-watched-history-body-shows-item>>
+  }
+  add-items-to-watched-history: func(params: add-items-to-watched-history-params) -> result<string, string>;
+
+  /// Remove items from history
+  record remove-items-from-history-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<remove-items-from-history-body-episodes-item>>,
+    ids: option<list<f64>>,
+    movies: option<list<remove-items-from-history-body-movies-item>>,
+    seasons: option<list<remove-items-from-history-body-seasons-item>>,
+    shows: option<list<remove-items-from-history-body-shows-item>>
+  }
+  remove-items-from-history: func(params: remove-items-from-history-params) -> result<string, string>;
+
+  /// Get watched history
+  record get-watched-history-params {
+    type-op: string,
+    /// Trakt ID for a specific item.
+    id: string,
+    /// Starting date.
+    start-at: option<string>,
+    /// Ending date.
+    end-at: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-watched-history: func(params: get-watched-history-params) -> result<string, string>;
+
+  /// Get last activity
+  record get-last-activity-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-last-activity: func(params: get-last-activity-params) -> result<string, string>;
+
+  /// Remove a playback item
+  record remove-a-playback-item-params {
+    /// playback ID
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  remove-a-playback-item: func(params: remove-a-playback-item-params) -> result<string, string>;
+
+  /// Get playback progress
+  record get-playback-progress-params {
+    type-op: string,
+    /// Starting date.
+    start-at: option<string>,
+    /// Ending date.
+    end-at: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-playback-progress: func(params: get-playback-progress-params) -> result<string, string>;
+
+  /// Add new ratings
+  record add-new-ratings-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<add-new-ratings-body-episodes-item>>,
+    movies: option<list<add-new-ratings-body-movies-item>>,
+    seasons: option<list<add-new-ratings-body-seasons-item>>,
+    shows: option<list<add-new-ratings-body-shows-item>>
+  }
+  add-new-ratings: func(params: add-new-ratings-params) -> result<string, string>;
+
+  /// Remove ratings
+  record remove-ratings-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<remove-ratings-body-episodes-item>>,
+    movies: option<list<remove-ratings-body-movies-item>>,
+    seasons: option<list<remove-ratings-body-seasons-item>>,
+    shows: option<list<remove-ratings-body-shows-item>>
+  }
+  remove-ratings: func(params: remove-ratings-params) -> result<string, string>;
+
+  /// Get ratings
+  record get-ratings-params {
+    type-op: string,
+    /// Filter for a specific rating.
+    rating: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-ratings: func(params: get-ratings-params) -> result<string, string>;
+
+  /// Add items to personal recommendations
+  record add-items-to-personal-recommendations-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    movies: option<list<add-items-to-personal-recommendations-body-movies-item>>,
+    shows: option<list<add-items-to-personal-recommendations-body-shows-item>>
+  }
+  add-items-to-personal-recommendations: func(params: add-items-to-personal-recommendations-params) -> result<string, string>;
+
+  /// Remove items from personal recommendations
+  record remove-items-from-personal-recommendations-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    movies: option<list<remove-items-from-personal-recommendations-body-movies-item>>,
+    shows: option<list<remove-items-from-personal-recommendations-body-shows-item>>
+  }
+  remove-items-from-personal-recommendations: func(params: remove-items-from-personal-recommendations-params) -> result<string, string>;
+
+  /// Reorder personally recommended items
+  record reorder-personally-recommended-items-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    rank: option<list<f64>>
+  }
+  reorder-personally-recommended-items: func(params: reorder-personally-recommended-items-params) -> result<string, string>;
+
+  /// Get personal recommendations
+  record get-personal-recommendations-params {
+    /// Filter for a specific item type
+    type-op: string,
+    /// How to sort (only if type is also sent)
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-personal-recommendations: func(params: get-personal-recommendations-params) -> result<string, string>;
+
+  /// Get watched
+  record get-watched-params {
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-watched: func(params: get-watched-params) -> result<string, string>;
+
+  /// Add items to watchlist
+  record add-items-to-watchlist-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<add-items-to-watchlist-body-episodes-item>>,
+    movies: option<list<add-items-to-watchlist-body-movies-item>>,
+    seasons: option<list<add-items-to-watchlist-body-seasons-item>>,
+    shows: option<list<add-items-to-watchlist-body-shows-item>>
+  }
+  add-items-to-watchlist: func(params: add-items-to-watchlist-params) -> result<string, string>;
+
+  /// Remove items from watchlist
+  record remove-items-from-watchlist-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<remove-items-from-watchlist-body-episodes-item>>,
+    movies: option<list<remove-items-from-watchlist-body-movies-item>>,
+    seasons: option<list<remove-items-from-watchlist-body-seasons-item>>,
+    shows: option<list<remove-items-from-watchlist-body-shows-item>>
+  }
+  remove-items-from-watchlist: func(params: remove-items-from-watchlist-params) -> result<string, string>;
+
+  /// Reorder watchlist items
+  record reorder-watchlist-items-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    rank: option<list<f64>>
+  }
+  reorder-watchlist-items: func(params: reorder-watchlist-items-params) -> result<string, string>;
+
+  /// Get watchlist
+  record get-watchlist-params {
+    /// Filter for a specific item type
+    type-op: string,
+    /// How to sort (only if type is also sent)
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-watchlist: func(params: get-watchlist-params) -> result<string, string>;
+
+}
+
+interface users {
+  enum get-hidden-items-type-op-enum {
+    movie,
+    show,
+    season,
+    user,
+  }
+
+  enum get-comments-include-replies-enum {
+    true,
+    false,
+    only,
+  }
+
+  record add-hidden-items-body-movies-item {
+    ids: add-hidden-items-body-movies-item-ids,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record add-hidden-items-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record add-hidden-items-body-seasons-item {
+    ids: option<add-hidden-items-body-seasons-item-ids>
+  }
+
+  record add-hidden-items-body-seasons-item-ids {
+    trakt: option<f64>
+  }
+
+  record add-hidden-items-body-shows-item {
+    ids: add-hidden-items-body-shows-item-ids,
+    seasons: option<list<add-hidden-items-body-shows-item-seasons-item>>,
+    title: string,
+    year: f64
+  }
+
+  record add-hidden-items-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-hidden-items-body-shows-item-seasons-item {
+    number: option<f64>
+  }
+
+  record remove-hidden-items-body-movies-item {
+    ids: remove-hidden-items-body-movies-item-ids,
+    title: option<string>,
+    year: option<f64>
+  }
+
+  record remove-hidden-items-body-movies-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record remove-hidden-items-body-seasons-item {
+    ids: option<remove-hidden-items-body-seasons-item-ids>
+  }
+
+  record remove-hidden-items-body-seasons-item-ids {
+    trakt: option<f64>
+  }
+
+  record remove-hidden-items-body-shows-item {
+    ids: remove-hidden-items-body-shows-item-ids,
+    seasons: option<list<remove-hidden-items-body-shows-item-seasons-item>>,
+    title: string,
+    year: f64
+  }
+
+  record remove-hidden-items-body-shows-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-hidden-items-body-shows-item-seasons-item {
+    number: option<f64>
+  }
+
+  record add-items-to-personal-list-body-episodes-item {
+    ids: option<add-items-to-personal-list-body-episodes-item-ids>
+  }
+
+  record add-items-to-personal-list-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-personal-list-body-movies-item {
+    ids: add-items-to-personal-list-body-movies-item-ids,
+    notes: option<string>
+  }
+
+  record add-items-to-personal-list-body-movies-item-ids {
+    imdb: option<string>,
+    trakt: option<f64>
+  }
+
+  record add-items-to-personal-list-body-people-item {
+    ids: option<add-items-to-personal-list-body-people-item-ids>,
+    name: option<string>
+  }
+
+  record add-items-to-personal-list-body-people-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record add-items-to-personal-list-body-seasons-item {
+    ids: option<add-items-to-personal-list-body-seasons-item-ids>
+  }
+
+  record add-items-to-personal-list-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record add-items-to-personal-list-body-shows-item {
+    ids: add-items-to-personal-list-body-shows-item-ids,
+    notes: option<string>,
+    seasons: list<add-items-to-personal-list-body-shows-item-seasons-item>
+  }
+
+  record add-items-to-personal-list-body-shows-item-ids {
+    trakt: option<f64>
+  }
+
+  record add-items-to-personal-list-body-shows-item-seasons-item {
+    episodes: option<list<add-items-to-personal-list-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record add-items-to-personal-list-body-shows-item-seasons-item-episodes-item {
+    number: f64
+  }
+
+  record remove-items-from-personal-list-body-episodes-item {
+    ids: option<remove-items-from-personal-list-body-episodes-item-ids>
+  }
+
+  record remove-items-from-personal-list-body-episodes-item-ids {
+    imdb: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-personal-list-body-movies-item {
+    ids: remove-items-from-personal-list-body-movies-item-ids
+  }
+
+  record remove-items-from-personal-list-body-movies-item-ids {
+    imdb: option<string>,
+    trakt: option<f64>
+  }
+
+  record remove-items-from-personal-list-body-people-item {
+    ids: option<remove-items-from-personal-list-body-people-item-ids>,
+    name: option<string>
+  }
+
+  record remove-items-from-personal-list-body-people-item-ids {
+    imdb: option<string>,
+    slug: option<string>,
+    tmdb: option<f64>,
+    trakt: option<f64>
+  }
+
+  record remove-items-from-personal-list-body-seasons-item {
+    ids: option<remove-items-from-personal-list-body-seasons-item-ids>
+  }
+
+  record remove-items-from-personal-list-body-seasons-item-ids {
+    tmdb: option<f64>,
+    trakt: option<f64>,
+    tvdb: option<f64>
+  }
+
+  record remove-items-from-personal-list-body-shows-item {
+    ids: remove-items-from-personal-list-body-shows-item-ids,
+    seasons: list<remove-items-from-personal-list-body-shows-item-seasons-item>
+  }
+
+  record remove-items-from-personal-list-body-shows-item-ids {
+    trakt: option<f64>
+  }
+
+  record remove-items-from-personal-list-body-shows-item-seasons-item {
+    episodes: option<list<remove-items-from-personal-list-body-shows-item-seasons-item-episodes-item>>,
+    number: f64
+  }
+
+  record remove-items-from-personal-list-body-shows-item-seasons-item-episodes-item {
+    number: f64
+  }
+
+  /// Get hidden items
+  record get-hidden-items-params {
+    section: string,
+    /// Narrow down by element type.
+    type-op: option<get-hidden-items-type-op-enum>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-hidden-items: func(params: get-hidden-items-params) -> result<string, string>;
+
+  /// Add hidden items
+  record add-hidden-items-params {
+    section: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    movies: option<list<add-hidden-items-body-movies-item>>,
+    seasons: option<list<add-hidden-items-body-seasons-item>>,
+    shows: option<list<add-hidden-items-body-shows-item>>
+  }
+  add-hidden-items: func(params: add-hidden-items-params) -> result<string, string>;
+
+  /// Remove hidden items
+  record remove-hidden-items-params {
+    section: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    movies: option<list<remove-hidden-items-body-movies-item>>,
+    seasons: option<list<remove-hidden-items-body-seasons-item>>,
+    shows: option<list<remove-hidden-items-body-shows-item>>
+  }
+  remove-hidden-items: func(params: remove-hidden-items-params) -> result<string, string>;
+
+  /// Get follow requests
+  record get-follow-requests-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-follow-requests: func(params: get-follow-requests-params) -> result<string, string>;
+
+  /// Get pending following requests
+  record get-pending-following-requests-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-pending-following-requests: func(params: get-pending-following-requests-params) -> result<string, string>;
+
+  /// Approve follow request
+  record approve-follow-request-params {
+    /// ID of the follower request.
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  approve-follow-request: func(params: approve-follow-request-params) -> result<string, string>;
+
+  /// Deny follow request
+  record deny-follow-request-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string
+  }
+  deny-follow-request: func(params: deny-follow-request-params) -> result<string, string>;
+
+  /// Get saved filters
+  record get-saved-filters-params {
+    section: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-saved-filters: func(params: get-saved-filters-params) -> result<string, string>;
+
+  /// Retrieve settings
+  record retrieve-settings-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  retrieve-settings: func(params: retrieve-settings-params) -> result<string, string>;
+
+  /// Get user profile
+  record get-user-profile-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-user-profile: func(params: get-user-profile-params) -> result<string, string>;
+
+  /// Get collection
+  record get-users-id-collection-type-params {
+    /// User slug
+    id: string,
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-collection-type: func(params: get-users-id-collection-type-params) -> result<string, string>;
+
+  /// Get comments
+  record get-comments-params {
+    /// User slug
+    id: string,
+    comment-type: string,
+    type-op: string,
+    /// include comment replies
+    include-replies: option<get-comments-include-replies-enum>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-comments: func(params: get-comments-params) -> result<string, string>;
+
+  /// Follow this user
+  record follow-this-user-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  follow-this-user: func(params: follow-this-user-params) -> result<string, string>;
+
+  /// Unfollow this user
+  record unfollow-this-user-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string
+  }
+  unfollow-this-user: func(params: unfollow-this-user-params) -> result<string, string>;
+
+  /// Get followers
+  record get-followers-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-followers: func(params: get-followers-params) -> result<string, string>;
+
+  /// Get following
+  record get-following-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-following: func(params: get-following-params) -> result<string, string>;
+
+  /// Get friends
+  record get-friends-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-friends: func(params: get-friends-params) -> result<string, string>;
+
+  /// Get watched history
+  record get-users-id-history-type-item-id-params {
+    /// User slug
+    id: string,
+    type-op: string,
+    /// Trakt ID for a specific item.
+    item-id: string,
+    /// Starting date.
+    start-at: option<string>,
+    /// Ending date.
+    end-at: option<string>,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-history-type-item-id: func(params: get-users-id-history-type-item-id-params) -> result<string, string>;
+
+  /// Get likes
+  record get-likes-params {
+    /// User slug
+    id: string,
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-likes: func(params: get-likes-params) -> result<string, string>;
+
+  /// Get a user's personal lists
+  record get-a-user-s-personal-lists-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-a-user-s-personal-lists: func(params: get-a-user-s-personal-lists-params) -> result<string, string>;
+
+  /// Create personal list
+  record create-personal-list-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string,
+    allow-comments: option<bool>,
+    description: option<string>,
+    display-numbers: option<bool>,
+    name: option<string>,
+    privacy: option<string>,
+    sort-by: option<string>,
+    sort-how: option<string>
+  }
+  create-personal-list: func(params: create-personal-list-params) -> result<string, string>;
+
+  /// Get all lists a user can collaborate on
+  record get-all-lists-a-user-can-collaborate-on-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-all-lists-a-user-can-collaborate-on: func(params: get-all-lists-a-user-can-collaborate-on-params) -> result<string, string>;
+
+  /// Reorder a user's lists
+  record reorder-a-user-s-lists-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    rank: option<list<f64>>
+  }
+  reorder-a-user-s-lists: func(params: reorder-a-user-s-lists-params) -> result<string, string>;
+
+  /// Get personal list
+  record get-personal-list-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-personal-list: func(params: get-personal-list-params) -> result<string, string>;
+
+  /// Update personal list
+  record update-personal-list-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string,
+    /// Automatically added
+    list-id: string,
+    display-numbers: option<bool>,
+    name: option<string>,
+    privacy: option<string>,
+    sort-by: option<string>,
+    sort-how: option<string>
+  }
+  update-personal-list: func(params: update-personal-list-params) -> result<string, string>;
+
+  /// Delete a user's personal list
+  record delete-a-user-s-personal-list-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string,
+    /// Automatically added
+    list-id: string
+  }
+  delete-a-user-s-personal-list: func(params: delete-a-user-s-personal-list-params) -> result<string, string>;
+
+  /// Get all list comments
+  record get-users-id-lists-list-id-comments-sort-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// how to sort
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-lists-list-id-comments-sort: func(params: get-users-id-lists-list-id-comments-sort-params) -> result<string, string>;
+
+  /// Add items to personal list
+  record add-items-to-personal-list-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<add-items-to-personal-list-body-episodes-item>>,
+    movies: option<list<add-items-to-personal-list-body-movies-item>>,
+    people: option<list<add-items-to-personal-list-body-people-item>>,
+    seasons: option<list<add-items-to-personal-list-body-seasons-item>>,
+    shows: option<list<add-items-to-personal-list-body-shows-item>>
+  }
+  add-items-to-personal-list: func(params: add-items-to-personal-list-params) -> result<string, string>;
+
+  /// Remove items from personal list
+  record remove-items-from-personal-list-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    episodes: option<list<remove-items-from-personal-list-body-episodes-item>>,
+    movies: option<list<remove-items-from-personal-list-body-movies-item>>,
+    people: option<list<remove-items-from-personal-list-body-people-item>>,
+    seasons: option<list<remove-items-from-personal-list-body-seasons-item>>,
+    shows: option<list<remove-items-from-personal-list-body-shows-item>>
+  }
+  remove-items-from-personal-list: func(params: remove-items-from-personal-list-params) -> result<string, string>;
+
+  /// Reorder items on a list
+  record reorder-items-on-a-list-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    rank: option<list<f64>>
+  }
+  reorder-items-on-a-list: func(params: reorder-items-on-a-list-params) -> result<string, string>;
+
+  /// Get items on a personal list
+  record get-items-on-a-personal-list-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// Filter for a specific item type
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-items-on-a-personal-list: func(params: get-items-on-a-personal-list-params) -> result<string, string>;
+
+  /// Like a list
+  record like-a-list-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  like-a-list: func(params: like-a-list-params) -> result<string, string>;
+
+  /// Remove like on a list
+  record remove-like-on-a-list-params {
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>,
+    /// Automatically added
+    id: string,
+    /// Automatically added
+    list-id: string
+  }
+  remove-like-on-a-list: func(params: remove-like-on-a-list-params) -> result<string, string>;
+
+  /// Get all users who liked a list
+  record get-users-id-lists-list-id-likes-params {
+    /// User slug
+    id: string,
+    /// Trakt ID or Trakt slug
+    list-id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-lists-list-id-likes: func(params: get-users-id-lists-list-id-likes-params) -> result<string, string>;
+
+  /// Get ratings
+  record get-users-id-ratings-type-rating-params {
+    /// User slug
+    id: string,
+    type-op: string,
+    /// Filter for a specific rating.
+    rating: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-ratings-type-rating: func(params: get-users-id-ratings-type-rating-params) -> result<string, string>;
+
+  /// Get personal recommendations
+  record get-users-id-recommendations-type-sort-params {
+    /// User slug
+    id: string,
+    /// Filter for a specific item type
+    type-op: string,
+    /// How to sort (only if type is also sent)
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-recommendations-type-sort: func(params: get-users-id-recommendations-type-sort-params) -> result<string, string>;
+
+  /// Get stats
+  record get-stats-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-stats: func(params: get-stats-params) -> result<string, string>;
+
+  /// Get watched
+  record get-users-id-watched-type-params {
+    /// User slug
+    id: string,
+    type-op: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-watched-type: func(params: get-users-id-watched-type-params) -> result<string, string>;
+
+  /// Get watching
+  record get-watching-params {
+    /// User slug
+    id: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-watching: func(params: get-watching-params) -> result<string, string>;
+
+  /// Get watchlist
+  record get-users-id-watchlist-type-sort-params {
+    /// User slug
+    id: string,
+    /// Filter for a specific item type
+    type-op: string,
+    /// How to sort (only if type is also sent)
+    sort: string,
+    /// e.g. 2
+    trakt-api-version: option<string>,
+    /// e.g. [client_id]
+    trakt-api-key: option<string>
+  }
+  get-users-id-watchlist-type-sort: func(params: get-users-id-watchlist-type-sort-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export calendars;
+  export certifications;
+  export checkin;
+  export comments;
+  export countries;
+  export genres;
+  export languages;
+  export lists;
+  export movies;
+  export networks;
+  export authentication-o-auth;
+  export authentication-devices;
+  export people;
+  export recommendations;
+  export scrobble;
+  export search;
+  export shows;
+  export seasons;
+  export episodes;
+  export sync;
+  export users;
+}

@@ -1,0 +1,649 @@
+package autostamp:getpostman@0.2.0;
+
+interface api {
+  record create-api-body-api {
+    description: option<string>,
+    name: option<string>,
+    summary: option<string>
+  }
+
+  record update-an-api-body-api {
+    description: option<string>,
+    name: option<string>
+  }
+
+  record create-api-version-body-version {
+    name: option<string>,
+    source: option<create-api-version-body-version-source>
+  }
+
+  record create-api-version-body-version-source {
+    id: option<string>,
+    relations: option<create-api-version-body-version-source-relations>,
+    schema: option<bool>
+  }
+
+  record create-api-version-body-version-source-relations {
+    documentation: option<bool>,
+    mock: option<bool>,
+    monitor: option<bool>
+  }
+
+  record update-an-api-version-body-version {
+    name: option<string>
+  }
+
+  record create-schema-body-schema {
+    language: option<string>,
+    schema: option<string>,
+    type-op: option<string>
+  }
+
+  record update-schema-body-schema {
+    language: option<string>,
+    schema: option<string>,
+    type-op: option<string>
+  }
+
+  record create-collection-from-schema-body-relations-item {
+    type-op: option<string>
+  }
+
+  /// Get all APIs
+  record get-all-ap-is-params {
+    /// Only return APIs that are inside the given workspace.
+    workspace: option<string>,
+    /// Only return APIs that have been updated after this time. Time is represented using the ISO 8601 date and time format.
+    since: option<string>,
+    /// Only return APIs that have been updated before this time. Time is represented using the ISO 8601 date and time format.
+    until: option<string>,
+    /// Only return APIs that have been created by the user ID represented by the given value.
+    created-by: option<string>,
+    /// Only return APIs that have been updated by the user ID represented by the given value.
+    updated-by: option<string>,
+    /// Only return APIs with the corresponding privacy state. Public APIs have the isPublic value true; private APIs have the isPublic value false.
+    is-public: option<string>,
+    /// Only return APIs whose name includes the given value. Matching is case insensitive.
+    name: option<string>,
+    /// Only return APIs whose summary includes the given value. Matching is case insensitive.
+    summary: option<string>,
+    /// Only return APIs whose description includes the given value. Matching is case insensitive.
+    description: option<string>,
+    /// The value of sort can be one of the names of the fields included in the response.
+    sort: option<string>,
+    /// The sorting direction, which can be ascending or descending. The value can be asc to specify an ascending direction or desc to specify a descending direction. If none is specified, the default sorting direction is descending for timestamp and numeric fields and ascending otherwise. An ID is not considered a numeric field.
+    direction: option<string>
+  }
+  get-all-ap-is: func(params: get-all-ap-is-params) -> result<string, string>;
+
+  /// Create API
+  record create-api-params {
+    workspace: option<string>,
+    api: option<create-api-body-api>
+  }
+  create-api: func(params: create-api-params) -> result<string, string>;
+
+  /// Single API
+  single-api: func() -> result<string, string>;
+
+  /// Update an API
+  record update-an-api-params {
+    api: option<update-an-api-body-api>
+  }
+  update-an-api: func(params: update-an-api-params) -> result<string, string>;
+
+  /// Delete an API
+  delete-an-api: func() -> result<string, string>;
+
+  /// Get All API Versions
+  get-all-api-versions: func() -> result<string, string>;
+
+  /// Create API Version
+  record create-api-version-params {
+    version: option<create-api-version-body-version>
+  }
+  create-api-version: func(params: create-api-version-params) -> result<string, string>;
+
+  /// Get an API Version
+  get-an-api-version: func() -> result<string, string>;
+
+  /// Update an API Version
+  record update-an-api-version-params {
+    version: option<update-an-api-version-body-version>
+  }
+  update-an-api-version: func(params: update-an-api-version-params) -> result<string, string>;
+
+  /// Delete an API Version
+  delete-an-api-version: func() -> result<string, string>;
+
+  /// Get contract test relations
+  get-contract-test-relations: func() -> result<string, string>;
+
+  /// Get  documentation relations
+  get-documentation-relations: func() -> result<string, string>;
+
+  /// Get environment relations
+  get-environment-relations: func() -> result<string, string>;
+
+  /// Get integration test relations
+  get-integration-test-relations: func() -> result<string, string>;
+
+  /// Get monitor relations
+  get-monitor-relations: func() -> result<string, string>;
+
+  /// Get linked relations
+  get-linked-relations: func() -> result<string, string>;
+
+  /// Create relations
+  record create-relations-params {
+    contracttest: option<list<string>>,
+    documentation: option<list<string>>,
+    mock: option<list<string>>,
+    testsuite: option<list<string>>
+  }
+  create-relations: func(params: create-relations-params) -> result<string, string>;
+
+  /// Create Schema
+  record create-schema-params {
+    schema: option<create-schema-body-schema>
+  }
+  create-schema: func(params: create-schema-params) -> result<string, string>;
+
+  /// Get Schema
+  get-schema: func() -> result<string, string>;
+
+  /// Update Schema
+  record update-schema-params {
+    schema: option<update-schema-body-schema>
+  }
+  update-schema: func(params: update-schema-params) -> result<string, string>;
+
+  /// Create collection from schema
+  record create-collection-from-schema-params {
+    workspace: option<string>,
+    name: option<string>,
+    relations: option<list<create-collection-from-schema-body-relations-item>>
+  }
+  create-collection-from-schema: func(params: create-collection-from-schema-params) -> result<string, string>;
+
+  /// Get test suite relations
+  get-test-suite-relations: func() -> result<string, string>;
+
+  /// Sync relations with schema
+  sync-relations-with-schema: func() -> result<string, string>;
+
+}
+
+
+interface collections {
+  record create-collection-body-collection {
+    info: option<create-collection-body-collection-info>,
+    item: option<list<create-collection-body-collection-item-item>>
+  }
+
+  record create-collection-body-collection-info {
+    description: option<string>,
+    name: option<string>,
+    schema: option<string>
+  }
+
+  record create-collection-body-collection-item-item {
+    item: option<list<create-collection-body-collection-item-item-item-item>>,
+    name: option<string>
+  }
+
+  record create-collection-body-collection-item-item-item-item {
+    name: option<string>,
+    request: option<create-collection-body-collection-item-item-item-item-request>
+  }
+
+  record create-collection-body-collection-item-item-item-item-request {
+    body: option<create-collection-body-collection-item-item-item-item-request-body>,
+    description: option<string>,
+    header: option<list<create-collection-body-collection-item-item-item-item-request-header-item>>,
+    method: option<string>,
+    url: option<string>
+  }
+
+  record create-collection-body-collection-item-item-item-item-request-body {
+    mode: option<string>,
+    raw: option<string>
+  }
+
+  record create-collection-body-collection-item-item-item-item-request-header-item {
+    key: option<string>,
+    value: option<string>
+  }
+
+  record update-collection-body-collection {
+    info: option<update-collection-body-collection-info>,
+    item: option<list<update-collection-body-collection-item-item>>
+  }
+
+  record update-collection-body-collection-info {
+    postman-id: option<string>,
+    description: option<string>,
+    name: option<string>,
+    schema: option<string>
+  }
+
+  record update-collection-body-collection-item-item {
+    item: option<list<update-collection-body-collection-item-item-item-item>>,
+    name: option<string>
+  }
+
+  record update-collection-body-collection-item-item-item-item {
+    name: option<string>,
+    request: option<update-collection-body-collection-item-item-item-item-request>
+  }
+
+  record update-collection-body-collection-item-item-item-item-request {
+    body: option<update-collection-body-collection-item-item-item-item-request-body>,
+    description: option<string>,
+    header: option<list<update-collection-body-collection-item-item-item-item-request-header-item>>,
+    method: option<string>,
+    url: option<string>
+  }
+
+  record update-collection-body-collection-item-item-item-item-request-body {
+    mode: option<string>,
+    raw: option<string>
+  }
+
+  record update-collection-body-collection-item-item-item-item-request-header-item {
+    key: option<string>,
+    value: option<string>
+  }
+
+  /// All Collections
+  all-collections: func() -> result<string, string>;
+
+  /// Create Collection
+  record create-collection-params {
+    collection: option<create-collection-body-collection>
+  }
+  create-collection: func(params: create-collection-params) -> result<string, string>;
+
+  /// Create a Fork
+  record create-a-fork-params {
+    /// Workspace ID is required to create a fork
+    workspace: option<string>,
+    name: option<string>
+  }
+  create-a-fork: func(params: create-a-fork-params) -> result<string, string>;
+
+  /// Merge a Fork
+  record merge-a-fork-params {
+    destination: option<string>,
+    source: option<string>,
+    strategy: option<string>
+  }
+  merge-a-fork: func(params: merge-a-fork-params) -> result<string, string>;
+
+  /// Single Collection 
+  single-collection: func() -> result<string, string>;
+
+  /// Update Collection
+  record update-collection-params {
+    collection: option<update-collection-body-collection>
+  }
+  update-collection: func(params: update-collection-params) -> result<string, string>;
+
+  /// Delete Collection
+  delete-collection: func() -> result<string, string>;
+
+}
+
+interface environments {
+  record create-environment-body-environment {
+    name: option<string>,
+    values: option<list<create-environment-body-environment-values-item>>
+  }
+
+  record create-environment-body-environment-values-item {
+    key: option<string>,
+    value: option<string>
+  }
+
+  record update-environment-body-environment {
+    name: option<string>,
+    values: option<list<update-environment-body-environment-values-item>>
+  }
+
+  record update-environment-body-environment-values-item {
+    key: option<string>,
+    value: option<string>
+  }
+
+  /// All Environments
+  all-environments: func() -> result<string, string>;
+
+  /// Create Environment
+  record create-environment-params {
+    environment: option<create-environment-body-environment>
+  }
+  create-environment: func(params: create-environment-params) -> result<string, string>;
+
+  /// Single Environment
+  single-environment: func() -> result<string, string>;
+
+  /// Update Environment
+  record update-environment-params {
+    environment: option<update-environment-body-environment>
+  }
+  update-environment: func(params: update-environment-params) -> result<string, string>;
+
+  /// Delete Environment
+  delete-environment: func() -> result<string, string>;
+
+}
+
+interface import-op {
+  record import-external-api-specification-body-input {
+    info: option<import-external-api-specification-body-input-info>,
+    openapi: option<string>,
+    paths: option<import-external-api-specification-body-input-paths>,
+    servers: option<list<import-external-api-specification-body-input-servers-item>>
+  }
+
+  record import-external-api-specification-body-input-info {
+    license: option<import-external-api-specification-body-input-info-license>,
+    title: option<string>,
+    version: option<string>
+  }
+
+  record import-external-api-specification-body-input-info-license {
+    name: option<string>
+  }
+
+  record import-external-api-specification-body-input-paths {
+    pets: option<import-external-api-specification-body-input-paths-pets>
+  }
+
+  record import-external-api-specification-body-input-paths-pets {
+    get: option<import-external-api-specification-body-input-paths-pets-get>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get {
+    operation-id: option<string>,
+    parameters: option<list<import-external-api-specification-body-input-paths-pets-get-parameters-item>>,
+    responses: option<import-external-api-specification-body-input-paths-pets-get-responses>,
+    summary: option<string>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-parameters-item {
+    description: option<string>,
+    in: option<string>,
+    name: option<string>,
+    required: option<bool>,
+    schema: option<import-external-api-specification-body-input-paths-pets-get-parameters-item-schema>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-parameters-item-schema {
+    format: option<string>,
+    type-op: option<string>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses {
+    default: option<import-external-api-specification-body-input-paths-pets-get-responses-default>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses-default {
+    content: option<import-external-api-specification-body-input-paths-pets-get-responses-default-content>,
+    description: option<string>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses-default-content {
+    application-json: option<import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json {
+    schema: option<import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema {
+    properties: option<import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema-properties>,
+    required: option<list<string>>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema-properties {
+    code: option<import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema-properties-code>,
+    message: option<import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema-properties-message>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema-properties-code {
+    format: option<string>,
+    type-op: option<string>
+  }
+
+  record import-external-api-specification-body-input-paths-pets-get-responses-default-content-application-json-schema-properties-message {
+    type-op: option<string>
+  }
+
+  record import-external-api-specification-body-input-servers-item {
+    url: option<string>
+  }
+
+  /// Import exported data
+  import-exported-data: func() -> result<string, string>;
+
+  /// Import external API specification
+  record import-external-api-specification-params {
+    input: option<import-external-api-specification-body-input>,
+    type-op: option<string>
+  }
+  import-external-api-specification: func(params: import-external-api-specification-params) -> result<string, string>;
+
+}
+
+interface user {
+  /// API Key Owner
+  api-key-owner: func() -> result<string, string>;
+
+}
+
+interface mocks {
+  record create-mock-body-mock {
+    collection: option<string>,
+    environment: option<string>
+  }
+
+  record update-mock-body-mock {
+    description: option<string>,
+    environment: option<string>,
+    name: option<string>,
+    private: option<bool>,
+    version-tag: option<string>
+  }
+
+  /// All Mocks
+  all-mocks: func() -> result<string, string>;
+
+  /// Create Mock
+  record create-mock-params {
+    mock: option<create-mock-body-mock>
+  }
+  create-mock: func(params: create-mock-params) -> result<string, string>;
+
+  /// Single Mock
+  single-mock: func() -> result<string, string>;
+
+  /// Update Mock
+  record update-mock-params {
+    mock: option<update-mock-body-mock>
+  }
+  update-mock: func(params: update-mock-params) -> result<string, string>;
+
+  /// Delete Mock
+  delete-mock: func() -> result<string, string>;
+
+  /// Publish Mock
+  publish-mock: func() -> result<string, string>;
+
+  /// Unpublish Mock
+  unpublish-mock: func() -> result<string, string>;
+
+}
+
+interface monitors {
+  record create-monitor-body-monitor {
+    collection: option<string>,
+    environment: option<string>,
+    name: option<string>,
+    schedule: option<create-monitor-body-monitor-schedule>
+  }
+
+  record create-monitor-body-monitor-schedule {
+    cron: option<string>,
+    timezone: option<string>
+  }
+
+  record update-monitor-body-monitor {
+    name: option<string>,
+    schedule: option<update-monitor-body-monitor-schedule>
+  }
+
+  record update-monitor-body-monitor-schedule {
+    cron: option<string>,
+    timezone: option<string>
+  }
+
+  /// All Monitors
+  all-monitors: func() -> result<string, string>;
+
+  /// Create Monitor
+  record create-monitor-params {
+    monitor: option<create-monitor-body-monitor>
+  }
+  create-monitor: func(params: create-monitor-params) -> result<string, string>;
+
+  /// Single Monitor
+  single-monitor: func() -> result<string, string>;
+
+  /// Update Monitor
+  record update-monitor-params {
+    monitor: option<update-monitor-body-monitor>
+  }
+  update-monitor: func(params: update-monitor-params) -> result<string, string>;
+
+  /// Delete Monitor
+  delete-monitor: func() -> result<string, string>;
+
+  /// Run a Monitor
+  run-a-monitor: func() -> result<string, string>;
+
+}
+
+interface webhooks {
+  record create-webhook-body-webhook {
+    collection: option<string>,
+    name: option<string>
+  }
+
+  /// Create Webhook
+  record create-webhook-params {
+    workspace: option<string>,
+    webhook: option<create-webhook-body-webhook>
+  }
+  create-webhook: func(params: create-webhook-params) -> result<string, string>;
+
+}
+
+interface workspaces {
+  record create-workspace-body-workspace {
+    collections: option<list<create-workspace-body-workspace-collections-item>>,
+    description: option<string>,
+    environments: option<list<create-workspace-body-workspace-environments-item>>,
+    mocks: option<list<create-workspace-body-workspace-mocks-item>>,
+    monitors: option<list<create-workspace-body-workspace-monitors-item>>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  record create-workspace-body-workspace-collections-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record create-workspace-body-workspace-environments-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record create-workspace-body-workspace-mocks-item {
+    id: option<string>
+  }
+
+  record create-workspace-body-workspace-monitors-item {
+    id: option<string>
+  }
+
+  record update-workspace-body-workspace {
+    collections: option<list<update-workspace-body-workspace-collections-item>>,
+    description: option<string>,
+    environments: option<list<update-workspace-body-workspace-environments-item>>,
+    mocks: option<list<update-workspace-body-workspace-mocks-item>>,
+    monitors: option<list<update-workspace-body-workspace-monitors-item>>,
+    name: option<string>
+  }
+
+  record update-workspace-body-workspace-collections-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record update-workspace-body-workspace-environments-item {
+    id: option<string>,
+    name: option<string>,
+    uid: option<string>
+  }
+
+  record update-workspace-body-workspace-mocks-item {
+    id: option<string>
+  }
+
+  record update-workspace-body-workspace-monitors-item {
+    id: option<string>
+  }
+
+  /// All workspaces
+  all-workspaces: func() -> result<string, string>;
+
+  /// Create Workspace
+  record create-workspace-params {
+    workspace: option<create-workspace-body-workspace>
+  }
+  create-workspace: func(params: create-workspace-params) -> result<string, string>;
+
+  /// Single workspace
+  single-workspace: func() -> result<string, string>;
+
+  /// Update Workspace
+  record update-workspace-params {
+    workspace: option<update-workspace-body-workspace>
+  }
+  update-workspace: func(params: update-workspace-params) -> result<string, string>;
+
+  /// Delete Workspace
+  delete-workspace: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export api;
+  export collections;
+  export environments;
+  export import-op;
+  export user;
+  export mocks;
+  export monitors;
+  export webhooks;
+  export workspaces;
+}

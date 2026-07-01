@@ -1,0 +1,435 @@
+package autostamp:meilisearch@0.2.0;
+
+interface dumps {
+  /// Create a dump
+  create-a-dump: func() -> result<string, string>;
+
+}
+
+
+interface stats {
+  /// Health
+  health: func() -> result<string, string>;
+
+  /// Stats of an index
+  stats-of-an-index: func() -> result<string, string>;
+
+  /// Global stats
+  global-stats: func() -> result<string, string>;
+
+  /// Version
+  version: func() -> result<string, string>;
+
+}
+
+interface indexes {
+  record swap-indexes-body-item {
+    indexes: option<list<string>>
+  }
+
+  /// Get indexes
+  record get-indexes-params {
+    offset: option<string>,
+    limit: option<string>
+  }
+  get-indexes: func(params: get-indexes-params) -> result<string, string>;
+
+  /// Create index with primary key
+  record create-index-with-primary-key-params {
+    primary-key: option<string>,
+    uid: option<string>
+  }
+  create-index-with-primary-key: func(params: create-index-with-primary-key-params) -> result<string, string>;
+
+  /// Show index
+  show-index: func() -> result<string, string>;
+
+  /// Update index
+  record update-index-params {
+    primary-key: option<string>
+  }
+  update-index: func(params: update-index-params) -> result<string, string>;
+
+  /// Delete an index
+  delete-an-index: func() -> result<string, string>;
+
+  /// Swap indexes
+  record swap-indexes-params {
+    body: option<list<swap-indexes-body-item>>
+  }
+  swap-indexes: func(params: swap-indexes-params) -> result<string, string>;
+
+}
+
+interface documents {
+  record add-or-replace-documents-body-item {
+    author: option<string>,
+    genre: option<string>,
+    id: option<f64>,
+    price: option<f64>,
+    title: option<string>
+  }
+
+  record add-or-update-documents-body-item {
+    author: option<string>,
+    date: option<string>,
+    id: option<f64>
+  }
+
+  /// Get documents
+  record get-documents-params {
+    limit: option<string>,
+    offset: option<string>,
+    fields: option<string>
+  }
+  get-documents: func(params: get-documents-params) -> result<string, string>;
+
+  /// Add or replace documents
+  record add-or-replace-documents-params {
+    primary-key: option<string>,
+    csv-delimiter: option<string>,
+    body: option<list<add-or-replace-documents-body-item>>
+  }
+  add-or-replace-documents: func(params: add-or-replace-documents-params) -> result<string, string>;
+
+  /// Add or update documents
+  record add-or-update-documents-params {
+    primary-key: option<string>,
+    csv-delimiter: option<string>,
+    body: option<list<add-or-update-documents-body-item>>
+  }
+  add-or-update-documents: func(params: add-or-update-documents-params) -> result<string, string>;
+
+  /// Delete all documents
+  delete-all-documents: func() -> result<string, string>;
+
+  /// Delete one document
+  delete-one-document: func() -> result<string, string>;
+
+  /// Get one document
+  record get-one-document-params {
+    fields: option<string>
+  }
+  get-one-document: func(params: get-one-document-params) -> result<string, string>;
+
+  /// Delete documents
+  record delete-documents-params {
+    body: option<list<f64>>
+  }
+  delete-documents: func(params: delete-documents-params) -> result<string, string>;
+
+}
+
+interface search {
+  /// Search in index
+  record search-in-index-params {
+    q: option<string>,
+    offset: option<string>,
+    limit: option<string>,
+    attributes-to-retrieve: option<string>,
+    attributes-to-crop: option<string>,
+    attributes-to-highlight: option<string>,
+    crop-length: option<string>,
+    crop-marker: option<string>,
+    filter: option<string>,
+    show-matches-position: option<string>,
+    facets: option<string>,
+    sort: option<string>,
+    highlight-pre-tag: option<string>,
+    highlight-post-tag: option<string>,
+    matching-strategy: option<string>,
+    page: option<string>,
+    hits-per-page: option<string>
+  }
+  search-in-index: func(params: search-in-index-params) -> result<string, string>;
+
+  /// Search in index
+  record search-in-index1-params {
+    attributes-to-highlight: option<list<string>>,
+    q: option<string>
+  }
+  search-in-index1: func(params: search-in-index1-params) -> result<string, string>;
+
+}
+
+interface settings {
+  record update-typo-tolerance-body-min-word-size-for-typos {
+    one-typo: option<f64>,
+    two-typos: option<f64>
+  }
+
+  /// Get all settings
+  get-all-settings: func() -> result<string, string>;
+
+  /// Update settings
+  record update-settings-params {
+    displayed-attributes: option<list<string>>,
+    filterable-attributes: option<list<string>>,
+    searchable-attributes: option<list<string>>,
+    sortable-attributes: option<list<string>>,
+    stop-words: option<list<string>>
+  }
+  update-settings: func(params: update-settings-params) -> result<string, string>;
+
+  /// Reset all settings
+  reset-all-settings: func() -> result<string, string>;
+
+  /// Get displayed attributes
+  get-displayed-attributes: func() -> result<string, string>;
+
+  /// Update displayed attributes
+  record update-displayed-attributes-params {
+    body: option<list<string>>
+  }
+  update-displayed-attributes: func(params: update-displayed-attributes-params) -> result<string, string>;
+
+  /// Reset displayed attributes
+  reset-displayed-attributes: func() -> result<string, string>;
+
+  /// Get distinct attribute
+  get-distinct-attribute: func() -> result<string, string>;
+
+  /// Update distinct attribute
+  update-distinct-attribute: func() -> result<string, string>;
+
+  /// Reset distinct attribute
+  reset-distinct-attribute: func() -> result<string, string>;
+
+  /// Get faceting
+  get-faceting: func() -> result<string, string>;
+
+  /// Update faceting
+  record update-faceting-params {
+    max-values-per-facet: option<f64>
+  }
+  update-faceting: func(params: update-faceting-params) -> result<string, string>;
+
+  /// Reset faceting
+  reset-faceting: func() -> result<string, string>;
+
+  /// Get filterable attributes
+  get-filterable-attributes: func() -> result<string, string>;
+
+  /// Update filterable attributes
+  record update-filterable-attributes-params {
+    body: option<list<string>>
+  }
+  update-filterable-attributes: func(params: update-filterable-attributes-params) -> result<string, string>;
+
+  /// Reset filterable attributes
+  reset-filterable-attributes: func() -> result<string, string>;
+
+  /// Get pagination
+  get-pagination: func() -> result<string, string>;
+
+  /// Update pagination
+  record update-pagination-params {
+    max-total-hits: option<f64>
+  }
+  update-pagination: func(params: update-pagination-params) -> result<string, string>;
+
+  /// Reset pagination
+  reset-pagination: func() -> result<string, string>;
+
+  /// Get ranking rules
+  get-ranking-rules: func() -> result<string, string>;
+
+  /// Update ranking rules
+  record update-ranking-rules-params {
+    body: option<list<string>>
+  }
+  update-ranking-rules: func(params: update-ranking-rules-params) -> result<string, string>;
+
+  /// Reset ranking rules
+  reset-ranking-rules: func() -> result<string, string>;
+
+  /// Get searchable attributes
+  get-searchable-attributes: func() -> result<string, string>;
+
+  /// Update searchable attributes
+  record update-searchable-attributes-params {
+    body: option<list<string>>
+  }
+  update-searchable-attributes: func(params: update-searchable-attributes-params) -> result<string, string>;
+
+  /// Reset searchable attributes
+  reset-searchable-attributes: func() -> result<string, string>;
+
+  /// Get sortable attributes
+  get-sortable-attributes: func() -> result<string, string>;
+
+  /// Update sortable attributes
+  record update-sortable-attributes-params {
+    body: option<list<string>>
+  }
+  update-sortable-attributes: func(params: update-sortable-attributes-params) -> result<string, string>;
+
+  /// Reset sortable attributes
+  reset-sortable-attributes: func() -> result<string, string>;
+
+  /// Get stop-words
+  record get-stop-words-params {
+    body: option<list<string>>
+  }
+  get-stop-words: func(params: get-stop-words-params) -> result<string, string>;
+
+  /// Update stop-words
+  record update-stop-words-params {
+    body: option<list<string>>
+  }
+  update-stop-words: func(params: update-stop-words-params) -> result<string, string>;
+
+  /// Reset stop-words
+  reset-stop-words: func() -> result<string, string>;
+
+  /// Get synonyms
+  get-synonyms: func() -> result<string, string>;
+
+  /// Update synonyms
+  record update-synonyms-params {
+    harry-potter: option<list<string>>,
+    hp: option<list<string>>
+  }
+  update-synonyms: func(params: update-synonyms-params) -> result<string, string>;
+
+  /// Reset synonyms
+  reset-synonyms: func() -> result<string, string>;
+
+  /// Get typo-tolerance
+  get-typo-tolerance: func() -> result<string, string>;
+
+  /// Update typo-tolerance
+  record update-typo-tolerance-params {
+    disable-on-attributes: option<list<string>>,
+    disable-on-words: option<list<string>>,
+    min-word-size-for-typos: option<update-typo-tolerance-body-min-word-size-for-typos>
+  }
+  update-typo-tolerance: func(params: update-typo-tolerance-params) -> result<string, string>;
+
+  /// Reset typo-tolerance
+  reset-typo-tolerance: func() -> result<string, string>;
+
+}
+
+interface key-management {
+  /// Get keys
+  record get-keys-params {
+    offset: option<string>,
+    limit: option<string>
+  }
+  get-keys: func(params: get-keys-params) -> result<string, string>;
+
+  /// Create a key
+  record create-a-key-params {
+    actions: option<list<string>>,
+    description: option<string>,
+    expires-at: option<string>,
+    indexes: option<list<string>>,
+    name: option<string>
+  }
+  create-a-key: func(params: create-a-key-params) -> result<string, string>;
+
+  /// Get one key
+  get-one-key: func() -> result<string, string>;
+
+  /// Delete a key
+  delete-a-key: func() -> result<string, string>;
+
+  /// Update a key
+  record update-a-key-params {
+    description: option<string>
+  }
+  update-a-key: func(params: update-a-key-params) -> result<string, string>;
+
+}
+
+interface multi-search {
+  record search-one-or-more-indexes-body-queries-item {
+    attributes-to-highlight: option<list<string>>,
+    index-uid: option<string>,
+    q: option<string>
+  }
+
+  /// Search one or more indexes
+  record search-one-or-more-indexes-params {
+    queries: option<list<search-one-or-more-indexes-body-queries-item>>
+  }
+  search-one-or-more-indexes: func(params: search-one-or-more-indexes-params) -> result<string, string>;
+
+}
+
+interface tasks {
+  /// Get all tasks
+  record get-all-tasks-params {
+    uids: option<string>,
+    index-uids: option<string>,
+    types: option<string>,
+    statuses: option<string>,
+    before-enqueued-at: option<string>,
+    after-enqueued-at: option<string>,
+    before-started-at: option<string>,
+    after-started-at: option<string>,
+    before-finished-at: option<string>,
+    after-finished-at: option<string>,
+    canceled-by: option<string>,
+    limit: option<string>,
+    from-op: option<string>
+  }
+  get-all-tasks: func(params: get-all-tasks-params) -> result<string, string>;
+
+  /// Delete tasks
+  record delete-tasks-params {
+    uids: option<string>,
+    index-uids: option<string>,
+    types: option<string>,
+    statuses: option<string>,
+    before-enqueued-at: option<string>,
+    after-enqueued-at: option<string>,
+    before-started-at: option<string>,
+    after-started-at: option<string>,
+    before-finished-at: option<string>,
+    after-finished-at: option<string>,
+    canceled-by: option<string>,
+    limit: option<string>,
+    from-op: option<string>
+  }
+  delete-tasks: func(params: delete-tasks-params) -> result<string, string>;
+
+  /// Get one task
+  get-one-task: func() -> result<string, string>;
+
+  /// Cancel tasks
+  record cancel-tasks-params {
+    uids: option<string>,
+    index-uids: option<string>,
+    types: option<string>,
+    statuses: option<string>,
+    before-enqueued-at: option<string>,
+    after-enqueued-at: option<string>,
+    before-started-at: option<string>,
+    after-started-at: option<string>,
+    before-finished-at: option<string>,
+    after-finished-at: option<string>,
+    canceled-by: option<string>,
+    limit: option<string>,
+    from-op: option<string>
+  }
+  cancel-tasks: func(params: cancel-tasks-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export dumps;
+  export stats;
+  export indexes;
+  export documents;
+  export search;
+  export settings;
+  export key-management;
+  export multi-search;
+  export tasks;
+}

@@ -1,0 +1,387 @@
+package autostamp:launchdarkly@0.2.0;
+
+interface root {
+  get-root: func() -> result<string, string>;
+
+}
+
+
+interface relay-proxy-configurations {
+  /// Returns a list of relay proxy configurations in the account.
+  get-relay-proxy-configs: func() -> result<string, string>;
+
+  /// Create a new relay proxy config.
+  post-relay-auto-config: func() -> result<string, string>;
+
+  /// Get a single relay proxy configuration by ID.
+  get-relay-proxy-config: func() -> result<string, string>;
+
+  /// Modify a relay proxy configuration by ID.
+  patch-relay-proxy-config: func() -> result<string, string>;
+
+  /// Delete a relay proxy configuration by ID.
+  delete-relay-proxy-config: func() -> result<string, string>;
+
+  /// Reset a relay proxy configuration's secret key with an optional expiry time for the old key.
+  reset-relay-proxy-config: func() -> result<string, string>;
+
+}
+
+interface audit-log {
+  /// Get a list of all audit log entries. The query parameters allow you to restrict the returned results by date ranges, resource specifiers, or a full-text search query.
+  get-audit-log-entries: func() -> result<string, string>;
+
+  /// Use this endpoint to fetch a single audit log entry by its resouce ID.
+  get-audit-log-entry: func() -> result<string, string>;
+
+}
+
+interface data-export-destinations {
+  /// Returns a list of all data export destinations.
+  get-destinations: func() -> result<string, string>;
+
+  /// Create a new data export destination
+  post-destination: func() -> result<string, string>;
+
+  /// Get a single data export destination by ID
+  get-destination: func() -> result<string, string>;
+
+  /// Perform a partial update to a data export destination.
+  patch-destination: func() -> result<string, string>;
+
+  /// Get a single data export destination by ID
+  delete-destination: func() -> result<string, string>;
+
+}
+
+interface feature-flags {
+  /// Get the status for a particular feature flag across environments
+  get-feature-flag-status-across-environments: func() -> result<string, string>;
+
+  /// Get a list of statuses for all feature flags. The status includes the last time the feature flag was requested, as well as the state of the flag.
+  get-feature-flag-statuses: func() -> result<string, string>;
+
+  /// Get the status for a particular feature flag.
+  get-feature-flag-status: func() -> result<string, string>;
+
+  /// Get a list of all features in the given project.
+  get-feature-flags: func() -> result<string, string>;
+
+  /// Creates a new feature flag.
+  post-feature-flag: func() -> result<string, string>;
+
+  /// Get dependent flags for the flag in the environment specified in path parameters
+  get-flags-project-key-environment-key-feature-flag-key-dependent-flags: func() -> result<string, string>;
+
+  /// Get a single feature flag by key.
+  get-feature-flag: func() -> result<string, string>;
+
+  /// Perform a partial update to a feature.
+  patch-feature-flag: func() -> result<string, string>;
+
+  /// Delete a feature flag in all environments. Be careful-- only delete feature flags that are no longer being used by your application.
+  delete-feature-flag: func() -> result<string, string>;
+
+  /// Copies the feature flag configuration from one environment to the same feature flag in another environment.
+  copy-feature-flag: func() -> result<string, string>;
+
+  /// Get dependent flags across all environments for the flag specified in the path parameters
+  get-flags-project-key-feature-flag-key-dependent-flags: func() -> result<string, string>;
+
+  /// Get expiring user targets for feature flag
+  get-expiring-user-targets: func() -> result<string, string>;
+
+  /// Update, add, or delete expiring user targets on feature flag
+  patch-expiring-user-targets: func() -> result<string, string>;
+
+  /// Get all approval requests for a feature flag config
+  get-approval-requests: func() -> result<string, string>;
+
+  /// Get a single approval request for a feature flag config
+  get-approval-request: func() -> result<string, string>;
+
+  /// Create an approval request for a feature flag config
+  post-approval-request: func() -> result<string, string>;
+
+  /// Delete an approval request for a feature flag config
+  delete-approval-request: func() -> result<string, string>;
+
+  /// Apply approval request for a feature flag config
+  post-apply-approval-request: func() -> result<string, string>;
+
+  /// Review approval request for a feature flag config
+  post-review-approval-request: func() -> result<string, string>;
+
+  /// Get all scheduled workflows for a feature flag by key.
+  get-flag-config-scheduled-changes: func() -> result<string, string>;
+
+  /// Creates a new scheduled change for a feature flag.
+  post-flag-config-scheduled-changes: func() -> result<string, string>;
+
+  /// Lists conflicts between the given instructions and any existing scheduled changes for the feature flag. The actual HTTP verb should be REPORT, not POST.
+  get-flag-config-scheduled-changes-conflicts: func() -> result<string, string>;
+
+  /// Get a scheduled change on a feature flag by id.
+  get-flag-config-scheduled-change: func() -> result<string, string>;
+
+  /// Updates an existing scheduled-change on a feature flag in an environment.
+  patch-flag-config-scheduled-change: func() -> result<string, string>;
+
+  /// Delete a scheduled change on a feature flag in an environment.
+  delete-flag-config-scheduled-changes: func() -> result<string, string>;
+
+}
+
+interface integrations {
+  /// Get a list of all configured audit log event integrations associated with this account.
+  get-integrations: func() -> result<string, string>;
+
+  /// Get a list of all configured integrations of a given kind.
+  get-integration-subscriptions: func() -> result<string, string>;
+
+  /// Create a new integration subscription of a given kind.
+  post-integration-subscription: func() -> result<string, string>;
+
+  /// Get a single integration subscription by ID.
+  get-integration-subscription: func() -> result<string, string>;
+
+  /// Modify an integration subscription by ID.
+  patch-integration-subscription: func() -> result<string, string>;
+
+  /// Delete an integration subscription by ID.
+  delete-integration-subscription: func() -> result<string, string>;
+
+}
+
+interface team-members {
+  /// Returns a list of all members in the account.
+  get-members: func() -> result<string, string>;
+
+  /// Invite new members.
+  post-members: func() -> result<string, string>;
+
+  /// Get the current team member associated with the token
+  get-me: func() -> result<string, string>;
+
+  /// Get a single team member by ID.
+  get-member: func() -> result<string, string>;
+
+  /// Modify a team member by ID.
+  patch-member: func() -> result<string, string>;
+
+  /// Delete a team member by ID.
+  delete-member: func() -> result<string, string>;
+
+}
+
+interface projects {
+  /// Returns a list of all projects in the account.
+  get-projects: func() -> result<string, string>;
+
+  /// Create a new project with the given key and name.
+  post-project: func() -> result<string, string>;
+
+  /// Fetch a single project by key.
+  get-project: func() -> result<string, string>;
+
+  /// Modify a project by ID.
+  patch-project: func() -> result<string, string>;
+
+  /// Delete a project by key. Caution-- deleting a project will delete all associated environments and feature flags. You cannot delete the last project in an account.
+  delete-project: func() -> result<string, string>;
+
+}
+
+interface environments {
+  /// Create a new environment in a specified project with a given name, key, and swatch color.
+  post-environment: func() -> result<string, string>;
+
+  /// Get an environment given a project and key.
+  get-environment: func() -> result<string, string>;
+
+  /// Modify an environment by ID. If you try to patch the environment by setting both required and requiredApprovalTags, it will result in an error. Users can specify either required approvals for all flags in an environment or those with specific tags, but not both. Only customers on an Enterprise plan can require approval for flag updates with either mechanism.
+  patch-environment: func() -> result<string, string>;
+
+  /// Delete an environment in a specific project.
+  delete-environment: func() -> result<string, string>;
+
+  /// Reset an environment's SDK key with an optional expiry time for the old key.
+  reset-environment-sdk-key: func() -> result<string, string>;
+
+  /// Reset an environment's mobile key. The optional expiry for the old key is deprecated for this endpoint, so the old key will always expire immediately.
+  reset-environment-mobile-key: func() -> result<string, string>;
+
+}
+
+interface custom-roles {
+  /// Return a complete list of custom roles.
+  get-custom-roles: func() -> result<string, string>;
+
+  /// Create a new custom role.
+  post-custom-role: func() -> result<string, string>;
+
+  /// Get one custom role by key.
+  get-custom-role: func() -> result<string, string>;
+
+  /// Modify a custom role by key.
+  patch-custom-role: func() -> result<string, string>;
+
+  /// Delete a custom role by key.
+  delete-custom-role: func() -> result<string, string>;
+
+}
+
+interface user-segments {
+  /// Get a list of all user segments in the given project.
+  get-user-segments: func() -> result<string, string>;
+
+  /// Creates a new user segment.
+  post-user-segment: func() -> result<string, string>;
+
+  /// Get a single user segment by key.
+  get-user-segment: func() -> result<string, string>;
+
+  /// Perform a partial update to a user segment.
+  patch-user-segment: func() -> result<string, string>;
+
+  /// Delete a user segment.
+  delete-user-segment: func() -> result<string, string>;
+
+  /// Update targets included or excluded in a big segment
+  update-big-segment-targets: func() -> result<string, string>;
+
+  /// Get expiring user targets for user segment
+  get-expiring-user-targets-on-segment: func() -> result<string, string>;
+
+  /// Update, add, or delete expiring user targets on user segment
+  patch-expiring-user-targets-on-segment: func() -> result<string, string>;
+
+}
+
+interface access-tokens {
+  /// Returns a list of tokens in the account.
+  get-tokens: func() -> result<string, string>;
+
+  /// Create a new token.
+  post-token: func() -> result<string, string>;
+
+  /// Get a single access token by ID.
+  get-token: func() -> result<string, string>;
+
+  /// Modify an access token by ID.
+  patch-token: func() -> result<string, string>;
+
+  /// Delete an access token by ID.
+  delete-token: func() -> result<string, string>;
+
+  /// Reset an access token's secret key with an optional expiry time for the old key.
+  reset-token: func() -> result<string, string>;
+
+}
+
+interface customer-metrics {
+  /// Returns of the usage endpoints available.
+  get-usage: func() -> result<string, string>;
+
+  /// Get events usage by event id and the feature flag key.
+  get-evaluations: func() -> result<string, string>;
+
+  /// Get events usage endpoints.
+  get-events: func() -> result<string, string>;
+
+  /// Get events usage by event type.
+  get-event: func() -> result<string, string>;
+
+  /// Get monthly active user data.
+  get-mau: func() -> result<string, string>;
+
+  /// Get monthly active user data by category.
+  get-mau-by-category: func() -> result<string, string>;
+
+  /// Returns a list of all streams.
+  get-streams: func() -> result<string, string>;
+
+  /// Get a stream endpoint and return timeseries data.
+  get-stream: func() -> result<string, string>;
+
+  /// Get a stream timeseries data by source show sdk version metadata.
+  get-stream-by-sdk: func() -> result<string, string>;
+
+  /// Get a stream timeseries data by source and show all sdk version associated.
+  get-stream-sdk-version: func() -> result<string, string>;
+
+}
+
+interface users {
+  /// Search users in LaunchDarkly based on their last active date, or a search query. It should not be used to enumerate all users in LaunchDarkly-- use the List users API resource.
+  get-search-users: func() -> result<string, string>;
+
+  /// List all users in the environment. Includes the total count of users. In each page, there will be up to 'limit' users returned (default 20). This is useful for exporting all users in the system for further analysis. Paginated collections will include a next link containing a URL with the next set of elements in the collection.
+  get-users: func() -> result<string, string>;
+
+  /// Get a user by key.
+  get-user: func() -> result<string, string>;
+
+  /// Delete a user by ID.
+  delete-user: func() -> result<string, string>;
+
+}
+
+interface user-settings {
+  /// Fetch a single flag setting for a user by key.
+  get-user-flag-settings: func() -> result<string, string>;
+
+  /// Fetch a single flag setting for a user by key.
+  get-user-flag-setting: func() -> result<string, string>;
+
+  /// Specifically enable or disable a feature flag for a user based on their key.
+  put-flag-setting: func() -> result<string, string>;
+
+  /// Get expiring dates on flags for user
+  get-expiring-user-targets-for-user: func() -> result<string, string>;
+
+  /// Update, add, or delete expiring user targets for a single user on all flags
+  patch-expiring-user-targets-for-flags: func() -> result<string, string>;
+
+}
+
+interface webhooks {
+  /// Fetch a list of all webhooks.
+  get-webhooks: func() -> result<string, string>;
+
+  /// Create a webhook.
+  post-webhook: func() -> result<string, string>;
+
+  /// Get a webhook by ID.
+  get-webhook: func() -> result<string, string>;
+
+  /// Modify a webhook by ID.
+  patch-webhook: func() -> result<string, string>;
+
+  /// Delete a webhook by ID.
+  delete-webhook: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export root;
+  export relay-proxy-configurations;
+  export audit-log;
+  export data-export-destinations;
+  export feature-flags;
+  export integrations;
+  export team-members;
+  export projects;
+  export environments;
+  export custom-roles;
+  export user-segments;
+  export access-tokens;
+  export customer-metrics;
+  export users;
+  export user-settings;
+  export webhooks;
+}

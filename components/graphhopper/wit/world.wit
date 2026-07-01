@@ -1,0 +1,684 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `api_key` | query `key` |
+package autostamp:graphhopper@0.2.0;
+
+interface cluster-api {
+  record cluster-configuration {
+    clustering: option<cluster-configuration-clustering>,
+    /// Specifies the response format. You can either choose `geojson` or `json`.
+    response-type: option<string>,
+    routing: option<cluster-configuration-routing>
+  }
+
+  record cluster-configuration-clustering {
+    /// Specifies max. quantity in a cluster
+    max-quantity: option<f64>,
+    /// Specifies min. quantity in a cluster
+    min-quantity: option<f64>,
+    /// Specifies the number of clusters
+    num-clusters: option<f64>
+  }
+
+  record cluster-configuration-routing {
+    /// Cost per meter (travel distance)
+    cost-per-meter: option<f64>,
+    /// Cost per second (travel time)
+    cost-per-second: option<f64>,
+    /// The routing profile for which the travel times and distances should be calculated. Other profiles are listed [here](#section/Map-Data-and-Routing-Profiles/OpenStreetMap)
+    profile: option<string>
+  }
+
+  record cluster-customer {
+    address: option<cluster-customer-address>,
+    /// id of customer
+    id: option<string>,
+    /// demand of customer
+    quantity: option<f64>
+  }
+
+  record cluster-customer-address {
+    /// Latitude
+    lat: option<f64>,
+    /// Longitude
+    lon: option<f64>,
+    /// Optional parameter. Specifies a hint for each address to better snap the coordinates (lon,lat) to road network. E.g. if there is an address or house with two or more neighboring streets you can control for which street the closest location is looked up.
+    street-hint: option<string>
+  }
+
+  /// POST Cluster Endpoint
+  record solve-clustering-problem-params {
+    configuration: option<cluster-configuration>,
+    customers: option<list<cluster-customer>>
+  }
+  solve-clustering-problem: func(params: solve-clustering-problem-params) -> result<string, string>;
+
+  /// Batch Cluster Endpoint
+  record async-clustering-problem-params {
+    configuration: option<cluster-configuration>,
+    customers: option<list<cluster-customer>>
+  }
+  async-clustering-problem: func(params: async-clustering-problem-params) -> result<string, string>;
+
+  /// GET Batch Solution Endpoint
+  record get-cluster-solution-params {
+    /// Request solution with jobId
+    job-id: string
+  }
+  get-cluster-solution: func(params: get-cluster-solution-params) -> result<string, string>;
+
+}
+
+
+interface geocoding-api {
+  /// Geocoding Endpoint
+  record get-geocode-params {
+    /// If you do forward geocoding, this is `required` and is a textual description of the address you are looking for.
+    q: option<string>,
+    /// Display the search results for the specified locale. Currently French (fr), English (en), German (de) and Italian (it) are supported. If the locale wasn't found the default (en) is used.
+    locale: option<string>,
+    /// Specify the maximum number of results to return
+    limit: option<s32>,
+    /// It is `required` to be `true` if you want to do a reverse geocoding request. If it is `true`, `point` must be defined as well, and `q` must not be used.
+    reverse: option<bool>,
+    /// If `true`, the output will be formatted.
+    debug: option<bool>,
+    /// _Forward geocoding_: The location bias in the format 'latitude,longitude' e.g. point=45.93272,11.58803. _Reverse geocoding_: The location to find amenities, cities.
+    point: option<string>,
+    /// The provider parameter is currently under development and can fall back to `default` at any time.
+    /// The intend is to provide alternatives to our default geocoder. Each provider has its own strenghts and might fit better for certain scenarios, so it's worth to compare the different providers.
+    provider: option<string>
+  }
+  get-geocode: func(params: get-geocode-params) -> result<string, string>;
+
+}
+
+interface isochrone-api {
+  enum get-isochrone-weighting-enum {
+    fastest,
+    shortest,
+  }
+
+  record vehicle-profile-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Isochrone Endpoint
+  record get-isochrone-params {
+    /// Specify the start coordinate
+    point: string,
+    /// Specify which time the vehicle should travel. In seconds.
+    time-limit: option<s32>,
+    /// Specify which distance the vehicle should travel. In meters.
+    distance-limit: option<s32>,
+    /// The vehicle profile for which the route should be calculated.
+    vehicle: option<vehicle-profile-id>,
+    /// Number by which to divide the given `time_limit` to create `buckets` nested isochrones of time intervals `time_limit-n*time_limit/buckets`. Applies analogously to `distance_limit`.
+    buckets: option<s32>,
+    /// If `false` the flow goes from point to the polygon, if `true` the flow goes from the polygon "inside" to the point.
+    /// Example use case for `false`&#58; *How many potential customer can be reached within 30min travel time from your store* vs. `true`&#58; *How many customers can reach your store within 30min travel time.*
+    reverse-flow: option<bool>,
+    /// Use `"shortest"` to get an isodistance line instead of an isochrone.
+    weighting: option<get-isochrone-weighting-enum>
+  }
+  get-isochrone: func(params: get-isochrone-params) -> result<string, string>;
+
+}
+
+interface map-matching-api {
+  /// Map-match a GPX file
+  record post-gpx-params {
+    /// Specify the precision of a point, in meter
+    gps-accuracy: option<s32>,
+    /// Specify the vehicle profile like car
+    vehicle: option<string>
+  }
+  post-gpx: func(params: post-gpx-params) -> result<string, string>;
+
+}
+
+interface matrix-api {
+  enum get-matrix-curbside-item-enum {
+    any,
+    right,
+    left,
+  }
+
+  record vehicle-profile-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// GET Matrix Endpoint
+  record get-matrix-params {
+    /// Specify multiple points in `latitude,longitude` for which the weight-, route-, time- or distance-matrix should be calculated. In this case the starts are identical to the destinations. If there are N points, then NxN entries will be calculated. The order of the point parameter is important. Specify at least three points. Cannot be used together with from_point or to_point.
+    point: option<list<string>>,
+    /// The starting points for the routes in `latitude,longitude`. E.g. if you want to calculate the three routes A-&gt;1, A-&gt;2, A-&gt;3 then you have one from_point parameter and three to_point parameters.
+    from-point: option<list<string>>,
+    /// The destination points for the routes in `latitude,longitude`.
+    to-point: option<list<string>>,
+    /// Optional parameter. Specifies a hint for each `point` parameter to prefer a certain street for the closest location lookup. E.g. if there is an address or house with two or more neighboring streets you can control for which street the closest location is looked up.
+    point-hint: option<list<string>>,
+    /// For the from_point parameter. See point_hint
+    from-point-hint: option<list<string>>,
+    /// For the to_point parameter. See point_hint
+    to-point-hint: option<list<string>>,
+    /// Optional parameter to avoid snapping to a certain road class or road environment. Current supported values `motorway`, `trunk`, `ferry`, `tunnel`, `bridge` and `ford`. Multiple values are specified like `snap_prevention=ferry&snap_prevention=motorway`
+    snap-prevention: option<list<string>>,
+    /// Optional parameter. It specifies on which side a point should be relative to the driver when she leaves/arrives at a start/target/via point. You need to specify this parameter for either none or all points. Only supported for motor vehicles and OpenStreetMap.
+    curbside: option<list<get-matrix-curbside-item-enum>>,
+    /// Curbside setting for the from_point parameter. See curbside.
+    from-curbside: option<list<get-matrix-curbside-item-enum>>,
+    /// Curbside setting for the to_point parameter. See curbside.
+    to-curbside: option<list<get-matrix-curbside-item-enum>>,
+    /// Specifies which arrays should be included in the response. Specify one or more of the following options 'weights', 'times', 'distances'. To specify more than one array use e.g. out_array=times&out_array=distances. The units of the entries of distances are meters, of times are seconds and of weights is arbitrary and it can differ for different vehicles or versions of this API.
+    out-array: option<list<string>>,
+    /// The vehicle profile for which the matrix should be calculated.
+    vehicle: option<vehicle-profile-id>,
+    /// Specifies whether or not the matrix calculation should return with an error as soon as possible in case some points cannot be found or some points are not connected. If set to `false` the time/weight/distance matrix will be calculated for all valid points and contain the `null` value for all entries that could not be calculated. The `hint` field of the response will also contain additional information about what went wrong (see its documentation).
+    fail-fast: option<bool>,
+    /// Specifies if turn restrictions should be considered. Enabling this option increases the matrix computation time. Only supported for motor vehicles and OpenStreetMap.
+    turn-costs: option<bool>
+  }
+  get-matrix: func(params: get-matrix-params) -> result<string, string>;
+
+  /// POST Matrix Endpoint
+  record post-matrix-params {
+    body: option<string>
+  }
+  post-matrix: func(params: post-matrix-params) -> result<string, string>;
+
+  /// Batch Matrix Endpoint
+  record calculate-matrix-params {
+    body: option<string>
+  }
+  calculate-matrix: func(params: calculate-matrix-params) -> result<string, string>;
+
+  /// GET Batch Matrix Endpoint
+  record get-matrix-solution-params {
+    /// Request solution with jobId
+    job-id: string
+  }
+  get-matrix-solution: func(params: get-matrix-solution-params) -> result<string, string>;
+
+}
+
+interface routing-api {
+  enum get-route-curbside-item-enum {
+    any,
+    right,
+    left,
+  }
+
+  enum get-route-algorithm-enum {
+    round-trip,
+    alternative-route,
+  }
+
+  record vehicle-profile-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// GET Route Endpoint
+  record get-route-params {
+    /// The points for which the route should be calculated. Format: `[latitude,longitude]`. Specify at least an origin and a destination. Via points are possible.
+    /// The maximum number depends on your plan.
+    point: list<string>,
+    /// The `point_hint` is typically a road name to which the associated `point` parameter should be snapped to. Specify no `point_hint` parameter or the same number as you have `point` parameters.
+    point-hint: option<list<string>>,
+    /// Optional parameter to avoid snapping to a certain road class or road environment. Currently supported values are `motorway`, `trunk`, `ferry`, `tunnel`, `bridge` and `ford`. Multiple values are specified like `snap_prevention=ferry&snap_prevention=motorway`.
+    snap-prevention: option<list<string>>,
+    /// The vehicle profile for which the route should be calculated.
+    vehicle: option<vehicle-profile-id>,
+    /// Optional parameter. It specifies on which side a point should be relative to the driver when she leaves/arrives at a start/target/via point. You need to specify this parameter for either none or all points. Only supported for motor vehicles and OpenStreetMap.
+    curbside: option<list<get-route-curbside-item-enum>>,
+    /// Specifies if turn restrictions should be considered. Enabling this option increases the route computation time. Only supported for motor vehicles and OpenStreetMap.
+    turn-costs: option<bool>,
+    /// The locale of the resulting turn instructions. E.g. `pt_PT` for Portuguese or `de` for German.
+    locale: option<string>,
+    /// If `true`, a third coordinate, the altitude, is included with all positions in the response.
+    /// This changes the format of the `points` and `snapped_waypoints` fields of the response, in both their
+    elevation: option<bool>,
+    /// Optional parameter to retrieve path details. You can request additional details for the route: `street_name`, 
+    /// `time`, `distance`, `max_speed`, `toll`, `road_class`, `road_class_link`, `road_access`, `road_environment`, `lanes`, and `surface`. Read more about the usage of path details [here](https://discuss.graphhopper.com/t/2539).
+    details: option<list<string>>,
+    /// Normally, the calculated route will visit the points in the order you specified them.
+    /// If you have more than two points, you can set this parameter to `"true"` and the points may be re-ordered to minimize the total travel time.
+    optimize: option<string>,
+    /// If instructions should be calculated and returned
+    instructions: option<bool>,
+    /// If the points for the route should be calculated at all.
+    calc-points: option<bool>,
+    /// If `true`, the output will be formatted.
+    debug: option<bool>,
+    /// Allows changing the encoding of location data in the response. The default is polyline encoding, which is compact
+    /// but requires special client code to unpack. (We provide it in our JavaScript client library!)
+    points-encoded: option<bool>,
+    /// Use this parameter in combination with one or more parameters from below.
+    ch-disable: option<bool>,
+    /// Determines the way the "best" route is calculated. Besides `fastest` you can use `short_fastest` which finds a reasonable balance between the distance influence (`shortest`) and the time (`fastest`). You could also use `shortest` but is deprecated and not recommended for motor vehicles. All except `fastest` require `ch.disable=true`.
+    weighting: option<string>,
+    /// Favour a heading direction for a certain point. Specify either one heading for the start point or as many as there are points.
+    /// In this case headings are associated by their order to the specific points. Headings are given as north based clockwise angle between 0 and 360 degree.
+    heading: option<list<s32>>,
+    /// Time penalty in seconds for not obeying a specified heading. Requires `ch.disable=true`.
+    heading-penalty: option<s32>,
+    /// If `true`, u-turns are avoided at via-points with regard to the `heading_penalty`. Requires `ch.disable=true`.
+    pass-through: option<bool>,
+    /// Block road access by specifying a point close to the road segment to be blocked, with the format `lat,lon`.
+    /// You can also block all road segments crossing a geometric shape. Specify a circle using the format `lat,lon,radius`, or a polygon using the format `lat1,lon1,lat2,lon2,...,latN,lonN`.
+    block-area: option<string>,
+    /// Specify which road classes and environments you would like to avoid. 
+    /// Possible values are `motorway`, `steps`, `track`, `toll`, `ferry`, `tunnel` and `bridge`.
+    avoid: option<string>,
+    /// Rather than looking for the shortest or fastest path, this parameter lets you solve two different problems related to routing:
+    /// With `alternative_route`, we give you not one but several routes that are close to optimal, but
+    algorithm: option<get-route-algorithm-enum>,
+    /// If `algorithm=round_trip`, this parameter configures approximative length of the resulting round trip. Requires `ch.disable=true`.
+    round-trip-distance: option<s32>,
+    /// If `algorithm=round_trip`, this sets the random seed. Change this to get a different tour for each value.
+    round-trip-seed: option<s64>,
+    /// If `algorithm=alternative_route`, this parameter sets the number of maximum paths which should be calculated. Increasing can lead to worse alternatives.
+    alternative-route-max-paths: option<s32>,
+    /// If `algorithm=alternative_route`, this parameter sets the factor by which the alternatives routes can be longer than the optimal route. Increasing can lead to worse alternatives.
+    alternative-route-max-weight-factor: option<f64>,
+    /// If `algorithm=alternative_route`, this parameter specifies how similar an alternative route can be to the optimal route. Increasing can lead to worse alternatives.
+    alternative-route-max-share-factor: option<f64>
+  }
+  get-route: func(params: get-route-params) -> result<string, string>;
+
+  /// POST Route Endpoint
+  record post-route-params {
+    /// Rather than looking for the shortest or fastest path, this lets you solve two different problems related to routing:
+    /// With `round_trip`, the route will get you back to where you started. This is meant for fun (think of
+    algorithm: option<get-route-algorithm-enum>,
+    /// If `algorithm=alternative_route`, this parameter sets the number of maximum paths which should be calculated. Increasing can lead to worse alternatives.
+    alternative-route-max-paths: option<s32>,
+    /// If `algorithm=alternative_route`, this parameter specifies how similar an alternative route can be to the optimal route. Increasing can lead to worse alternatives.
+    alternative-route-max-share-factor: option<f64>,
+    /// If `algorithm=alternative_route`, this parameter sets the factor by which the alternatives routes can be longer than the optimal route. Increasing can lead to worse alternatives.
+    alternative-route-max-weight-factor: option<f64>,
+    /// Specify which road classes and environments you would like to avoid.
+    /// Possible values are `motorway`, `steps`, `track`, `toll`, `ferry`, `tunnel` and `bridge`.
+    avoid: option<string>,
+    /// Block road access via a point with the format `latitude,longitude`
+    /// or an area defined by a circle `lat,lon,radius` or a rectangle `lat1,lon1,lat2,lon2`.
+    block-area: option<string>,
+    /// If the points for the route should be calculated at all.
+    calc-points: option<bool>,
+    /// Use this parameter in combination with one or more parameters from below.
+    ch-disable: option<bool>,
+    /// Optional parameter. It specifies on which side a point should be relative to the driver when she leaves/arrives at a start/target/via point. You need to specify this parameter for either none or all points. Only supported for motor vehicles and OpenStreetMap.
+    curbsides: option<list<get-route-curbside-item-enum>>,
+    /// If `true`, the output will be formatted.
+    debug: option<bool>,
+    /// Optional parameter to retrieve path details. You can request additional details for the route: `street_name`,
+    /// `time`, `distance`, `max_speed`, `toll`, `road_class`, `road_class_link`, `road_access`, `road_environment`, `lanes`, and `surface`. Read more about the usage of path details [here](https://discuss.graphhopper.com/t/2539).
+    details: option<list<string>>,
+    /// If `true`, a third coordinate, the altitude, is included with all positions in the response.
+    /// This changes the format of the `points` and `snapped_waypoints` fields of the response, in both their
+    elevation: option<bool>,
+    /// Time penalty in seconds for not obeying a specified heading. Requires `ch.disable=true`.
+    heading-penalty: option<s32>,
+    /// Favour a heading direction for a certain point. Specify either one heading for the start point or as many as there are points.
+    /// In this case headings are associated by their order to the specific points. Headings are given as north based clockwise angle between 0 and 360 degree.
+    headings: option<list<s32>>,
+    /// If instructions should be calculated and returned
+    instructions: option<bool>,
+    /// The locale of the resulting turn instructions. E.g. `pt_PT` for Portuguese or `de` for German.
+    locale: option<string>,
+    /// Normally, the calculated route will visit the points in the order you specified them.
+    /// If you have more than two points, you can set this parameter to `"true"` and the points may be re-ordered to minimize the total travel time.
+    optimize: option<string>,
+    /// If `true`, u-turns are avoided at via-points with regard to the `heading_penalty`. Requires `ch.disable=true`.
+    pass-through: option<bool>,
+    /// Optional parameter. Specifies a hint for each point in the `points` array to prefer a certain street for the closest location lookup. E.g. if there is an address or house with two or more neighboring streets you can control for which street the closest location is looked up.
+    point-hints: option<list<string>>,
+    /// The points for the route in an array of `[longitude,latitude]`. For instance, if you want to calculate a route from point A to B to C
+    /// then you specify `points: [ [A_longitude, A_latitude], [B_longitude, B_latitude], [C_longitude, C_latitude]]
+    points: option<list<list<f64>>>,
+    /// Allows changing the encoding of location data in the response. The default is polyline encoding, which is compact
+    /// but requires special client code to unpack. (We provide it in our JavaScript client library!)
+    points-encoded: option<bool>,
+    /// If `algorithm=round_trip`, this parameter configures approximative length of the resulting round trip. Requires `ch.disable=true`.
+    round-trip-distance: option<s32>,
+    /// If `algorithm=round_trip`, this sets the random seed. Change this to get a different tour for each value.
+    round-trip-seed: option<s64>,
+    /// Optional parameter to avoid snapping to a certain road class or road environment. Current supported values `motorway`, `trunk`, `ferry`, `tunnel`, `bridge` and `ford`
+    snap-preventions: option<list<string>>,
+    vehicle: option<string>,
+    /// Determines the way the ''best'' route is calculated. Default is `fastest`. Other options are `shortest` (e.g. for `vehicle=foot` or `bike`) and `short_fastest` which finds a reasonable balance between `shortest` and `fastest`. Requires `ch.disable=true`.
+    weighting: option<string>
+  }
+  post-route: func(params: post-route-params) -> result<string, string>;
+
+  /// Coverage information
+  get-route-info: func() -> result<string, string>;
+
+}
+
+interface route-optimization-api {
+  enum algorithm-objective-enum {
+    transport-time,
+    completion-time,
+  }
+
+  enum algorithm-problem-type-enum {
+    min,
+    min-max,
+  }
+
+  enum routing-curbside-strictness-enum {
+    ignore,
+    soft,
+    strict,
+  }
+
+  enum routing-network-data-provider-enum {
+    openstreetmap,
+    tomtom,
+  }
+
+  enum routing-snap-preventions-item-enum {
+    motorway,
+    trunk,
+    bridge,
+    ford,
+    tunnel,
+    ferry,
+  }
+
+  enum cost-matrix-type-op-enum {
+    default,
+    google,
+  }
+
+  enum objective-value-enum {
+    completion-time,
+    transport-time,
+    vehicles,
+    activities,
+  }
+
+  enum address-curbside-enum {
+    right,
+    left,
+    any,
+  }
+
+  enum service-type-op-enum {
+    service,
+    pickup,
+    delivery,
+  }
+
+  /// Use `objectives` instead.
+  record algorithm {
+    objective: option<algorithm-objective-enum>,
+    problem-type: option<algorithm-problem-type-enum>
+  }
+
+  /// Specifies general configurations that are taken into account when solving the vehicle routing problem.
+  record configuration {
+    routing: option<routing>
+  }
+
+  /// This contains all routing specific configurations.
+  record routing {
+    /// It lets you specify whether the API should provide you with route geometries for vehicle routes or not. Thus, you do not need to do extra routing to get the polyline for each route.
+    calc-points: option<bool>,
+    /// indicates whether historical traffic information should be considered
+    consider-traffic: option<bool>,
+    /// In some cases curbside constraints cannot be fulfilled. For example in one-way streets you cannot arrive at a building that is on the left side of the street such that the building is to the right of you (unless you drove the one-way street the wrong/illegal way). You can set the `curbside_strictness` to `soft` to ignore the curbside constraint in such cases or set it to `strict` to get an error response instead. You can also set it to `ignore` to ignore all curbside constraints (this is useful to compare the results with and without constraints without modifying every single address).
+    curbside-strictness: option<routing-curbside-strictness-enum>,
+    /// indicates whether matrix calculation should fail fast when points cannot be connected
+    fail-fast: option<bool>,
+    /// specifies the data provider, read more about it [here](#section/Map-Data-and-Routing-Profiles).
+    network-data-provider: option<routing-network-data-provider-enum>,
+    /// Indicates whether a solution includes snapped waypoints. In contrary to the address coordinate a snapped waypoint is the access point to the (road) network.
+    return-snapped-waypoints: option<bool>,
+    /// Prevents snapping locations to road links of specified road types, e.g. to motorway.
+    snap-preventions: option<list<routing-snap-preventions-item-enum>>
+  }
+
+  record cost-matrix {
+    /// JSON data of matrix response
+    data: option<cost-matrix-data>,
+    location-ids: option<list<string>>,
+    /// vehicle profile or empty if catch all fallback
+    profile: option<string>,
+    /// type of cost matrix, currently default or google are supported
+    type-op: option<cost-matrix-type-op-enum>
+  }
+
+  /// JSON data of matrix response
+  record cost-matrix-data {
+    distances: option<list<list<f64>>>,
+    /// Additional information for your request
+    info: option<cost-matrix-data-info>,
+    times: option<list<list<s64>>>
+  }
+
+  /// Additional information for your request
+  record cost-matrix-data-info {
+    copyrights: option<list<string>>,
+    took: option<f64>
+  }
+
+  record objective {
+    /// Type of objective function, i.e. `min` or `min-max`.
+    /// 
+    type-op: algorithm-problem-type-enum,
+    /// The value of the objective function.
+    /// The objective value `transport_time` solely considers the time
+    value: objective-value-enum
+  }
+
+  record service {
+    address: option<address>,
+    /// Specifies an array of allowed vehicles, i.e. array of vehicle ids. For example, if this service can only be conducted EITHER by `technician_peter` OR `technician_stefan` specify this as follows: `["technician_peter","technician_stefan"]`.
+    allowed-vehicles: option<list<string>>,
+    /// Specifies an array of disallowed vehicles, i.e. array of vehicle ids.
+    disallowed-vehicles: option<list<string>>,
+    /// Specifies the duration of the service in seconds, i.e. how long it takes at the customer site.
+    duration: option<s64>,
+    /// Group this service belongs to. See the group relation and [this post](https://discuss.graphhopper.com/t/4040) on how to utilize this.
+    group: option<string>,
+    /// Specifies the id of the service. Ids need to be unique so there must not be two services/shipments with the same id.
+    id: string,
+    /// Specifies the maximum time in seconds a delivery can stay in the vehicle. Currently, it only works with services of "type":"delivery".
+    max-time-in-vehicle: option<s64>,
+    /// Meaningful name for service, e.g. `"deliver pizza"`.
+    name: option<string>,
+    /// Specifies the preparation time in seconds. It can be used to model parking lot search time since if you have 3 identical locations in a row, it only falls due once.
+    preparation-time: option<s64>,
+    /// Specifies the priority. Can be 1 = high priority to 10 = low priority. Often there are more services/shipments than the available vehicle fleet can handle. Then you can set priorities to differentiate high priority tasks from those that could be left unassigned. I.e. the lower the priority the earlier these tasks are omitted in the solution.
+    priority: option<s32>,
+    /// Specifies an array of required skills, i.e. array of string (not case sensitive). For example, if this service needs to be conducted by a technician having a `drilling_machine` and a `screw_driver` then specify the array as follows: `["drilling_machine","screw_driver"]`. This means that the service can only be done by a vehicle (technician) that has the skills `drilling_machine` AND `screw_driver` in its skill array. Otherwise it remains unassigned.
+    required-skills: option<list<string>>,
+    /// Size can have multiple dimensions and should be in line with the capacity dimension array of the vehicle type. For example, if the item that needs to be delivered has two size dimension, volume and weight, then specify it as follow [ 20, 5 ] assuming a volume of 20 and a weight of 5.
+    size: option<list<s32>>,
+    /// Specifies an array of time window objects (see time_window object below). Specify the time either with the recommended Unix time stamp (the number of seconds since 1970-01-01) or you can also count the seconds relative to Monday morning 00:00 and define the whole week in seconds. For example, Monday 9am is then represented by 9hour * 3600sec/hour = 32400. In turn, Wednesday 1pm corresponds to 2day * 24hour/day * 3600sec/hour + 1day * 13hour/day * 3600sec/hour = 219600. See this tutorial for more information.
+    time-windows: option<list<time-window>>,
+    /// Specifies type of service. This makes a difference if items are loaded or unloaded, i.e. if one of the size dimensions > 0. If it is specified as `service` or `pickup`, items are loaded and will stay in the vehicle for the rest of the route (and thus consumes capacity for the rest of the route). If it is a `delivery`, items are implicitly loaded at the beginning of the route and will stay in the route until delivery (and thus releases capacity for the rest of the route).
+    type-op: option<service-type-op-enum>
+  }
+
+  record address {
+    /// Optional parameter. Specifies on which side a point should be relative to the driver when she leaves/arrives at a start/target/via point. Only supported for motor vehicles and OpenStreetMap.
+    curbside: option<address-curbside-enum>,
+    /// Latitude of location.
+    lat: f64,
+    /// Specifies the id of the location.
+    location-id: string,
+    /// Longitude of location.
+    lon: f64,
+    /// Name of location.
+    name: option<string>,
+    /// Optional parameter. Specifies a hint for each address to better snap the coordinates (lon,lat) to road network. E.g. if there is an address or house with two or more neighboring streets you can control for which street the closest location is looked up.
+    street-hint: option<string>
+  }
+
+  record time-window {
+    /// Specifies the opening time of the time window in seconds, i.e. the earliest time the service can start.
+    earliest: option<s64>,
+    /// Specifies the closing time of the time window in seconds, i.e. the latest time the service can start.
+    latest: option<s64>
+  }
+
+  record shipment {
+    /// Specifies an array of allowed vehicles, i.e. array of vehicle ids. For example, if this shipment can only be conducted EITHER by "technician_peter" OR "technician_stefan" specify this as follows: ["technician_peter","technician_stefan"].
+    allowed-vehicles: option<list<string>>,
+    delivery: stop,
+    /// Specifies an array of disallowed vehicles, i.e. array of vehicle ids.
+    disallowed-vehicles: option<list<string>>,
+    /// Specifies the id of the shipment. Ids need to be unique so there must not be two services/shipments with the same id.
+    id: string,
+    /// Specifies the maximum time in seconds a shipment can stay in the vehicle.
+    max-time-in-vehicle: option<s64>,
+    /// Meaningful name for shipment, e.g. "pickup and deliver pizza to Peter".
+    name: option<string>,
+    pickup: stop,
+    /// Specifies the priority. Can be 1 = high priority to 10 = low priority. Often there are more services/shipments than the available vehicle fleet can handle. Then you can set priorities to differentiate high priority tasks from those that could be left unassigned. I.e. the lower the priority the earlier these tasks are omitted in the solution.
+    priority: option<s32>,
+    /// Specifies an array of required skills, i.e. array of string (not case sensitive). For example, if this shipment needs to be conducted by a technician having a `drilling_machine` and a `screw_driver` then specify the array as follows: `["drilling_machine","screw_driver"]`. This means that the service can only be done by a vehicle (technician) that has the skills `drilling_machine` AND `screw_driver` in its skill array. Otherwise it remains unassigned.
+    required-skills: option<list<string>>,
+    /// Size can have multiple dimensions and should be in line with the capacity dimension array of the vehicle type. For example, if the item that needs to be delivered has two size dimension, volume and weight, then specify it as follow [ 20, 5 ] assuming a volume of 20 and a weight of 5.
+    size: option<list<s32>>
+  }
+
+  record stop {
+    address: option<address>,
+    /// Specifies the duration of the pickup or delivery in seconds, e.g. how long it takes unload items at the customer site.
+    duration: option<s64>,
+    /// Group this stop belongs to. See the group relation and [this post](https://discuss.graphhopper.com/t/4040) on how to utilize this.
+    group: option<string>,
+    /// Specifies the preparation time in seconds. It can be used to model parking lot search time since if you have 3 identical locations in a row, it only falls due once.
+    preparation-time: option<s64>,
+    /// Specifies an array of time window objects (see time window object below). For example, if an item needs to be delivered between 7am and 10am then specify the array as follows: [ { "earliest": 25200, "latest" : 32400 } ] (starting the day from 0 in seconds).
+    time-windows: option<list<time-window>>
+  }
+
+  record vehicle-type {
+    /// Specifies an array of capacity dimension values which need to be int values. For example, if there are two dimensions such as volume and weight then it needs to be defined as [ 1000, 300 ] assuming a maximum volume of 1000 and a maximum weight of 300.
+    capacity: option<list<s32>>,
+    /// Specifies whether traffic should be considered. if "tomtom" is used and this is false, free flow travel times from "tomtom" are calculated. If this is true, historical traffic info are used. We do not yet have traffic data for "openstreetmap", thus, setting this true has no effect at all.
+    consider-traffic: option<bool>,
+    /// **_BETA feature_**! Cost parameter vehicle activation, i.e. fixed costs per vehicle
+    cost-per-activation: option<f64>,
+    /// **_BETA feature_**! Cost parameter per distance unit, here meter is used
+    cost-per-meter: option<f64>,
+    /// **_BETA feature_**! Cost parameter per time unit, here second is used
+    cost-per-second: option<f64>,
+    /// Specifies the network data provider. Either use [`openstreetmap`](#section/Map-Data-and-Routing-Profiles/OpenStreetMap) (default) or [`tomtom`](#section/Map-Data-and-Routing-Profiles/TomTom) (add-on required).
+    network-data-provider: option<routing-network-data-provider-enum>,
+    profile: option<string>,
+    /// Specifies a service time factor for this vehicle type. If the vehicle/driver that uses this type is able to conduct the service as double as fast as it is determined in the corresponding service or shipment then set it to 0.5.
+    service-time-factor: option<f64>,
+    /// Specifies a speed factor for this vehicle type. If the vehicle that uses this type needs to be only half as fast as what is actually calculated with our routing engine then set the speed factor to 0.5.
+    speed-factor: option<f64>,
+    /// Specifies the id of the vehicle type. If a vehicle needs to be of this type, it should refer to this with its type_id attribute.
+    type-id: string
+  }
+
+  record vehicle {
+    break: option<string>,
+    /// Earliest start of vehicle in seconds. It is recommended to use the unix timestamp.
+    earliest-start: option<s64>,
+    end-address: option<address>,
+    /// Latest end of vehicle in seconds, i.e. the time the vehicle needs to be at its end location at latest.
+    latest-end: option<s64>,
+    /// Specifies the maximum number of activities a vehicle can conduct.
+    max-activities: option<s32>,
+    /// Specifies the maximum distance (in meters) a vehicle can go.
+    max-distance: option<s64>,
+    /// Specifies the maximum drive time (in seconds) a vehicle/driver can go, i.e. the maximum time on the road (service and waiting times are not included here)
+    max-driving-time: option<s64>,
+    /// Specifies the maximum number of jobs a vehicle can load.
+    max-jobs: option<s32>,
+    /// Specifies the minimum number of jobs a vehicle should load. This is a soft constraint, i.e. if it is not possible to fulfill “min_jobs”, we will still try to get as close as possible to this constraint.
+    min-jobs: option<s32>,
+    /// Indicates whether a vehicle should be moved even though it has not been assigned any jobs.
+    move-to-end-address: option<bool>,
+    /// If it is false, the algorithm decides where to end the vehicle route. It ends in one of your customers' locations. The end is chosen such that it contributes to the overall objective function, e.g. min transport_time. If it is true, you can either specify a specific end location (which is then regarded as end depot) or you can leave it and the driver returns to its start location.
+    return-to-depot: option<bool>,
+    /// Array of skills, i.e. array of string (not case sensitive).
+    skills: option<list<string>>,
+    start-address: address,
+    /// The type ID assigns a vehicle type to this vehicle. You can specify types in the array of vehicle types. If you omit the type ID, the default type is used. The default type is a `car` with a capacity of 0.
+    type-id: option<string>,
+    /// Specifies the ID of the vehicle. Ids must be unique, i.e. if there are two vehicles with the same ID, an error is returned.
+    vehicle-id: string
+  }
+
+  /// POST route optimization problem
+  record solve-vrp-params {
+    algorithm: option<algorithm>,
+    configuration: option<configuration>,
+    /// Specifies your own tranport time and distance matrices.
+    cost-matrices: option<list<cost-matrix>>,
+    /// Specifies an objective function. The vehicle routing problem is solved in such a way that this objective function is minimized.
+    objectives: option<list<objective>>,
+    /// Defines additional relationships between orders.
+    relations: option<list<string>>,
+    /// Specifies the orders of the type "service". These are, for example, pick-ups, deliveries or other stops that are to be approached by the specified vehicles. Each of these orders contains only one location.
+    services: option<list<service>>,
+    /// Specifies the available shipments. Each shipment contains a pickup and a delivery stop, which must be processed one after the other.
+    shipments: option<list<shipment>>,
+    /// Specifies the available vehicle types. These types can be assigned to vehicles.
+    vehicle-types: option<list<vehicle-type>>,
+    /// Specifies the available vehicles.
+    vehicles: option<list<vehicle>>
+  }
+  solve-vrp: func(params: solve-vrp-params) -> result<string, string>;
+
+  /// POST route optimization problem (batch mode)
+  record async-vrp-params {
+    algorithm: option<algorithm>,
+    configuration: option<configuration>,
+    /// Specifies your own tranport time and distance matrices.
+    cost-matrices: option<list<cost-matrix>>,
+    /// Specifies an objective function. The vehicle routing problem is solved in such a way that this objective function is minimized.
+    objectives: option<list<objective>>,
+    /// Defines additional relationships between orders.
+    relations: option<list<string>>,
+    /// Specifies the orders of the type "service". These are, for example, pick-ups, deliveries or other stops that are to be approached by the specified vehicles. Each of these orders contains only one location.
+    services: option<list<service>>,
+    /// Specifies the available shipments. Each shipment contains a pickup and a delivery stop, which must be processed one after the other.
+    shipments: option<list<shipment>>,
+    /// Specifies the available vehicle types. These types can be assigned to vehicles.
+    vehicle-types: option<list<vehicle-type>>,
+    /// Specifies the available vehicles.
+    vehicles: option<list<vehicle>>
+  }
+  async-vrp: func(params: async-vrp-params) -> result<string, string>;
+
+  /// GET the solution (batch mode)
+  record get-solution-params {
+    /// Request solution with jobId
+    job-id: string
+  }
+  get-solution: func(params: get-solution-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export cluster-api;
+  export geocoding-api;
+  export isochrone-api;
+  export map-matching-api;
+  export matrix-api;
+  export routing-api;
+  export route-optimization-api;
+}

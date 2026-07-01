@@ -1,0 +1,4480 @@
+package autostamp:gitlab@0.2.0;
+
+interface application {
+  enum put-v3-application-settings-body-enabled-git-access-protocol-enum {
+    ssh,
+    http,
+    nil,
+  }
+
+  /// Get the current application settings
+  get-v3-application-settings: func() -> result<string, string>;
+
+  /// Modify application settings
+  record put-v3-application-settings-params {
+    /// Determine if developers can push to master
+    default-branch-protection: option<s32>,
+    /// The default project visibility
+    default-project-visibility: option<s32>,
+    /// The default snippet visibility
+    default-snippet-visibility: option<s32>,
+    /// The default group visibility
+    default-group-visibility: option<s32>,
+    /// Selected levels cannot be used by non-admin users for projects or snippets. If the public level is restricted, user profiles are only visible to logged in users.
+    restricted-visibility-levels: option<list<string>>,
+    /// Enabled sources for code import during project creation. OmniAuth must be configured for GitHub, Bitbucket, and GitLab.com
+    import-sources: option<string>,
+    /// Disable certain OAuth sign-in sources
+    disabled-oauth-sign-in-sources: option<list<string>>,
+    /// Allow only the selected protocols to be used for Git access.
+    enabled-git-access-protocol: option<put-v3-application-settings-body-enabled-git-access-protocol-enum>,
+    /// Flag indicating if the Gravatar service is enabled
+    gravatar-enabled: option<bool>,
+    /// The maximum number of personal projects
+    default-projects-limit: option<s32>,
+    /// Maximum attachment size in MB
+    max-attachment-size: option<s32>,
+    /// Session duration in minutes. GitLab restart is required to apply changes.
+    session-expire-delay: option<s32>,
+    /// Allow users to register any application to use GitLab as an OAuth provider
+    user-oauth-applications: option<bool>,
+    /// Newly registered users will by default be external
+    user-default-external: option<bool>,
+    /// Flag indicating if sign up is enabled
+    signup-enabled: option<bool>,
+    /// Send confirmation email on sign-up
+    send-user-confirmation-email: option<bool>,
+    /// ONLY users with e-mail addresses that match these domain(s) will be able to sign-up. Wildcards allowed. Use separate lines for multiple entries. Ex: domain.com, *.domain.com
+    domain-whitelist: option<string>,
+    /// Enable domain blacklist for sign ups
+    domain-blacklist-enabled: option<bool>,
+    /// Users with e-mail addresses that match these domain(s) will NOT be able to sign-up. Wildcards allowed. Use separate lines for multiple entries. Ex: domain.com, *.domain.com
+    domain-blacklist: string,
+    /// Text shown after sign up
+    after-sign-up-text: option<string>,
+    /// Flag indicating if sign in is enabled
+    signin-enabled: option<bool>,
+    /// Require all users to setup Two-factor authentication
+    require-two-factor-authentication: option<bool>,
+    /// Amount of time (in hours) that users are allowed to skip forced configuration of two-factor authentication
+    two-factor-grace-period: s32,
+    /// We will redirect non-logged in users to this page
+    home-page-url: option<string>,
+    /// We will redirect users to this page after they sign out
+    after-sign-out-path: option<string>,
+    /// The sign in text of the GitLab application
+    sign-in-text: option<string>,
+    /// Custom text displayed on the help page
+    help-page-text: option<string>,
+    /// Enable shared runners for new projects
+    shared-runners-enabled: option<bool>,
+    /// Shared runners text 
+    shared-runners-text: string,
+    /// Set the maximum file size each build's artifacts can have
+    max-artifacts-size: option<s32>,
+    /// Authorization token duration (minutes)
+    container-registry-token-expire-delay: option<s32>,
+    /// Enable the InfluxDB metrics
+    metrics-enabled: option<bool>,
+    /// The InfluxDB host
+    metrics-host: string,
+    /// The UDP port to use for connecting to InfluxDB
+    metrics-port: s32,
+    /// The amount of InfluxDB connections to open
+    metrics-pool-size: s32,
+    /// The amount of seconds after which an InfluxDB connection will time out
+    metrics-timeout: s32,
+    /// A method call is only tracked when it takes longer to complete than the given amount of milliseconds.
+    metrics-method-call-threshold: s32,
+    /// The sampling interval in seconds
+    metrics-sample-interval: s32,
+    /// The amount of points to store in a single UDP packet
+    metrics-packet-size: s32,
+    /// Enable Sidekiq Job Throttling
+    sidekiq-throttling-enabled: option<bool>,
+    /// Choose which queues you wish to throttle
+    sidekiq-throttling-queus: list<string>,
+    /// The factor by which the queues should be throttled. A value between 0.0 and 1.0, exclusive.
+    sidekiq-throttling-factor: f64,
+    /// Helps prevent bots from creating accounts
+    recaptcha-enabled: option<bool>,
+    /// Generate site key at http://www.google.com/recaptcha
+    recaptcha-site-key: string,
+    /// Generate private key at http://www.google.com/recaptcha
+    recaptcha-private-key: string,
+    /// Helps prevent bots from creating issues
+    akismet-enabled: option<bool>,
+    /// Generate API key at http://www.akismet.com
+    akismet-api-key: string,
+    /// Abuse reports will be sent to this address if it is set. Abuse reports are always available in the admin area.
+    admin-notification-email: option<string>,
+    /// Sentry is an error reporting and logging tool which is currently not shipped with GitLab, get it here: https://getsentry.com
+    sentry-enabled: option<bool>,
+    /// Sentry Data Source Name
+    sentry-dsn: string,
+    /// Storage paths for new projects
+    repository-storage: option<string>,
+    /// GitLab will periodically run 'git fsck' in all project and wiki repositories to look for silent disk corruption issues.
+    repository-checks-enabled: option<bool>,
+    /// Enable Koding
+    koding-enabled: option<bool>,
+    /// The Koding team URL
+    koding-url: string,
+    /// Enable PlantUML
+    plantuml-enabled: option<bool>,
+    /// The PlantUML server URL
+    plantuml-url: string,
+    /// Let GitLab inform you when an update is available.
+    version-check-enabled: option<bool>,
+    /// Some email servers do not support overriding the email sender name. Enable this option to include the name of the author of the issue, merge request or comment in the email body instead.
+    email-author-in-body: option<bool>,
+    /// By default GitLab sends emails in HTML and plain text formats so mail clients can choose what format to use. Disable this option if you only want to send emails in plain text format.
+    html-emails-enabled: option<bool>,
+    /// Enable automatic repository housekeeping (git repack, git gc)
+    housekeeping-enabled: option<bool>,
+    /// Creating pack file bitmaps makes housekeeping take a little longer but bitmaps should accelerate 'git clone' performance.
+    housekeeping-bitmaps-enabled: bool,
+    /// Number of Git pushes after which an incremental 'git repack' is run.
+    housekeeping-incremental-repack-period: s32,
+    /// Number of Git pushes after which a full 'git repack' is run.
+    housekeeping-full-repack-period: s32,
+    /// Number of Git pushes after which 'git gc' is run.
+    housekeeping-gc-period: s32
+  }
+  put-v3-application-settings: func(params: put-v3-application-settings-params) -> result<string, string>;
+
+}
+
+
+interface ci {
+  /// Validation of .gitlab-ci.yml content
+  record post-v3-ci-lint-params {
+    /// Content of .gitlab-ci.yml
+    content: string
+  }
+  post-v3-ci-lint: func(params: post-v3-ci-lint-params) -> result<string, string>;
+
+}
+
+interface deploy-keys {
+  get-v3-deploy-keys: func() -> result<string, string>;
+
+}
+
+interface dockerfiles {
+  /// Get the list of the available template
+  get-v3-dockerfiles: func() -> result<string, string>;
+
+  /// Get the text for a specific template present in local filesystem
+  record get-v3-dockerfiles-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-dockerfiles-name: func(params: get-v3-dockerfiles-name-params) -> result<string, string>;
+
+}
+
+interface gitignores {
+  /// Get the list of the available template
+  get-v3-gitignores: func() -> result<string, string>;
+
+  /// Get the text for a specific template present in local filesystem
+  record get-v3-gitignores-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-gitignores-name: func(params: get-v3-gitignores-name-params) -> result<string, string>;
+
+}
+
+interface gitlab-ci-ymls {
+  /// Get the list of the available template
+  get-v3-gitlab-ci-ymls: func() -> result<string, string>;
+
+  /// Get the text for a specific template present in local filesystem
+  record get-v3-gitlab-ci-ymls-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-gitlab-ci-ymls-name: func(params: get-v3-gitlab-ci-ymls-name-params) -> result<string, string>;
+
+}
+
+interface groups {
+  enum get-v3-groups-order-by-enum {
+    name,
+    path,
+  }
+
+  enum get-v3-groups-sort-enum {
+    asc,
+    desc,
+  }
+
+  enum get-v3-groups-id-issues-state-enum {
+    opened,
+    closed,
+    all,
+  }
+
+  enum get-v3-groups-id-issues-order-by-enum {
+    created-at,
+    updated-at,
+  }
+
+  enum get-v3-groups-id-projects-visibility-enum {
+    public,
+    internal,
+    private,
+  }
+
+  enum get-v3-groups-id-projects-order-by-enum {
+    id,
+    name,
+    path,
+    created-at,
+    updated-at,
+    last-activity-at,
+  }
+
+  /// Get a groups list
+  record get-v3-groups-params {
+    /// Include project statistics
+    statistics: option<bool>,
+    /// Show all group that you have access to
+    all-available: option<bool>,
+    /// Search for a specific group
+    search: option<string>,
+    /// Order by name or path
+    order-by: option<get-v3-groups-order-by-enum>,
+    /// Sort by asc (ascending) or desc (descending)
+    sort: option<get-v3-groups-sort-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Array of group ids to exclude from list
+    skip-groups: option<list<s32>>
+  }
+  get-v3-groups: func(params: get-v3-groups-params) -> result<string, string>;
+
+  /// Create a group. Available only for users who can create groups.
+  record post-v3-groups-params {
+    /// The name of the group
+    name: string,
+    /// The path of the group
+    path: string,
+    /// The description of the group
+    description: option<string>,
+    /// The visibility level of the group
+    visibility-level: option<s32>,
+    /// Enable/disable LFS for the projects in this group
+    lfs-enabled: option<bool>,
+    /// Allow users to request member access
+    request-access-enabled: option<bool>
+  }
+  post-v3-groups: func(params: post-v3-groups-params) -> result<string, string>;
+
+  /// Get list of owned groups for authenticated user
+  record get-v3-groups-owned-params {
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Include project statistics
+    statistics: option<bool>
+  }
+  get-v3-groups-owned: func(params: get-v3-groups-owned-params) -> result<string, string>;
+
+  /// Get a single group, with containing projects.
+  record get-v3-groups-id-params {
+    /// The ID of a group
+    id: string
+  }
+  get-v3-groups-id: func(params: get-v3-groups-id-params) -> result<string, string>;
+
+  /// Update a group. Available only for users who can administrate groups.
+  record put-v3-groups-id-params {
+    /// The ID of a group
+    id: string,
+    /// The name of the group
+    name: option<string>,
+    /// The path of the group
+    path: option<string>,
+    /// The description of the group
+    description: option<string>,
+    /// The visibility level of the group
+    visibility-level: option<s32>,
+    /// Enable/disable LFS for the projects in this group
+    lfs-enabled: option<bool>,
+    /// Allow users to request member access
+    request-access-enabled: option<bool>
+  }
+  put-v3-groups-id: func(params: put-v3-groups-id-params) -> result<string, string>;
+
+  /// Remove a group.
+  record delete-v3-groups-id-params {
+    /// The ID of a group
+    id: string
+  }
+  delete-v3-groups-id: func(params: delete-v3-groups-id-params) -> result<string, string>;
+
+  /// Gets a list of access requests for a group.
+  record get-v3-groups-id-access-requests-params {
+    /// The group ID
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-groups-id-access-requests: func(params: get-v3-groups-id-access-requests-params) -> result<string, string>;
+
+  /// Requests access for the authenticated user to a group.
+  record post-v3-groups-id-access-requests-params {
+    /// The group ID
+    id: string
+  }
+  post-v3-groups-id-access-requests: func(params: post-v3-groups-id-access-requests-params) -> result<string, string>;
+
+  /// Denies an access request for the given user.
+  record delete-v3-groups-id-access-requests-user-id-params {
+    /// The group ID
+    id: string,
+    /// The user ID of the access requester
+    user-id: string
+  }
+  delete-v3-groups-id-access-requests-user-id: func(params: delete-v3-groups-id-access-requests-user-id-params) -> result<string, string>;
+
+  /// Approves an access request for the given user.
+  record put-v3-groups-id-access-requests-user-id-approve-params {
+    /// The group ID
+    id: string,
+    /// The user ID of the access requester
+    user-id: string,
+    /// A valid access level (defaults: `30`, developer access level)
+    access-level: option<s32>
+  }
+  put-v3-groups-id-access-requests-user-id-approve: func(params: put-v3-groups-id-access-requests-user-id-approve-params) -> result<string, string>;
+
+  /// Get a list of group issues
+  record get-v3-groups-id-issues-params {
+    /// The ID of a group
+    id: string,
+    /// Return opened, closed, or all issues
+    state: option<get-v3-groups-id-issues-state-enum>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Return issues for a specific milestone
+    milestone: option<string>,
+    /// Return issues ordered by `created_at` or `updated_at` fields.
+    order-by: option<get-v3-groups-id-issues-order-by-enum>,
+    /// Return issues sorted in `asc` or `desc` order.
+    sort: option<get-v3-groups-sort-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-groups-id-issues: func(params: get-v3-groups-id-issues-params) -> result<string, string>;
+
+  /// Gets a list of group or project members viewable by the authenticated user.
+  record get-v3-groups-id-members-params {
+    /// The group ID
+    id: string,
+    /// A query string to search for members
+    query: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-groups-id-members: func(params: get-v3-groups-id-members-params) -> result<string, string>;
+
+  /// Adds a member to a group or project.
+  record post-v3-groups-id-members-params {
+    /// The group ID
+    id: string,
+    /// The user ID of the new member
+    user-id: s32,
+    /// A valid access level (defaults: `30`, developer access level)
+    access-level: s32,
+    /// Date string in the format YEAR-MONTH-DAY
+    expires-at: option<string>
+  }
+  post-v3-groups-id-members: func(params: post-v3-groups-id-members-params) -> result<string, string>;
+
+  /// Gets a member of a group or project.
+  record get-v3-groups-id-members-user-id-params {
+    /// The group ID
+    id: string,
+    /// The user ID of the member
+    user-id: string
+  }
+  get-v3-groups-id-members-user-id: func(params: get-v3-groups-id-members-user-id-params) -> result<string, string>;
+
+  /// Updates a member of a group or project.
+  record put-v3-groups-id-members-user-id-params {
+    /// The group ID
+    id: string,
+    /// The user ID of the new member
+    user-id: string,
+    /// A valid access level
+    access-level: s32,
+    /// Date string in the format YEAR-MONTH-DAY
+    expires-at: option<string>
+  }
+  put-v3-groups-id-members-user-id: func(params: put-v3-groups-id-members-user-id-params) -> result<string, string>;
+
+  /// Removes a user from a group or project.
+  record delete-v3-groups-id-members-user-id-params {
+    /// The group ID
+    id: string,
+    /// The user ID of the member
+    user-id: string
+  }
+  delete-v3-groups-id-members-user-id: func(params: delete-v3-groups-id-members-user-id-params) -> result<string, string>;
+
+  /// Get group level notification level settings, defaults to Global
+  record get-v3-groups-id-notification-settings-params {
+    /// The group ID or project ID or project NAMESPACE/PROJECT_NAME
+    id: string
+  }
+  get-v3-groups-id-notification-settings: func(params: get-v3-groups-id-notification-settings-params) -> result<string, string>;
+
+  /// Update group level notification level settings, defaults to Global
+  record put-v3-groups-id-notification-settings-params {
+    /// The group ID or project ID or project NAMESPACE/PROJECT_NAME
+    id: string,
+    /// The group notification level
+    level: option<string>,
+    /// Enable/disable this notification
+    new-note: option<bool>,
+    /// Enable/disable this notification
+    new-issue: option<bool>,
+    /// Enable/disable this notification
+    reopen-issue: option<bool>,
+    /// Enable/disable this notification
+    close-issue: option<bool>,
+    /// Enable/disable this notification
+    reassign-issue: option<bool>,
+    /// Enable/disable this notification
+    new-merge-request: option<bool>,
+    /// Enable/disable this notification
+    reopen-merge-request: option<bool>,
+    /// Enable/disable this notification
+    close-merge-request: option<bool>,
+    /// Enable/disable this notification
+    reassign-merge-request: option<bool>,
+    /// Enable/disable this notification
+    merge-merge-request: option<bool>,
+    /// Enable/disable this notification
+    failed-pipeline: option<bool>,
+    /// Enable/disable this notification
+    success-pipeline: option<bool>
+  }
+  put-v3-groups-id-notification-settings: func(params: put-v3-groups-id-notification-settings-params) -> result<string, string>;
+
+  /// Get a list of projects in this group.
+  record get-v3-groups-id-projects-params {
+    /// The ID of a group
+    id: string,
+    /// Limit by archived status
+    archived: option<bool>,
+    /// Limit by visibility
+    visibility: option<get-v3-groups-id-projects-visibility-enum>,
+    /// Return list of authorized projects matching the search criteria
+    search: option<string>,
+    /// Return projects ordered by field
+    order-by: option<get-v3-groups-id-projects-order-by-enum>,
+    /// Return projects sorted in ascending and descending order
+    sort: option<get-v3-groups-sort-enum>,
+    /// Return only the ID, URL, name, and path of each project
+    simple: option<bool>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-groups-id-projects: func(params: get-v3-groups-id-projects-params) -> result<string, string>;
+
+  /// Transfer a project to the group namespace. Available only for admin.
+  record post-v3-groups-id-projects-project-id-params {
+    /// The ID of a group
+    id: string,
+    /// The ID or path of the project
+    project-id: string
+  }
+  post-v3-groups-id-projects-project-id: func(params: post-v3-groups-id-projects-project-id-params) -> result<string, string>;
+
+}
+
+interface hooks {
+  /// Get the list of system hooks
+  get-v3-hooks: func() -> result<string, string>;
+
+  /// Create a new system hook
+  record post-v3-hooks-params {
+    /// The URL to send the request to
+    url: string,
+    /// The token used to validate payloads
+    token: option<string>,
+    /// Trigger hook on push events
+    push-events: option<bool>,
+    /// Trigger hook on tag push events
+    tag-push-events: option<bool>,
+    /// Do SSL verification when triggering the hook
+    enable-ssl-verification: option<bool>
+  }
+  post-v3-hooks: func(params: post-v3-hooks-params) -> result<string, string>;
+
+  /// Test a hook
+  record get-v3-hooks-id-params {
+    /// The ID of the system hook
+    id: string
+  }
+  get-v3-hooks-id: func(params: get-v3-hooks-id-params) -> result<string, string>;
+
+  /// Delete a hook
+  record delete-v3-hooks-id-params {
+    /// The ID of the system hook
+    id: string
+  }
+  delete-v3-hooks-id: func(params: delete-v3-hooks-id-params) -> result<string, string>;
+
+}
+
+interface internal {
+  post-v3-internal-allowed: func() -> result<string, string>;
+
+  get-v3-internal-broadcast-message: func() -> result<string, string>;
+
+  get-v3-internal-check: func() -> result<string, string>;
+
+  get-v3-internal-discover: func() -> result<string, string>;
+
+  post-v3-internal-lfs-authenticate: func() -> result<string, string>;
+
+  get-v3-internal-merge-request-urls: func() -> result<string, string>;
+
+  post-v3-internal-two-factor-recovery-codes: func() -> result<string, string>;
+
+}
+
+interface issues {
+  enum get-v3-issues-state-enum {
+    opened,
+    closed,
+    all,
+  }
+
+  enum get-v3-issues-order-by-enum {
+    created-at,
+    updated-at,
+  }
+
+  enum get-v3-issues-sort-enum {
+    asc,
+    desc,
+  }
+
+  /// Get currently authenticated user's issues
+  record get-v3-issues-params {
+    /// Return opened, closed, or all issues
+    state: option<get-v3-issues-state-enum>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Return issues for a specific milestone
+    milestone: option<string>,
+    /// Return issues ordered by `created_at` or `updated_at` fields.
+    order-by: option<get-v3-issues-order-by-enum>,
+    /// Return issues sorted in `asc` or `desc` order.
+    sort: option<get-v3-issues-sort-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-issues: func(params: get-v3-issues-params) -> result<string, string>;
+
+}
+
+interface keys {
+  /// Get single ssh key by id. Only available to admin users
+  record get-v3-keys-id-params {
+    id: string
+  }
+  get-v3-keys-id: func(params: get-v3-keys-id-params) -> result<string, string>;
+
+}
+
+interface licenses {
+  /// Get the list of the available license template
+  record get-v3-licenses-params {
+    /// If passed, returns only popular licenses
+    popular: option<bool>
+  }
+  get-v3-licenses: func(params: get-v3-licenses-params) -> result<string, string>;
+
+  /// Get the text for a specific license
+  record get-v3-licenses-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-licenses-name: func(params: get-v3-licenses-name-params) -> result<string, string>;
+
+}
+
+interface namespaces {
+  /// Get a namespaces list
+  record get-v3-namespaces-params {
+    /// Search query for namespaces
+    search: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-namespaces: func(params: get-v3-namespaces-params) -> result<string, string>;
+
+}
+
+interface notification-settings {
+  /// Get global notification level settings and email, defaults to Participate
+  get-v3-notification-settings: func() -> result<string, string>;
+
+  /// Update global notification level settings and email, defaults to Participate
+  record put-v3-notification-settings-params {
+    /// The global notification level
+    level: option<string>,
+    /// The email address to send notifications
+    notification-email: option<string>,
+    /// Enable/disable this notification
+    new-note: option<bool>,
+    /// Enable/disable this notification
+    new-issue: option<bool>,
+    /// Enable/disable this notification
+    reopen-issue: option<bool>,
+    /// Enable/disable this notification
+    close-issue: option<bool>,
+    /// Enable/disable this notification
+    reassign-issue: option<bool>,
+    /// Enable/disable this notification
+    new-merge-request: option<bool>,
+    /// Enable/disable this notification
+    reopen-merge-request: option<bool>,
+    /// Enable/disable this notification
+    close-merge-request: option<bool>,
+    /// Enable/disable this notification
+    reassign-merge-request: option<bool>,
+    /// Enable/disable this notification
+    merge-merge-request: option<bool>,
+    /// Enable/disable this notification
+    failed-pipeline: option<bool>,
+    /// Enable/disable this notification
+    success-pipeline: option<bool>
+  }
+  put-v3-notification-settings: func(params: put-v3-notification-settings-params) -> result<string, string>;
+
+}
+
+interface projects {
+  enum get-v3-projects-order-by-enum {
+    id,
+    name,
+    path,
+    created-at,
+    updated-at,
+    last-activity-at,
+  }
+
+  enum get-v3-projects-sort-enum {
+    asc,
+    desc,
+  }
+
+  enum get-v3-projects-visibility-enum {
+    public,
+    internal,
+    private,
+  }
+
+  enum get-v3-projects-id-builds-scope-enum {
+    pending,
+    running,
+    failed,
+    success,
+    canceled,
+  }
+
+  enum get-v3-projects-id-issues-state-enum {
+    opened,
+    closed,
+    all,
+  }
+
+  enum get-v3-projects-id-issues-order-by-enum {
+    created-at,
+    updated-at,
+  }
+
+  enum put-v3-projects-id-issues-issue-id-body-state-event-enum {
+    reopen,
+    close,
+  }
+
+  enum put-v3-projects-id-merge-request-merge-request-id-body-state-event-enum {
+    close,
+    reopen,
+    merge,
+  }
+
+  enum get-v3-projects-id-merge-requests-state-enum {
+    opened,
+    closed,
+    merged,
+    all,
+  }
+
+  enum get-v3-projects-id-milestones-state-enum {
+    active,
+    closed,
+    all,
+  }
+
+  enum put-v3-projects-id-milestones-milestone-id-body-state-event-enum {
+    close,
+    activate,
+  }
+
+  enum get-v3-projects-id-pipelines-scope-enum {
+    running,
+    branches,
+    tags,
+  }
+
+  enum post-v3-projects-id-repository-commits-sha-comments-body-line-type-enum {
+    new,
+    old,
+  }
+
+  enum post-v3-projects-id-repository-files-body-encoding-enum {
+    base64,
+  }
+
+  enum get-v3-projects-id-runners-scope-enum {
+    active,
+    paused,
+    online,
+    specific,
+    shared,
+  }
+
+  enum post-v3-projects-id-statuses-sha-body-state-enum {
+    pending,
+    running,
+    success,
+    failed,
+    canceled,
+  }
+
+  /// Get a projects list for authenticated user
+  record get-v3-projects-params {
+    /// Return projects ordered by field
+    order-by: option<get-v3-projects-order-by-enum>,
+    /// Return projects sorted in ascending and descending order
+    sort: option<get-v3-projects-sort-enum>,
+    /// Limit by archived status
+    archived: option<bool>,
+    /// Limit by visibility
+    visibility: option<get-v3-projects-visibility-enum>,
+    /// Return list of authorized projects matching the search criteria
+    search: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Return only the ID, URL, name, and path of each project
+    simple: option<bool>
+  }
+  get-v3-projects: func(params: get-v3-projects-params) -> result<string, string>;
+
+  /// Create new project
+  record post-v3-projects-params {
+    /// The name of the project
+    name: string,
+    /// The path of the repository
+    path: option<string>,
+    /// The description of the project
+    description: option<string>,
+    /// Flag indication if the issue tracker is enabled
+    issues-enabled: option<bool>,
+    /// Flag indication if merge requests are enabled
+    merge-requests-enabled: option<bool>,
+    /// Flag indication if the wiki is enabled
+    wiki-enabled: option<bool>,
+    /// Flag indication if builds are enabled
+    builds-enabled: option<bool>,
+    /// Flag indication if snippets are enabled
+    snippets-enabled: option<bool>,
+    /// Flag indication if shared runners are enabled for that project
+    shared-runners-enabled: option<bool>,
+    /// Flag indication if the container registry is enabled for that project
+    container-registry-enabled: option<bool>,
+    /// Flag indication if Git LFS is enabled for that project
+    lfs-enabled: option<bool>,
+    /// Create a public project. The same as visibility_level = 20.
+    public: option<bool>,
+    /// Create a public project. The same as visibility_level = 20.
+    visibility-level: option<s32>,
+    /// Perform public builds
+    public-builds: option<bool>,
+    /// Allow users to request member access
+    request-access-enabled: option<bool>,
+    /// Only allow to merge if builds succeed
+    only-allow-merge-if-build-succeeds: option<bool>,
+    /// Only allow to merge if all discussions are resolved
+    only-allow-merge-if-all-discussions-are-resolved: option<bool>,
+    /// Namespace ID for the new project. Default to the user namespace.
+    namespace-id: option<s32>,
+    /// URL from which the project is imported
+    import-url: option<string>
+  }
+  post-v3-projects: func(params: post-v3-projects-params) -> result<string, string>;
+
+  /// Get all projects for admin user
+  record get-v3-projects-all-params {
+    /// Return projects ordered by field
+    order-by: option<get-v3-projects-order-by-enum>,
+    /// Return projects sorted in ascending and descending order
+    sort: option<get-v3-projects-sort-enum>,
+    /// Limit by archived status
+    archived: option<bool>,
+    /// Limit by visibility
+    visibility: option<get-v3-projects-visibility-enum>,
+    /// Return list of authorized projects matching the search criteria
+    search: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Return only the ID, URL, name, and path of each project
+    simple: option<bool>,
+    /// Include project statistics
+    statistics: option<bool>
+  }
+  get-v3-projects-all: func(params: get-v3-projects-all-params) -> result<string, string>;
+
+  /// Fork new project for the current user or provided namespace.
+  record post-v3-projects-fork-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID or name of the namespace that the project will be forked into
+    namespace: option<string>
+  }
+  post-v3-projects-fork-id: func(params: post-v3-projects-fork-id-params) -> result<string, string>;
+
+  /// Get an owned projects list for authenticated user
+  record get-v3-projects-owned-params {
+    /// Return projects ordered by field
+    order-by: option<get-v3-projects-order-by-enum>,
+    /// Return projects sorted in ascending and descending order
+    sort: option<get-v3-projects-sort-enum>,
+    /// Limit by archived status
+    archived: option<bool>,
+    /// Limit by visibility
+    visibility: option<get-v3-projects-visibility-enum>,
+    /// Return list of authorized projects matching the search criteria
+    search: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Return only the ID, URL, name, and path of each project
+    simple: option<bool>,
+    /// Include project statistics
+    statistics: option<bool>
+  }
+  get-v3-projects-owned: func(params: get-v3-projects-owned-params) -> result<string, string>;
+
+  /// Search for projects the current user has access to
+  record get-v3-projects-search-query-params {
+    /// The project name to be searched
+    query: string,
+    /// Return projects ordered by field
+    order-by: option<get-v3-projects-order-by-enum>,
+    /// Return projects sorted in ascending and descending order
+    sort: option<get-v3-projects-sort-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-search-query: func(params: get-v3-projects-search-query-params) -> result<string, string>;
+
+  /// Gets starred project for the authenticated user
+  record get-v3-projects-starred-params {
+    /// Return projects ordered by field
+    order-by: option<get-v3-projects-order-by-enum>,
+    /// Return projects sorted in ascending and descending order
+    sort: option<get-v3-projects-sort-enum>,
+    /// Limit by archived status
+    archived: option<bool>,
+    /// Limit by visibility
+    visibility: option<get-v3-projects-visibility-enum>,
+    /// Return list of authorized projects matching the search criteria
+    search: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Return only the ID, URL, name, and path of each project
+    simple: option<bool>
+  }
+  get-v3-projects-starred: func(params: get-v3-projects-starred-params) -> result<string, string>;
+
+  /// Create new project for a specified user. Only available to admin users.
+  record post-v3-projects-user-user-id-params {
+    /// The ID of a user
+    user-id: string,
+    /// The name of the project
+    name: string,
+    /// The default branch of the project
+    default-branch: option<string>,
+    /// The description of the project
+    description: option<string>,
+    /// Flag indication if the issue tracker is enabled
+    issues-enabled: option<bool>,
+    /// Flag indication if merge requests are enabled
+    merge-requests-enabled: option<bool>,
+    /// Flag indication if the wiki is enabled
+    wiki-enabled: option<bool>,
+    /// Flag indication if builds are enabled
+    builds-enabled: option<bool>,
+    /// Flag indication if snippets are enabled
+    snippets-enabled: option<bool>,
+    /// Flag indication if shared runners are enabled for that project
+    shared-runners-enabled: option<bool>,
+    /// Flag indication if the container registry is enabled for that project
+    container-registry-enabled: option<bool>,
+    /// Flag indication if Git LFS is enabled for that project
+    lfs-enabled: option<bool>,
+    /// Create a public project. The same as visibility_level = 20.
+    public: option<bool>,
+    /// Create a public project. The same as visibility_level = 20.
+    visibility-level: option<s32>,
+    /// Perform public builds
+    public-builds: option<bool>,
+    /// Allow users to request member access
+    request-access-enabled: option<bool>,
+    /// Only allow to merge if builds succeed
+    only-allow-merge-if-build-succeeds: option<bool>,
+    /// Only allow to merge if all discussions are resolved
+    only-allow-merge-if-all-discussions-are-resolved: option<bool>,
+    /// Namespace ID for the new project. Default to the user namespace.
+    namespace-id: option<s32>,
+    /// URL from which the project is imported
+    import-url: option<string>
+  }
+  post-v3-projects-user-user-id: func(params: post-v3-projects-user-user-id-params) -> result<string, string>;
+
+  /// Get a list of visible projects for authenticated user
+  record get-v3-projects-visible-params {
+    /// Return projects ordered by field
+    order-by: option<get-v3-projects-order-by-enum>,
+    /// Return projects sorted in ascending and descending order
+    sort: option<get-v3-projects-sort-enum>,
+    /// Limit by archived status
+    archived: option<bool>,
+    /// Limit by visibility
+    visibility: option<get-v3-projects-visibility-enum>,
+    /// Return list of authorized projects matching the search criteria
+    search: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Return only the ID, URL, name, and path of each project
+    simple: option<bool>
+  }
+  get-v3-projects-visible: func(params: get-v3-projects-visible-params) -> result<string, string>;
+
+  /// Get a single project
+  record get-v3-projects-id-params {
+    /// The ID of a project
+    id: string
+  }
+  get-v3-projects-id: func(params: get-v3-projects-id-params) -> result<string, string>;
+
+  /// Update an existing project
+  record put-v3-projects-id-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the project
+    name: option<string>,
+    /// The default branch of the project
+    default-branch: option<string>,
+    /// The path of the repository
+    path: option<string>,
+    /// The description of the project
+    description: option<string>,
+    /// Flag indication if the issue tracker is enabled
+    issues-enabled: option<bool>,
+    /// Flag indication if merge requests are enabled
+    merge-requests-enabled: option<bool>,
+    /// Flag indication if the wiki is enabled
+    wiki-enabled: option<bool>,
+    /// Flag indication if builds are enabled
+    builds-enabled: option<bool>,
+    /// Flag indication if snippets are enabled
+    snippets-enabled: option<bool>,
+    /// Flag indication if shared runners are enabled for that project
+    shared-runners-enabled: option<bool>,
+    /// Flag indication if the container registry is enabled for that project
+    container-registry-enabled: option<bool>,
+    /// Flag indication if Git LFS is enabled for that project
+    lfs-enabled: option<bool>,
+    /// Create a public project. The same as visibility_level = 20.
+    public: option<bool>,
+    /// Create a public project. The same as visibility_level = 20.
+    visibility-level: option<s32>,
+    /// Perform public builds
+    public-builds: option<bool>,
+    /// Allow users to request member access
+    request-access-enabled: option<bool>,
+    /// Only allow to merge if builds succeed
+    only-allow-merge-if-build-succeeds: option<bool>,
+    /// Only allow to merge if all discussions are resolved
+    only-allow-merge-if-all-discussions-are-resolved: option<bool>
+  }
+  put-v3-projects-id: func(params: put-v3-projects-id-params) -> result<string, string>;
+
+  /// Remove a project
+  record delete-v3-projects-id-params {
+    /// The ID of a project
+    id: string
+  }
+  delete-v3-projects-id: func(params: delete-v3-projects-id-params) -> result<string, string>;
+
+  /// Trigger a GitLab project build
+  record post-v3-projects-id-ref-ref-trigger-builds-params {
+    /// The ID of a project
+    id: string,
+    /// The commit sha or name of a branch or tag
+    ref: string,
+    /// The unique token of trigger
+    token: string
+  }
+  post-v3-projects-id-ref-ref-trigger-builds: func(params: post-v3-projects-id-ref-ref-trigger-builds-params) -> result<string, string>;
+
+  /// Gets a list of access requests for a project.
+  record get-v3-projects-id-access-requests-params {
+    /// The project ID
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-access-requests: func(params: get-v3-projects-id-access-requests-params) -> result<string, string>;
+
+  /// Requests access for the authenticated user to a project.
+  record post-v3-projects-id-access-requests-params {
+    /// The project ID
+    id: string
+  }
+  post-v3-projects-id-access-requests: func(params: post-v3-projects-id-access-requests-params) -> result<string, string>;
+
+  /// Denies an access request for the given user.
+  record delete-v3-projects-id-access-requests-user-id-params {
+    /// The project ID
+    id: string,
+    /// The user ID of the access requester
+    user-id: string
+  }
+  delete-v3-projects-id-access-requests-user-id: func(params: delete-v3-projects-id-access-requests-user-id-params) -> result<string, string>;
+
+  /// Approves an access request for the given user.
+  record put-v3-projects-id-access-requests-user-id-approve-params {
+    /// The project ID
+    id: string,
+    /// The user ID of the access requester
+    user-id: string,
+    /// A valid access level (defaults: `30`, developer access level)
+    access-level: option<s32>
+  }
+  put-v3-projects-id-access-requests-user-id-approve: func(params: put-v3-projects-id-access-requests-user-id-approve-params) -> result<string, string>;
+
+  /// Archive a project
+  record post-v3-projects-id-archive-params {
+    /// The ID of a project
+    id: string
+  }
+  post-v3-projects-id-archive: func(params: post-v3-projects-id-archive-params) -> result<string, string>;
+
+  /// Get all project boards
+  record get-v3-projects-id-boards-params {
+    /// The ID of a project
+    id: string
+  }
+  get-v3-projects-id-boards: func(params: get-v3-projects-id-boards-params) -> result<string, string>;
+
+  /// Get the lists of a project board
+  record get-v3-projects-id-boards-board-id-lists-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a board
+    board-id: string
+  }
+  get-v3-projects-id-boards-board-id-lists: func(params: get-v3-projects-id-boards-board-id-lists-params) -> result<string, string>;
+
+  /// Create a new board list
+  record post-v3-projects-id-boards-board-id-lists-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a board
+    board-id: string,
+    /// The ID of an existing label
+    label-id: s32
+  }
+  post-v3-projects-id-boards-board-id-lists: func(params: post-v3-projects-id-boards-board-id-lists-params) -> result<string, string>;
+
+  /// Get a list of a project board
+  record get-v3-projects-id-boards-board-id-lists-list-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a board
+    board-id: string,
+    /// The ID of a list
+    list-id: string
+  }
+  get-v3-projects-id-boards-board-id-lists-list-id: func(params: get-v3-projects-id-boards-board-id-lists-list-id-params) -> result<string, string>;
+
+  /// Moves a board list to a new position
+  record put-v3-projects-id-boards-board-id-lists-list-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a board
+    board-id: string,
+    /// The ID of a list
+    list-id: string,
+    /// The position of the list
+    position: s32
+  }
+  put-v3-projects-id-boards-board-id-lists-list-id: func(params: put-v3-projects-id-boards-board-id-lists-list-id-params) -> result<string, string>;
+
+  /// Delete a board list
+  record delete-v3-projects-id-boards-board-id-lists-list-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a board
+    board-id: string,
+    /// The ID of a board list
+    list-id: string
+  }
+  delete-v3-projects-id-boards-board-id-lists-list-id: func(params: delete-v3-projects-id-boards-board-id-lists-list-id-params) -> result<string, string>;
+
+  /// Get a project builds
+  record get-v3-projects-id-builds-params {
+    /// The ID of a project
+    id: string,
+    /// The scope of builds to show
+    scope: option<get-v3-projects-id-builds-scope-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-builds: func(params: get-v3-projects-id-builds-params) -> result<string, string>;
+
+  /// Download the artifacts file from build
+  record get-v3-projects-id-builds-artifacts-ref-name-download-params {
+    /// The ID of a project
+    id: string,
+    /// The ref from repository
+    ref-name: string,
+    /// The name for the build
+    job: string
+  }
+  get-v3-projects-id-builds-artifacts-ref-name-download: func(params: get-v3-projects-id-builds-artifacts-ref-name-download-params) -> result<string, string>;
+
+  /// Get a specific build of a project
+  record get-v3-projects-id-builds-build-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a build
+    build-id: string
+  }
+  get-v3-projects-id-builds-build-id: func(params: get-v3-projects-id-builds-build-id-params) -> result<string, string>;
+
+  /// Download the artifacts file from build
+  record get-v3-projects-id-builds-build-id-artifacts-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a build
+    build-id: string
+  }
+  get-v3-projects-id-builds-build-id-artifacts: func(params: get-v3-projects-id-builds-build-id-artifacts-params) -> result<string, string>;
+
+  /// Keep the artifacts to prevent them from being deleted
+  record post-v3-projects-id-builds-build-id-artifacts-keep-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a build
+    build-id: string
+  }
+  post-v3-projects-id-builds-build-id-artifacts-keep: func(params: post-v3-projects-id-builds-build-id-artifacts-keep-params) -> result<string, string>;
+
+  /// Cancel a specific build of a project
+  record post-v3-projects-id-builds-build-id-cancel-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a build
+    build-id: string
+  }
+  post-v3-projects-id-builds-build-id-cancel: func(params: post-v3-projects-id-builds-build-id-cancel-params) -> result<string, string>;
+
+  /// Erase build (remove artifacts and build trace)
+  record post-v3-projects-id-builds-build-id-erase-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a build
+    build-id: string
+  }
+  post-v3-projects-id-builds-build-id-erase: func(params: post-v3-projects-id-builds-build-id-erase-params) -> result<string, string>;
+
+  /// Trigger a manual build
+  record post-v3-projects-id-builds-build-id-play-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a Build
+    build-id: string
+  }
+  post-v3-projects-id-builds-build-id-play: func(params: post-v3-projects-id-builds-build-id-play-params) -> result<string, string>;
+
+  /// Retry a specific build of a project
+  record post-v3-projects-id-builds-build-id-retry-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a build
+    build-id: string
+  }
+  post-v3-projects-id-builds-build-id-retry: func(params: post-v3-projects-id-builds-build-id-retry-params) -> result<string, string>;
+
+  /// Get a trace of a specific build of a project
+  record get-v3-projects-id-builds-build-id-trace-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a build
+    build-id: string
+  }
+  get-v3-projects-id-builds-build-id-trace: func(params: get-v3-projects-id-builds-build-id-trace-params) -> result<string, string>;
+
+  /// Get a specific project's deploy keys
+  record get-v3-projects-id-deploy-keys-params {
+    /// The ID of the project
+    id: string
+  }
+  get-v3-projects-id-deploy-keys: func(params: get-v3-projects-id-deploy-keys-params) -> result<string, string>;
+
+  /// Add new deploy key to currently authenticated user
+  record post-v3-projects-id-deploy-keys-params {
+    /// The ID of the project
+    id: string,
+    /// The new deploy key
+    key: string,
+    /// The name of the deploy key
+    title: string
+  }
+  post-v3-projects-id-deploy-keys: func(params: post-v3-projects-id-deploy-keys-params) -> result<string, string>;
+
+  /// Get single deploy key
+  record get-v3-projects-id-deploy-keys-key-id-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  get-v3-projects-id-deploy-keys-key-id: func(params: get-v3-projects-id-deploy-keys-key-id-params) -> result<string, string>;
+
+  /// Delete deploy key for a project
+  record delete-v3-projects-id-deploy-keys-key-id-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  delete-v3-projects-id-deploy-keys-key-id: func(params: delete-v3-projects-id-deploy-keys-key-id-params) -> result<string, string>;
+
+  /// Disable a deploy key for a project
+  record delete-v3-projects-id-deploy-keys-key-id-disable-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  delete-v3-projects-id-deploy-keys-key-id-disable: func(params: delete-v3-projects-id-deploy-keys-key-id-disable-params) -> result<string, string>;
+
+  /// Enable a deploy key for a project
+  record post-v3-projects-id-deploy-keys-key-id-enable-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  post-v3-projects-id-deploy-keys-key-id-enable: func(params: post-v3-projects-id-deploy-keys-key-id-enable-params) -> result<string, string>;
+
+  /// Get all deployments of the project
+  record get-v3-projects-id-deployments-params {
+    /// The project ID
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-deployments: func(params: get-v3-projects-id-deployments-params) -> result<string, string>;
+
+  /// Gets a specific deployment
+  record get-v3-projects-id-deployments-deployment-id-params {
+    /// The project ID
+    id: string,
+    /// The deployment ID
+    deployment-id: string
+  }
+  get-v3-projects-id-deployments-deployment-id: func(params: get-v3-projects-id-deployments-deployment-id-params) -> result<string, string>;
+
+  /// Get all environments of the project
+  record get-v3-projects-id-environments-params {
+    /// The project ID
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-environments: func(params: get-v3-projects-id-environments-params) -> result<string, string>;
+
+  /// Creates a new environment
+  record post-v3-projects-id-environments-params {
+    /// The project ID
+    id: string,
+    /// The name of the environment to be created
+    name: string,
+    /// URL on which this deployment is viewable
+    external-url: option<string>,
+    slug: option<string>
+  }
+  post-v3-projects-id-environments: func(params: post-v3-projects-id-environments-params) -> result<string, string>;
+
+  /// Updates an existing environment
+  record put-v3-projects-id-environments-environment-id-params {
+    /// The project ID
+    id: string,
+    /// The environment ID
+    environment-id: string,
+    /// The new environment name
+    name: option<string>,
+    /// The new URL on which this deployment is viewable
+    external-url: option<string>,
+    slug: option<string>
+  }
+  put-v3-projects-id-environments-environment-id: func(params: put-v3-projects-id-environments-environment-id-params) -> result<string, string>;
+
+  /// Deletes an existing environment
+  record delete-v3-projects-id-environments-environment-id-params {
+    /// The project ID
+    id: string,
+    /// The environment ID
+    environment-id: string
+  }
+  delete-v3-projects-id-environments-environment-id: func(params: delete-v3-projects-id-environments-environment-id-params) -> result<string, string>;
+
+  /// Get events for a single project
+  record get-v3-projects-id-events-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-events: func(params: get-v3-projects-id-events-params) -> result<string, string>;
+
+  /// Remove a forked_from relationship
+  record delete-v3-projects-id-fork-params {
+    /// The ID of a project
+    id: string
+  }
+  delete-v3-projects-id-fork: func(params: delete-v3-projects-id-fork-params) -> result<string, string>;
+
+  /// Mark this project as forked from another
+  record post-v3-projects-id-fork-forked-from-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the project it was forked from
+    forked-from-id: string
+  }
+  post-v3-projects-id-fork-forked-from-id: func(params: post-v3-projects-id-fork-forked-from-id-params) -> result<string, string>;
+
+  /// Get project hooks
+  record get-v3-projects-id-hooks-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-hooks: func(params: get-v3-projects-id-hooks-params) -> result<string, string>;
+
+  /// Add hook to project
+  record post-v3-projects-id-hooks-params {
+    /// The ID of a project
+    id: string,
+    /// The URL to send the request to
+    url: string,
+    /// Trigger hook on push events
+    push-events: option<bool>,
+    /// Trigger hook on issues events
+    issues-events: option<bool>,
+    /// Trigger hook on merge request events
+    merge-requests-events: option<bool>,
+    /// Trigger hook on tag push events
+    tag-push-events: option<bool>,
+    /// Trigger hook on note(comment) events
+    note-events: option<bool>,
+    /// Trigger hook on build events
+    build-events: option<bool>,
+    /// Trigger hook on pipeline events
+    pipeline-events: option<bool>,
+    /// Trigger hook on wiki events
+    wiki-page-events: option<bool>,
+    /// Do SSL verification when triggering the hook
+    enable-ssl-verification: option<bool>,
+    /// Secret token to validate received payloads; this will not be returned in the response
+    token: option<string>
+  }
+  post-v3-projects-id-hooks: func(params: post-v3-projects-id-hooks-params) -> result<string, string>;
+
+  /// Get a project hook
+  record get-v3-projects-id-hooks-hook-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project hook
+    hook-id: string
+  }
+  get-v3-projects-id-hooks-hook-id: func(params: get-v3-projects-id-hooks-hook-id-params) -> result<string, string>;
+
+  /// Update an existing project hook
+  record put-v3-projects-id-hooks-hook-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the hook to update
+    hook-id: string,
+    /// The URL to send the request to
+    url: string,
+    /// Trigger hook on push events
+    push-events: option<bool>,
+    /// Trigger hook on issues events
+    issues-events: option<bool>,
+    /// Trigger hook on merge request events
+    merge-requests-events: option<bool>,
+    /// Trigger hook on tag push events
+    tag-push-events: option<bool>,
+    /// Trigger hook on note(comment) events
+    note-events: option<bool>,
+    /// Trigger hook on build events
+    build-events: option<bool>,
+    /// Trigger hook on pipeline events
+    pipeline-events: option<bool>,
+    /// Trigger hook on wiki events
+    wiki-page-events: option<bool>,
+    /// Do SSL verification when triggering the hook
+    enable-ssl-verification: option<bool>,
+    /// Secret token to validate received payloads; this will not be returned in the response
+    token: option<string>
+  }
+  put-v3-projects-id-hooks-hook-id: func(params: put-v3-projects-id-hooks-hook-id-params) -> result<string, string>;
+
+  /// Deletes project hook
+  record delete-v3-projects-id-hooks-hook-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the hook to delete
+    hook-id: string
+  }
+  delete-v3-projects-id-hooks-hook-id: func(params: delete-v3-projects-id-hooks-hook-id-params) -> result<string, string>;
+
+  /// Get a list of project issues
+  record get-v3-projects-id-issues-params {
+    /// The ID of a project
+    id: string,
+    /// Return opened, closed, or all issues
+    state: option<get-v3-projects-id-issues-state-enum>,
+    /// Return the issue having the given `iid`
+    iid: option<s32>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Return issues for a specific milestone
+    milestone: option<string>,
+    /// Return issues ordered by `created_at` or `updated_at` fields.
+    order-by: option<get-v3-projects-id-issues-order-by-enum>,
+    /// Return issues sorted in `asc` or `desc` order.
+    sort: option<get-v3-projects-sort-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-issues: func(params: get-v3-projects-id-issues-params) -> result<string, string>;
+
+  /// Create a new project issue
+  record post-v3-projects-id-issues-params {
+    /// The ID of a project
+    id: string,
+    /// The title of an issue
+    title: string,
+    /// Date time when the issue was created. Available only for admins and project owners.
+    created-at: option<string>,
+    /// The IID of a merge request for which to resolve discussions
+    merge-request-for-resolving-discussions: option<s32>,
+    /// The description of an issue
+    description: option<string>,
+    /// The ID of a user to assign issue
+    assignee-id: option<s32>,
+    /// The ID of a milestone to assign issue
+    milestone-id: option<s32>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Date time string in the format YEAR-MONTH-DAY
+    due-date: option<string>,
+    /// Boolean parameter if the issue should be confidential
+    confidential: option<bool>
+  }
+  post-v3-projects-id-issues: func(params: post-v3-projects-id-issues-params) -> result<string, string>;
+
+  /// Get a single project issue
+  record get-v3-projects-id-issues-issue-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string
+  }
+  get-v3-projects-id-issues-issue-id: func(params: get-v3-projects-id-issues-issue-id-params) -> result<string, string>;
+
+  /// Update an existing issue
+  record put-v3-projects-id-issues-issue-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string,
+    /// The title of an issue
+    title: option<string>,
+    /// Date time when the issue was updated. Available only for admins and project owners.
+    updated-at: option<string>,
+    /// State of the issue
+    state-event: option<put-v3-projects-id-issues-issue-id-body-state-event-enum>,
+    /// The description of an issue
+    description: option<string>,
+    /// The ID of a user to assign issue
+    assignee-id: option<s32>,
+    /// The ID of a milestone to assign issue
+    milestone-id: option<s32>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Date time string in the format YEAR-MONTH-DAY
+    due-date: option<string>,
+    /// Boolean parameter if the issue should be confidential
+    confidential: option<bool>,
+    created-at: option<string>
+  }
+  put-v3-projects-id-issues-issue-id: func(params: put-v3-projects-id-issues-issue-id-params) -> result<string, string>;
+
+  /// Delete a project issue
+  record delete-v3-projects-id-issues-issue-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string
+  }
+  delete-v3-projects-id-issues-issue-id: func(params: delete-v3-projects-id-issues-issue-id-params) -> result<string, string>;
+
+  /// Add spent time for a project issue
+  record post-v3-projects-id-issues-issue-id-add-spent-time-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string,
+    /// The duration to be parsed
+    duration: string
+  }
+  post-v3-projects-id-issues-issue-id-add-spent-time: func(params: post-v3-projects-id-issues-issue-id-add-spent-time-params) -> result<string, string>;
+
+  /// Get a list of project +awardable+ award emoji
+  record get-v3-projects-id-issues-issue-id-award-emoji-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of an Issue, Merge Request or Snippet
+    issue-id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-issues-issue-id-award-emoji: func(params: get-v3-projects-id-issues-issue-id-award-emoji-params) -> result<string, string>;
+
+  /// Award a new Emoji
+  record post-v3-projects-id-issues-issue-id-award-emoji-params {
+    id: string,
+    issue-id: string,
+    /// The name of a award_emoji (without colons)
+    name: string
+  }
+  post-v3-projects-id-issues-issue-id-award-emoji: func(params: post-v3-projects-id-issues-issue-id-award-emoji-params) -> result<string, string>;
+
+  /// Get a specific award emoji
+  record get-v3-projects-id-issues-issue-id-award-emoji-award-id-params {
+    /// The ID of the award
+    award-id: string,
+    id: string,
+    issue-id: string
+  }
+  get-v3-projects-id-issues-issue-id-award-emoji-award-id: func(params: get-v3-projects-id-issues-issue-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Delete a +awardables+ award emoji
+  record delete-v3-projects-id-issues-issue-id-award-emoji-award-id-params {
+    /// The ID of an award emoji
+    award-id: string,
+    id: string,
+    issue-id: string
+  }
+  delete-v3-projects-id-issues-issue-id-award-emoji-award-id: func(params: delete-v3-projects-id-issues-issue-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Move an existing issue
+  record post-v3-projects-id-issues-issue-id-move-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string,
+    /// The ID of the new project
+    to-project-id: s32
+  }
+  post-v3-projects-id-issues-issue-id-move: func(params: post-v3-projects-id-issues-issue-id-move-params) -> result<string, string>;
+
+  /// Get a list of project +awardable+ award emoji
+  record get-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-params {
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    id: string,
+    issue-id: string,
+    note-id: string
+  }
+  get-v3-projects-id-issues-issue-id-notes-note-id-award-emoji: func(params: get-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-params) -> result<string, string>;
+
+  /// Award a new Emoji
+  record post-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-params {
+    id: string,
+    issue-id: string,
+    note-id: string,
+    /// The name of a award_emoji (without colons)
+    name: string
+  }
+  post-v3-projects-id-issues-issue-id-notes-note-id-award-emoji: func(params: post-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-params) -> result<string, string>;
+
+  /// Get a specific award emoji
+  record get-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-award-id-params {
+    /// The ID of the award
+    award-id: string,
+    id: string,
+    issue-id: string,
+    note-id: string
+  }
+  get-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-award-id: func(params: get-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Delete a +awardables+ award emoji
+  record delete-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-award-id-params {
+    /// The ID of an award emoji
+    award-id: string,
+    id: string,
+    issue-id: string,
+    note-id: string
+  }
+  delete-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-award-id: func(params: delete-v3-projects-id-issues-issue-id-notes-note-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Reset spent time for a project issue
+  record post-v3-projects-id-issues-issue-id-reset-spent-time-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string
+  }
+  post-v3-projects-id-issues-issue-id-reset-spent-time: func(params: post-v3-projects-id-issues-issue-id-reset-spent-time-params) -> result<string, string>;
+
+  /// Reset the time estimate for a project issue
+  record post-v3-projects-id-issues-issue-id-reset-time-estimate-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string
+  }
+  post-v3-projects-id-issues-issue-id-reset-time-estimate: func(params: post-v3-projects-id-issues-issue-id-reset-time-estimate-params) -> result<string, string>;
+
+  /// Set a time estimate for a project issue
+  record post-v3-projects-id-issues-issue-id-time-estimate-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string,
+    /// The duration to be parsed
+    duration: string
+  }
+  post-v3-projects-id-issues-issue-id-time-estimate: func(params: post-v3-projects-id-issues-issue-id-time-estimate-params) -> result<string, string>;
+
+  /// Show time stats for a project issue
+  record get-v3-projects-id-issues-issue-id-time-stats-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project issue
+    issue-id: string
+  }
+  get-v3-projects-id-issues-issue-id-time-stats: func(params: get-v3-projects-id-issues-issue-id-time-stats-params) -> result<string, string>;
+
+  /// Create a todo on an issuable
+  record post-v3-projects-id-issues-issue-id-todo-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of an issuable
+    issue-id: string
+  }
+  post-v3-projects-id-issues-issue-id-todo: func(params: post-v3-projects-id-issues-issue-id-todo-params) -> result<string, string>;
+
+  /// Get a list of project +noteable+ notes
+  record get-v3-projects-id-issues-noteable-id-notes-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-issues-noteable-id-notes: func(params: get-v3-projects-id-issues-noteable-id-notes-params) -> result<string, string>;
+
+  /// Create a new +noteable+ note
+  record post-v3-projects-id-issues-noteable-id-notes-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The content of a note
+    body: string,
+    /// The creation date of the note
+    created-at: option<string>
+  }
+  post-v3-projects-id-issues-noteable-id-notes: func(params: post-v3-projects-id-issues-noteable-id-notes-params) -> result<string, string>;
+
+  /// Get a single +noteable+ note
+  record get-v3-projects-id-issues-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a note
+    note-id: string,
+    /// The ID of the noteable
+    noteable-id: string
+  }
+  get-v3-projects-id-issues-noteable-id-notes-note-id: func(params: get-v3-projects-id-issues-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Update an existing +noteable+ note
+  record put-v3-projects-id-issues-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The ID of a note
+    note-id: string,
+    /// The content of a note
+    body: string
+  }
+  put-v3-projects-id-issues-noteable-id-notes-note-id: func(params: put-v3-projects-id-issues-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Delete a +noteable+ note
+  record delete-v3-projects-id-issues-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The ID of a note
+    note-id: string
+  }
+  delete-v3-projects-id-issues-noteable-id-notes-note-id: func(params: delete-v3-projects-id-issues-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Subscribe to a resource
+  record post-v3-projects-id-issues-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  post-v3-projects-id-issues-subscribable-id-subscription: func(params: post-v3-projects-id-issues-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// Unsubscribe from a resource
+  record delete-v3-projects-id-issues-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  delete-v3-projects-id-issues-subscribable-id-subscription: func(params: delete-v3-projects-id-issues-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// Get a specific project's deploy keys
+  record get-v3-projects-id-keys-params {
+    /// The ID of the project
+    id: string
+  }
+  get-v3-projects-id-keys: func(params: get-v3-projects-id-keys-params) -> result<string, string>;
+
+  /// Add new deploy key to currently authenticated user
+  record post-v3-projects-id-keys-params {
+    /// The ID of the project
+    id: string,
+    /// The new deploy key
+    key: string,
+    /// The name of the deploy key
+    title: string
+  }
+  post-v3-projects-id-keys: func(params: post-v3-projects-id-keys-params) -> result<string, string>;
+
+  /// Get single deploy key
+  record get-v3-projects-id-keys-key-id-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  get-v3-projects-id-keys-key-id: func(params: get-v3-projects-id-keys-key-id-params) -> result<string, string>;
+
+  /// Delete deploy key for a project
+  record delete-v3-projects-id-keys-key-id-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  delete-v3-projects-id-keys-key-id: func(params: delete-v3-projects-id-keys-key-id-params) -> result<string, string>;
+
+  /// Disable a deploy key for a project
+  record delete-v3-projects-id-keys-key-id-disable-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  delete-v3-projects-id-keys-key-id-disable: func(params: delete-v3-projects-id-keys-key-id-disable-params) -> result<string, string>;
+
+  /// Enable a deploy key for a project
+  record post-v3-projects-id-keys-key-id-enable-params {
+    /// The ID of the project
+    id: string,
+    /// The ID of the deploy key
+    key-id: string
+  }
+  post-v3-projects-id-keys-key-id-enable: func(params: post-v3-projects-id-keys-key-id-enable-params) -> result<string, string>;
+
+  /// Get all labels of the project
+  record get-v3-projects-id-labels-params {
+    /// The ID of a project
+    id: string
+  }
+  get-v3-projects-id-labels: func(params: get-v3-projects-id-labels-params) -> result<string, string>;
+
+  /// Create a new label
+  record post-v3-projects-id-labels-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the label to be created
+    name: string,
+    /// The color of the label given in 6-digit hex notation with leading '#' sign (e.g. #FFAABB)
+    color: string,
+    /// The description of label to be created
+    description: option<string>,
+    /// The priority of the label
+    priority: option<s32>
+  }
+  post-v3-projects-id-labels: func(params: post-v3-projects-id-labels-params) -> result<string, string>;
+
+  /// Update an existing label. At least one optional parameter is required.
+  record put-v3-projects-id-labels-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the label to be updated
+    name: string,
+    /// The new name of the label
+    new-name: option<string>,
+    /// The new color of the label given in 6-digit hex notation with leading '#' sign (e.g. #FFAABB)
+    color: option<string>,
+    /// The new description of label
+    description: option<string>,
+    /// The priority of the label
+    priority: option<s32>
+  }
+  put-v3-projects-id-labels: func(params: put-v3-projects-id-labels-params) -> result<string, string>;
+
+  /// Delete an existing label
+  record delete-v3-projects-id-labels-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the label to be deleted
+    name: string
+  }
+  delete-v3-projects-id-labels: func(params: delete-v3-projects-id-labels-params) -> result<string, string>;
+
+  /// Subscribe to a resource
+  record post-v3-projects-id-labels-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  post-v3-projects-id-labels-subscribable-id-subscription: func(params: post-v3-projects-id-labels-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// Unsubscribe from a resource
+  record delete-v3-projects-id-labels-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  delete-v3-projects-id-labels-subscribable-id-subscription: func(params: delete-v3-projects-id-labels-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// Gets a list of group or project members viewable by the authenticated user.
+  record get-v3-projects-id-members-params {
+    /// The project ID
+    id: string,
+    /// A query string to search for members
+    query: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-members: func(params: get-v3-projects-id-members-params) -> result<string, string>;
+
+  /// Adds a member to a group or project.
+  record post-v3-projects-id-members-params {
+    /// The project ID
+    id: string,
+    /// The user ID of the new member
+    user-id: s32,
+    /// A valid access level (defaults: `30`, developer access level)
+    access-level: s32,
+    /// Date string in the format YEAR-MONTH-DAY
+    expires-at: option<string>
+  }
+  post-v3-projects-id-members: func(params: post-v3-projects-id-members-params) -> result<string, string>;
+
+  /// Gets a member of a group or project.
+  record get-v3-projects-id-members-user-id-params {
+    /// The project ID
+    id: string,
+    /// The user ID of the member
+    user-id: string
+  }
+  get-v3-projects-id-members-user-id: func(params: get-v3-projects-id-members-user-id-params) -> result<string, string>;
+
+  /// Updates a member of a group or project.
+  record put-v3-projects-id-members-user-id-params {
+    /// The project ID
+    id: string,
+    /// The user ID of the new member
+    user-id: string,
+    /// A valid access level
+    access-level: s32,
+    /// Date string in the format YEAR-MONTH-DAY
+    expires-at: option<string>
+  }
+  put-v3-projects-id-members-user-id: func(params: put-v3-projects-id-members-user-id-params) -> result<string, string>;
+
+  /// Removes a user from a group or project.
+  record delete-v3-projects-id-members-user-id-params {
+    /// The project ID
+    id: string,
+    /// The user ID of the member
+    user-id: string
+  }
+  delete-v3-projects-id-members-user-id: func(params: delete-v3-projects-id-members-user-id-params) -> result<string, string>;
+
+  /// Get a single merge request
+  record get-v3-projects-id-merge-request-merge-request-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a merge request
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-request-merge-request-id: func(params: get-v3-projects-id-merge-request-merge-request-id-params) -> result<string, string>;
+
+  /// Update a merge request
+  record put-v3-projects-id-merge-request-merge-request-id-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string,
+    /// The title of the merge request
+    title: option<string>,
+    /// The target branch
+    target-branch: option<string>,
+    /// Status of the merge request
+    state-event: option<put-v3-projects-id-merge-request-merge-request-id-body-state-event-enum>,
+    /// The description of the merge request
+    description: option<string>,
+    /// The ID of a user to assign the merge request
+    assignee-id: option<s32>,
+    /// The ID of a milestone to assign the merge request
+    milestone-id: option<s32>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Remove source branch when merging
+    remove-source-branch: option<bool>
+  }
+  put-v3-projects-id-merge-request-merge-request-id: func(params: put-v3-projects-id-merge-request-merge-request-id-params) -> result<string, string>;
+
+  /// Cancel merge if "Merge When Pipeline Succeeds" is enabled
+  record post-v3-projects-id-merge-request-merge-request-id-cancel-merge-when-build-succeeds-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string
+  }
+  post-v3-projects-id-merge-request-merge-request-id-cancel-merge-when-build-succeeds: func(params: post-v3-projects-id-merge-request-merge-request-id-cancel-merge-when-build-succeeds-params) -> result<string, string>;
+
+  /// Show the merge request changes
+  record get-v3-projects-id-merge-request-merge-request-id-changes-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-request-merge-request-id-changes: func(params: get-v3-projects-id-merge-request-merge-request-id-changes-params) -> result<string, string>;
+
+  /// List issues that will be closed on merge
+  record get-v3-projects-id-merge-request-merge-request-id-closes-issues-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-request-merge-request-id-closes-issues: func(params: get-v3-projects-id-merge-request-merge-request-id-closes-issues-params) -> result<string, string>;
+
+  /// Get the comments of a merge request
+  record get-v3-projects-id-merge-request-merge-request-id-comments-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-request-merge-request-id-comments: func(params: get-v3-projects-id-merge-request-merge-request-id-comments-params) -> result<string, string>;
+
+  /// Post a comment to a merge request
+  record post-v3-projects-id-merge-request-merge-request-id-comments-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string,
+    /// The text of the comment
+    note: string
+  }
+  post-v3-projects-id-merge-request-merge-request-id-comments: func(params: post-v3-projects-id-merge-request-merge-request-id-comments-params) -> result<string, string>;
+
+  /// Get the commits of a merge request
+  record get-v3-projects-id-merge-request-merge-request-id-commits-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-request-merge-request-id-commits: func(params: get-v3-projects-id-merge-request-merge-request-id-commits-params) -> result<string, string>;
+
+  /// Merge a merge request
+  record put-v3-projects-id-merge-request-merge-request-id-merge-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string,
+    /// Custom merge commit message
+    merge-commit-message: option<string>,
+    /// When true, the source branch will be deleted if possible
+    should-remove-source-branch: option<bool>,
+    /// When true, this merge request will be merged when the pipeline succeeds
+    merge-when-build-succeeds: option<bool>,
+    /// When present, must have the HEAD SHA of the source branch
+    sha: option<string>
+  }
+  put-v3-projects-id-merge-request-merge-request-id-merge: func(params: put-v3-projects-id-merge-request-merge-request-id-merge-params) -> result<string, string>;
+
+  /// Subscribe to a resource
+  record post-v3-projects-id-merge-request-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  post-v3-projects-id-merge-request-subscribable-id-subscription: func(params: post-v3-projects-id-merge-request-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// Unsubscribe from a resource
+  record delete-v3-projects-id-merge-request-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  delete-v3-projects-id-merge-request-subscribable-id-subscription: func(params: delete-v3-projects-id-merge-request-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// List merge requests
+  record get-v3-projects-id-merge-requests-params {
+    /// The ID of a project
+    id: string,
+    /// Return opened, closed, merged, or all merge requests
+    state: option<get-v3-projects-id-merge-requests-state-enum>,
+    /// Return merge requests ordered by `created_at` or `updated_at` fields.
+    order-by: option<get-v3-projects-id-issues-order-by-enum>,
+    /// Return merge requests sorted in `asc` or `desc` order.
+    sort: option<get-v3-projects-sort-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// The IID of the merge requests
+    iid: option<list<s32>>
+  }
+  get-v3-projects-id-merge-requests: func(params: get-v3-projects-id-merge-requests-params) -> result<string, string>;
+
+  /// Create a merge request
+  record post-v3-projects-id-merge-requests-params {
+    /// The ID of a project
+    id: string,
+    /// The title of the merge request
+    title: string,
+    /// The source branch
+    source-branch: string,
+    /// The target branch
+    target-branch: string,
+    /// The target project of the merge request defaults to the :id of the project
+    target-project-id: option<s32>,
+    /// The description of the merge request
+    description: option<string>,
+    /// The ID of a user to assign the merge request
+    assignee-id: option<s32>,
+    /// The ID of a milestone to assign the merge request
+    milestone-id: option<s32>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Remove source branch when merging
+    remove-source-branch: option<bool>
+  }
+  post-v3-projects-id-merge-requests: func(params: post-v3-projects-id-merge-requests-params) -> result<string, string>;
+
+  /// Get a single merge request
+  record get-v3-projects-id-merge-requests-merge-request-id-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id: func(params: get-v3-projects-id-merge-requests-merge-request-id-params) -> result<string, string>;
+
+  /// Update a merge request
+  record put-v3-projects-id-merge-requests-merge-request-id-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string,
+    /// The title of the merge request
+    title: option<string>,
+    /// The target branch
+    target-branch: option<string>,
+    /// Status of the merge request
+    state-event: option<put-v3-projects-id-merge-request-merge-request-id-body-state-event-enum>,
+    /// The description of the merge request
+    description: option<string>,
+    /// The ID of a user to assign the merge request
+    assignee-id: option<s32>,
+    /// The ID of a milestone to assign the merge request
+    milestone-id: option<s32>,
+    /// Comma-separated list of label names
+    labels: option<string>,
+    /// Remove source branch when merging
+    remove-source-branch: option<bool>
+  }
+  put-v3-projects-id-merge-requests-merge-request-id: func(params: put-v3-projects-id-merge-requests-merge-request-id-params) -> result<string, string>;
+
+  /// Delete a merge request
+  record delete-v3-projects-id-merge-requests-merge-request-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a merge request
+    merge-request-id: string
+  }
+  delete-v3-projects-id-merge-requests-merge-request-id: func(params: delete-v3-projects-id-merge-requests-merge-request-id-params) -> result<string, string>;
+
+  /// Add spent time for a project merge_request
+  record post-v3-projects-id-merge-requests-merge-request-id-add-spent-time-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project merge_request
+    merge-request-id: string,
+    /// The duration to be parsed
+    duration: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-add-spent-time: func(params: post-v3-projects-id-merge-requests-merge-request-id-add-spent-time-params) -> result<string, string>;
+
+  /// Get a list of project +awardable+ award emoji
+  record get-v3-projects-id-merge-requests-merge-request-id-award-emoji-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of an Issue, Merge Request or Snippet
+    merge-request-id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-award-emoji: func(params: get-v3-projects-id-merge-requests-merge-request-id-award-emoji-params) -> result<string, string>;
+
+  /// Award a new Emoji
+  record post-v3-projects-id-merge-requests-merge-request-id-award-emoji-params {
+    id: string,
+    merge-request-id: string,
+    /// The name of a award_emoji (without colons)
+    name: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-award-emoji: func(params: post-v3-projects-id-merge-requests-merge-request-id-award-emoji-params) -> result<string, string>;
+
+  /// Get a specific award emoji
+  record get-v3-projects-id-merge-requests-merge-request-id-award-emoji-award-id-params {
+    /// The ID of the award
+    award-id: string,
+    id: string,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-award-emoji-award-id: func(params: get-v3-projects-id-merge-requests-merge-request-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Delete a +awardables+ award emoji
+  record delete-v3-projects-id-merge-requests-merge-request-id-award-emoji-award-id-params {
+    /// The ID of an award emoji
+    award-id: string,
+    id: string,
+    merge-request-id: string
+  }
+  delete-v3-projects-id-merge-requests-merge-request-id-award-emoji-award-id: func(params: delete-v3-projects-id-merge-requests-merge-request-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Cancel merge if "Merge When Pipeline Succeeds" is enabled
+  record post-v3-projects-id-merge-requests-merge-request-id-cancel-merge-when-build-succeeds-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-cancel-merge-when-build-succeeds: func(params: post-v3-projects-id-merge-requests-merge-request-id-cancel-merge-when-build-succeeds-params) -> result<string, string>;
+
+  /// Show the merge request changes
+  record get-v3-projects-id-merge-requests-merge-request-id-changes-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-changes: func(params: get-v3-projects-id-merge-requests-merge-request-id-changes-params) -> result<string, string>;
+
+  /// List issues that will be closed on merge
+  record get-v3-projects-id-merge-requests-merge-request-id-closes-issues-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-closes-issues: func(params: get-v3-projects-id-merge-requests-merge-request-id-closes-issues-params) -> result<string, string>;
+
+  /// Get the comments of a merge request
+  record get-v3-projects-id-merge-requests-merge-request-id-comments-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-comments: func(params: get-v3-projects-id-merge-requests-merge-request-id-comments-params) -> result<string, string>;
+
+  /// Post a comment to a merge request
+  record post-v3-projects-id-merge-requests-merge-request-id-comments-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string,
+    /// The text of the comment
+    note: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-comments: func(params: post-v3-projects-id-merge-requests-merge-request-id-comments-params) -> result<string, string>;
+
+  /// Get the commits of a merge request
+  record get-v3-projects-id-merge-requests-merge-request-id-commits-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-commits: func(params: get-v3-projects-id-merge-requests-merge-request-id-commits-params) -> result<string, string>;
+
+  /// Merge a merge request
+  record put-v3-projects-id-merge-requests-merge-request-id-merge-params {
+    /// The ID of a project
+    id: string,
+    merge-request-id: string,
+    /// Custom merge commit message
+    merge-commit-message: option<string>,
+    /// When true, the source branch will be deleted if possible
+    should-remove-source-branch: option<bool>,
+    /// When true, this merge request will be merged when the pipeline succeeds
+    merge-when-build-succeeds: option<bool>,
+    /// When present, must have the HEAD SHA of the source branch
+    sha: option<string>
+  }
+  put-v3-projects-id-merge-requests-merge-request-id-merge: func(params: put-v3-projects-id-merge-requests-merge-request-id-merge-params) -> result<string, string>;
+
+  /// Get a list of project +awardable+ award emoji
+  record get-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-params {
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    id: string,
+    merge-request-id: string,
+    note-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji: func(params: get-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-params) -> result<string, string>;
+
+  /// Award a new Emoji
+  record post-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-params {
+    id: string,
+    merge-request-id: string,
+    note-id: string,
+    /// The name of a award_emoji (without colons)
+    name: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji: func(params: post-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-params) -> result<string, string>;
+
+  /// Get a specific award emoji
+  record get-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-award-id-params {
+    /// The ID of the award
+    award-id: string,
+    id: string,
+    merge-request-id: string,
+    note-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-award-id: func(params: get-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Delete a +awardables+ award emoji
+  record delete-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-award-id-params {
+    /// The ID of an award emoji
+    award-id: string,
+    id: string,
+    merge-request-id: string,
+    note-id: string
+  }
+  delete-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-award-id: func(params: delete-v3-projects-id-merge-requests-merge-request-id-notes-note-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Reset spent time for a project merge_request
+  record post-v3-projects-id-merge-requests-merge-request-id-reset-spent-time-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project merge_request
+    merge-request-id: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-reset-spent-time: func(params: post-v3-projects-id-merge-requests-merge-request-id-reset-spent-time-params) -> result<string, string>;
+
+  /// Reset the time estimate for a project merge_request
+  record post-v3-projects-id-merge-requests-merge-request-id-reset-time-estimate-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project merge_request
+    merge-request-id: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-reset-time-estimate: func(params: post-v3-projects-id-merge-requests-merge-request-id-reset-time-estimate-params) -> result<string, string>;
+
+  /// Set a time estimate for a project merge_request
+  record post-v3-projects-id-merge-requests-merge-request-id-time-estimate-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project merge_request
+    merge-request-id: string,
+    /// The duration to be parsed
+    duration: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-time-estimate: func(params: post-v3-projects-id-merge-requests-merge-request-id-time-estimate-params) -> result<string, string>;
+
+  /// Show time stats for a project merge_request
+  record get-v3-projects-id-merge-requests-merge-request-id-time-stats-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project merge_request
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-time-stats: func(params: get-v3-projects-id-merge-requests-merge-request-id-time-stats-params) -> result<string, string>;
+
+  /// Create a todo on an issuable
+  record post-v3-projects-id-merge-requests-merge-request-id-todo-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of an issuable
+    merge-request-id: string
+  }
+  post-v3-projects-id-merge-requests-merge-request-id-todo: func(params: post-v3-projects-id-merge-requests-merge-request-id-todo-params) -> result<string, string>;
+
+  /// Get a list of merge request diff versions
+  record get-v3-projects-id-merge-requests-merge-request-id-versions-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a merge request
+    merge-request-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-versions: func(params: get-v3-projects-id-merge-requests-merge-request-id-versions-params) -> result<string, string>;
+
+  /// Get a single merge request diff version
+  record get-v3-projects-id-merge-requests-merge-request-id-versions-version-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a merge request
+    merge-request-id: string,
+    /// The ID of a merge request diff version
+    version-id: string
+  }
+  get-v3-projects-id-merge-requests-merge-request-id-versions-version-id: func(params: get-v3-projects-id-merge-requests-merge-request-id-versions-version-id-params) -> result<string, string>;
+
+  /// Get a list of project +noteable+ notes
+  record get-v3-projects-id-merge-requests-noteable-id-notes-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-merge-requests-noteable-id-notes: func(params: get-v3-projects-id-merge-requests-noteable-id-notes-params) -> result<string, string>;
+
+  /// Create a new +noteable+ note
+  record post-v3-projects-id-merge-requests-noteable-id-notes-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The content of a note
+    body: string,
+    /// The creation date of the note
+    created-at: option<string>
+  }
+  post-v3-projects-id-merge-requests-noteable-id-notes: func(params: post-v3-projects-id-merge-requests-noteable-id-notes-params) -> result<string, string>;
+
+  /// Get a single +noteable+ note
+  record get-v3-projects-id-merge-requests-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a note
+    note-id: string,
+    /// The ID of the noteable
+    noteable-id: string
+  }
+  get-v3-projects-id-merge-requests-noteable-id-notes-note-id: func(params: get-v3-projects-id-merge-requests-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Update an existing +noteable+ note
+  record put-v3-projects-id-merge-requests-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The ID of a note
+    note-id: string,
+    /// The content of a note
+    body: string
+  }
+  put-v3-projects-id-merge-requests-noteable-id-notes-note-id: func(params: put-v3-projects-id-merge-requests-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Delete a +noteable+ note
+  record delete-v3-projects-id-merge-requests-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The ID of a note
+    note-id: string
+  }
+  delete-v3-projects-id-merge-requests-noteable-id-notes-note-id: func(params: delete-v3-projects-id-merge-requests-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Subscribe to a resource
+  record post-v3-projects-id-merge-requests-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  post-v3-projects-id-merge-requests-subscribable-id-subscription: func(params: post-v3-projects-id-merge-requests-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// Unsubscribe from a resource
+  record delete-v3-projects-id-merge-requests-subscribable-id-subscription-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a resource
+    subscribable-id: string
+  }
+  delete-v3-projects-id-merge-requests-subscribable-id-subscription: func(params: delete-v3-projects-id-merge-requests-subscribable-id-subscription-params) -> result<string, string>;
+
+  /// Get a list of project milestones
+  record get-v3-projects-id-milestones-params {
+    /// The ID of a project
+    id: string,
+    /// Return "active", "closed", or "all" milestones
+    state: option<get-v3-projects-id-milestones-state-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// The IID of the milestone
+    iid: option<list<s32>>
+  }
+  get-v3-projects-id-milestones: func(params: get-v3-projects-id-milestones-params) -> result<string, string>;
+
+  /// Create a new project milestone
+  record post-v3-projects-id-milestones-params {
+    /// The ID of a project
+    id: string,
+    /// The title of the milestone
+    title: string,
+    /// The description of the milestone
+    description: option<string>,
+    /// The due date of the milestone. The ISO 8601 date format (%Y-%m-%d)
+    due-date: option<string>,
+    /// The start date of the milestone. The ISO 8601 date format (%Y-%m-%d)
+    start-date: option<string>
+  }
+  post-v3-projects-id-milestones: func(params: post-v3-projects-id-milestones-params) -> result<string, string>;
+
+  /// Get a single project milestone
+  record get-v3-projects-id-milestones-milestone-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project milestone
+    milestone-id: string
+  }
+  get-v3-projects-id-milestones-milestone-id: func(params: get-v3-projects-id-milestones-milestone-id-params) -> result<string, string>;
+
+  /// Update an existing project milestone
+  record put-v3-projects-id-milestones-milestone-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project milestone
+    milestone-id: string,
+    /// The title of the milestone
+    title: option<string>,
+    /// The state event of the milestone 
+    state-event: option<put-v3-projects-id-milestones-milestone-id-body-state-event-enum>,
+    /// The description of the milestone
+    description: option<string>,
+    /// The due date of the milestone. The ISO 8601 date format (%Y-%m-%d)
+    due-date: option<string>,
+    /// The start date of the milestone. The ISO 8601 date format (%Y-%m-%d)
+    start-date: option<string>
+  }
+  put-v3-projects-id-milestones-milestone-id: func(params: put-v3-projects-id-milestones-milestone-id-params) -> result<string, string>;
+
+  /// Get all issues for a single project milestone
+  record get-v3-projects-id-milestones-milestone-id-issues-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project milestone
+    milestone-id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-milestones-milestone-id-issues: func(params: get-v3-projects-id-milestones-milestone-id-issues-params) -> result<string, string>;
+
+  /// Get project level notification level settings, defaults to Global
+  record get-v3-projects-id-notification-settings-params {
+    /// The group ID or project ID or project NAMESPACE/PROJECT_NAME
+    id: string
+  }
+  get-v3-projects-id-notification-settings: func(params: get-v3-projects-id-notification-settings-params) -> result<string, string>;
+
+  /// Update project level notification level settings, defaults to Global
+  record put-v3-projects-id-notification-settings-params {
+    /// The group ID or project ID or project NAMESPACE/PROJECT_NAME
+    id: string,
+    /// The project notification level
+    level: option<string>,
+    /// Enable/disable this notification
+    new-note: option<bool>,
+    /// Enable/disable this notification
+    new-issue: option<bool>,
+    /// Enable/disable this notification
+    reopen-issue: option<bool>,
+    /// Enable/disable this notification
+    close-issue: option<bool>,
+    /// Enable/disable this notification
+    reassign-issue: option<bool>,
+    /// Enable/disable this notification
+    new-merge-request: option<bool>,
+    /// Enable/disable this notification
+    reopen-merge-request: option<bool>,
+    /// Enable/disable this notification
+    close-merge-request: option<bool>,
+    /// Enable/disable this notification
+    reassign-merge-request: option<bool>,
+    /// Enable/disable this notification
+    merge-merge-request: option<bool>,
+    /// Enable/disable this notification
+    failed-pipeline: option<bool>,
+    /// Enable/disable this notification
+    success-pipeline: option<bool>
+  }
+  put-v3-projects-id-notification-settings: func(params: put-v3-projects-id-notification-settings-params) -> result<string, string>;
+
+  /// Create a new pipeline
+  record post-v3-projects-id-pipeline-params {
+    /// The project ID
+    id: string,
+    /// Reference
+    ref: string
+  }
+  post-v3-projects-id-pipeline: func(params: post-v3-projects-id-pipeline-params) -> result<string, string>;
+
+  /// Get all Pipelines of the project
+  record get-v3-projects-id-pipelines-params {
+    /// The project ID
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// Either running, branches, or tags
+    scope: option<get-v3-projects-id-pipelines-scope-enum>
+  }
+  get-v3-projects-id-pipelines: func(params: get-v3-projects-id-pipelines-params) -> result<string, string>;
+
+  /// Gets a specific pipeline for the project
+  record get-v3-projects-id-pipelines-pipeline-id-params {
+    /// The project ID
+    id: string,
+    /// The pipeline ID
+    pipeline-id: string
+  }
+  get-v3-projects-id-pipelines-pipeline-id: func(params: get-v3-projects-id-pipelines-pipeline-id-params) -> result<string, string>;
+
+  /// Cancel all builds in the pipeline
+  record post-v3-projects-id-pipelines-pipeline-id-cancel-params {
+    /// The project ID
+    id: string,
+    /// The pipeline ID
+    pipeline-id: string
+  }
+  post-v3-projects-id-pipelines-pipeline-id-cancel: func(params: post-v3-projects-id-pipelines-pipeline-id-cancel-params) -> result<string, string>;
+
+  /// Retry failed builds in the pipeline
+  record post-v3-projects-id-pipelines-pipeline-id-retry-params {
+    /// The project ID
+    id: string,
+    /// The pipeline ID
+    pipeline-id: string
+  }
+  post-v3-projects-id-pipelines-pipeline-id-retry: func(params: post-v3-projects-id-pipelines-pipeline-id-retry-params) -> result<string, string>;
+
+  /// Get an archive of the repository
+  record get-v3-projects-id-repository-archive-params {
+    /// The ID of a project
+    id: string,
+    /// The commit sha of the archive to be downloaded
+    sha: option<string>,
+    /// The archive format
+    format: option<string>
+  }
+  get-v3-projects-id-repository-archive: func(params: get-v3-projects-id-repository-archive-params) -> result<string, string>;
+
+  /// Get a raw file contents
+  record get-v3-projects-id-repository-blobs-sha-params {
+    /// The ID of a project
+    id: string,
+    /// The commit, branch name, or tag name
+    sha: string,
+    /// The path to the file to display
+    filepath: string
+  }
+  get-v3-projects-id-repository-blobs-sha: func(params: get-v3-projects-id-repository-blobs-sha-params) -> result<string, string>;
+
+  /// Get a project repository branches
+  record get-v3-projects-id-repository-branches-params {
+    /// The ID of a project
+    id: string
+  }
+  get-v3-projects-id-repository-branches: func(params: get-v3-projects-id-repository-branches-params) -> result<string, string>;
+
+  /// Create branch
+  record post-v3-projects-id-repository-branches-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the branch
+    branch-name: string,
+    /// Create branch from commit sha or existing branch
+    ref: string
+  }
+  post-v3-projects-id-repository-branches: func(params: post-v3-projects-id-repository-branches-params) -> result<string, string>;
+
+  /// Get a single branch
+  record get-v3-projects-id-repository-branches-branch-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the branch
+    branch: string
+  }
+  get-v3-projects-id-repository-branches-branch: func(params: get-v3-projects-id-repository-branches-branch-params) -> result<string, string>;
+
+  /// Delete a branch
+  record delete-v3-projects-id-repository-branches-branch-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the branch
+    branch: string
+  }
+  delete-v3-projects-id-repository-branches-branch: func(params: delete-v3-projects-id-repository-branches-branch-params) -> result<string, string>;
+
+  /// Protect a single branch
+  record put-v3-projects-id-repository-branches-branch-protect-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the branch
+    branch: string,
+    /// Flag if developers can push to that branch
+    developers-can-push: option<bool>,
+    /// Flag if developers can merge to that branch
+    developers-can-merge: option<bool>
+  }
+  put-v3-projects-id-repository-branches-branch-protect: func(params: put-v3-projects-id-repository-branches-branch-protect-params) -> result<string, string>;
+
+  /// Unprotect a single branch
+  record put-v3-projects-id-repository-branches-branch-unprotect-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the branch
+    branch: string
+  }
+  put-v3-projects-id-repository-branches-branch-unprotect: func(params: put-v3-projects-id-repository-branches-branch-unprotect-params) -> result<string, string>;
+
+  /// Get a project repository commits
+  record get-v3-projects-id-repository-commits-params {
+    /// The ID of a project
+    id: string,
+    /// The name of a repository branch or tag, if not given the default branch is used
+    ref-name: option<string>,
+    /// Only commits after or in this date will be returned
+    since: option<string>,
+    /// Only commits before or in this date will be returned
+    until: option<string>,
+    /// The page for pagination
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The file path
+    path: option<string>
+  }
+  get-v3-projects-id-repository-commits: func(params: get-v3-projects-id-repository-commits-params) -> result<string, string>;
+
+  /// Commit multiple file changes as one commit
+  record post-v3-projects-id-repository-commits-params {
+    /// The ID of a project
+    id: string,
+    /// The name of branch
+    branch-name: string,
+    /// Commit message
+    commit-message: string,
+    /// Actions to perform in commit
+    actions: list<string>,
+    /// Author email for commit
+    author-email: option<string>,
+    /// Author name for commit
+    author-name: option<string>
+  }
+  post-v3-projects-id-repository-commits: func(params: post-v3-projects-id-repository-commits-params) -> result<string, string>;
+
+  /// Get a specific commit of a project
+  record get-v3-projects-id-repository-commits-sha-params {
+    /// The ID of a project
+    id: string,
+    /// A commit sha, or the name of a branch or tag
+    sha: string
+  }
+  get-v3-projects-id-repository-commits-sha: func(params: get-v3-projects-id-repository-commits-sha-params) -> result<string, string>;
+
+  /// Get a raw file contents
+  record get-v3-projects-id-repository-commits-sha-blob-params {
+    /// The ID of a project
+    id: string,
+    /// The commit, branch name, or tag name
+    sha: string,
+    /// The path to the file to display
+    filepath: string
+  }
+  get-v3-projects-id-repository-commits-sha-blob: func(params: get-v3-projects-id-repository-commits-sha-blob-params) -> result<string, string>;
+
+  /// Get builds for a specific commit of a project
+  record get-v3-projects-id-repository-commits-sha-builds-params {
+    /// The ID of a project
+    id: string,
+    /// The SHA id of a commit
+    sha: string,
+    /// The scope of builds to show
+    scope: option<get-v3-projects-id-builds-scope-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-repository-commits-sha-builds: func(params: get-v3-projects-id-repository-commits-sha-builds-params) -> result<string, string>;
+
+  /// Cherry pick commit into a branch
+  record post-v3-projects-id-repository-commits-sha-cherry-pick-params {
+    /// The ID of a project
+    id: string,
+    /// A commit sha to be cherry picked
+    sha: string,
+    /// The name of the branch
+    branch: string
+  }
+  post-v3-projects-id-repository-commits-sha-cherry-pick: func(params: post-v3-projects-id-repository-commits-sha-cherry-pick-params) -> result<string, string>;
+
+  /// Get a commit's comments
+  record get-v3-projects-id-repository-commits-sha-comments-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    /// A commit sha, or the name of a branch or tag
+    sha: string
+  }
+  get-v3-projects-id-repository-commits-sha-comments: func(params: get-v3-projects-id-repository-commits-sha-comments-params) -> result<string, string>;
+
+  /// Post comment to commit
+  record post-v3-projects-id-repository-commits-sha-comments-params {
+    /// The ID of a project
+    id: string,
+    /// The commit's SHA
+    sha: string,
+    /// The text of the comment
+    note: string,
+    /// The file path
+    path: option<string>,
+    /// The line number
+    line: s32,
+    /// The type of the line
+    line-type: post-v3-projects-id-repository-commits-sha-comments-body-line-type-enum
+  }
+  post-v3-projects-id-repository-commits-sha-comments: func(params: post-v3-projects-id-repository-commits-sha-comments-params) -> result<string, string>;
+
+  /// Get the diff for a specific commit of a project
+  record get-v3-projects-id-repository-commits-sha-diff-params {
+    /// The ID of a project
+    id: string,
+    /// A commit sha, or the name of a branch or tag
+    sha: string
+  }
+  get-v3-projects-id-repository-commits-sha-diff: func(params: get-v3-projects-id-repository-commits-sha-diff-params) -> result<string, string>;
+
+  /// Get a commit's statuses
+  record get-v3-projects-id-repository-commits-sha-statuses-params {
+    /// The ID of a project
+    id: string,
+    /// The commit hash
+    sha: string,
+    /// The ref
+    ref: option<string>,
+    /// The stage
+    stage: option<string>,
+    /// The name
+    name: option<string>,
+    /// Show all statuses, default: false
+    all: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-repository-commits-sha-statuses: func(params: get-v3-projects-id-repository-commits-sha-statuses-params) -> result<string, string>;
+
+  /// Compare two branches, tags, or commits
+  record get-v3-projects-id-repository-compare-params {
+    /// The ID of a project
+    id: string,
+    /// The commit, branch name, or tag name to start comparison
+    from-op: string,
+    /// The commit, branch name, or tag name to stop comparison
+    to: string
+  }
+  get-v3-projects-id-repository-compare: func(params: get-v3-projects-id-repository-compare-params) -> result<string, string>;
+
+  /// Get repository contributors
+  record get-v3-projects-id-repository-contributors-params {
+    /// The ID of a project
+    id: string
+  }
+  get-v3-projects-id-repository-contributors: func(params: get-v3-projects-id-repository-contributors-params) -> result<string, string>;
+
+  /// Get a file from repository
+  record get-v3-projects-id-repository-files-params {
+    /// The project ID
+    id: string,
+    /// The path to the file. Ex. lib/class.rb
+    file-path: string,
+    /// The name of branch, tag, or commit
+    ref: string
+  }
+  get-v3-projects-id-repository-files: func(params: get-v3-projects-id-repository-files-params) -> result<string, string>;
+
+  /// Create new file in repository
+  record post-v3-projects-id-repository-files-params {
+    /// The project ID
+    id: string,
+    /// The path to new file. Ex. lib/class.rb
+    file-path: string,
+    /// The name of branch
+    branch-name: string,
+    /// Commit Message
+    commit-message: string,
+    /// The email of the author
+    author-email: option<string>,
+    /// The name of the author
+    author-name: option<string>,
+    /// File content
+    content: string,
+    /// File encoding
+    encoding: option<post-v3-projects-id-repository-files-body-encoding-enum>
+  }
+  post-v3-projects-id-repository-files: func(params: post-v3-projects-id-repository-files-params) -> result<string, string>;
+
+  /// Update existing file in repository
+  record put-v3-projects-id-repository-files-params {
+    /// The project ID
+    id: string,
+    /// The path to new file. Ex. lib/class.rb
+    file-path: string,
+    /// The name of branch
+    branch-name: string,
+    /// Commit Message
+    commit-message: string,
+    /// The email of the author
+    author-email: option<string>,
+    /// The name of the author
+    author-name: option<string>,
+    /// File content
+    content: string,
+    /// File encoding
+    encoding: option<post-v3-projects-id-repository-files-body-encoding-enum>
+  }
+  put-v3-projects-id-repository-files: func(params: put-v3-projects-id-repository-files-params) -> result<string, string>;
+
+  /// Delete an existing file in repository
+  record delete-v3-projects-id-repository-files-params {
+    /// The project ID
+    id: string,
+    /// The path to new file. Ex. lib/class.rb
+    file-path: string,
+    /// The name of branch
+    branch-name: string,
+    /// Commit Message
+    commit-message: string,
+    /// The email of the author
+    author-email: option<string>,
+    /// The name of the author
+    author-name: option<string>
+  }
+  delete-v3-projects-id-repository-files: func(params: delete-v3-projects-id-repository-files-params) -> result<string, string>;
+
+  record delete-v3-projects-id-repository-merged-branches-params {
+    /// The ID of a project
+    id: string
+  }
+  delete-v3-projects-id-repository-merged-branches: func(params: delete-v3-projects-id-repository-merged-branches-params) -> result<string, string>;
+
+  /// Get a raw blob contents by blob sha
+  record get-v3-projects-id-repository-raw-blobs-sha-params {
+    /// The ID of a project
+    id: string,
+    /// The commit, branch name, or tag name
+    sha: string
+  }
+  get-v3-projects-id-repository-raw-blobs-sha: func(params: get-v3-projects-id-repository-raw-blobs-sha-params) -> result<string, string>;
+
+  /// Get a project repository tags
+  record get-v3-projects-id-repository-tags-params {
+    /// The ID of a project
+    id: string
+  }
+  get-v3-projects-id-repository-tags: func(params: get-v3-projects-id-repository-tags-params) -> result<string, string>;
+
+  /// Create a new repository tag
+  record post-v3-projects-id-repository-tags-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the tag
+    tag-name: string,
+    /// The commit sha or branch name
+    ref: string,
+    /// Specifying a message creates an annotated tag
+    message: option<string>,
+    /// Specifying release notes stored in the GitLab database
+    release-description: option<string>
+  }
+  post-v3-projects-id-repository-tags: func(params: post-v3-projects-id-repository-tags-params) -> result<string, string>;
+
+  /// Get a single repository tag
+  record get-v3-projects-id-repository-tags-tag-name-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the tag
+    tag-name: string
+  }
+  get-v3-projects-id-repository-tags-tag-name: func(params: get-v3-projects-id-repository-tags-tag-name-params) -> result<string, string>;
+
+  /// Delete a repository tag
+  record delete-v3-projects-id-repository-tags-tag-name-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the tag
+    tag-name: string
+  }
+  delete-v3-projects-id-repository-tags-tag-name: func(params: delete-v3-projects-id-repository-tags-tag-name-params) -> result<string, string>;
+
+  /// Add a release note to a tag
+  record post-v3-projects-id-repository-tags-tag-name-release-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the tag
+    tag-name: string,
+    /// Release notes with markdown support
+    description: string
+  }
+  post-v3-projects-id-repository-tags-tag-name-release: func(params: post-v3-projects-id-repository-tags-tag-name-release-params) -> result<string, string>;
+
+  /// Update a tag's release note
+  record put-v3-projects-id-repository-tags-tag-name-release-params {
+    /// The ID of a project
+    id: string,
+    /// The name of the tag
+    tag-name: string,
+    /// Release notes with markdown support
+    description: string
+  }
+  put-v3-projects-id-repository-tags-tag-name-release: func(params: put-v3-projects-id-repository-tags-tag-name-release-params) -> result<string, string>;
+
+  /// Get a project repository tree
+  record get-v3-projects-id-repository-tree-params {
+    /// The ID of a project
+    id: string,
+    /// The name of a repository branch or tag, if not given the default branch is used
+    ref-name: option<string>,
+    /// The path of the tree
+    path: option<string>,
+    /// Used to get a recursive tree
+    recursive: option<bool>
+  }
+  get-v3-projects-id-repository-tree: func(params: get-v3-projects-id-repository-tree-params) -> result<string, string>;
+
+  /// Get runners available for project
+  record get-v3-projects-id-runners-params {
+    /// The ID of a project
+    id: string,
+    /// The scope of specific runners to show
+    scope: option<get-v3-projects-id-runners-scope-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-runners: func(params: get-v3-projects-id-runners-params) -> result<string, string>;
+
+  /// Enable a runner for a project
+  record post-v3-projects-id-runners-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the runner
+    runner-id: s32
+  }
+  post-v3-projects-id-runners: func(params: post-v3-projects-id-runners-params) -> result<string, string>;
+
+  /// Disable project's runner
+  record delete-v3-projects-id-runners-runner-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the runner
+    runner-id: string
+  }
+  delete-v3-projects-id-runners-runner-id: func(params: delete-v3-projects-id-runners-runner-id-params) -> result<string, string>;
+
+  /// Set asana service for project
+  record put-v3-projects-id-services-asana-params {
+    id: string,
+    /// User API token
+    api-key: string,
+    /// Comma-separated list of branches which will be automatically inspected. Leave blank to include all branches
+    restrict-to-branch: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-asana: func(params: put-v3-projects-id-services-asana-params) -> result<string, string>;
+
+  /// Set assembla service for project
+  record put-v3-projects-id-services-assembla-params {
+    id: string,
+    /// The authentication token
+    token: string,
+    /// Subdomain setting
+    subdomain: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-assembla: func(params: put-v3-projects-id-services-assembla-params) -> result<string, string>;
+
+  /// Set bamboo service for project
+  record put-v3-projects-id-services-bamboo-params {
+    id: string,
+    /// Bamboo root URL like https://bamboo.example.com
+    bamboo-url: string,
+    /// Bamboo build plan key like
+    build-key: string,
+    /// A user with API access, if applicable
+    username: string,
+    /// Passord of the user
+    password: string,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-bamboo: func(params: put-v3-projects-id-services-bamboo-params) -> result<string, string>;
+
+  /// Set bugzilla service for project
+  record put-v3-projects-id-services-bugzilla-params {
+    id: string,
+    /// New issue URL
+    new-issue-url: string,
+    /// Issues URL
+    issues-url: string,
+    /// Project URL
+    project-url: string,
+    /// Description
+    description: option<string>,
+    /// Title
+    title: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-bugzilla: func(params: put-v3-projects-id-services-bugzilla-params) -> result<string, string>;
+
+  /// Set buildkite service for project
+  record put-v3-projects-id-services-buildkite-params {
+    id: string,
+    /// Buildkite project GitLab token
+    token: string,
+    /// The buildkite project URL
+    project-url: string,
+    /// Enable SSL verification for communication
+    enable-ssl-verification: option<bool>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-buildkite: func(params: put-v3-projects-id-services-buildkite-params) -> result<string, string>;
+
+  /// Set builds-email service for project
+  record put-v3-projects-id-services-builds-email-params {
+    id: string,
+    /// Comma-separated list of recipient email addresses
+    recipients: string,
+    /// Add pusher to recipients list
+    add-pusher: option<bool>,
+    /// Notify only broken builds
+    notify-only-broken-builds: option<bool>,
+    /// Event will be triggered when a build status changes
+    build-events: option<string>
+  }
+  put-v3-projects-id-services-builds-email: func(params: put-v3-projects-id-services-builds-email-params) -> result<string, string>;
+
+  /// Set campfire service for project
+  record put-v3-projects-id-services-campfire-params {
+    id: string,
+    /// Campfire token
+    token: string,
+    /// Campfire subdomain
+    subdomain: option<string>,
+    /// Campfire room
+    room: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-campfire: func(params: put-v3-projects-id-services-campfire-params) -> result<string, string>;
+
+  /// Set custom-issue-tracker service for project
+  record put-v3-projects-id-services-custom-issue-tracker-params {
+    id: string,
+    /// New issue URL
+    new-issue-url: string,
+    /// Issues URL
+    issues-url: string,
+    /// Project URL
+    project-url: string,
+    /// Description
+    description: option<string>,
+    /// Title
+    title: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-custom-issue-tracker: func(params: put-v3-projects-id-services-custom-issue-tracker-params) -> result<string, string>;
+
+  /// Set drone-ci service for project
+  record put-v3-projects-id-services-drone-ci-params {
+    id: string,
+    /// Drone CI token
+    token: string,
+    /// Drone CI URL
+    drone-url: string,
+    /// Enable SSL verification for communication
+    enable-ssl-verification: option<bool>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>,
+    /// Event will be triggered when a merge request is created/updated/merged
+    merge-request-events: option<string>,
+    /// Event will be triggered when a new tag is pushed to the repository
+    tag-push-events: option<string>
+  }
+  put-v3-projects-id-services-drone-ci: func(params: put-v3-projects-id-services-drone-ci-params) -> result<string, string>;
+
+  /// Set emails-on-push service for project
+  record put-v3-projects-id-services-emails-on-push-params {
+    id: string,
+    /// Comma-separated list of recipient email addresses
+    recipients: string,
+    /// Disable code diffs
+    disable-diffs: option<bool>,
+    /// Send from committer
+    send-from-committer-email: option<bool>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>,
+    /// Event will be triggered when a new tag is pushed to the repository
+    tag-push-events: option<string>
+  }
+  put-v3-projects-id-services-emails-on-push: func(params: put-v3-projects-id-services-emails-on-push-params) -> result<string, string>;
+
+  /// Set external-wiki service for project
+  record put-v3-projects-id-services-external-wiki-params {
+    id: string,
+    /// The URL of the external Wiki
+    external-wiki-url: string
+  }
+  put-v3-projects-id-services-external-wiki: func(params: put-v3-projects-id-services-external-wiki-params) -> result<string, string>;
+
+  /// Set flowdock service for project
+  record put-v3-projects-id-services-flowdock-params {
+    id: string,
+    /// Flowdock token
+    token: string,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-flowdock: func(params: put-v3-projects-id-services-flowdock-params) -> result<string, string>;
+
+  /// Set gemnasium service for project
+  record put-v3-projects-id-services-gemnasium-params {
+    id: string,
+    /// Your personal API key on gemnasium.com
+    api-key: string,
+    /// The project's slug on gemnasium.com
+    token: string,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-gemnasium: func(params: put-v3-projects-id-services-gemnasium-params) -> result<string, string>;
+
+  /// Set hipchat service for project
+  record put-v3-projects-id-services-hipchat-params {
+    id: string,
+    /// The room token
+    token: string,
+    /// The room name or ID
+    room: option<string>,
+    /// The room color
+    color: option<string>,
+    /// Enable notifications
+    notify: option<bool>,
+    /// Leave blank for default (v2)
+    api-version: option<string>,
+    /// Leave blank for default. https://hipchat.example.com
+    server: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>,
+    /// Event will be triggered when an issue is created/updated/closed
+    issue-events: option<string>,
+    /// Event will be triggered when a confidential issue is created/updated/closed
+    confidential-issue-events: option<string>,
+    /// Event will be triggered when a merge request is created/updated/merged
+    merge-request-events: option<string>,
+    /// Event will be triggered when someone adds a comment
+    note-events: option<string>,
+    /// Event will be triggered when a new tag is pushed to the repository
+    tag-push-events: option<string>,
+    /// Event will be triggered when a build status changes
+    build-events: option<string>
+  }
+  put-v3-projects-id-services-hipchat: func(params: put-v3-projects-id-services-hipchat-params) -> result<string, string>;
+
+  /// Set irker service for project
+  record put-v3-projects-id-services-irker-params {
+    id: string,
+    /// Recipients/channels separated by whitespaces
+    recipients: string,
+    /// Default: irc://irc.network.net:6697
+    default-irc-uri: option<string>,
+    /// Server host. Default localhost
+    server-host: option<string>,
+    /// Server port. Default 6659
+    server-port: option<s32>,
+    /// Colorize messages
+    colorize-messages: option<bool>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-irker: func(params: put-v3-projects-id-services-irker-params) -> result<string, string>;
+
+  /// Set jira service for project
+  record put-v3-projects-id-services-jira-params {
+    id: string,
+    /// The URL to the JIRA project which is being linked to this GitLab project, e.g., https://jira.example.com
+    url: string,
+    /// The short identifier for your JIRA project, all uppercase, e.g., PROJ
+    project-key: string,
+    /// The username of the user created to be used with GitLab/JIRA
+    username: option<string>,
+    /// The password of the user created to be used with GitLab/JIRA
+    password: option<string>,
+    /// The ID of a transition that moves issues to a closed state. You can find this number under the JIRA workflow administration (**Administration > Issues > Workflows**) by selecting **View** under **Operations** of the desired workflow of your project. The ID of each state can be found inside the parenthesis of each transition name under the **Transitions (id)** column ([see screenshot][trans]). By default, this ID is set to `2`
+    jira-issue-transition-id: option<s32>,
+    /// Event will be triggered when a commit is created/updated
+    commit-events: option<string>,
+    /// Event will be triggered when a merge request is created/updated/merged
+    merge-request-events: option<string>
+  }
+  put-v3-projects-id-services-jira: func(params: put-v3-projects-id-services-jira-params) -> result<string, string>;
+
+  /// Set kubernetes service for project
+  record put-v3-projects-id-services-kubernetes-params {
+    id: string,
+    /// The Kubernetes namespace to use
+    namespace: string,
+    /// The URL to the Kubernetes cluster API, e.g., https://kubernetes.example.com
+    api-url: string,
+    /// The service token to authenticate against the Kubernetes cluster with
+    token: string,
+    /// A custom certificate authority bundle to verify the Kubernetes cluster with (PEM format)
+    ca-pem: option<string>
+  }
+  put-v3-projects-id-services-kubernetes: func(params: put-v3-projects-id-services-kubernetes-params) -> result<string, string>;
+
+  /// Set mattermost service for project
+  record put-v3-projects-id-services-mattermost-params {
+    id: string,
+    /// The Mattermost webhook. e.g. http://mattermost_host/hooks/...
+    webhook: string,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>,
+    /// Event will be triggered when an issue is created/updated/closed
+    issue-events: option<string>,
+    /// Event will be triggered when a confidential issue is created/updated/closed
+    confidential-issue-events: option<string>,
+    /// Event will be triggered when a merge request is created/updated/merged
+    merge-request-events: option<string>,
+    /// Event will be triggered when someone adds a comment
+    note-events: option<string>,
+    /// Event will be triggered when a new tag is pushed to the repository
+    tag-push-events: option<string>,
+    /// Event will be triggered when a build status changes
+    build-events: option<string>,
+    pipeline-events: option<string>,
+    /// Event will be triggered when a wiki page is created/updated
+    wiki-page-events: option<string>
+  }
+  put-v3-projects-id-services-mattermost: func(params: put-v3-projects-id-services-mattermost-params) -> result<string, string>;
+
+  /// Set mattermost-slash-commands service for project
+  record put-v3-projects-id-services-mattermost-slash-commands-params {
+    id: string,
+    /// The Mattermost token
+    token: string
+  }
+  put-v3-projects-id-services-mattermost-slash-commands: func(params: put-v3-projects-id-services-mattermost-slash-commands-params) -> result<string, string>;
+
+  /// Trigger a slash command for mattermost-slash-commands
+  record post-v3-projects-id-services-mattermost-slash-commands-trigger-params {
+    /// The ID of a project
+    id: string,
+    /// The Mattermost token
+    token: string
+  }
+  post-v3-projects-id-services-mattermost-slash-commands-trigger: func(params: post-v3-projects-id-services-mattermost-slash-commands-trigger-params) -> result<string, string>;
+
+  /// Set pipelines-email service for project
+  record put-v3-projects-id-services-pipelines-email-params {
+    id: string,
+    /// Comma-separated list of recipient email addresses
+    recipients: string,
+    /// Notify only broken builds
+    notify-only-broken-builds: option<bool>,
+    pipeline-events: option<string>
+  }
+  put-v3-projects-id-services-pipelines-email: func(params: put-v3-projects-id-services-pipelines-email-params) -> result<string, string>;
+
+  /// Set pivotaltracker service for project
+  record put-v3-projects-id-services-pivotaltracker-params {
+    id: string,
+    /// The Pivotaltracker token
+    token: string,
+    /// Comma-separated list of branches which will be automatically inspected. Leave blank to include all branches.
+    restrict-to-branch: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-pivotaltracker: func(params: put-v3-projects-id-services-pivotaltracker-params) -> result<string, string>;
+
+  /// Set pushover service for project
+  record put-v3-projects-id-services-pushover-params {
+    id: string,
+    /// The application key
+    api-key: string,
+    /// The user key
+    user-key: string,
+    /// The priority
+    priority: string,
+    /// Leave blank for all active devices
+    device: string,
+    /// The sound of the notification
+    sound: string,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-pushover: func(params: put-v3-projects-id-services-pushover-params) -> result<string, string>;
+
+  /// Set redmine service for project
+  record put-v3-projects-id-services-redmine-params {
+    id: string,
+    /// The new issue URL
+    new-issue-url: string,
+    /// The project URL
+    project-url: string,
+    /// The issues URL
+    issues-url: string,
+    /// The description of the tracker
+    description: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-redmine: func(params: put-v3-projects-id-services-redmine-params) -> result<string, string>;
+
+  /// Set slack service for project
+  record put-v3-projects-id-services-slack-params {
+    id: string,
+    /// The Slack webhook. e.g. https://hooks.slack.com/services/...
+    webhook: string,
+    /// The user name
+    new-issue-url: option<string>,
+    /// The channel name
+    channel: option<string>,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>,
+    /// Event will be triggered when an issue is created/updated/closed
+    issue-events: option<string>,
+    /// Event will be triggered when a confidential issue is created/updated/closed
+    confidential-issue-events: option<string>,
+    /// Event will be triggered when a merge request is created/updated/merged
+    merge-request-events: option<string>,
+    /// Event will be triggered when someone adds a comment
+    note-events: option<string>,
+    /// Event will be triggered when a new tag is pushed to the repository
+    tag-push-events: option<string>,
+    /// Event will be triggered when a build status changes
+    build-events: option<string>,
+    pipeline-events: option<string>,
+    /// Event will be triggered when a wiki page is created/updated
+    wiki-page-events: option<string>
+  }
+  put-v3-projects-id-services-slack: func(params: put-v3-projects-id-services-slack-params) -> result<string, string>;
+
+  /// Set slack-slash-commands service for project
+  record put-v3-projects-id-services-slack-slash-commands-params {
+    id: string,
+    /// The Slack token
+    token: string
+  }
+  put-v3-projects-id-services-slack-slash-commands: func(params: put-v3-projects-id-services-slack-slash-commands-params) -> result<string, string>;
+
+  /// Trigger a slash command for slack-slash-commands
+  record post-v3-projects-id-services-slack-slash-commands-trigger-params {
+    /// The ID of a project
+    id: string,
+    /// The Slack token
+    token: string
+  }
+  post-v3-projects-id-services-slack-slash-commands-trigger: func(params: post-v3-projects-id-services-slack-slash-commands-trigger-params) -> result<string, string>;
+
+  /// Set teamcity service for project
+  record put-v3-projects-id-services-teamcity-params {
+    id: string,
+    /// TeamCity root URL like https://teamcity.example.com
+    teamcity-url: string,
+    /// Build configuration ID
+    build-type: string,
+    /// A user with permissions to trigger a manual build
+    username: string,
+    /// The password of the user
+    password: string,
+    /// Event will be triggered by a push to the repository
+    push-events: option<string>
+  }
+  put-v3-projects-id-services-teamcity: func(params: put-v3-projects-id-services-teamcity-params) -> result<string, string>;
+
+  /// Get the service settings for project
+  record get-v3-projects-id-services-service-slug-params {
+    /// The name of the service
+    service-slug: string,
+    id: string
+  }
+  get-v3-projects-id-services-service-slug: func(params: get-v3-projects-id-services-service-slug-params) -> result<string, string>;
+
+  /// Delete a service for project
+  record delete-v3-projects-id-services-service-slug-params {
+    /// The name of the service
+    service-slug: string,
+    id: string
+  }
+  delete-v3-projects-id-services-service-slug: func(params: delete-v3-projects-id-services-service-slug-params) -> result<string, string>;
+
+  /// Share the project with a group
+  record post-v3-projects-id-share-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a group
+    group-id: s32,
+    /// The group access level
+    group-access: s32,
+    /// Share expiration date
+    expires-at: option<string>
+  }
+  post-v3-projects-id-share: func(params: post-v3-projects-id-share-params) -> result<string, string>;
+
+  record delete-v3-projects-id-share-group-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the group
+    group-id: string
+  }
+  delete-v3-projects-id-share-group-id: func(params: delete-v3-projects-id-share-group-id-params) -> result<string, string>;
+
+  /// Get all project snippets
+  record get-v3-projects-id-snippets-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-snippets: func(params: get-v3-projects-id-snippets-params) -> result<string, string>;
+
+  /// Create a new project snippet
+  record post-v3-projects-id-snippets-params {
+    /// The ID of a project
+    id: string,
+    /// The title of the snippet
+    title: string,
+    /// The file name of the snippet
+    file-name: string,
+    /// The content of the snippet
+    code: string,
+    /// The visibility level of the snippet
+    visibility-level: s32
+  }
+  post-v3-projects-id-snippets: func(params: post-v3-projects-id-snippets-params) -> result<string, string>;
+
+  /// Get a list of project +noteable+ notes
+  record get-v3-projects-id-snippets-noteable-id-notes-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-snippets-noteable-id-notes: func(params: get-v3-projects-id-snippets-noteable-id-notes-params) -> result<string, string>;
+
+  /// Create a new +noteable+ note
+  record post-v3-projects-id-snippets-noteable-id-notes-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The content of a note
+    body: string,
+    /// The creation date of the note
+    created-at: option<string>
+  }
+  post-v3-projects-id-snippets-noteable-id-notes: func(params: post-v3-projects-id-snippets-noteable-id-notes-params) -> result<string, string>;
+
+  /// Get a single +noteable+ note
+  record get-v3-projects-id-snippets-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a note
+    note-id: string,
+    /// The ID of the noteable
+    noteable-id: string
+  }
+  get-v3-projects-id-snippets-noteable-id-notes-note-id: func(params: get-v3-projects-id-snippets-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Update an existing +noteable+ note
+  record put-v3-projects-id-snippets-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The ID of a note
+    note-id: string,
+    /// The content of a note
+    body: string
+  }
+  put-v3-projects-id-snippets-noteable-id-notes-note-id: func(params: put-v3-projects-id-snippets-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Delete a +noteable+ note
+  record delete-v3-projects-id-snippets-noteable-id-notes-note-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of the noteable
+    noteable-id: string,
+    /// The ID of a note
+    note-id: string
+  }
+  delete-v3-projects-id-snippets-noteable-id-notes-note-id: func(params: delete-v3-projects-id-snippets-noteable-id-notes-note-id-params) -> result<string, string>;
+
+  /// Get a single project snippet
+  record get-v3-projects-id-snippets-snippet-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project snippet
+    snippet-id: string
+  }
+  get-v3-projects-id-snippets-snippet-id: func(params: get-v3-projects-id-snippets-snippet-id-params) -> result<string, string>;
+
+  /// Update an existing project snippet
+  record put-v3-projects-id-snippets-snippet-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project snippet
+    snippet-id: string,
+    /// The title of the snippet
+    title: option<string>,
+    /// The file name of the snippet
+    file-name: option<string>,
+    /// The content of the snippet
+    code: option<string>,
+    /// The visibility level of the snippet
+    visibility-level: option<s32>
+  }
+  put-v3-projects-id-snippets-snippet-id: func(params: put-v3-projects-id-snippets-snippet-id-params) -> result<string, string>;
+
+  /// Delete a project snippet
+  record delete-v3-projects-id-snippets-snippet-id-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project snippet
+    snippet-id: string
+  }
+  delete-v3-projects-id-snippets-snippet-id: func(params: delete-v3-projects-id-snippets-snippet-id-params) -> result<string, string>;
+
+  /// Get a list of project +awardable+ award emoji
+  record get-v3-projects-id-snippets-snippet-id-award-emoji-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of an Issue, Merge Request or Snippet
+    snippet-id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-snippets-snippet-id-award-emoji: func(params: get-v3-projects-id-snippets-snippet-id-award-emoji-params) -> result<string, string>;
+
+  /// Award a new Emoji
+  record post-v3-projects-id-snippets-snippet-id-award-emoji-params {
+    id: string,
+    snippet-id: string,
+    /// The name of a award_emoji (without colons)
+    name: string
+  }
+  post-v3-projects-id-snippets-snippet-id-award-emoji: func(params: post-v3-projects-id-snippets-snippet-id-award-emoji-params) -> result<string, string>;
+
+  /// Get a specific award emoji
+  record get-v3-projects-id-snippets-snippet-id-award-emoji-award-id-params {
+    /// The ID of the award
+    award-id: string,
+    id: string,
+    snippet-id: string
+  }
+  get-v3-projects-id-snippets-snippet-id-award-emoji-award-id: func(params: get-v3-projects-id-snippets-snippet-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Delete a +awardables+ award emoji
+  record delete-v3-projects-id-snippets-snippet-id-award-emoji-award-id-params {
+    /// The ID of an award emoji
+    award-id: string,
+    id: string,
+    snippet-id: string
+  }
+  delete-v3-projects-id-snippets-snippet-id-award-emoji-award-id: func(params: delete-v3-projects-id-snippets-snippet-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Get a list of project +awardable+ award emoji
+  record get-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-params {
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>,
+    id: string,
+    snippet-id: string,
+    note-id: string
+  }
+  get-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji: func(params: get-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-params) -> result<string, string>;
+
+  /// Award a new Emoji
+  record post-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-params {
+    id: string,
+    snippet-id: string,
+    note-id: string,
+    /// The name of a award_emoji (without colons)
+    name: string
+  }
+  post-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji: func(params: post-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-params) -> result<string, string>;
+
+  /// Get a specific award emoji
+  record get-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-award-id-params {
+    /// The ID of the award
+    award-id: string,
+    id: string,
+    snippet-id: string,
+    note-id: string
+  }
+  get-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-award-id: func(params: get-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Delete a +awardables+ award emoji
+  record delete-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-award-id-params {
+    /// The ID of an award emoji
+    award-id: string,
+    id: string,
+    snippet-id: string,
+    note-id: string
+  }
+  delete-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-award-id: func(params: delete-v3-projects-id-snippets-snippet-id-notes-note-id-award-emoji-award-id-params) -> result<string, string>;
+
+  /// Get a raw project snippet
+  record get-v3-projects-id-snippets-snippet-id-raw-params {
+    /// The ID of a project
+    id: string,
+    /// The ID of a project snippet
+    snippet-id: string
+  }
+  get-v3-projects-id-snippets-snippet-id-raw: func(params: get-v3-projects-id-snippets-snippet-id-raw-params) -> result<string, string>;
+
+  /// Star a project
+  record post-v3-projects-id-star-params {
+    /// The ID of a project
+    id: string
+  }
+  post-v3-projects-id-star: func(params: post-v3-projects-id-star-params) -> result<string, string>;
+
+  /// Unstar a project
+  record delete-v3-projects-id-star-params {
+    /// The ID of a project
+    id: string
+  }
+  delete-v3-projects-id-star: func(params: delete-v3-projects-id-star-params) -> result<string, string>;
+
+  /// Post status to a commit
+  record post-v3-projects-id-statuses-sha-params {
+    /// The ID of a project
+    id: string,
+    /// The commit hash
+    sha: string,
+    /// The state of the status
+    state: post-v3-projects-id-statuses-sha-body-state-enum,
+    /// The ref
+    ref: option<string>,
+    /// The target URL to associate with this status
+    target-url: option<string>,
+    /// A short description of the status
+    description: option<string>,
+    /// A string label to differentiate this status from the status of other systems. Default: "default"
+    name: option<string>,
+    /// A string label to differentiate this status from the status of other systems. Default: "default"
+    context: option<string>
+  }
+  post-v3-projects-id-statuses-sha: func(params: post-v3-projects-id-statuses-sha-params) -> result<string, string>;
+
+  /// Get triggers list
+  record get-v3-projects-id-triggers-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-triggers: func(params: get-v3-projects-id-triggers-params) -> result<string, string>;
+
+  /// Create a trigger
+  record post-v3-projects-id-triggers-params {
+    /// The ID of a project
+    id: string
+  }
+  post-v3-projects-id-triggers: func(params: post-v3-projects-id-triggers-params) -> result<string, string>;
+
+  /// Get specific trigger of a project
+  record get-v3-projects-id-triggers-token-params {
+    /// The ID of a project
+    id: string,
+    /// The unique token of trigger
+    token: string
+  }
+  get-v3-projects-id-triggers-token: func(params: get-v3-projects-id-triggers-token-params) -> result<string, string>;
+
+  /// Delete a trigger
+  record delete-v3-projects-id-triggers-token-params {
+    /// The ID of a project
+    id: string,
+    /// The unique token of trigger
+    token: string
+  }
+  delete-v3-projects-id-triggers-token: func(params: delete-v3-projects-id-triggers-token-params) -> result<string, string>;
+
+  /// Unarchive a project
+  record post-v3-projects-id-unarchive-params {
+    /// The ID of a project
+    id: string
+  }
+  post-v3-projects-id-unarchive: func(params: post-v3-projects-id-unarchive-params) -> result<string, string>;
+
+  /// Upload a file
+  record post-v3-projects-id-uploads-params {
+    /// The ID of a project
+    id: string,
+    /// The file to be uploaded
+    file: string
+  }
+  post-v3-projects-id-uploads: func(params: post-v3-projects-id-uploads-params) -> result<string, string>;
+
+  /// Get the users list of a project
+  record get-v3-projects-id-users-params {
+    /// The ID of a project
+    id: string,
+    /// Return list of users matching the search criteria
+    search: option<string>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-users: func(params: get-v3-projects-id-users-params) -> result<string, string>;
+
+  /// Get project variables
+  record get-v3-projects-id-variables-params {
+    /// The ID of a project
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-projects-id-variables: func(params: get-v3-projects-id-variables-params) -> result<string, string>;
+
+  /// Create a new variable in a project
+  record post-v3-projects-id-variables-params {
+    /// The ID of a project
+    id: string,
+    /// The key of the variable
+    key: string,
+    /// The value of the variable
+    value: string
+  }
+  post-v3-projects-id-variables: func(params: post-v3-projects-id-variables-params) -> result<string, string>;
+
+  /// Get a specific variable from a project
+  record get-v3-projects-id-variables-key-params {
+    /// The ID of a project
+    id: string,
+    /// The key of the variable
+    key: string
+  }
+  get-v3-projects-id-variables-key: func(params: get-v3-projects-id-variables-key-params) -> result<string, string>;
+
+  /// Update an existing variable from a project
+  record put-v3-projects-id-variables-key-params {
+    /// The ID of a project
+    id: string,
+    /// The key of the variable
+    key: string,
+    /// The value of the variable
+    value: option<string>
+  }
+  put-v3-projects-id-variables-key: func(params: put-v3-projects-id-variables-key-params) -> result<string, string>;
+
+  /// Delete an existing variable from a project
+  record delete-v3-projects-id-variables-key-params {
+    /// The ID of a project
+    id: string,
+    /// The key of the variable
+    key: string
+  }
+  delete-v3-projects-id-variables-key: func(params: delete-v3-projects-id-variables-key-params) -> result<string, string>;
+
+}
+
+interface runners {
+  enum get-v3-runners-scope-enum {
+    active,
+    paused,
+    online,
+  }
+
+  enum get-v3-runners-all-scope-enum {
+    active,
+    paused,
+    online,
+    specific,
+    shared,
+  }
+
+  /// Get runners available for user
+  record get-v3-runners-params {
+    /// The scope of specific runners to show
+    scope: option<get-v3-runners-scope-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-runners: func(params: get-v3-runners-params) -> result<string, string>;
+
+  /// Get all runners - shared and specific
+  record get-v3-runners-all-params {
+    /// The scope of specific runners to show
+    scope: option<get-v3-runners-all-scope-enum>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-runners-all: func(params: get-v3-runners-all-params) -> result<string, string>;
+
+  /// Get runner's details
+  record get-v3-runners-id-params {
+    /// The ID of the runner
+    id: string
+  }
+  get-v3-runners-id: func(params: get-v3-runners-id-params) -> result<string, string>;
+
+  /// Update runner's details
+  record put-v3-runners-id-params {
+    /// The ID of the runner
+    id: string,
+    /// The description of the runner
+    description: option<string>,
+    /// The state of a runner
+    active: option<bool>,
+    /// The list of tags for a runner
+    tag-list: option<list<string>>,
+    /// Flag indicating the runner can execute untagged jobs
+    run-untagged: option<bool>,
+    /// Flag indicating the runner is locked
+    locked: option<bool>
+  }
+  put-v3-runners-id: func(params: put-v3-runners-id-params) -> result<string, string>;
+
+  /// Remove a runner
+  record delete-v3-runners-id-params {
+    /// The ID of the runner
+    id: string
+  }
+  delete-v3-runners-id: func(params: delete-v3-runners-id-params) -> result<string, string>;
+
+}
+
+interface session {
+  /// Login to get token
+  record post-v3-session-params {
+    /// The username
+    login: option<string>,
+    /// The email of the user
+    email: option<string>,
+    /// The password of the user
+    password: string
+  }
+  post-v3-session: func(params: post-v3-session-params) -> result<string, string>;
+
+}
+
+interface sidekiq {
+  /// Get the Sidekiq Compound metrics. Includes queue, process, and job statistics
+  get-v3-sidekiq-compound-metrics: func() -> result<string, string>;
+
+  /// Get the Sidekiq job statistics
+  get-v3-sidekiq-job-stats: func() -> result<string, string>;
+
+  /// Get the Sidekiq process metrics
+  get-v3-sidekiq-process-metrics: func() -> result<string, string>;
+
+  /// Get the Sidekiq queue metrics
+  get-v3-sidekiq-queue-metrics: func() -> result<string, string>;
+
+}
+
+interface snippets {
+  /// Get a snippets list for authenticated user
+  record get-v3-snippets-params {
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-snippets: func(params: get-v3-snippets-params) -> result<string, string>;
+
+  /// Create new snippet
+  record post-v3-snippets-params {
+    /// The title of a snippet
+    title: string,
+    /// The name of a snippet file
+    file-name: string,
+    /// The content of a snippet
+    content: string,
+    /// The visibility level of the snippet
+    visibility-level: option<s32>
+  }
+  post-v3-snippets: func(params: post-v3-snippets-params) -> result<string, string>;
+
+  /// List all public snippets current_user has access to
+  record get-v3-snippets-public-params {
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-snippets-public: func(params: get-v3-snippets-public-params) -> result<string, string>;
+
+  /// Get a single snippet
+  record get-v3-snippets-id-params {
+    /// The ID of a snippet
+    id: string
+  }
+  get-v3-snippets-id: func(params: get-v3-snippets-id-params) -> result<string, string>;
+
+  /// Update an existing snippet
+  record put-v3-snippets-id-params {
+    /// The ID of a snippet
+    id: string,
+    /// The title of a snippet
+    title: option<string>,
+    /// The name of a snippet file
+    file-name: option<string>,
+    /// The content of a snippet
+    content: option<string>,
+    /// The visibility level of the snippet
+    visibility-level: option<s32>
+  }
+  put-v3-snippets-id: func(params: put-v3-snippets-id-params) -> result<string, string>;
+
+  /// Remove snippet
+  record delete-v3-snippets-id-params {
+    /// The ID of a snippet
+    id: string
+  }
+  delete-v3-snippets-id: func(params: delete-v3-snippets-id-params) -> result<string, string>;
+
+  /// Get a raw snippet
+  record get-v3-snippets-id-raw-params {
+    /// The ID of a snippet
+    id: string
+  }
+  get-v3-snippets-id-raw: func(params: get-v3-snippets-id-raw-params) -> result<string, string>;
+
+}
+
+interface templates {
+  /// Get the list of the available template
+  get-v3-templates-dockerfiles: func() -> result<string, string>;
+
+  /// Get the text for a specific template present in local filesystem
+  record get-v3-templates-dockerfiles-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-templates-dockerfiles-name: func(params: get-v3-templates-dockerfiles-name-params) -> result<string, string>;
+
+  /// Get the list of the available template
+  get-v3-templates-gitignores: func() -> result<string, string>;
+
+  /// Get the text for a specific template present in local filesystem
+  record get-v3-templates-gitignores-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-templates-gitignores-name: func(params: get-v3-templates-gitignores-name-params) -> result<string, string>;
+
+  /// Get the list of the available template
+  get-v3-templates-gitlab-ci-ymls: func() -> result<string, string>;
+
+  /// Get the text for a specific template present in local filesystem
+  record get-v3-templates-gitlab-ci-ymls-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-templates-gitlab-ci-ymls-name: func(params: get-v3-templates-gitlab-ci-ymls-name-params) -> result<string, string>;
+
+  /// Get the list of the available license template
+  record get-v3-templates-licenses-params {
+    /// If passed, returns only popular licenses
+    popular: option<bool>
+  }
+  get-v3-templates-licenses: func(params: get-v3-templates-licenses-params) -> result<string, string>;
+
+  /// Get the text for a specific license
+  record get-v3-templates-licenses-name-params {
+    /// The name of the template
+    name: string
+  }
+  get-v3-templates-licenses-name: func(params: get-v3-templates-licenses-name-params) -> result<string, string>;
+
+}
+
+interface todos {
+  /// Get a todo list
+  record get-v3-todos-params {
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-todos: func(params: get-v3-todos-params) -> result<string, string>;
+
+  /// Mark all todos as done
+  delete-v3-todos: func() -> result<string, string>;
+
+  /// Mark a todo as done
+  record delete-v3-todos-id-params {
+    /// The ID of the todo being marked as done
+    id: string
+  }
+  delete-v3-todos-id: func(params: delete-v3-todos-id-params) -> result<string, string>;
+
+}
+
+interface user {
+  /// Get the currently authenticated user
+  get-v3-user: func() -> result<string, string>;
+
+  /// Get the currently authenticated user's email addresses
+  get-v3-user-emails: func() -> result<string, string>;
+
+  /// Add new email address to the currently authenticated user
+  record post-v3-user-emails-params {
+    /// The new email
+    email: string
+  }
+  post-v3-user-emails: func(params: post-v3-user-emails-params) -> result<string, string>;
+
+  /// Get a single email address owned by the currently authenticated user
+  record get-v3-user-emails-email-id-params {
+    /// The ID of the email
+    email-id: string
+  }
+  get-v3-user-emails-email-id: func(params: get-v3-user-emails-email-id-params) -> result<string, string>;
+
+  /// Delete an email address from the currently authenticated user
+  record delete-v3-user-emails-email-id-params {
+    /// The ID of the email
+    email-id: string
+  }
+  delete-v3-user-emails-email-id: func(params: delete-v3-user-emails-email-id-params) -> result<string, string>;
+
+  /// Get the currently authenticated user's SSH keys
+  get-v3-user-keys: func() -> result<string, string>;
+
+  /// Add a new SSH key to the currently authenticated user
+  record post-v3-user-keys-params {
+    /// The new SSH key
+    key: string,
+    /// The title of the new SSH key
+    title: string
+  }
+  post-v3-user-keys: func(params: post-v3-user-keys-params) -> result<string, string>;
+
+  /// Get a single key owned by currently authenticated user
+  record get-v3-user-keys-key-id-params {
+    /// The ID of the SSH key
+    key-id: string
+  }
+  get-v3-user-keys-key-id: func(params: get-v3-user-keys-key-id-params) -> result<string, string>;
+
+  /// Delete an SSH key from the currently authenticated user
+  record delete-v3-user-keys-key-id-params {
+    /// The ID of the SSH key
+    key-id: string
+  }
+  delete-v3-user-keys-key-id: func(params: delete-v3-user-keys-key-id-params) -> result<string, string>;
+
+}
+
+interface users {
+  /// Get the list of users
+  record get-v3-users-params {
+    /// Get a single user with a specific username
+    username: option<string>,
+    /// Search for a username
+    search: option<string>,
+    /// Filters only active users
+    active: option<bool>,
+    /// Filters only external users
+    external: option<bool>,
+    /// Filters only blocked users
+    blocked: option<bool>,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-users: func(params: get-v3-users-params) -> result<string, string>;
+
+  /// Create a user. Available only for admins.
+  record post-v3-users-params {
+    /// The email of the user
+    email: string,
+    /// The password of the new user
+    password: string,
+    /// The name of the user
+    name: string,
+    /// The username of the user
+    username: string,
+    /// The Skype username
+    skype: option<string>,
+    /// The LinkedIn username
+    linkedin: option<string>,
+    /// The Twitter username
+    twitter: option<string>,
+    /// The website of the user
+    website-url: option<string>,
+    /// The organization of the user
+    organization: option<string>,
+    /// The number of projects a user can create
+    projects-limit: option<s32>,
+    /// The external authentication provider UID
+    extern-uid: option<string>,
+    /// The external provider
+    provider: option<string>,
+    /// The biography of the user
+    bio: option<string>,
+    /// The location of the user
+    location: option<string>,
+    /// Flag indicating the user is an administrator
+    admin: option<bool>,
+    /// Flag indicating the user can create groups
+    can-create-group: option<bool>,
+    /// Flag indicating the account needs to be confirmed
+    confirm: option<bool>,
+    /// Flag indicating the user is an external user
+    external: option<bool>
+  }
+  post-v3-users: func(params: post-v3-users-params) -> result<string, string>;
+
+  /// Get a single user
+  record get-v3-users-id-params {
+    /// The ID of the user
+    id: string
+  }
+  get-v3-users-id: func(params: get-v3-users-id-params) -> result<string, string>;
+
+  /// Update a user. Available only for admins.
+  record put-v3-users-id-params {
+    /// The ID of the user
+    id: string,
+    /// The email of the user
+    email: option<string>,
+    /// The password of the new user
+    password: option<string>,
+    /// The name of the user
+    name: option<string>,
+    /// The username of the user
+    username: option<string>,
+    /// The Skype username
+    skype: option<string>,
+    /// The LinkedIn username
+    linkedin: option<string>,
+    /// The Twitter username
+    twitter: option<string>,
+    /// The website of the user
+    website-url: option<string>,
+    /// The organization of the user
+    organization: option<string>,
+    /// The number of projects a user can create
+    projects-limit: option<s32>,
+    /// The external authentication provider UID
+    extern-uid: option<string>,
+    /// The external provider
+    provider: option<string>,
+    /// The biography of the user
+    bio: option<string>,
+    /// The location of the user
+    location: option<string>,
+    /// Flag indicating the user is an administrator
+    admin: option<bool>,
+    /// Flag indicating the user can create groups
+    can-create-group: option<bool>,
+    /// Flag indicating the account needs to be confirmed
+    confirm: option<bool>,
+    /// Flag indicating the user is an external user
+    external: option<bool>
+  }
+  put-v3-users-id: func(params: put-v3-users-id-params) -> result<string, string>;
+
+  /// Delete a user. Available only for admins.
+  record delete-v3-users-id-params {
+    /// The ID of the user
+    id: string
+  }
+  delete-v3-users-id: func(params: delete-v3-users-id-params) -> result<string, string>;
+
+  /// Block a user. Available only for admins.
+  record put-v3-users-id-block-params {
+    /// The ID of the user
+    id: string
+  }
+  put-v3-users-id-block: func(params: put-v3-users-id-block-params) -> result<string, string>;
+
+  /// Get the emails addresses of a specified user. Available only for admins.
+  record get-v3-users-id-emails-params {
+    /// The ID of the user
+    id: string
+  }
+  get-v3-users-id-emails: func(params: get-v3-users-id-emails-params) -> result<string, string>;
+
+  /// Add an email address to a specified user. Available only for admins.
+  record post-v3-users-id-emails-params {
+    /// The ID of the user
+    id: string,
+    /// The email of the user
+    email: string
+  }
+  post-v3-users-id-emails: func(params: post-v3-users-id-emails-params) -> result<string, string>;
+
+  /// Delete an email address of a specified user. Available only for admins.
+  record delete-v3-users-id-emails-email-id-params {
+    /// The ID of the user
+    id: string,
+    /// The ID of the email
+    email-id: string
+  }
+  delete-v3-users-id-emails-email-id: func(params: delete-v3-users-id-emails-email-id-params) -> result<string, string>;
+
+  /// Get the contribution events of a specified user
+  record get-v3-users-id-events-params {
+    /// The ID of the user
+    id: string,
+    /// Current page number
+    page: option<s32>,
+    /// Number of items per page
+    per-page: option<s32>
+  }
+  get-v3-users-id-events: func(params: get-v3-users-id-events-params) -> result<string, string>;
+
+  /// Get the SSH keys of a specified user. Available only for admins.
+  record get-v3-users-id-keys-params {
+    /// The ID of the user
+    id: string
+  }
+  get-v3-users-id-keys: func(params: get-v3-users-id-keys-params) -> result<string, string>;
+
+  /// Add an SSH key to a specified user. Available only for admins.
+  record post-v3-users-id-keys-params {
+    /// The ID of the user
+    id: string,
+    /// The new SSH key
+    key: string,
+    /// The title of the new SSH key
+    title: string
+  }
+  post-v3-users-id-keys: func(params: post-v3-users-id-keys-params) -> result<string, string>;
+
+  /// Delete an existing SSH key from a specified user. Available only for admins.
+  record delete-v3-users-id-keys-key-id-params {
+    /// The ID of the user
+    id: string,
+    /// The ID of the SSH key
+    key-id: string
+  }
+  delete-v3-users-id-keys-key-id: func(params: delete-v3-users-id-keys-key-id-params) -> result<string, string>;
+
+  /// Unblock a user. Available only for admins.
+  record put-v3-users-id-unblock-params {
+    /// The ID of the user
+    id: string
+  }
+  put-v3-users-id-unblock: func(params: put-v3-users-id-unblock-params) -> result<string, string>;
+
+}
+
+interface version {
+  /// Get the version information of the GitLab instance.
+  get-v3-version: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export application;
+  export ci;
+  export deploy-keys;
+  export dockerfiles;
+  export gitignores;
+  export gitlab-ci-ymls;
+  export groups;
+  export hooks;
+  export internal;
+  export issues;
+  export keys;
+  export licenses;
+  export namespaces;
+  export notification-settings;
+  export projects;
+  export runners;
+  export session;
+  export sidekiq;
+  export snippets;
+  export templates;
+  export todos;
+  export user;
+  export users;
+  export version;
+}

@@ -1,0 +1,207 @@
+package autostamp:notion@0.2.0;
+
+interface blocks {
+  record update-a-block-body-paragraph {
+    rich-text: option<list<update-a-block-body-paragraph-rich-text-item>>
+  }
+
+  record update-a-block-body-paragraph-rich-text-item {
+    text: option<update-a-block-body-paragraph-rich-text-item-text>,
+    type-op: option<string>
+  }
+
+  record update-a-block-body-paragraph-rich-text-item-text {
+    content: option<string>
+  }
+
+  record append-block-children-body-children-item {
+    heading-v2: option<append-block-children-body-children-item-heading-v2>,
+    object: option<string>,
+    paragraph: option<append-block-children-body-children-item-paragraph>,
+    type-op: option<string>
+  }
+
+  record append-block-children-body-children-item-heading-v2 {
+    text: option<list<append-block-children-body-children-item-heading-v2-text-item>>
+  }
+
+  record append-block-children-body-children-item-heading-v2-text-item {
+    text: option<append-block-children-body-children-item-heading-v2-text-item-text>,
+    type-op: option<string>
+  }
+
+  record append-block-children-body-children-item-heading-v2-text-item-text {
+    content: option<string>
+  }
+
+  record append-block-children-body-children-item-paragraph {
+    rich-text: option<list<append-block-children-body-children-item-paragraph-rich-text-item>>
+  }
+
+  record append-block-children-body-children-item-paragraph-rich-text-item {
+    text: option<append-block-children-body-children-item-paragraph-rich-text-item-text>,
+    type-op: option<string>
+  }
+
+  record append-block-children-body-children-item-paragraph-rich-text-item-text {
+    content: option<string>,
+    link: option<append-block-children-body-children-item-paragraph-rich-text-item-text-link>
+  }
+
+  record append-block-children-body-children-item-paragraph-rich-text-item-text-link {
+    url: option<string>
+  }
+
+  /// Retrieve a block
+  record retrieve-a-block-params {
+    notion-version: option<string>
+  }
+  retrieve-a-block: func(params: retrieve-a-block-params) -> result<string, string>;
+
+  /// Update a block
+  record update-a-block-params {
+    notion-version: option<string>,
+    paragraph: option<update-a-block-body-paragraph>
+  }
+  update-a-block: func(params: update-a-block-params) -> result<string, string>;
+
+  /// Delete a block
+  record delete-a-block-params {
+    notion-version: option<string>
+  }
+  delete-a-block: func(params: delete-a-block-params) -> result<string, string>;
+
+  /// Retrieve block children
+  record retrieve-block-children-params {
+    page-size: option<string>,
+    notion-version: option<string>
+  }
+  retrieve-block-children: func(params: retrieve-block-children-params) -> result<string, string>;
+
+  /// Append block children
+  record append-block-children-params {
+    notion-version: option<string>,
+    children: option<list<append-block-children-body-children-item>>
+  }
+  append-block-children: func(params: append-block-children-params) -> result<string, string>;
+
+}
+
+
+interface comments {
+  /// Retrieve comments
+  record retrieve-comments-params {
+    block-id: option<string>,
+    page-size: option<string>,
+    notion-version: option<string>
+  }
+  retrieve-comments: func(params: retrieve-comments-params) -> result<string, string>;
+
+}
+
+interface databases {
+  record update-a-database-body-properties {
+    wine-pairing: option<update-a-database-body-properties-wine-pairing>
+  }
+
+  record update-a-database-body-properties-wine-pairing {
+    rich-text: option<update-a-database-body-properties-wine-pairing-rich-text>
+  }
+
+  record update-a-database-body-properties-wine-pairing-rich-text {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-a-database-body-title-item {
+    text: option<update-a-database-body-title-item-text>
+  }
+
+  record update-a-database-body-title-item-text {
+    content: option<string>
+  }
+
+  record query-a-database-body-filter {
+    property: option<string>,
+    select: option<query-a-database-body-filter-select>
+  }
+
+  record query-a-database-body-filter-select {
+    equals: option<string>
+  }
+
+  /// Retrieve a database
+  record retrieve-a-database-params {
+    notion-version: option<string>
+  }
+  retrieve-a-database: func(params: retrieve-a-database-params) -> result<string, string>;
+
+  /// Update a database
+  record update-a-database-params {
+    notion-version: option<string>,
+    properties: option<update-a-database-body-properties>,
+    title: option<list<update-a-database-body-title-item>>
+  }
+  update-a-database: func(params: update-a-database-params) -> result<string, string>;
+
+  /// Query a database
+  record query-a-database-params {
+    notion-version: option<string>,
+    filter: option<query-a-database-body-filter>
+  }
+  query-a-database: func(params: query-a-database-params) -> result<string, string>;
+
+}
+
+interface pages {
+  record update-page-properties-body-properties {
+    status: option<update-page-properties-body-properties-status>
+  }
+
+  record update-page-properties-body-properties-status {
+    select: option<update-page-properties-body-properties-status-select>
+  }
+
+  record update-page-properties-body-properties-status-select {
+    name: option<string>
+  }
+
+  /// Retrieve a Page
+  record retrieve-a-page-params {
+    notion-version: option<string>,
+    x: option<string>
+  }
+  retrieve-a-page: func(params: retrieve-a-page-params) -> result<string, string>;
+
+  /// Update Page properties 
+  record update-page-properties-params {
+    notion-version: option<string>,
+    properties: option<update-page-properties-body-properties>
+  }
+  update-page-properties: func(params: update-page-properties-params) -> result<string, string>;
+
+  /// Retrieve a Page Property Item
+  retrieve-a-page-property-item: func() -> result<string, string>;
+
+}
+
+interface users {
+  /// Retrieve a user
+  record retrieve-a-user-params {
+    notion-version: option<string>
+  }
+  retrieve-a-user: func(params: retrieve-a-user-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export blocks;
+  export comments;
+  export databases;
+  export pages;
+  export users;
+}

@@ -1,0 +1,1203 @@
+package autostamp:weatherbit@0.2.0;
+
+interface alerts {
+  /// Returns severe weather alerts issued by meteorological agencies - Given a lat/lon.
+  record get-alerts-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Wraps return in jsonp callback - Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-alerts-lat-lat-lon-lon: func(params: get-alerts-lat-lat-lon-lon-params) -> result<string, string>;
+
+}
+
+
+interface bulk-downloads {
+  /// Download pre-generated bulk datasets
+  record get-bulk-files-file-params {
+    /// Filename (ie. current.csv.gz)
+    file: string,
+    /// Your registered API key.
+    key: string
+  }
+  get-bulk-files-file: func(params: get-bulk-files-file-params) -> result<string, string>;
+
+}
+
+interface current-air-quality {
+  /// Returns current air quality conditions - Given City and/or State, Country.
+  record get-current-airquality-city-city-country-country-params {
+    /// City search.. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-airquality-city-city-country-country: func(params: get-current-airquality-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns current air quality conditions - Given a City ID.
+  record get-current-airquality-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-airquality-city-id-city-id: func(params: get-current-airquality-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns current air quality conditions - Given a lat/lon.
+  record get-current-airquality-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-airquality-lat-lat-lon-lon: func(params: get-current-airquality-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns current air quality conditions - Given a Postal Code.
+  record get-current-airquality-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-airquality-postal-code-postal-code: func(params: get-current-airquality-postal-code-postal-code-params) -> result<string, string>;
+
+}
+
+interface current-weather-data {
+  enum get-current-cities-cities-units-enum {
+    s,
+    i,
+  }
+
+  enum get-current-cities-cities-marine-enum {
+    t,
+  }
+
+  enum get-current-cities-cities-lang-enum {
+    ar,
+    az,
+    be,
+    bg,
+    bs,
+    ca,
+    cs,
+    de,
+    fi,
+    fr,
+    el,
+    es,
+    et,
+    hr,
+    hu,
+    id,
+    it,
+    is,
+    kw,
+    nb,
+    nl,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sr,
+    sv,
+    tr,
+    uk,
+    zh,
+    zh-tw,
+  }
+
+  enum get-current-city-city-country-country-include-op-enum {
+    minutely,
+  }
+
+  /// Returns a group of observations given a list of cities
+  record get-current-cities-cities-params {
+    /// Comma separated list of City ID's. Example: 4487042, 4494942, 4504871
+    cities: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Marine stations only (buoys, oil platforms, etc)
+    marine: option<get-current-cities-cities-marine-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback - Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-cities-cities: func(params: get-current-cities-cities-params) -> result<string, string>;
+
+  /// Returns a Current Observation - Given City and/or State, Country.
+  record get-current-city-city-country-country-params {
+    /// City search.. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Include 1 hour - minutely forecast in the response
+    include-op: option<get-current-city-city-country-country-include-op-enum>,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Marine stations only (buoys, oil platforms, etc)
+    marine: option<get-current-cities-cities-marine-enum>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback - Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-city-city-country-country: func(params: get-current-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns a current observation by city id.
+  record get-current-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Include 1 hour - minutely forecast in the response
+    include-op: option<get-current-city-city-country-country-include-op-enum>,
+    /// Marine stations only (buoys, oil platforms, etc)
+    marine: option<get-current-cities-cities-marine-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback - Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-city-id-city-id: func(params: get-current-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns a Current Observation - Given a lat/lon.
+  record get-current-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Include 1 hour - minutely forecast in the response
+    include-op: option<get-current-city-city-country-country-include-op-enum>,
+    /// Marine stations only (buoys, oil platforms, etc)
+    marine: option<get-current-cities-cities-marine-enum>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback - Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-lat-lat-lon-lon: func(params: get-current-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns a group of observations given a list of points in the format (lat1, lon1), (lat2, lon2), (latN, lonN), ...
+  record get-current-points-points-params {
+    /// Comma separated list of points. Example: (35.5, -75.5),(45, 65),(45.12, -130.5)
+    points: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-points-points: func(params: get-current-points-points-params) -> result<string, string>;
+
+  /// Returns a current observation by postal code.
+  record get-current-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Include 1 hour - minutely forecast in the response
+    include-op: option<get-current-city-city-country-country-include-op-enum>,
+    /// Marine stations only (buoys, oil platforms, etc)
+    marine: option<get-current-cities-cities-marine-enum>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback - Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-postal-code-postal-code: func(params: get-current-postal-code-postal-code-params) -> result<string, string>;
+
+  /// Returns a Current Observation. - Given a station ID.
+  record get-current-station-station-params {
+    /// Station Call ID.
+    station: string,
+    /// Include 1 hour - minutely forecast in the response
+    include-op: option<get-current-city-city-country-country-include-op-enum>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-station-station: func(params: get-current-station-station-params) -> result<string, string>;
+
+  /// Returns a group of observations given a list of stations
+  record get-current-stations-stations-params {
+    /// Comma separated list of Station Call ID's. Example: KRDU,KBFI,KVNY
+    stations: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-current-cities-cities-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-current-cities-cities-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-current-stations-stations: func(params: get-current-stations-stations-params) -> result<string, string>;
+
+}
+
+interface air-quality-forecast {
+  /// Returns 72 hour (hourly) Air Quality forecast - Given City and/or State, Country.
+  record get-forecast-airquality-city-city-country-country-params {
+    /// City search.. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Number of hours to return.
+    hours: option<s32>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-airquality-city-city-country-country: func(params: get-forecast-airquality-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns 72 hour (hourly) Air Quality forecast - Given a City ID.
+  record get-forecast-airquality-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Number of hours to return.
+    hours: option<s32>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-airquality-city-id-city-id: func(params: get-forecast-airquality-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns 72 hour (hourly) Air Quality forecast - Given a lat/lon.
+  record get-forecast-airquality-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string,
+    /// Number of hours to return.
+    hours: option<s32>
+  }
+  get-forecast-airquality-lat-lat-lon-lon: func(params: get-forecast-airquality-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns 72 hour (hourly) Air Quality forecast - Given a Postal Code.
+  record get-forecast-airquality-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Number of hours to return.
+    hours: option<s32>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-airquality-postal-code-postal-code: func(params: get-forecast-airquality-postal-code-postal-code-params) -> result<string, string>;
+
+}
+
+interface v16-day-daily-forecast {
+  enum get-forecast-daily-city-city-country-country-units-enum {
+    s,
+    i,
+  }
+
+  enum get-forecast-daily-city-city-country-country-lang-enum {
+    ar,
+    az,
+    be,
+    bg,
+    bs,
+    ca,
+    cs,
+    de,
+    fi,
+    fr,
+    el,
+    es,
+    et,
+    hr,
+    hu,
+    id,
+    it,
+    is,
+    kw,
+    nb,
+    nl,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sr,
+    sv,
+    tr,
+    uk,
+    zh,
+    zh-tw,
+  }
+
+  /// Returns a daily forecast - Given City and/or State, Country.
+  record get-forecast-daily-city-city-country-country-params {
+    /// City search.. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Number of days to return. Default 16.
+    days: option<f64>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-daily-city-city-country-country: func(params: get-forecast-daily-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns a daily forecast - Given a City ID.
+  record get-forecast-daily-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Number of days to return. Default 16.
+    days: option<f64>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-daily-city-id-city-id: func(params: get-forecast-daily-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns a daily forecast - Given Lat/Lon.
+  record get-forecast-daily-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Number of days to return. Default 16.
+    days: option<f64>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-daily-lat-lat-lon-lon: func(params: get-forecast-daily-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns a daily forecast - Given a Postal Code.
+  record get-forecast-daily-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Number of days to return. Default 16.
+    days: option<f64>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-daily-postal-code-postal-code: func(params: get-forecast-daily-postal-code-postal-code-params) -> result<string, string>;
+
+}
+
+interface forecast-degree-day-api {
+  enum get-forecast-energy-lat-lat-lon-lon-units-enum {
+    s,
+    i,
+  }
+
+  enum get-forecast-energy-lat-lat-lon-lon-tp-enum {
+    hourly,
+    daily,
+  }
+
+  /// Returns Energy Forecast API response  - Given a single lat/lon. 
+  record get-forecast-energy-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Temperature threshold to use to calculate degree days (default 18 C) 
+    threshold: option<f64>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-energy-lat-lat-lon-lon-units-enum>,
+    /// Time period (default: daily)
+    tp: option<get-forecast-energy-lat-lat-lon-lon-tp-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-energy-lat-lat-lon-lon: func(params: get-forecast-energy-lat-lat-lon-lon-params) -> result<string, string>;
+
+}
+
+interface v240-hour-hourly-forecast {
+  enum get-forecast-hourly-city-city-country-country-units-enum {
+    s,
+    i,
+  }
+
+  enum get-forecast-hourly-city-city-country-country-lang-enum {
+    ar,
+    az,
+    be,
+    bg,
+    bs,
+    ca,
+    cs,
+    de,
+    fi,
+    fr,
+    el,
+    es,
+    et,
+    hr,
+    hu,
+    id,
+    it,
+    is,
+    kw,
+    nb,
+    nl,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sr,
+    sv,
+    tr,
+    uk,
+    zh,
+    zh-tw,
+  }
+
+  /// Returns an hourly forecast - Given City and/or State, Country.
+  record get-forecast-hourly-city-city-country-country-params {
+    /// City search.. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-hourly-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Number of hours to return.
+    hours: option<s32>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-hourly-city-city-country-country: func(params: get-forecast-hourly-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns an hourly forecast - Given a City ID.
+  record get-forecast-hourly-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-hourly-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Number of hours to return.
+    hours: option<s32>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-hourly-city-id-city-id: func(params: get-forecast-hourly-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns an hourly forecast - Given a lat/lon.
+  record get-forecast-hourly-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-hourly-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string,
+    /// Number of hours to return.
+    hours: option<s32>
+  }
+  get-forecast-hourly-lat-lat-lon-lon: func(params: get-forecast-hourly-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns an hourly forecast - Given a Postal Code.
+  record get-forecast-hourly-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-forecast-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-forecast-hourly-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Number of hours to return.
+    hours: option<s32>,
+    /// Your registered API key.
+    key: string
+  }
+  get-forecast-hourly-postal-code-postal-code: func(params: get-forecast-hourly-postal-code-postal-code-params) -> result<string, string>;
+
+}
+
+interface historical-air-quality {
+  /// Returns 72 hours of historical quality conditions - Given City and/or State, Country.
+  record get-history-airquality-city-city-country-country-params {
+    /// City search.. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-airquality-city-city-country-country: func(params: get-history-airquality-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns 72 hours of historical air quality conditions - Given a City ID.
+  record get-history-airquality-city-id-city-id-params {
+    /// City ID.
+    city-id: string,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-airquality-city-id-city-id: func(params: get-history-airquality-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns 72 hours of historical air quality conditions - Given a lat/lon.
+  record get-history-airquality-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-airquality-lat-lat-lon-lon: func(params: get-history-airquality-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns 72 hours of historical air quality conditions - Given a Postal Code.
+  record get-history-airquality-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Wraps return in jsonp callback. Example - callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-airquality-postal-code-postal-code: func(params: get-history-airquality-postal-code-postal-code-params) -> result<string, string>;
+
+}
+
+interface daily-historical-weather-data {
+  enum get-history-daily-city-city-country-country-units-enum {
+    s,
+    i,
+  }
+
+  enum get-history-daily-city-city-country-country-lang-enum {
+    ar,
+    az,
+    be,
+    bg,
+    bs,
+    ca,
+    cs,
+    de,
+    fi,
+    fr,
+    el,
+    es,
+    et,
+    hr,
+    hu,
+    id,
+    it,
+    is,
+    kw,
+    nb,
+    nl,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sr,
+    sv,
+    tr,
+    uk,
+    zh,
+    zh-tw,
+  }
+
+  /// Returns Historical Observations - Given City and/or State, Country.
+  record get-history-daily-city-city-country-country-params {
+    /// City search.. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-daily-city-city-country-country: func(params: get-history-daily-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a City ID
+  record get-history-daily-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-daily-city-id-city-id: func(params: get-history-daily-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a lat/lon.
+  record get-history-daily-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-daily-lat-lat-lon-lon: func(params: get-history-daily-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a Postal Code
+  record get-history-daily-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-daily-postal-code-postal-code: func(params: get-history-daily-postal-code-postal-code-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a station ID.
+  record get-history-daily-station-station-params {
+    /// Station ID.
+    station: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-daily-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-daily-city-city-country-country-lang-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-daily-station-station: func(params: get-history-daily-station-station-params) -> result<string, string>;
+
+}
+
+interface historical-degree-day-api {
+  enum get-history-energy-lat-lat-lon-lon-tp-enum {
+    hourly,
+    daily,
+    monthly,
+  }
+
+  enum get-history-energy-lat-lat-lon-lon-units-enum {
+    s,
+    i,
+  }
+
+  /// Returns Energy API response  - Given a single lat/lon. 
+  record get-history-energy-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Time period to aggregate by (daily, monthly)
+    tp: option<get-history-energy-lat-lat-lon-lon-tp-enum>,
+    /// Temperature threshold to use to calculate degree days (default 18 C) 
+    threshold: option<f64>,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-energy-lat-lat-lon-lon-units-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-energy-lat-lat-lon-lon: func(params: get-history-energy-lat-lat-lon-lon-params) -> result<string, string>;
+
+}
+
+interface hourly-historical-weather-data {
+  enum get-history-hourly-city-city-country-country-units-enum {
+    s,
+    i,
+  }
+
+  enum get-history-hourly-city-city-country-country-lang-enum {
+    ar,
+    az,
+    be,
+    bg,
+    bs,
+    ca,
+    cs,
+    de,
+    fi,
+    fr,
+    el,
+    es,
+    et,
+    hr,
+    hu,
+    id,
+    it,
+    is,
+    kw,
+    nb,
+    nl,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sr,
+    sv,
+    tr,
+    uk,
+    zh,
+    zh-tw,
+  }
+
+  enum get-history-hourly-city-city-country-country-tz-enum {
+    local,
+    utc,
+  }
+
+  /// Returns Historical Observations - Given City and/or State, Country.
+  record get-history-hourly-city-city-country-country-params {
+    /// City search. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-hourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-hourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-hourly-city-city-country-country: func(params: get-history-hourly-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a City ID
+  record get-history-hourly-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-hourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-hourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-hourly-city-id-city-id: func(params: get-history-hourly-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a lat/lon.
+  record get-history-hourly-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-hourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-hourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-hourly-lat-lat-lon-lon: func(params: get-history-hourly-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a Postal Code
+  record get-history-hourly-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-hourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-hourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-hourly-postal-code-postal-code: func(params: get-history-hourly-postal-code-postal-code-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a station ID.
+  record get-history-hourly-station-station-params {
+    /// Station ID.
+    station: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-hourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-hourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-hourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-hourly-station-station: func(params: get-history-hourly-station-station-params) -> result<string, string>;
+
+}
+
+interface sub-hourly-historical-weather-data {
+  enum get-history-subhourly-city-city-country-country-units-enum {
+    s,
+    i,
+  }
+
+  enum get-history-subhourly-city-city-country-country-lang-enum {
+    ar,
+    az,
+    be,
+    bg,
+    bs,
+    ca,
+    cs,
+    de,
+    fi,
+    fr,
+    el,
+    es,
+    et,
+    hr,
+    hu,
+    id,
+    it,
+    is,
+    kw,
+    nb,
+    nl,
+    pl,
+    pt,
+    ro,
+    ru,
+    sk,
+    sl,
+    sr,
+    sv,
+    tr,
+    uk,
+    zh,
+    zh-tw,
+  }
+
+  enum get-history-subhourly-city-city-country-country-tz-enum {
+    local,
+    utc,
+  }
+
+  /// Returns Historical Observations - Given City and/or State, Country.
+  record get-history-subhourly-city-city-country-country-params {
+    /// City search. Example - &city=Raleigh,NC or &city=Berlin,DE or city=Paris&country=FR
+    city: string,
+    /// Full name of state.
+    state: option<string>,
+    /// Country Code (2 letter).
+    country: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-subhourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-subhourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-subhourly-city-city-country-country: func(params: get-history-subhourly-city-city-country-country-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a City ID
+  record get-history-subhourly-city-id-city-id-params {
+    /// City ID. Example: 4487042
+    city-id: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-subhourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-subhourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-subhourly-city-id-city-id: func(params: get-history-subhourly-city-id-city-id-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a lat/lon.
+  record get-history-subhourly-lat-lat-lon-lon-params {
+    /// Latitude component of location.
+    lat: string,
+    /// Longitude component of location.
+    lon: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-subhourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-subhourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-subhourly-lat-lat-lon-lon: func(params: get-history-subhourly-lat-lat-lon-lon-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a Postal Code
+  record get-history-subhourly-postal-code-postal-code-params {
+    /// Postal Code. Example: 28546
+    postal-code: string,
+    /// Country Code (2 letter).
+    country: option<string>,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH)
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-subhourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-subhourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-subhourly-postal-code-postal-code: func(params: get-history-subhourly-postal-code-postal-code-params) -> result<string, string>;
+
+  /// Returns Historical Observations - Given a station ID.
+  record get-history-subhourly-station-station-params {
+    /// Station ID.
+    station: string,
+    /// Start Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    start-date: string,
+    /// End Date (YYYY-MM-DD or YYYY-MM-DD:HH).
+    end-date: string,
+    /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
+    units: option<get-history-subhourly-city-city-country-country-units-enum>,
+    /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
+    lang: option<get-history-subhourly-city-city-country-country-lang-enum>,
+    /// Assume utc (default) or local time for start_date, end_date
+    tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
+    /// Wraps return in jsonp callback. Example: callback=func
+    callback: option<string>,
+    /// Your registered API key.
+    key: string
+  }
+  get-history-subhourly-station-station: func(params: get-history-subhourly-station-station-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export alerts;
+  export bulk-downloads;
+  export current-air-quality;
+  export current-weather-data;
+  export air-quality-forecast;
+  export v16-day-daily-forecast;
+  export forecast-degree-day-api;
+  export v240-hour-hourly-forecast;
+  export historical-air-quality;
+  export daily-historical-weather-data;
+  export historical-degree-day-api;
+  export hourly-historical-weather-data;
+  export sub-hourly-historical-weather-data;
+}

@@ -1,0 +1,58 @@
+package autostamp:amadeus@0.2.0;
+
+interface shopping {
+  enum get-flight-offers-travel-class-enum {
+    economy,
+    premium-economy,
+    business,
+    first,
+  }
+
+  /// Return list of Flight Offers based on searching criteria.
+  record get-flight-offers-params {
+    /// city/airport [IATA code](http://www.iata.org/publications/Pages/code-search.aspx) from which the traveler will depart, e.g. BOS for Boston
+    origin-location-code: string,
+    /// city/airport [IATA code](http://www.iata.org/publications/Pages/code-search.aspx) to which the traveler is going, e.g. PAR for Paris
+    destination-location-code: string,
+    /// the date on which the traveler will depart from the origin to go to the destination. Dates are specified in the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) YYYY-MM-DD format, e.g. 2017-12-25
+    departure-date: string,
+    /// the date on which the traveler will depart from the destination to return to the origin. If this parameter is not specified, only one-way itineraries are found. If this parameter is specified, only round-trip itineraries are found. Dates are specified in the [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) YYYY-MM-DD format, e.g. 2018-02-28
+    return-date: option<string>,
+    /// the number of adult travelers (age 12 or older on date of departure).
+    adults: s32,
+    /// the number of child travelers (older than age 2 and younger than age 12 on date of departure) who will each have their own separate seat. If specified, this number should be greater than or equal to 0
+    children: option<s32>,
+    /// the number of infant travelers (whose age is less or equal to 2 on date of departure). Infants travel on the lap of an adult traveler, and thus the number of infants must not exceed the number of adults. If specified, this number should be greater than or equal to 0
+    infants: option<s32>,
+    /// most of the flight time should be spent in a cabin of this quality or higher. The accepted travel class is economy, premium economy, business or first class. If no travel class is specified, the search considers any travel class
+    travel-class: option<get-flight-offers-travel-class-enum>,
+    /// This option ensures that the system will only consider these airlines. This can not be cumulated with parameter excludedAirlineCodes.
+    /// 
+    included-airline-codes: option<string>,
+    /// This option ensures that the system will ignore these airlines. This can not be cumulated with parameter includedAirlineCodes.
+    /// 
+    excluded-airline-codes: option<string>,
+    /// if set to true, the search will find only flights going from the origin to the destination with no stop in between
+    non-stop: option<bool>,
+    /// the preferred currency for the flight offers. Currency is specified in the [ISO 4217](https://en.wikipedia.org/wiki/ISO_4217) format, e.g. EUR for Euro
+    currency-code: option<string>,
+    /// maximum price per traveler. By default, no limit is applied. If specified, the value should be a positive number with no decimals
+    max-price: option<s32>,
+    /// maximum number of flight offers to return. If specified, the value should be greater than or equal to 1
+    max: option<s32>
+  }
+  get-flight-offers: func(params: get-flight-offers-params) -> result<string, string>;
+
+  /// Return list of Flight Offers based on posted searching criteria.
+  search-flight-offers: func() -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export shopping;
+}

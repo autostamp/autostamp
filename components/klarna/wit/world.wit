@@ -1,0 +1,24 @@
+package autostamp:klarna@0.2.0;
+
+interface open-ai-product-endpoint {
+  /// API for fetching Klarna product information
+  record products-using-get-params {
+    /// A precise query that matches one very small category or product that needs to be searched for to find the products the user is looking for. If the user explicitly stated what they want, use that as a query. The query is as specific as possible to the product name or category mentioned by the user in its singular form, and don't contain any clarifiers like latest, newest, cheapest, budget, premium, expensive or similar. The query is always taken from the latest topic, if there is a new topic a new query is started.
+    q: string,
+    /// number of products returned
+    size: option<s32>,
+    /// maximum price of the matching product in local currency, filters results
+    budget: option<s32>
+  }
+  products-using-get: func(params: products-using-get-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export open-ai-product-endpoint;
+}

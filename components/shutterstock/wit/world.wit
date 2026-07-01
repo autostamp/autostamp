@@ -1,0 +1,2450 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `basic` | `Authorization: Basic base64(<secret>)` |
+/// | `customer_accessCode` | `Authorization: Bearer <secret>` |
+package autostamp:shutterstock@0.2.0;
+
+interface custom-music {
+  enum create-audio-render-preset-enum {
+    master-mp3,
+    master-wav,
+    stems-wav,
+  }
+
+  enum audio-render-timeline-span-instrument-group-status-status-enum {
+    active,
+    inactive,
+  }
+
+  enum audio-render-timeline-span-region-end-type-event-enum {
+    ending,
+    transition,
+  }
+
+  enum audio-render-timeline-span-region-end-type-type-op-enum {
+    ringout,
+    cut,
+  }
+
+  enum audio-render-timeline-span-region-key-tonic-accidental-enum {
+    double-flat,
+    flat,
+    natural,
+    sharp,
+    double-sharp,
+  }
+
+  enum audio-render-timeline-span-region-key-tonic-note-enum {
+    c,
+    d,
+    e,
+    f,
+    g,
+    a,
+    b,
+  }
+
+  enum audio-render-timeline-span-region-key-tonic-quality-enum {
+    major,
+    natural-minor,
+    harmonic-minor,
+    melodic-minor,
+    ionian,
+    dorian,
+    phrygian,
+    lydian,
+    mixolydian,
+    aeolian,
+    locrian,
+  }
+
+  enum audio-render-timeline-span-region-region-enum {
+    music,
+    silence,
+  }
+
+  enum audio-render-timeline-span-span-type-enum {
+    metered,
+    unmetered,
+  }
+
+  /// Data required to create an audio render
+  record create-audio-render {
+    /// A user-specified file name suggestion; this file name becomes the filename property of the Content-Disposition header when the user downloads the rendered audio file
+    filename: string,
+    /// File format, such as MP3 file, combined WAV file, or individual track WAV files
+    preset: create-audio-render-preset-enum,
+    timeline: audio-render-timeline
+  }
+
+  /// A timeline object that represents either a request for music to be created or an entire music composition
+  record audio-render-timeline {
+    /// A span object that represents the beginning of a period of absolute time
+    spans: option<list<audio-render-timeline-span>>
+  }
+
+  /// The beginning of a non-overlapping period of absolute time
+  record audio-render-timeline-span {
+    /// An identifier which must be unique within the parent span
+    id: option<f64>,
+    /// An array of instrument_group objects that are used in this span
+    instrument-groups: option<list<audio-render-timeline-span-instrument-group>>,
+    /// An array of region objects within the span
+    regions: option<list<audio-render-timeline-span-region>>,
+    /// Type of span; metered spans represent a pariod of time with music, and unmetered spans denote the end of the prior metered span
+    span-type: audio-render-timeline-span-span-type-enum,
+    /// The tempo, in beats per minute, at the start of the span; if not provided, the API selects a random tempo
+    tempo: option<s32>,
+    /// Two or more inflection points in a tempo curve; the API creates a smoothly changing tempo by using a linear interpolation of the time between each tempo change
+    tempo-changes: option<list<audio-render-timeline-span-tempo-changes>>,
+    /// The absolute time, in seconds, at which the span starts
+    time: s32
+  }
+
+  /// An instrument and the status objects that specify when that instrument plays
+  record audio-render-timeline-span-instrument-group {
+    /// The instrument ID
+    instrument-group: string,
+    /// An array of status objects
+    statuses: option<list<audio-render-timeline-span-instrument-group-status>>
+  }
+
+  /// The status of an instrument at a specific beat
+  record audio-render-timeline-span-instrument-group-status {
+    /// The beat, relative to the span, at which the status begins
+    beat: f64,
+    /// Whether the instrument is playing or not
+    status: audio-render-timeline-span-instrument-group-status-status-enum
+  }
+
+  /// A period of music or silence, measured in beats
+  record audio-render-timeline-span-region {
+    /// The beat, relative to the span, at which the region object's music begins
+    beat: s32,
+    /// The descriptor ID needed to compose the music
+    descriptor: string,
+    /// A high-level description of how a region ends
+    end-type: option<audio-render-timeline-span-region-end-type>,
+    /// An identifier which must be unique within the parent span
+    id: f64,
+    /// The key signature active at the beginning of the region
+    key: option<audio-render-timeline-span-region-key>,
+    /// The type of region
+    region: audio-render-timeline-span-region-region-enum
+  }
+
+  /// A high-level description of how a region ends
+  record audio-render-timeline-span-region-end-type {
+    /// The beat, relative to the start of the active region, at which the end_type begins; in other words, the ending starts on this beat of the region
+    beat: f64,
+    /// The type of event
+    event: audio-render-timeline-span-region-end-type-event-enum,
+    /// The specific action to perform; if the event type is "ending" then this must be "ringout" and if event type is "transition" this must be "cut"
+    type-op: audio-render-timeline-span-region-end-type-type-op-enum
+  }
+
+  /// The key signature active at the beginning of the region
+  record audio-render-timeline-span-region-key {
+    /// A text representation of the accidental; if this field is specified, the tonic_note field should also be specified
+    tonic-accidental: option<audio-render-timeline-span-region-key-tonic-accidental-enum>,
+    /// A text representation of the musical note; if this field is specified, the tonic_accidental field should also be specified
+    tonic-note: option<audio-render-timeline-span-region-key-tonic-note-enum>,
+    /// The scale quality; if this field is not specified, the API selects the quality automatically
+    tonic-quality: option<audio-render-timeline-span-region-key-tonic-quality-enum>
+  }
+
+  /// An inflection point in a tempo curve; the API creates the overall tempo by using a linear interpolation of the time between each tempo change
+  record audio-render-timeline-span-tempo-changes {
+    /// The tempo, in beats per minute, active at this time
+    tempo: f64,
+    /// The time, in seconds, at which the tempo exists
+    time: f64
+  }
+
+  /// List computer audio descriptors
+  record list-custom-descriptors-params {
+    /// Show descriptors with an average render speed that is greater than or equal to the specified value
+    render-speed-over: option<f64>,
+    /// Show descriptors that contain the specified band (case-sentsitive)
+    band-id: option<string>,
+    /// Show descriptors with the specified band name (case-sensitive)
+    band-name: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Show descriptors with the specified IDs (case-sensitive)
+    id: option<list<string>>,
+    /// Show descriptors with the specified instrument name (case-sensitive)
+    instrument-name: option<string>,
+    /// Show descriptors with the specified instrument ID (case-sensitive)
+    instrument-id: option<string>,
+    /// Show descriptors whose tempo range includes the specified tempo in beats per minute
+    tempo: option<f64>,
+    /// Show descriptors with a tempo that is less than or equal to the specified number
+    tempo-to: option<f64>,
+    /// Show descriptors that have a tempo range that includes the specified tempo in beats per minute
+    tempo-from: option<f64>,
+    /// Show descriptors with the specified name (case-sensitive)
+    name: option<string>,
+    /// Show descriptors with the specified tag, such as Cinematic or Roomy (case-sensitive)
+    tag: option<string>
+  }
+  list-custom-descriptors: func(params: list-custom-descriptors-params) -> result<string, string>;
+
+  /// List computer audio instruments
+  record list-custom-instruments-params {
+    /// Show instruments with the specified ID
+    id: option<list<string>>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Page number
+    page: option<s32>,
+    /// Show instruments with the specified name (case-sensitive)
+    name: option<string>,
+    /// Show instruments with the specified tag, such as Percussion or Strings (case-sensitive)
+    tag: option<string>
+  }
+  list-custom-instruments: func(params: list-custom-instruments-params) -> result<string, string>;
+
+  /// Get details about audio renders
+  record fetch-renders-params {
+    /// One or more render IDs
+    id: list<string>
+  }
+  fetch-renders: func(params: fetch-renders-params) -> result<string, string>;
+
+  /// Create rendered audio
+  record create-audio-renders-params {
+    /// Parameters to create computer audio renders
+    audio-renders: list<create-audio-render>
+  }
+  create-audio-renders: func(params: create-audio-renders-params) -> result<string, string>;
+
+}
+
+
+interface audio {
+  enum get-track-list-view-enum {
+    minimal,
+    full,
+  }
+
+  enum get-track-collection-list-embed-item-enum {
+    share-code,
+    share-url,
+  }
+
+  enum get-track-collection-items-sort-enum {
+    newest,
+    oldest,
+  }
+
+  enum get-track-license-list-download-availability-enum {
+    all,
+    downloadable,
+    non-downloadable,
+  }
+
+  enum license-track-license-enum {
+    audio-platform,
+    premier-music-basic,
+    premier-music-extended,
+    premier-music-pro,
+    premier-music-comp,
+    asset-all-music,
+  }
+
+  /// Metadata about an item that is part of a collection
+  record collection-item {
+    /// The date the item was added to the collection
+    added-time: option<string>,
+    /// ID of the item
+    id: string,
+    /// The media type of the item, such as image, video, or audio
+    media-type: option<string>
+  }
+
+  /// An audio track in a licensing request
+  record license-audio {
+    /// ID of the track being licensed
+    audio-id: string,
+    /// Type of license
+    license: option<license-track-license-enum>,
+    /// ID of the search that led to this licensing event
+    search-id: option<string>
+  }
+
+  /// List audio tracks
+  record get-track-list-params {
+    /// One or more audio IDs
+    id: list<string>,
+    /// Amount of detail to render in the response
+    view: option<get-track-list-view-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-track-list: func(params: get-track-list-params) -> result<string, string>;
+
+  /// List audio collections
+  record get-track-collection-list-params {
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<list<get-track-collection-list-embed-item-enum>>
+  }
+  get-track-collection-list: func(params: get-track-collection-list-params) -> result<string, string>;
+
+  /// Create audio collections
+  record create-track-collection-params {
+    /// The name of the collection
+    name: string
+  }
+  create-track-collection: func(params: create-track-collection-params) -> result<string, string>;
+
+  /// Get the details of audio collections
+  record get-track-collection-params {
+    /// Collection ID
+    id: string,
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<list<get-track-collection-list-embed-item-enum>>,
+    /// Code to retrieve a shared collection
+    share-code: option<string>
+  }
+  get-track-collection: func(params: get-track-collection-params) -> result<string, string>;
+
+  /// Rename audio collections
+  record rename-track-collection-params {
+    /// Collection ID
+    id: string,
+    /// The new name of the collection
+    name: string
+  }
+  rename-track-collection: func(params: rename-track-collection-params) -> result<string, string>;
+
+  /// Delete audio collections
+  record delete-track-collection-params {
+    /// Collection ID
+    id: string
+  }
+  delete-track-collection: func(params: delete-track-collection-params) -> result<string, string>;
+
+  /// Get the contents of audio collections
+  record get-track-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Code to retrieve the contents of a shared collection
+    share-code: option<string>,
+    /// Sort order
+    sort: option<get-track-collection-items-sort-enum>
+  }
+  get-track-collection-items: func(params: get-track-collection-items-params) -> result<string, string>;
+
+  /// Add audio tracks to collections
+  record add-track-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// List of items
+    items: list<collection-item>
+  }
+  add-track-collection-items: func(params: add-track-collection-items-params) -> result<string, string>;
+
+  /// Remove audio tracks from collections
+  record delete-track-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// One or more item IDs to remove from the collection
+    item-id: option<list<string>>
+  }
+  delete-track-collection-items: func(params: delete-track-collection-items-params) -> result<string, string>;
+
+  /// List audio genres
+  record list-genres-params {
+    /// Which language the genres will be returned
+    language: option<string>
+  }
+  list-genres: func(params: list-genres-params) -> result<string, string>;
+
+  /// List audio instruments
+  record list-instruments-params {
+    /// Which language the instruments will be returned in
+    language: option<string>
+  }
+  list-instruments: func(params: list-instruments-params) -> result<string, string>;
+
+  /// List audio licenses
+  record get-track-license-list-params {
+    /// Show licenses for the specified track ID
+    audio-id: option<string>,
+    /// Restrict results by license. Prepending a `-` sign will exclude results by license
+    license: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort order
+    sort: option<get-track-collection-items-sort-enum>,
+    /// Filter licenses by username of licensee
+    username: option<string>,
+    /// Show licenses created on or after the specified date
+    start-date: option<string>,
+    /// Show licenses created before the specified date
+    end-date: option<string>,
+    /// Filter licenses by download availability
+    download-availability: option<get-track-license-list-download-availability-enum>,
+    /// Set to true to see license history for all members of your team.
+    team-history: option<bool>
+  }
+  get-track-license-list: func(params: get-track-license-list-params) -> result<string, string>;
+
+  /// License audio tracks
+  record license-track-params {
+    /// License type
+    license: option<license-track-license-enum>,
+    /// The ID of the search that led to licensing this track
+    search-id: option<string>,
+    /// List of audio tracks to license
+    audio: list<license-audio>
+  }
+  license-track: func(params: license-track-params) -> result<string, string>;
+
+  /// Download audio tracks
+  record download-tracks-params {
+    /// License ID
+    id: string
+  }
+  download-tracks: func(params: download-tracks-params) -> result<string, string>;
+
+  /// List audio moods
+  record list-moods-params {
+    /// Which language the moods will be returned in
+    language: option<string>
+  }
+  list-moods: func(params: list-moods-params) -> result<string, string>;
+
+  /// Search for tracks
+  record search-tracks-params {
+    /// Show tracks with one of the specified artist names or IDs
+    artists: option<list<string>>,
+    /// (Deprecated; use bpm_from and bpm_to instead) Show tracks with the specified beats per minute
+    bpm: option<string>,
+    /// Show tracks with the specified beats per minute or faster
+    bpm-from: option<string>,
+    /// Show tracks with the specified beats per minute or slower
+    bpm-to: option<string>,
+    /// Show tracks with the specified duration in seconds
+    duration: option<string>,
+    /// Show tracks with the specified duration or longer in seconds
+    duration-from: option<string>,
+    /// Show tracks with the specified duration or shorter in seconds
+    duration-to: option<string>,
+    /// Show tracks with each of the specified genres; to get the list of genres, use `GET /v2/audio/genres`
+    genre: option<list<string>>,
+    /// Show instrumental music only
+    is-instrumental: option<string>,
+    /// Show tracks with each of the specified instruments; to get the list of instruments, use `GET /v2/audio/instruments`
+    instruments: option<list<string>>,
+    /// Show tracks with each of the specified moods; to get the list of moods, use `GET /v2/audio/moods`
+    moods: option<list<string>>,
+    /// Page number
+    page: option<string>,
+    /// Number of results per page
+    per-page: option<string>,
+    /// One or more search terms separated by spaces
+    query: option<string>,
+    /// Sort by
+    sort: option<string>,
+    /// Sort order
+    sort-order: option<string>,
+    /// Show tracks with the specified vocal description (male, female)
+    vocal-description: option<string>,
+    /// Amount of detail to render in the response
+    view: option<string>,
+    /// Fields to display in the response; see the documentation for the fields parameter in the overview section
+    fields: option<string>,
+    /// Which library to search
+    library: option<string>,
+    /// Which language to search in
+    language: option<string>
+  }
+  search-tracks: func(params: search-tracks-params) -> result<string, string>;
+
+  /// Get details about audio tracks
+  record get-track-params {
+    /// Audio track ID
+    id: string,
+    /// Amount of detail to render in the response
+    view: option<get-track-list-view-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-track: func(params: get-track-params) -> result<string, string>;
+
+}
+
+interface images {
+  enum bulk-search-images-image-type-item-enum {
+    photo,
+    illustration,
+    vector,
+  }
+
+  enum bulk-search-images-license-item-enum {
+    commercial,
+    editorial,
+    enhanced,
+  }
+
+  enum bulk-search-images-orientation-enum {
+    horizontal,
+    vertical,
+  }
+
+  enum bulk-search-images-people-age-enum {
+    infants,
+    children,
+    teenagers,
+    v20s,
+    v30s,
+    v40s,
+    v50s,
+    v60s,
+    older,
+  }
+
+  enum bulk-search-images-people-ethnicity-item-enum {
+    african,
+    african-american,
+    black,
+    brazilian,
+    chinese,
+    caucasian,
+    east-asian,
+    hispanic,
+    japanese,
+    middle-eastern,
+    native-american,
+    pacific-islander,
+    south-asian,
+    southeast-asian,
+    other,
+    not-african,
+    not-african-american,
+    not-black,
+    not-brazilian,
+    not-chinese,
+    not-caucasian,
+    not-east-asian,
+    not-hispanic,
+    not-japanese,
+    not-middle-eastern,
+    not-native-american,
+    not-pacific-islander,
+    not-south-asian,
+    not-southeast-asian,
+    not-other,
+  }
+
+  enum bulk-search-images-people-gender-enum {
+    male,
+    female,
+    both,
+  }
+
+  enum bulk-search-images-sort-enum {
+    newest,
+    popular,
+    relevance,
+    random,
+  }
+
+  enum bulk-search-images-view-enum {
+    minimal,
+    full,
+  }
+
+  enum get-image-collection-list-embed-item-enum {
+    share-code,
+    share-url,
+  }
+
+  enum get-featured-image-collection-list-embed-enum {
+    share-url,
+  }
+
+  enum get-featured-image-collection-list-type-op-item-enum {
+    photo,
+    editorial,
+    vector,
+  }
+
+  enum get-featured-image-collection-list-asset-hint-enum {
+    v1x,
+    v2x,
+  }
+
+  enum get-image-collection-items-sort-enum {
+    newest,
+    oldest,
+  }
+
+  enum get-image-license-list-download-availability-enum {
+    all,
+    downloadable,
+    non-downloadable,
+  }
+
+  enum license-images-format-enum {
+    eps,
+    jpg,
+  }
+
+  enum license-images-size-enum {
+    small,
+    medium,
+    huge,
+    vector,
+    custom,
+  }
+
+  enum redownload-image-size-enum {
+    small,
+    medium,
+    huge,
+    supersize,
+    vector,
+  }
+
+  enum search-images-ai-industry-enum {
+    automotive,
+    cpg,
+    finance,
+    healthcare,
+    retail,
+    technology,
+  }
+
+  enum search-images-ai-objective-enum {
+    awareness,
+    traffic,
+    conversions,
+  }
+
+  enum get-updated-images-type-op-item-enum {
+    addition,
+    deletion,
+    edit,
+  }
+
+  /// Language code
+  record language {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Metadata about an item that is part of a collection
+  record collection-item {
+    /// The date the item was added to the collection
+    added-time: option<string>,
+    /// ID of the item
+    id: string,
+    /// The media type of the item, such as image, video, or audio
+    media-type: option<string>
+  }
+
+  /// Cookie object
+  record cookie {
+    /// The name of the cookie
+    name: string,
+    /// The value of the cookie
+    value: string
+  }
+
+  /// Run multiple image searches
+  record bulk-search-images-params {
+    /// Show images added on the specified date
+    added-date: option<string>,
+    /// Show images added on or after the specified date
+    added-date-start: option<string>,
+    /// Show images with the specified aspect ratio or higher, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio-min: option<f64>,
+    /// Show images with the specified aspect ratio or lower, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio-max: option<f64>,
+    /// Show images with the specified aspect ratio, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio: option<f64>,
+    /// Show images added before the specified date
+    added-date-end: option<string>,
+    /// Show images with the specified Shutterstock-defined category; specify a category name or ID
+    category: option<string>,
+    /// Specify either a hexadecimal color in the format '4F21EA' or 'grayscale'; the API returns images that use similar colors
+    color: option<string>,
+    /// Show images with the specified contributor names or IDs, allows multiple
+    contributor: option<list<string>>,
+    /// Show images from contributors in one or more specified countries, or start with NOT to exclude a country from the search
+    contributor-country: option<string>,
+    /// Fields to display in the response; see the documentation for the fields parameter in the overview section
+    fields: option<string>,
+    /// (Deprecated; use height_from and height_to instead) Show images with the specified height
+    height: option<s32>,
+    /// Show images with the specified height or larger, in pixels
+    height-from: option<s32>,
+    /// Show images with the specified height or smaller, in pixels
+    height-to: option<s32>,
+    /// Show images of the specified type
+    image-type: option<list<bulk-search-images-image-type-item-enum>>,
+    /// Hide results with potentially unsafe keywords
+    keyword-safe-search: option<bool>,
+    /// Set query and result language (uses Accept-Language header if not set)
+    language: option<language>,
+    /// Show only images with the specified license
+    license: option<list<bulk-search-images-license-item-enum>>,
+    /// Show image results with the specified model IDs
+    model: option<list<string>>,
+    /// Show image results with horizontal or vertical orientation
+    orientation: option<bulk-search-images-orientation-enum>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Show images of people with a signed model release
+    people-model-released: option<bool>,
+    /// Show images that feature people of the specified age category
+    people-age: option<bulk-search-images-people-age-enum>,
+    /// Show images with people of the specified ethnicities, or start with NOT to show images without those ethnicities
+    people-ethnicity: option<list<bulk-search-images-people-ethnicity-item-enum>>,
+    /// Show images with people of the specified gender
+    people-gender: option<bulk-search-images-people-gender-enum>,
+    /// Show images with the specified number of people
+    people-number: option<s32>,
+    /// Raise or lower search result rankings based on the result's relevance to a specified region; you can provide a country code or an IP address from which the API infers a country
+    region: option<string>,
+    /// Enable or disable safe search
+    safe: option<bool>,
+    /// Sort by
+    sort: option<bulk-search-images-sort-enum>,
+    /// Spellcheck the search query and return results on suggested spellings
+    spellcheck-query: option<bool>,
+    /// Amount of detail to render in the response
+    view: option<bulk-search-images-view-enum>,
+    /// (Deprecated; use width_from and width_to instead) Show images with the specified width
+    width: option<s32>,
+    /// Show images with the specified width or larger, in pixels
+    width-from: option<s32>,
+    /// Show images with the specified width or smaller, in pixels
+    width-to: option<s32>,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  bulk-search-images: func(params: bulk-search-images-params) -> result<string, string>;
+
+  /// List images
+  record get-image-list-params {
+    /// One or more image IDs
+    id: list<string>,
+    /// Amount of detail to render in the response
+    view: option<bulk-search-images-view-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-image-list: func(params: get-image-list-params) -> result<string, string>;
+
+  /// List image categories
+  record list-image-categories-params {
+    /// Language for the keywords and categories in the response
+    language: option<language>
+  }
+  list-image-categories: func(params: list-image-categories-params) -> result<string, string>;
+
+  /// List image collections
+  record get-image-collection-list-params {
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<list<get-image-collection-list-embed-item-enum>>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+  get-image-collection-list: func(params: get-image-collection-list-params) -> result<string, string>;
+
+  /// Create image collections
+  record create-image-collection-params {
+    /// The name of the collection
+    name: string
+  }
+  create-image-collection: func(params: create-image-collection-params) -> result<string, string>;
+
+  /// List featured image collections
+  record get-featured-image-collection-list-params {
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<get-featured-image-collection-list-embed-enum>,
+    /// The types of collections to return
+    type-op: option<list<get-featured-image-collection-list-type-op-item-enum>>,
+    /// Cover image size
+    asset-hint: option<get-featured-image-collection-list-asset-hint-enum>
+  }
+  get-featured-image-collection-list: func(params: get-featured-image-collection-list-params) -> result<string, string>;
+
+  /// Get the details of featured image collections
+  record get-featured-image-collection-params {
+    /// Collection ID
+    id: string,
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<get-featured-image-collection-list-embed-enum>,
+    /// Cover image size
+    asset-hint: option<get-featured-image-collection-list-asset-hint-enum>
+  }
+  get-featured-image-collection: func(params: get-featured-image-collection-params) -> result<string, string>;
+
+  /// Get the contents of featured image collections
+  record get-featured-image-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+  get-featured-image-collection-items: func(params: get-featured-image-collection-items-params) -> result<string, string>;
+
+  /// Get the details of image collections
+  record get-image-collection-params {
+    /// Collection ID
+    id: string,
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<list<get-image-collection-list-embed-item-enum>>,
+    /// Code to retrieve a shared collection
+    share-code: option<string>
+  }
+  get-image-collection: func(params: get-image-collection-params) -> result<string, string>;
+
+  /// Rename image collections
+  record rename-image-collection-params {
+    /// Collection ID
+    id: string,
+    /// The new name of the collection
+    name: string
+  }
+  rename-image-collection: func(params: rename-image-collection-params) -> result<string, string>;
+
+  /// Delete image collections
+  record delete-image-collection-params {
+    /// Collection ID
+    id: string
+  }
+  delete-image-collection: func(params: delete-image-collection-params) -> result<string, string>;
+
+  /// Get the contents of image collections
+  record get-image-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Code to retrieve the contents of a shared collection
+    share-code: option<string>,
+    /// Sort order
+    sort: option<get-image-collection-items-sort-enum>
+  }
+  get-image-collection-items: func(params: get-image-collection-items-params) -> result<string, string>;
+
+  /// Add images to collections
+  record add-image-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// List of items
+    items: list<collection-item>
+  }
+  add-image-collection-items: func(params: add-image-collection-items-params) -> result<string, string>;
+
+  /// Remove images from collections
+  record delete-image-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// One or more image IDs to remove from the collection
+    item-id: option<list<string>>
+  }
+  delete-image-collection-items: func(params: delete-image-collection-items-params) -> result<string, string>;
+
+  /// List image licenses
+  record get-image-license-list-params {
+    /// Show licenses for the specified image ID
+    image-id: option<string>,
+    /// Show images that are available with the specified license, such as `standard` or `enhanced`; prepending a `-` sign excludes results from that license
+    license: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort order
+    sort: option<get-image-collection-items-sort-enum>,
+    /// Filter licenses by username of licensee
+    username: option<string>,
+    /// Show licenses created on or after the specified date
+    start-date: option<string>,
+    /// Show licenses created before the specified date
+    end-date: option<string>,
+    /// Filter licenses by download availability
+    download-availability: option<get-image-license-list-download-availability-enum>,
+    /// Set to true to see license history for all members of your team.
+    team-history: option<bool>
+  }
+  get-image-license-list: func(params: get-image-license-list-params) -> result<string, string>;
+
+  /// License images
+  record license-images-params {
+    /// Subscription ID to use to license the image
+    subscription-id: option<string>,
+    /// (Deprecated) Image format
+    format: option<license-images-format-enum>,
+    /// Image size
+    size: option<license-images-size-enum>,
+    /// Search ID that was provided in the results of an image search
+    search-id: option<string>,
+    /// Images to create licenses for
+    images: list<string>
+  }
+  license-images: func(params: license-images-params) -> result<string, string>;
+
+  /// Download images
+  record download-image-params {
+    /// License ID
+    id: string,
+    auth-cookie: option<cookie>,
+    /// (Deprecated)
+    show-modal: option<bool>,
+    /// Size of the image
+    size: option<redownload-image-size-enum>,
+    /// (Deprecated)
+    verification-code: option<string>
+  }
+  download-image: func(params: download-image-params) -> result<string, string>;
+
+  /// List recommended images
+  record get-image-recommendations-params {
+    /// Image IDs
+    id: list<string>,
+    /// Maximum number of results returned in the response
+    max-items: option<s32>,
+    /// Restrict results to safe images
+    safe: option<bool>
+  }
+  get-image-recommendations: func(params: get-image-recommendations-params) -> result<string, string>;
+
+  /// Search for images
+  record search-images-params {
+    /// Show images added on the specified date
+    added-date: option<string>,
+    /// Show images added on or after the specified date
+    added-date-start: option<string>,
+    /// Show images with the specified aspect ratio or higher, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio-min: option<f64>,
+    /// Show images with the specified aspect ratio or lower, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio-max: option<f64>,
+    /// Show images with the specified aspect ratio, using a positive decimal of the width divided by the height, such as 1.7778 for a 16:9 image
+    aspect-ratio: option<f64>,
+    /// Set to true and specify the `ai_objective` and `ai_industry` parameters to use AI-powered search; the API returns information about how well images meet the objective for the industry 
+    ai-search: option<bool>,
+    /// For AI-powered search, specify the maximum number of labels to return
+    ai-labels-limit: option<s32>,
+    /// For AI-powered search, specify the industry to target; requires that the `ai_search` parameter is set to true
+    ai-industry: option<search-images-ai-industry-enum>,
+    /// For AI-powered search, specify the goal of the media; requires that the `ai_search` parameter is set to true
+    ai-objective: option<search-images-ai-objective-enum>,
+    /// Show images added before the specified date
+    added-date-end: option<string>,
+    /// Show images with the specified Shutterstock-defined category; specify a category name or ID
+    category: option<string>,
+    /// Specify either a hexadecimal color in the format '4F21EA' or 'grayscale'; the API returns images that use similar colors
+    color: option<string>,
+    /// Show images with the specified contributor names or IDs, allows multiple
+    contributor: option<list<string>>,
+    /// Show images from contributors in one or more specified countries, or start with NOT to exclude a country from the search
+    contributor-country: option<string>,
+    /// Fields to display in the response; see the documentation for the fields parameter in the overview section
+    fields: option<string>,
+    /// (Deprecated; use height_from and height_to instead) Show images with the specified height
+    height: option<s32>,
+    /// Show images with the specified height or larger, in pixels
+    height-from: option<s32>,
+    /// Show images with the specified height or smaller, in pixels
+    height-to: option<s32>,
+    /// Show images of the specified type
+    image-type: option<list<bulk-search-images-image-type-item-enum>>,
+    /// Hide results with potentially unsafe keywords
+    keyword-safe-search: option<bool>,
+    /// Set query and result language (uses Accept-Language header if not set)
+    language: option<language>,
+    /// Show only images with the specified license
+    license: option<list<bulk-search-images-license-item-enum>>,
+    /// Show image results with the specified model IDs
+    model: option<list<string>>,
+    /// Show image results with horizontal or vertical orientation
+    orientation: option<bulk-search-images-orientation-enum>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Show images of people with a signed model release
+    people-model-released: option<bool>,
+    /// Show images that feature people of the specified age category
+    people-age: option<bulk-search-images-people-age-enum>,
+    /// Show images with people of the specified ethnicities, or start with NOT to show images without those ethnicities
+    people-ethnicity: option<list<bulk-search-images-people-ethnicity-item-enum>>,
+    /// Show images with people of the specified gender
+    people-gender: option<bulk-search-images-people-gender-enum>,
+    /// Show images with the specified number of people
+    people-number: option<s32>,
+    /// One or more search terms separated by spaces; you can use NOT to filter out images that match a term
+    query: option<string>,
+    /// Raise or lower search result rankings based on the result's relevance to a specified region; you can provide a country code or an IP address from which the API infers a country
+    region: option<string>,
+    /// Enable or disable safe search
+    safe: option<bool>,
+    /// Sort by
+    sort: option<bulk-search-images-sort-enum>,
+    /// Spellcheck the search query and return results on suggested spellings
+    spellcheck-query: option<bool>,
+    /// Amount of detail to render in the response
+    view: option<bulk-search-images-view-enum>,
+    /// (Deprecated; use width_from and width_to instead) Show images with the specified width
+    width: option<s32>,
+    /// Show images with the specified width or larger, in pixels
+    width-from: option<s32>,
+    /// Show images with the specified width or smaller, in pixels
+    width-to: option<s32>
+  }
+  search-images: func(params: search-images-params) -> result<string, string>;
+
+  /// Get suggestions for a search term
+  record get-image-suggestions-params {
+    /// Search term for which you want keyword suggestions
+    query: string,
+    /// Limit the number of suggestions
+    limit: option<s32>
+  }
+  get-image-suggestions: func(params: get-image-suggestions-params) -> result<string, string>;
+
+  /// Get keywords from text
+  record get-image-keyword-suggestions-params {
+    /// Plain text to extract keywords from
+    text: string
+  }
+  get-image-keyword-suggestions: func(params: get-image-keyword-suggestions-params) -> result<string, string>;
+
+  /// List updated images
+  record get-updated-images-params {
+    /// Show images that were added, deleted, or edited; by default, the endpoint returns images that were updated in any of these ways
+    type-op: option<list<get-updated-images-type-op-item-enum>>,
+    /// Show images updated on or after the specified date
+    start-date: option<string>,
+    /// Show images updated before the specified date
+    end-date: option<string>,
+    /// Show images updated in the specified time period, where the time period is an interval (like SQL INTERVAL) such as 1 DAY, 6 HOUR, or 30 MINUTE; the default is 1 HOUR, which shows images that were updated in the hour preceding the request
+    interval: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort order
+    sort: option<get-image-collection-items-sort-enum>
+  }
+  get-updated-images: func(params: get-updated-images-params) -> result<string, string>;
+
+  /// Get details about images
+  record get-image-params {
+    /// Image ID
+    id: string,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Amount of detail to render in the response
+    view: option<bulk-search-images-view-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-image: func(params: get-image-params) -> result<string, string>;
+
+  /// List similar images
+  record list-similar-images-params {
+    /// Image ID
+    id: string,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Amount of detail to render in the response
+    view: option<bulk-search-images-view-enum>
+  }
+  list-similar-images: func(params: list-similar-images-params) -> result<string, string>;
+
+}
+
+interface catalog {
+  enum get-collections-sort-enum {
+    newest,
+    oldest,
+  }
+
+  enum create-catalog-collection-visibility-enum {
+    private,
+    public,
+  }
+
+  enum search-catalog-asset-type-item-enum {
+    image,
+    video,
+    audio,
+    elements,
+    editorial-image,
+    editorial-video,
+  }
+
+  record create-catalog-collection-item {
+    asset: create-catalog-collection-item-asset
+  }
+
+  record create-catalog-collection-item-asset {
+    id: option<string>,
+    type-op: string
+  }
+
+  record update-catalog-collection-cover-asset {
+    id: string
+  }
+
+  record remove-catalog-collection-item {
+    id: string
+  }
+
+  /// List catalog collections
+  record get-collections-params {
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort by
+    sort: option<get-collections-sort-enum>,
+    /// Set to true to omit collections that you own and return only collections  that are shared with you
+    shared: option<bool>
+  }
+  get-collections: func(params: get-collections-params) -> result<string, string>;
+
+  /// Create catalog collections
+  record create-collection-params {
+    items: option<list<create-catalog-collection-item>>,
+    name: string,
+    visibility: option<create-catalog-collection-visibility-enum>
+  }
+  create-collection: func(params: create-collection-params) -> result<string, string>;
+
+  /// Update collection metadata
+  record update-collection-params {
+    /// ID of collection that needs to be modified
+    collection-id: string,
+    cover-asset: option<update-catalog-collection-cover-asset>,
+    name: option<string>,
+    visibility: option<create-catalog-collection-visibility-enum>
+  }
+  update-collection: func(params: update-collection-params) -> result<string, string>;
+
+  /// Delete catalog collections
+  record delete-collection-params {
+    /// The ID of the collection to delete
+    collection-id: string
+  }
+  delete-collection: func(params: delete-collection-params) -> result<string, string>;
+
+  /// Add items to catalog collections
+  record add-to-collection-params {
+    /// The ID of the collection to add assets to
+    collection-id: string,
+    items: list<create-catalog-collection-item>
+  }
+  add-to-collection: func(params: add-to-collection-params) -> result<string, string>;
+
+  /// Remove items from catalog collection
+  record delete-from-collection-params {
+    /// The ID of the collection to remove assets from
+    collection-id: string,
+    items: list<remove-catalog-collection-item>
+  }
+  delete-from-collection: func(params: delete-from-collection-params) -> result<string, string>;
+
+  /// Search catalogs for assets
+  record search-catalog-params {
+    /// Sort by
+    sort: option<get-collections-sort-enum>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// One or more search terms separated by spaces
+    query: option<string>,
+    /// Filter by collection id
+    collection-id: option<list<string>>,
+    /// Filter by asset type
+    asset-type: option<list<search-catalog-asset-type-item-enum>>
+  }
+  search-catalog: func(params: search-catalog-params) -> result<string, string>;
+
+}
+
+interface contributors {
+  enum get-contributor-collections-list-sort-enum {
+    newest,
+    last-updated,
+    item-count,
+  }
+
+  enum get-contributor-collection-items-sort-enum {
+    newest,
+    oldest,
+  }
+
+  /// Get details about multiple contributors
+  record get-contributor-list-params {
+    /// One or more contributor IDs
+    id: list<string>
+  }
+  get-contributor-list: func(params: get-contributor-list-params) -> result<string, string>;
+
+  /// Get details about a single contributor
+  record get-contributor-params {
+    /// Contributor ID
+    contributor-id: string
+  }
+  get-contributor: func(params: get-contributor-params) -> result<string, string>;
+
+  /// List contributors' collections
+  record get-contributor-collections-list-params {
+    /// Contributor ID
+    contributor-id: string,
+    /// Sort order
+    sort: option<get-contributor-collections-list-sort-enum>
+  }
+  get-contributor-collections-list: func(params: get-contributor-collections-list-params) -> result<string, string>;
+
+  /// Get details about contributors' collections
+  record get-contributor-collections-params {
+    /// Contributor ID
+    contributor-id: string,
+    /// Collection ID that belongs to the contributor
+    id: string
+  }
+  get-contributor-collections: func(params: get-contributor-collections-params) -> result<string, string>;
+
+  /// Get the items in contributors' collections
+  record get-contributor-collection-items-params {
+    /// Contributor ID
+    contributor-id: string,
+    /// Collection ID that belongs to the contributor
+    id: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort order
+    sort: option<get-contributor-collection-items-sort-enum>
+  }
+  get-contributor-collection-items: func(params: get-contributor-collection-items-params) -> result<string, string>;
+
+}
+
+interface computer-vision {
+  enum get-similar-images-license-item-enum {
+    commercial,
+    editorial,
+  }
+
+  enum get-similar-images-view-enum {
+    minimal,
+    full,
+  }
+
+  /// Language code
+  record language {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Upload images
+  record upload-image-params {
+    /// A Base 64 encoded jpeg or png; images can be no larger than 10mb and can be no larger than 10,000 pixels in width or height
+    base64-image: string
+  }
+  upload-image: func(params: upload-image-params) -> result<string, string>;
+
+  /// List suggested keywords
+  record get-keywords-params {
+    /// The asset ID or upload ID to suggest keywords for
+    asset-id: string
+  }
+  get-keywords: func(params: get-keywords-params) -> result<string, string>;
+
+  /// List similar images
+  record get-similar-images-params {
+    /// The asset ID or upload ID to find similar images for
+    asset-id: string,
+    /// Show only images with the specified license
+    license: option<list<get-similar-images-license-item-enum>>,
+    /// Enable or disable safe search
+    safe: option<bool>,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Amount of detail to render in the response
+    view: option<get-similar-images-view-enum>
+  }
+  get-similar-images: func(params: get-similar-images-params) -> result<string, string>;
+
+  /// List similar videos
+  record get-similar-videos-params {
+    /// The asset ID or upload ID to find similar videos for
+    asset-id: string,
+    /// Show only videos with the specified license
+    license: option<list<get-similar-images-license-item-enum>>,
+    /// Enable or disable safe search
+    safe: option<bool>,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Amount of detail to render in the response
+    view: option<get-similar-images-view-enum>
+  }
+  get-similar-videos: func(params: get-similar-videos-params) -> result<string, string>;
+
+  /// Upload ephemeral images
+  record upload-ephemeral-image-params {
+    /// A Base 64 encoded jpeg or png; images can be no larger than 10mb and can be no larger than 10,000 pixels in width or height
+    base64-image: string
+  }
+  upload-ephemeral-image: func(params: upload-ephemeral-image-params) -> result<string, string>;
+
+}
+
+interface editorial-images {
+  enum get-editorial-image-license-list-sort-enum {
+    newest,
+    oldest,
+  }
+
+  enum get-editorial-image-license-list-download-availability-enum {
+    all,
+    downloadable,
+    non-downloadable,
+  }
+
+  enum license-editorial-content-size-enum {
+    small,
+    medium,
+    original,
+  }
+
+  enum search-editorial-images-sort-enum {
+    relevant,
+    newest,
+    oldest,
+  }
+
+  enum get-updated-editorial-images-type-op-enum {
+    edit,
+    addition,
+  }
+
+  /// A valid ISO 3166-1 Alpha-2 or ISO 3166-1 Alpha-3 code.
+  record iso-country-code {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Individual editorial content to license
+  record license-editorial-content {
+    /// Editorial ID
+    editorial-id: string,
+    /// License agreement to use for licensing
+    license: string,
+    metadata: option<license-request-metadata>,
+    /// Asset size to download
+    size: option<license-editorial-content-size-enum>
+  }
+
+  /// Additional information for license requests for enterprise accounts and API subscriptions, 4 fields maximum; which fields are required is set by the account holder
+  record license-request-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// (Deprecated) List editorial categories
+  get-editorial-categories: func() -> result<string, string>;
+
+  /// List editorial categories
+  list-editorial-image-categories: func() -> result<string, string>;
+
+  /// List editorial image licenses
+  record get-editorial-image-license-list-params {
+    /// Show licenses for the specified editorial image ID
+    image-id: option<string>,
+    /// Show editorial images that are available with the specified license name
+    license: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort order
+    sort: option<get-editorial-image-license-list-sort-enum>,
+    /// Filter licenses by username of licensee
+    username: option<string>,
+    /// Show licenses created on or after the specified date
+    start-date: option<string>,
+    /// Show licenses created before the specified date
+    end-date: option<string>,
+    /// Filter licenses by download availability
+    download-availability: option<get-editorial-image-license-list-download-availability-enum>,
+    /// Set to true to see license history for all members of your team.
+    team-history: option<bool>
+  }
+  get-editorial-image-license-list: func(params: get-editorial-image-license-list-params) -> result<string, string>;
+
+  /// License editorial content
+  record license-editorial-images-params {
+    country: iso-country-code,
+    /// Editorial content to license
+    editorial: list<license-editorial-content>
+  }
+  license-editorial-images: func(params: license-editorial-images-params) -> result<string, string>;
+
+  /// Get editorial livefeed list
+  record get-editorial-image-livefeed-list-params {
+    /// Returns only livefeeds that are available for distribution in a certain country
+    country: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+  get-editorial-image-livefeed-list: func(params: get-editorial-image-livefeed-list-params) -> result<string, string>;
+
+  /// Get editorial livefeed
+  record get-editorial-image-livefeed-params {
+    /// Editorial livefeed ID; must be an URI encoded string
+    id: string,
+    /// Returns only if the livefeed is available for distribution in a certain country
+    country: string
+  }
+  get-editorial-image-livefeed: func(params: get-editorial-image-livefeed-params) -> result<string, string>;
+
+  /// Get editorial livefeed items
+  record get-editorial-image-livefeed-items-params {
+    /// Editorial livefeed ID; must be an URI encoded string
+    id: string,
+    /// Returns only if the livefeed items are available for distribution in a certain country
+    country: string
+  }
+  get-editorial-image-livefeed-items: func(params: get-editorial-image-livefeed-items-params) -> result<string, string>;
+
+  /// Search editorial images
+  record search-editorial-images-params {
+    /// One or more search terms separated by spaces
+    query: option<string>,
+    /// Sort by
+    sort: option<search-editorial-images-sort-enum>,
+    /// Show editorial content with each of the specified editorial categories; specify category names in a comma-separated list
+    category: option<string>,
+    /// Show only editorial content that is available for distribution in a certain country
+    country: string,
+    /// Show only editorial content from certain suppliers
+    supplier-code: option<list<string>>,
+    /// Show only editorial content generated on or after a specific date
+    date-start: option<string>,
+    /// Show only editorial content generated on or before a specific date
+    date-end: option<string>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
+    cursor: option<string>
+  }
+  search-editorial-images: func(params: search-editorial-images-params) -> result<string, string>;
+
+  /// List updated content
+  record get-updated-editorial-images-params {
+    /// Specify `addition` to return only images that were added or `edit` to return only images that were edited or deleted
+    type-op: get-updated-editorial-images-type-op-enum,
+    /// Show images images added, edited, or deleted after the specified date. Acceptable range is 1970-01-01T00:00:01 to 2038-01-19T00:00:00.
+    date-updated-start: string,
+    /// Show images images added, edited, or deleted before the specified date. Acceptable range is 1970-01-01T00:00:01 to 2038-01-19T00:00:00.
+    date-updated-end: string,
+    /// Show images that were taken on or after the specified date; use this parameter if you want recently created images from the collection instead of updated older assets
+    date-taken-start: option<string>,
+    /// Show images that were taken before the specified date
+    date-taken-end: option<string>,
+    /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
+    cursor: option<string>,
+    /// Sort by
+    sort: option<get-editorial-image-license-list-sort-enum>,
+    /// Show only editorial content from certain suppliers
+    supplier-code: option<list<string>>,
+    /// Show only editorial content that is available for distribution in a certain country
+    country: string,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+  get-updated-editorial-images: func(params: get-updated-editorial-images-params) -> result<string, string>;
+
+  /// Get editorial content details
+  record get-editorial-image-params {
+    /// Editorial ID
+    id: string,
+    /// Returns only if the content is available for distribution in a certain country
+    country: string
+  }
+  get-editorial-image: func(params: get-editorial-image-params) -> result<string, string>;
+
+  /// (Deprecated) License editorial content
+  record license-editorial-image-params {
+    country: iso-country-code,
+    /// Editorial content to license
+    editorial: list<license-editorial-content>
+  }
+  license-editorial-image: func(params: license-editorial-image-params) -> result<string, string>;
+
+  /// (Deprecated) Get editorial livefeed list
+  record get-editorial-livefeed-list-params {
+    /// Returns only livefeeds that are available for distribution in a certain country
+    country: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+  get-editorial-livefeed-list: func(params: get-editorial-livefeed-list-params) -> result<string, string>;
+
+  /// (Deprecated) Get editorial livefeed
+  record get-editorial-livefeed-params {
+    /// Editorial livefeed ID; must be an URI encoded string
+    id: string,
+    /// Returns only if the livefeed is available for distribution in a certain country
+    country: string
+  }
+  get-editorial-livefeed: func(params: get-editorial-livefeed-params) -> result<string, string>;
+
+  /// (Deprecated) Get editorial livefeed items
+  record get-editorial-livefeed-items-params {
+    /// Editorial livefeed ID; must be an URI encoded string
+    id: string,
+    /// Returns only if the livefeed items are available for distribution in a certain country
+    country: string
+  }
+  get-editorial-livefeed-items: func(params: get-editorial-livefeed-items-params) -> result<string, string>;
+
+  /// (Deprecated) Search editorial content
+  record search-editorial-params {
+    /// One or more search terms separated by spaces
+    query: option<string>,
+    /// Sort by
+    sort: option<search-editorial-images-sort-enum>,
+    /// Show editorial content within a certain editorial category; specify by category name
+    category: option<string>,
+    /// Show only editorial content that is available for distribution in a certain country
+    country: string,
+    /// Show only editorial content from certain suppliers
+    supplier-code: option<list<string>>,
+    /// Show only editorial content generated on or after a specific date
+    date-start: option<string>,
+    /// Show only editorial content generated on or before a specific date
+    date-end: option<string>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
+    cursor: option<string>
+  }
+  search-editorial: func(params: search-editorial-params) -> result<string, string>;
+
+  /// (Deprecated) List updated content
+  record get-updated-editorial-image-params {
+    /// Specify `addition` to return only images that were added or `edit` to return only images that were edited or deleted
+    type-op: get-updated-editorial-images-type-op-enum,
+    /// Show images images added, edited, or deleted after the specified date. Acceptable range is 1970-01-01T00:00:01 to 2038-01-19T00:00:00.
+    date-updated-start: string,
+    /// Show images images added, edited, or deleted before the specified date. Acceptable range is 1970-01-01T00:00:01 to 2038-01-19T00:00:00.
+    date-updated-end: string,
+    /// Show images that were taken on or after the specified date; use this parameter if you want recently created images from the collection instead of updated older assets
+    date-taken-start: option<string>,
+    /// Show images that were taken before the specified date
+    date-taken-end: option<string>,
+    /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
+    cursor: option<string>,
+    /// Sort by
+    sort: option<get-editorial-image-license-list-sort-enum>,
+    /// Show only editorial content from certain suppliers
+    supplier-code: option<list<string>>,
+    /// Show only editorial content that is available for distribution in a certain country
+    country: string,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+  get-updated-editorial-image: func(params: get-updated-editorial-image-params) -> result<string, string>;
+
+  /// (Deprecated) Get editorial content details
+  record get-v2-editorial-id-params {
+    /// Editorial ID
+    id: string,
+    /// Returns only if the content is available for distribution in a certain country
+    country: string,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-v2-editorial-id: func(params: get-v2-editorial-id-params) -> result<string, string>;
+
+}
+
+interface editorial-video {
+  enum get-editorial-video-license-list-sort-enum {
+    newest,
+    oldest,
+  }
+
+  enum get-editorial-video-license-list-download-availability-enum {
+    all,
+    downloadable,
+    non-downloadable,
+  }
+
+  enum license-editorial-video-content-license-enum {
+    premier-editorial-video-digital-only,
+    premier-editorial-video-all-media,
+    premier-editorial-video-all-media-single-territory,
+    premier-editorial-video-comp,
+  }
+
+  enum license-editorial-video-content-size-enum {
+    original,
+  }
+
+  enum search-editorial-videos-sort-enum {
+    relevant,
+    newest,
+    oldest,
+  }
+
+  enum search-editorial-videos-resolution-enum {
+    v4k,
+    high-definition,
+    standard-definition,
+  }
+
+  /// A valid ISO 3166-1 Alpha-2 or ISO 3166-1 Alpha-3 code.
+  record iso-country-code {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Individual editorial video content to license
+  record license-editorial-video-content {
+    /// Editorial ID
+    editorial-id: string,
+    /// License agreement to use for licensing
+    license: license-editorial-video-content-license-enum,
+    metadata: option<license-request-metadata>,
+    /// Asset size to download
+    size: option<license-editorial-video-content-size-enum>
+  }
+
+  /// Additional information for license requests for enterprise accounts and API subscriptions, 4 fields maximum; which fields are required is set by the account holder
+  record license-request-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List editorial video categories
+  list-editorial-video-categories: func() -> result<string, string>;
+
+  /// List editorial video licenses
+  record get-editorial-video-license-list-params {
+    /// Show licenses for the specified editorial video ID
+    video-id: option<string>,
+    /// Show editorial videos that are available with the specified license name
+    license: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort order
+    sort: option<get-editorial-video-license-list-sort-enum>,
+    /// Filter licenses by username of licensee
+    username: option<string>,
+    /// Show licenses created on or after the specified date
+    start-date: option<string>,
+    /// Show licenses created before the specified date
+    end-date: option<string>,
+    /// Filter licenses by download availability
+    download-availability: option<get-editorial-video-license-list-download-availability-enum>,
+    /// Set to true to see license history for all members of your team.
+    team-history: option<bool>
+  }
+  get-editorial-video-license-list: func(params: get-editorial-video-license-list-params) -> result<string, string>;
+
+  /// License editorial video content
+  record license-editorial-video-params {
+    country: iso-country-code,
+    /// Editorial content to license
+    editorial: list<license-editorial-video-content>
+  }
+  license-editorial-video: func(params: license-editorial-video-params) -> result<string, string>;
+
+  /// Search editorial video content
+  record search-editorial-videos-params {
+    /// One or more search terms separated by spaces
+    query: option<string>,
+    /// Sort by
+    sort: option<search-editorial-videos-sort-enum>,
+    /// Show editorial content with each of the specified editorial categories; specify category names in a comma-separated list
+    category: option<string>,
+    /// Show only editorial video content that is available for distribution in a certain country
+    country: string,
+    /// Show only editorial video content from certain suppliers
+    supplier-code: option<list<string>>,
+    /// Show only editorial video content generated on or after a specific date
+    date-start: option<string>,
+    /// Show only editorial video content generated on or before a specific date
+    date-end: option<string>,
+    /// Show only editorial video content with specific resolution
+    resolution: option<search-editorial-videos-resolution-enum>,
+    /// Show only editorial video content generated with specific frames per second
+    fps: option<f64>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
+    cursor: option<string>
+  }
+  search-editorial-videos: func(params: search-editorial-videos-params) -> result<string, string>;
+
+  /// Get editorial video content details
+  record get-editorial-video-params {
+    /// Editorial ID
+    id: string,
+    /// Returns only if the content is available for distribution in a certain country
+    country: string,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-editorial-video: func(params: get-editorial-video-params) -> result<string, string>;
+
+}
+
+interface oauth {
+  enum create-access-token-body-grant-type-enum {
+    authorization-code,
+    client-credentials,
+    refresh-token,
+  }
+
+  enum create-access-token-body-realm-enum {
+    customer,
+    contributor,
+  }
+
+  enum authorize-response-type-enum {
+    code,
+  }
+
+  /// Get access tokens
+  record create-access-token-params {
+    /// Client ID (Consumer Key) of your application
+    client-id: string,
+    /// Client Secret (Consumer Secret) of your application
+    client-secret: option<string>,
+    /// Response code from the /oauth/authorize flow; required if grant_type=authorization_code
+    code: option<string>,
+    /// Whether or not the token expires, expiring tokens come with a refresh_token to renew the access_token
+    expires: option<bool>,
+    /// Grant type: authorization_code generates user tokens, client_credentials generates short-lived client grants
+    grant-type: create-access-token-body-grant-type-enum,
+    /// User type to be authorized (usually 'customer')
+    realm: option<create-access-token-body-realm-enum>,
+    /// Pass this along with grant_type=refresh_token to get a fresh access token
+    refresh-token: option<string>
+  }
+  create-access-token: func(params: create-access-token-params) -> result<string, string>;
+
+  /// Authorize applications
+  record authorize-params {
+    /// Client ID (Consumer Key) of your application
+    client-id: string,
+    /// User type to be authorized (usually 'customer')
+    realm: option<create-access-token-body-realm-enum>,
+    /// The callback URI to send the request to after authorization; must use a host name that is registered with your application
+    redirect-uri: string,
+    /// Type of temporary authorization code that will be used to generate an access code; the only valid value is 'code'
+    response-type: authorize-response-type-enum,
+    /// Space-separated list of scopes to be authorized
+    scope: option<string>,
+    /// Unique value used by the calling app to verify the request
+    state: string
+  }
+  authorize: func(params: authorize-params) -> result<string, string>;
+
+}
+
+interface sound-effects {
+  enum get-sfx-list-details-view-enum {
+    minimal,
+    full,
+  }
+
+  enum get-sfx-list-details-library-enum {
+    shutterstock,
+    premier,
+    premiumbeat,
+  }
+
+  enum get-sfx-license-list-sort-enum {
+    newest,
+    oldest,
+  }
+
+  enum get-sfx-license-list-download-availability-enum {
+    all,
+    downloadable,
+    non-downloadable,
+  }
+
+  enum license-sfx-audio-layout-enum {
+    ambisonic,
+    v5-v1,
+    stereo,
+  }
+
+  enum license-sfx-format-enum {
+    wav,
+    mp3,
+  }
+
+  /// Language code
+  record language {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record license-sfx {
+    audio-layout: option<license-sfx-audio-layout-enum>,
+    format: option<license-sfx-format-enum>,
+    /// ID of the search that led to this licensing event
+    search-id: option<string>,
+    /// ID of the sounds effect being licensed
+    sfx-id: string,
+    /// ID of the subscription to use for the download.
+    subscription-id: string
+  }
+
+  /// List details about sound effects
+  record get-sfx-list-details-params {
+    /// One or more sound effect IDs
+    id: list<string>,
+    /// Amount of detail to render in the response
+    view: option<get-sfx-list-details-view-enum>,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Which library to fetch from
+    library: option<get-sfx-list-details-library-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-sfx-list-details: func(params: get-sfx-list-details-params) -> result<string, string>;
+
+  /// List sound effects licenses
+  record get-sfx-license-list-params {
+    /// Show licenses for the specified sound effects ID
+    sfx-id: option<string>,
+    /// Show sound effects that are available with the specified license, such as `standard` or `enhanced`; prepending a `-` sign excludes results from that license
+    license: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort order
+    sort: option<get-sfx-license-list-sort-enum>,
+    /// Filter licenses by username of licensee
+    username: option<string>,
+    /// Show licenses created on or after the specified date
+    start-date: option<string>,
+    /// Show licenses created before the specified date
+    end-date: option<string>,
+    /// Filter by the license ID
+    license-id: option<string>,
+    /// Filter licenses by download availability
+    download-availability: option<get-sfx-license-list-download-availability-enum>,
+    /// Set to true to see license history for all members of your team.
+    team-history: option<bool>
+  }
+  get-sfx-license-list: func(params: get-sfx-license-list-params) -> result<string, string>;
+
+  /// License sound effects
+  record licenses-sfx-params {
+    /// Sound effects to license for
+    sound-effects: list<license-sfx>
+  }
+  licenses-sfx: func(params: licenses-sfx-params) -> result<string, string>;
+
+  /// Download sound effects
+  record download-sfx-params {
+    /// License ID
+    id: string
+  }
+  download-sfx: func(params: download-sfx-params) -> result<string, string>;
+
+  /// Search for sound effects
+  record search-sfx-params {
+    /// Show sound effects added on the specified date
+    added-date: option<string>,
+    /// Show sound effects added on or after the specified date
+    added-date-start: option<string>,
+    /// Show sound effects added before the specified date
+    added-date-end: option<string>,
+    /// Show sound effects with the specified duration in seconds
+    duration: option<string>,
+    /// Show sound effects with the specified duration or longer in seconds
+    duration-from: option<string>,
+    /// Show sound effects with the specified duration or shorter in seconds
+    duration-to: option<string>,
+    /// Page number
+    page: option<string>,
+    /// Number of results per page
+    per-page: option<string>,
+    /// One or more search terms separated by spaces
+    query: option<string>,
+    /// Enable or disable safe search
+    safe: option<bool>,
+    /// Sort by
+    sort: option<string>,
+    /// Amount of detail to render in the response
+    view: option<string>,
+    /// Set query and result language (uses Accept-Language header if not set)
+    language: option<language>
+  }
+  search-sfx: func(params: search-sfx-params) -> result<string, string>;
+
+  /// Get details about sound effects
+  record get-sfx-details-params {
+    /// Audio track ID
+    id: string,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Amount of detail to render in the response
+    view: option<get-sfx-list-details-view-enum>,
+    /// Which library to fetch from
+    library: option<get-sfx-list-details-library-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-sfx-details: func(params: get-sfx-details-params) -> result<string, string>;
+
+}
+
+interface test {
+  /// Echo text
+  record echo-params {
+    /// Text to echo
+    text: option<string>
+  }
+  echo: func(params: echo-params) -> result<string, string>;
+
+  /// Validate input
+  record validate-params {
+    /// Integer ID
+    id: s32,
+    /// List of tags
+    tag: option<list<string>>,
+    /// User agent
+    user-agent: option<string>
+  }
+  validate: func(params: validate-params) -> result<string, string>;
+
+}
+
+interface users {
+  /// Get user details
+  get-user: func() -> result<string, string>;
+
+  /// Get access token details
+  get-access-token: func() -> result<string, string>;
+
+  /// List user subscriptions
+  get-user-subscription-list: func() -> result<string, string>;
+
+}
+
+interface videos {
+  enum get-video-list-view-enum {
+    minimal,
+    full,
+  }
+
+  enum get-video-collection-list-embed-item-enum {
+    share-code,
+    share-url,
+  }
+
+  enum get-featured-video-collection-list-embed-enum {
+    share-url,
+  }
+
+  enum get-video-collection-items-sort-enum {
+    newest,
+    oldest,
+  }
+
+  enum get-video-license-list-download-availability-enum {
+    all,
+    downloadable,
+    non-downloadable,
+  }
+
+  enum license-videos-size-enum {
+    web,
+    sd,
+    hd,
+    v4k,
+  }
+
+  enum search-videos-aspect-ratio-enum {
+    v4-v3,
+    v16-v9,
+    nonstandard,
+  }
+
+  enum search-videos-license-item-enum {
+    commercial,
+    editorial,
+  }
+
+  enum search-videos-people-age-enum {
+    infants,
+    children,
+    teenagers,
+    v20s,
+    v30s,
+    v40s,
+    v50s,
+    v60s,
+    older,
+  }
+
+  enum search-videos-people-ethnicity-item-enum {
+    african,
+    african-american,
+    black,
+    brazilian,
+    chinese,
+    caucasian,
+    east-asian,
+    hispanic,
+    japanese,
+    middle-eastern,
+    native-american,
+    pacific-islander,
+    south-asian,
+    southeast-asian,
+    other,
+  }
+
+  enum search-videos-people-gender-enum {
+    male,
+    female,
+    both,
+  }
+
+  enum search-videos-resolution-enum {
+    v4k,
+    standard-definition,
+    high-definition,
+  }
+
+  enum search-videos-sort-enum {
+    newest,
+    popular,
+    relevance,
+    random,
+  }
+
+  /// Language code
+  record language {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Metadata about an item that is part of a collection
+  record collection-item {
+    /// The date the item was added to the collection
+    added-time: option<string>,
+    /// ID of the item
+    id: string,
+    /// The media type of the item, such as image, video, or audio
+    media-type: option<string>
+  }
+
+  /// Data required to license a video
+  record license-video {
+    auth-cookie: option<cookie>,
+    /// Whether or not this item is editorial content
+    editorial-acknowledgement: option<bool>,
+    metadata: option<license-request-metadata>,
+    /// Retail price amount as a floating-point number in the transaction currency, such as 12.34; only for rev-share partners
+    price: option<f64>,
+    /// ID of the search that led to this licensing event
+    search-id: option<string>,
+    /// (Deprecated)
+    show-modal: option<bool>,
+    /// Size of the video being licensed
+    size: option<license-videos-size-enum>,
+    /// ID of the subscription used for this license
+    subscription-id: option<string>,
+    /// ID of the video being licensed
+    video-id: string
+  }
+
+  /// Cookie object
+  record cookie {
+    /// The name of the cookie
+    name: string,
+    /// The value of the cookie
+    value: string
+  }
+
+  /// Additional information for license requests for enterprise accounts and API subscriptions, 4 fields maximum; which fields are required is set by the account holder
+  record license-request-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List videos
+  record get-video-list-params {
+    /// One or more video IDs
+    id: list<string>,
+    /// Amount of detail to render in the response
+    view: option<get-video-list-view-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-video-list: func(params: get-video-list-params) -> result<string, string>;
+
+  /// List video categories
+  record list-video-categories-params {
+    /// Language for the keywords and categories in the response
+    language: option<language>
+  }
+  list-video-categories: func(params: list-video-categories-params) -> result<string, string>;
+
+  /// List video collections
+  record get-video-collection-list-params {
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<list<get-video-collection-list-embed-item-enum>>
+  }
+  get-video-collection-list: func(params: get-video-collection-list-params) -> result<string, string>;
+
+  /// Create video collections
+  record create-video-collection-params {
+    /// The name of the collection
+    name: string
+  }
+  create-video-collection: func(params: create-video-collection-params) -> result<string, string>;
+
+  /// List featured video collections
+  record get-featured-video-collection-list-params {
+    /// What information to include in the response, such as a URL to the collection
+    embed: option<get-featured-video-collection-list-embed-enum>
+  }
+  get-featured-video-collection-list: func(params: get-featured-video-collection-list-params) -> result<string, string>;
+
+  /// Get the details of featured video collections
+  record get-featured-video-collection-params {
+    /// Collection ID
+    id: string,
+    /// What information to include in the response, such as a URL to the collection
+    embed: option<get-featured-video-collection-list-embed-enum>
+  }
+  get-featured-video-collection: func(params: get-featured-video-collection-params) -> result<string, string>;
+
+  /// Get the contents of featured video collections
+  record get-featured-video-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+  get-featured-video-collection-items: func(params: get-featured-video-collection-items-params) -> result<string, string>;
+
+  /// Get the details of video collections
+  record get-video-collection-params {
+    /// The ID of the collection to return
+    id: string,
+    /// Which sharing information to include in the response, such as a URL to the collection
+    embed: option<list<get-video-collection-list-embed-item-enum>>,
+    /// Code to retrieve a shared collection
+    share-code: option<string>
+  }
+  get-video-collection: func(params: get-video-collection-params) -> result<string, string>;
+
+  /// Rename video collections
+  record rename-video-collection-params {
+    /// The ID of the collection to rename
+    id: string,
+    /// The new name of the collection
+    name: string
+  }
+  rename-video-collection: func(params: rename-video-collection-params) -> result<string, string>;
+
+  /// Delete video collections
+  record delete-video-collection-params {
+    /// The ID of the collection to delete
+    id: string
+  }
+  delete-video-collection: func(params: delete-video-collection-params) -> result<string, string>;
+
+  /// Get the contents of video collections
+  record get-video-collection-items-params {
+    /// Collection ID
+    id: string,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Code to retrieve the contents of a shared collection
+    share-code: option<string>,
+    /// Sort order
+    sort: option<get-video-collection-items-sort-enum>
+  }
+  get-video-collection-items: func(params: get-video-collection-items-params) -> result<string, string>;
+
+  /// Add videos to collections
+  record add-video-collection-items-params {
+    /// The ID of the collection to which items should be added
+    id: string,
+    /// List of items
+    items: list<collection-item>
+  }
+  add-video-collection-items: func(params: add-video-collection-items-params) -> result<string, string>;
+
+  /// Remove videos from collections
+  record delete-video-collection-items-params {
+    /// The ID of the Collection from which items will be deleted
+    id: string,
+    /// One or more video IDs to remove from the collection
+    item-id: option<list<string>>
+  }
+  delete-video-collection-items: func(params: delete-video-collection-items-params) -> result<string, string>;
+
+  /// List video licenses
+  record get-video-license-list-params {
+    /// Show licenses for the specified video ID
+    video-id: option<string>,
+    /// Show videos that are available with the specified license, such as `standard` or `enhanced`; prepending a `-` sign excludes results from that license
+    license: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort by oldest or newest videos first
+    sort: option<get-video-collection-items-sort-enum>,
+    /// Filter licenses by username of licensee
+    username: option<string>,
+    /// Show licenses created on or after the specified date
+    start-date: option<string>,
+    /// Show licenses created before the specified date
+    end-date: option<string>,
+    /// Filter licenses by download availability
+    download-availability: option<get-video-license-list-download-availability-enum>,
+    /// Set to true to see license history for all members of your team.
+    team-history: option<bool>
+  }
+  get-video-license-list: func(params: get-video-license-list-params) -> result<string, string>;
+
+  /// License videos
+  record license-videos-params {
+    /// The subscription ID to use for licensing
+    subscription-id: option<string>,
+    /// The size of the video to license
+    size: option<license-videos-size-enum>,
+    /// The Search ID that led to this licensing event
+    search-id: option<string>,
+    /// Videos to license
+    videos: list<license-video>
+  }
+  license-videos: func(params: license-videos-params) -> result<string, string>;
+
+  /// Download videos
+  record download-videos-params {
+    /// The license ID of the item to (re)download. The download links in the response are valid for 8 hours.
+    id: string,
+    auth-cookie: option<cookie>,
+    /// (Deprecated)
+    show-modal: option<bool>,
+    /// Size of the video
+    size: option<license-videos-size-enum>,
+    /// (Deprecated)
+    verification-code: option<string>
+  }
+  download-videos: func(params: download-videos-params) -> result<string, string>;
+
+  /// Search for videos
+  record search-videos-params {
+    /// Show videos added on the specified date
+    added-date: option<string>,
+    /// Show videos added on or after the specified date
+    added-date-start: option<string>,
+    /// Show videos added before the specified date
+    added-date-end: option<string>,
+    /// Show videos with the specified aspect ratio
+    aspect-ratio: option<search-videos-aspect-ratio-enum>,
+    /// Show videos with the specified Shutterstock-defined category; specify a category name or ID
+    category: option<string>,
+    /// Show videos with the specified artist names or IDs
+    contributor: option<list<string>>,
+    /// Show videos from contributors in one or more specified countries
+    contributor-country: option<list<string>>,
+    /// (Deprecated; use duration_from and duration_to instead) Show videos with the specified duration in seconds
+    duration: option<s32>,
+    /// Show videos with the specified duration or longer in seconds
+    duration-from: option<s32>,
+    /// Show videos with the specified duration or shorter in seconds
+    duration-to: option<s32>,
+    /// (Deprecated; use fps_from and fps_to instead) Show videos with the specified frames per second
+    fps: option<f64>,
+    /// Show videos with the specified frames per second or more
+    fps-from: option<f64>,
+    /// Show videos with the specified frames per second or fewer
+    fps-to: option<f64>,
+    /// Hide results with potentially unsafe keywords
+    keyword-safe-search: option<bool>,
+    /// Set query and result language (uses Accept-Language header if not set)
+    language: option<language>,
+    /// Show only videos with the specified license or licenses
+    license: option<list<search-videos-license-item-enum>>,
+    /// Show videos with each of the specified models
+    model: option<list<string>>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Show videos that feature people of the specified age range
+    people-age: option<search-videos-people-age-enum>,
+    /// Show videos with people of the specified ethnicities
+    people-ethnicity: option<list<search-videos-people-ethnicity-item-enum>>,
+    /// Show videos with people with the specified gender
+    people-gender: option<search-videos-people-gender-enum>,
+    /// Show videos with the specified number of people
+    people-number: option<s32>,
+    /// Show only videos of people with a signed model release
+    people-model-released: option<bool>,
+    /// One or more search terms separated by spaces; you can use NOT to filter out videos that match a term
+    query: option<string>,
+    /// Show videos with the specified resolution
+    resolution: option<search-videos-resolution-enum>,
+    /// Enable or disable safe search
+    safe: option<bool>,
+    /// Sort by one of these categories
+    sort: option<search-videos-sort-enum>,
+    /// Amount of detail to render in the response
+    view: option<get-video-list-view-enum>
+  }
+  search-videos: func(params: search-videos-params) -> result<string, string>;
+
+  /// Get suggestions for a search term
+  record get-video-suggestions-params {
+    /// Search term for which you want keyword suggestions
+    query: string,
+    /// Limit the number of the suggestions
+    limit: option<s32>
+  }
+  get-video-suggestions: func(params: get-video-suggestions-params) -> result<string, string>;
+
+  /// List updated videos
+  record get-updated-videos-params {
+    /// Show videos updated on or after the specified date
+    start-date: option<string>,
+    /// Show videos updated before the specified date
+    end-date: option<string>,
+    /// Show videos updated in the specified time period, where the time period is an interval (like SQL INTERVAL) such as 1 DAY, 6 HOUR, or 30 MINUTE; the default is 1 HOUR, which shows videos that were updated in the hour preceding the request
+    interval: option<string>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Sort by oldest or newest videos first
+    sort: option<get-video-collection-items-sort-enum>
+  }
+  get-updated-videos: func(params: get-updated-videos-params) -> result<string, string>;
+
+  /// Get details about videos
+  record get-video-params {
+    /// Video ID
+    id: string,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Amount of detail to render in the response
+    view: option<get-video-list-view-enum>,
+    /// The ID of the search that is related to this request
+    search-id: option<string>
+  }
+  get-video: func(params: get-video-params) -> result<string, string>;
+
+  /// List similar videos
+  record find-similar-videos-params {
+    /// The ID of a video for which similar videos should be returned
+    id: string,
+    /// Language for the keywords and categories in the response
+    language: option<language>,
+    /// Page number
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Amount of detail to render in the response
+    view: option<get-video-list-view-enum>
+  }
+  find-similar-videos: func(params: find-similar-videos-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export custom-music;
+  export audio;
+  export images;
+  export catalog;
+  export contributors;
+  export computer-vision;
+  export editorial-images;
+  export editorial-video;
+  export oauth;
+  export sound-effects;
+  export test;
+  export users;
+  export videos;
+}

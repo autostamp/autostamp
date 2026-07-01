@@ -1,0 +1,116 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `apim_key` | header `Ocp-Apim-Subscription-Key` |
+package autostamp:microsoft@0.2.0;
+
+interface analyze {
+  enum analyze-image-details-item-enum {
+    celebrities,
+    landmarks,
+  }
+
+  record analyze-image-params {
+    /// A string indicating which domain-specific details to return. Multiple values should be comma-separated. Valid visual feature types include: Celebrities - identifies celebrities if detected in the image, Landmarks - identifies notable landmarks in the image.
+    details: option<list<analyze-image-details-item-enum>>,
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  analyze-image: func(params: analyze-image-params) -> result<string, string>;
+
+}
+
+
+interface area-of-interest {
+  record get-area-of-interest-params {
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  get-area-of-interest: func(params: get-area-of-interest-params) -> result<string, string>;
+
+}
+
+interface describe {
+  record describe-image-params {
+    /// Maximum number of candidate descriptions to be returned.  The default is 1.
+    max-candidates: option<s32>,
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  describe-image: func(params: describe-image-params) -> result<string, string>;
+
+}
+
+interface detect {
+  record detect-objects-params {
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  detect-objects: func(params: detect-objects-params) -> result<string, string>;
+
+}
+
+interface generate-thumbnail {
+  record generate-thumbnail-params {
+    /// Width of the thumbnail, in pixels. It must be between 1 and 1024. Recommended minimum of 50.
+    width: s32,
+    /// Height of the thumbnail, in pixels. It must be between 1 and 1024. Recommended minimum of 50.
+    height: s32,
+    /// Boolean flag for enabling smart cropping.
+    smart-cropping: option<bool>,
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  generate-thumbnail: func(params: generate-thumbnail-params) -> result<string, string>;
+
+}
+
+interface models {
+  list-models: func() -> result<string, string>;
+
+  record analyze-image-by-domain-params {
+    /// The domain-specific content to recognize.
+    model: string,
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  analyze-image-by-domain: func(params: analyze-image-by-domain-params) -> result<string, string>;
+
+}
+
+interface ocr {
+  record recognize-printed-text-params {
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  recognize-printed-text: func(params: recognize-printed-text-params) -> result<string, string>;
+
+}
+
+interface tag {
+  record tag-image-params {
+    /// Publicly reachable URL of an image.
+    url: string
+  }
+  tag-image: func(params: tag-image-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export analyze;
+  export area-of-interest;
+  export describe;
+  export detect;
+  export generate-thumbnail;
+  export models;
+  export ocr;
+  export tag;
+}

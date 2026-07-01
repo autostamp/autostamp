@@ -1,0 +1,2298 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `oauth2` | `Authorization: Bearer <secret>` |
+package autostamp:bitbucket@0.2.0;
+
+interface addon {
+  /// Update an installed app
+  put-addon: func() -> result<string, string>;
+
+  /// Delete an app
+  delete-addon: func() -> result<string, string>;
+
+  /// List linkers for an app
+  get-addon-linkers: func() -> result<string, string>;
+
+  /// Get a linker for an app
+  get-addon-linkers-linker-key: func() -> result<string, string>;
+
+  /// List linker values for a linker
+  get-addon-linkers-linker-key-values: func() -> result<string, string>;
+
+  /// Create a linker value
+  post-addon-linkers-linker-key-values: func() -> result<string, string>;
+
+  /// Update a linker value
+  put-addon-linkers-linker-key-values: func() -> result<string, string>;
+
+  /// Delete all linker values
+  delete-addon-linkers-linker-key-values: func() -> result<string, string>;
+
+  /// Get a linker value
+  get-addon-linkers-linker-key-values-value-id: func() -> result<string, string>;
+
+  /// Delete a linker value
+  delete-addon-linkers-linker-key-values-value-id: func() -> result<string, string>;
+
+}
+
+
+interface webhooks {
+  /// Get a webhook resource
+  get-hook-events: func() -> result<string, string>;
+
+  /// List subscribable webhook types
+  get-hook-events-subject-type: func() -> result<string, string>;
+
+}
+
+interface pullrequests {
+  enum get-pullrequests-selected-user-state-enum {
+    open,
+    merged,
+    declined,
+    superseded,
+  }
+
+  enum pullrequest-merge-parameters-merge-strategy-enum {
+    merge-commit,
+    squash,
+    fast-forward,
+  }
+
+  /// List pull requests for a user
+  record get-pullrequests-selected-user-params {
+    /// Only return pull requests that are in this state. This parameter can be repeated.
+    state: option<get-pullrequests-selected-user-state-enum>
+  }
+  get-pullrequests-selected-user: func(params: get-pullrequests-selected-user-params) -> result<string, string>;
+
+  /// List pull requests that contain a commit
+  record get-pullrequests-for-commit-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces
+    workspace: string,
+    /// The repository; either the UUID in curly braces, or the slug
+    repo-slug: string,
+    /// The SHA1 of the commit
+    commit: string,
+    /// Which page to retrieve
+    page: option<s32>,
+    /// How many pull requests to retrieve per page
+    pagelen: option<s32>
+  }
+  get-pullrequests-for-commit: func(params: get-pullrequests-for-commit-params) -> result<string, string>;
+
+  /// List default reviewers
+  get-repositories-workspace-repo-slug-default-reviewers: func() -> result<string, string>;
+
+  /// Get a default reviewer
+  get-repositories-workspace-repo-slug-default-reviewers-target-username: func() -> result<string, string>;
+
+  /// Add a user to the default reviewers
+  put-repositories-workspace-repo-slug-default-reviewers-target-username: func() -> result<string, string>;
+
+  /// Remove a user from the default reviewers
+  delete-repositories-workspace-repo-slug-default-reviewers-target-username: func() -> result<string, string>;
+
+  /// List effective default reviewers
+  get-repositories-workspace-repo-slug-effective-default-reviewers: func() -> result<string, string>;
+
+  /// List pull requests
+  record get-repositories-workspace-repo-slug-pullrequests-params {
+    /// Only return pull requests that are in this state. This parameter can be repeated.
+    state: option<get-pullrequests-selected-user-state-enum>
+  }
+  get-repositories-workspace-repo-slug-pullrequests: func(params: get-repositories-workspace-repo-slug-pullrequests-params) -> result<string, string>;
+
+  /// Create a pull request
+  record post-repositories-workspace-repo-slug-pullrequests-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-pullrequests: func(params: post-repositories-workspace-repo-slug-pullrequests-params) -> result<string, string>;
+
+  /// List a pull request activity log
+  get-repositories-workspace-repo-slug-pullrequests-activity: func() -> result<string, string>;
+
+  /// Get a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id: func() -> result<string, string>;
+
+  /// Update a pull request
+  record put-repositories-workspace-repo-slug-pullrequests-pull-request-id-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-repositories-workspace-repo-slug-pullrequests-pull-request-id: func(params: put-repositories-workspace-repo-slug-pullrequests-pull-request-id-params) -> result<string, string>;
+
+  /// List a pull request activity log
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-activity: func() -> result<string, string>;
+
+  /// Approve a pull request
+  post-repositories-workspace-repo-slug-pullrequests-pull-request-id-approve: func() -> result<string, string>;
+
+  /// Unapprove a pull request
+  delete-repositories-workspace-repo-slug-pullrequests-pull-request-id-approve: func() -> result<string, string>;
+
+  /// List comments on a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments: func() -> result<string, string>;
+
+  /// Create a comment on a pull request
+  record post-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments: func(params: post-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-params) -> result<string, string>;
+
+  /// Get a comment on a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-comment-id: func() -> result<string, string>;
+
+  /// Update a comment on a pull request
+  record put-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-comment-id-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-comment-id: func(params: put-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-comment-id-params) -> result<string, string>;
+
+  /// Delete a comment on a pull request
+  delete-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-comment-id: func() -> result<string, string>;
+
+  /// Resolve a comment thread
+  post-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-comment-id-resolve: func() -> result<string, string>;
+
+  /// Reopen a comment thread
+  delete-repositories-workspace-repo-slug-pullrequests-pull-request-id-comments-comment-id-resolve: func() -> result<string, string>;
+
+  /// List commits on a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-commits: func() -> result<string, string>;
+
+  /// Decline a pull request
+  post-repositories-workspace-repo-slug-pullrequests-pull-request-id-decline: func() -> result<string, string>;
+
+  /// List changes in a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-diff: func() -> result<string, string>;
+
+  /// Get the diff stat for a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-diffstat: func() -> result<string, string>;
+
+  /// Merge a pull request
+  record post-repositories-workspace-repo-slug-pullrequests-pull-request-id-merge-params {
+    /// Default value is false.
+    /// 
+    async-op: option<bool>,
+    /// Whether the source branch should be deleted. If this is not provided, we fallback to the value used when the pull request was created, which defaults to False
+    close-source-branch: option<bool>,
+    /// The merge strategy that will be used to merge the pull request.
+    merge-strategy: option<pullrequest-merge-parameters-merge-strategy-enum>,
+    /// The commit message that will be used on the resulting commit.
+    message: option<string>,
+    type-op: string
+  }
+  post-repositories-workspace-repo-slug-pullrequests-pull-request-id-merge: func(params: post-repositories-workspace-repo-slug-pullrequests-pull-request-id-merge-params) -> result<string, string>;
+
+  /// Get the merge task status for a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-merge-task-status-task-id: func() -> result<string, string>;
+
+  /// Get the patch for a pull request
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-patch: func() -> result<string, string>;
+
+  /// Request changes for a pull request
+  post-repositories-workspace-repo-slug-pullrequests-pull-request-id-request-changes: func() -> result<string, string>;
+
+  /// Remove change request for a pull request
+  delete-repositories-workspace-repo-slug-pullrequests-pull-request-id-request-changes: func() -> result<string, string>;
+
+  /// List commit statuses for a pull request
+  record get-repositories-workspace-repo-slug-pullrequests-pull-request-id-statuses-params {
+    /// Query string to narrow down the response as per
+    /// [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    q: option<string>,
+    /// Field by which the results should be sorted as per
+    /// [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-pullrequests-pull-request-id-statuses: func(params: get-repositories-workspace-repo-slug-pullrequests-pull-request-id-statuses-params) -> result<string, string>;
+
+}
+
+interface repositories {
+  enum get-repositories-role-enum {
+    admin,
+    contributor,
+    member,
+    owner,
+  }
+
+  /// List public repositories
+  record get-repositories-params {
+    /// Filter the results to include only repositories created on or
+    /// after this [ISO-8601](https://en.wikipedia.org/wiki/ISO_8601)
+    after: option<string>,
+    /// Filters the result based on the authenticated user's role on each repository.
+    /// 
+    role: option<get-repositories-role-enum>,
+    /// Query string to narrow down the response as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    /// `role` parameter must also be specified.
+    q: option<string>,
+    /// Field by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    sort: option<string>
+  }
+  get-repositories: func(params: get-repositories-params) -> result<string, string>;
+
+  /// List repositories in a workspace
+  record get-repositories-workspace-params {
+    /// 
+    /// Filters the result based on the authenticated user's role on each repository.
+    role: option<get-repositories-role-enum>,
+    /// 
+    /// Query string to narrow down the response as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    q: option<string>,
+    /// 
+    /// Field by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    sort: option<string>
+  }
+  get-repositories-workspace: func(params: get-repositories-workspace-params) -> result<string, string>;
+
+  /// Get a repository
+  get-repositories-workspace-repo-slug: func() -> result<string, string>;
+
+  /// Create a repository
+  record post-repositories-workspace-repo-slug-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug: func(params: post-repositories-workspace-repo-slug-params) -> result<string, string>;
+
+  /// Update a repository
+  record put-repositories-workspace-repo-slug-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-repositories-workspace-repo-slug: func(params: put-repositories-workspace-repo-slug-params) -> result<string, string>;
+
+  /// Delete a repository
+  record delete-repositories-workspace-repo-slug-params {
+    /// If a repository has been moved to a new location, use this parameter to
+    /// show users a friendly message in the Bitbucket UI that the repository
+    redirect-to: option<string>
+  }
+  delete-repositories-workspace-repo-slug: func(params: delete-repositories-workspace-repo-slug-params) -> result<string, string>;
+
+  /// List repository forks
+  record get-repositories-workspace-repo-slug-forks-params {
+    /// Filters the result based on the authenticated user's role on each repository.
+    /// 
+    role: option<get-repositories-role-enum>,
+    /// Query string to narrow down the response as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    q: option<string>,
+    /// Field by which the results should be sorted as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-forks: func(params: get-repositories-workspace-repo-slug-forks-params) -> result<string, string>;
+
+  /// Fork a repository
+  record post-repositories-workspace-repo-slug-forks-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-forks: func(params: post-repositories-workspace-repo-slug-forks-params) -> result<string, string>;
+
+  /// List webhooks for a repository
+  get-repositories-workspace-repo-slug-hooks: func() -> result<string, string>;
+
+  /// Create a webhook for a repository
+  post-repositories-workspace-repo-slug-hooks: func() -> result<string, string>;
+
+  /// Get a webhook for a repository
+  get-repositories-workspace-repo-slug-hooks-uid: func() -> result<string, string>;
+
+  /// Update a webhook for a repository
+  put-repositories-workspace-repo-slug-hooks-uid: func() -> result<string, string>;
+
+  /// Delete a webhook for a repository
+  delete-repositories-workspace-repo-slug-hooks-uid: func() -> result<string, string>;
+
+  /// Retrieve the inheritance state for repository settings
+  get-repositories-workspace-repo-slug-override-settings: func() -> result<string, string>;
+
+  /// Set the inheritance state for repository settings
+  ///                 
+  put-repositories-workspace-repo-slug-override-settings: func() -> result<string, string>;
+
+  /// List explicit group permissions for a repository
+  get-repositories-workspace-repo-slug-permissions-config-groups: func() -> result<string, string>;
+
+  /// Get an explicit group permission for a repository
+  get-repositories-workspace-repo-slug-permissions-config-groups-group-slug: func() -> result<string, string>;
+
+  /// Update an explicit group permission for a repository
+  put-repositories-workspace-repo-slug-permissions-config-groups-group-slug: func() -> result<string, string>;
+
+  /// Delete an explicit group permission for a repository
+  delete-repositories-workspace-repo-slug-permissions-config-groups-group-slug: func() -> result<string, string>;
+
+  /// List explicit user permissions for a repository
+  get-repositories-workspace-repo-slug-permissions-config-users: func() -> result<string, string>;
+
+  /// Get an explicit user permission for a repository
+  get-repositories-workspace-repo-slug-permissions-config-users-selected-user-id: func() -> result<string, string>;
+
+  /// Update an explicit user permission for a repository
+  put-repositories-workspace-repo-slug-permissions-config-users-selected-user-id: func() -> result<string, string>;
+
+  /// Delete an explicit user permission for a repository
+  delete-repositories-workspace-repo-slug-permissions-config-users-selected-user-id: func() -> result<string, string>;
+
+  /// List repositories watchers
+  get-repositories-workspace-repo-slug-watchers: func() -> result<string, string>;
+
+  /// List repository permissions for a user
+  record get-user-permissions-repositories-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>,
+    /// 
+    /// Name of a response property sort the result by as per
+    sort: option<string>
+  }
+  get-user-permissions-repositories: func(params: get-user-permissions-repositories-params) -> result<string, string>;
+
+}
+
+interface branch-restrictions {
+  /// List branch restrictions
+  record get-repositories-workspace-repo-slug-branch-restrictions-params {
+    /// Branch restrictions of this type
+    kind: option<string>,
+    /// Branch restrictions applied to branches of this pattern
+    pattern: option<string>
+  }
+  get-repositories-workspace-repo-slug-branch-restrictions: func(params: get-repositories-workspace-repo-slug-branch-restrictions-params) -> result<string, string>;
+
+  /// Create a branch restriction rule
+  record post-repositories-workspace-repo-slug-branch-restrictions-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-branch-restrictions: func(params: post-repositories-workspace-repo-slug-branch-restrictions-params) -> result<string, string>;
+
+  /// Get a branch restriction rule
+  get-repositories-workspace-repo-slug-branch-restrictions-id: func() -> result<string, string>;
+
+  /// Update a branch restriction rule
+  record put-repositories-workspace-repo-slug-branch-restrictions-id-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-repositories-workspace-repo-slug-branch-restrictions-id: func(params: put-repositories-workspace-repo-slug-branch-restrictions-id-params) -> result<string, string>;
+
+  /// Delete a branch restriction rule
+  delete-repositories-workspace-repo-slug-branch-restrictions-id: func() -> result<string, string>;
+
+}
+
+interface branching-model {
+  /// Get the branching model for a repository
+  get-repositories-workspace-repo-slug-branching-model: func() -> result<string, string>;
+
+  /// Get the branching model config for a repository
+  get-repositories-workspace-repo-slug-branching-model-settings: func() -> result<string, string>;
+
+  /// Update the branching model config for a repository
+  put-repositories-workspace-repo-slug-branching-model-settings: func() -> result<string, string>;
+
+  /// Get the effective, or currently applied, branching model for a repository
+  get-repositories-workspace-repo-slug-effective-branching-model: func() -> result<string, string>;
+
+  /// Get the branching model for a project
+  get-workspaces-workspace-projects-project-key-branching-model: func() -> result<string, string>;
+
+  /// Get the branching model config for a project
+  get-workspaces-workspace-projects-project-key-branching-model-settings: func() -> result<string, string>;
+
+  /// Update the branching model config for a project
+  put-workspaces-workspace-projects-project-key-branching-model-settings: func() -> result<string, string>;
+
+}
+
+interface commits {
+  /// Get a commit
+  get-repositories-workspace-repo-slug-commit-commit: func() -> result<string, string>;
+
+  /// Approve a commit
+  post-repositories-workspace-repo-slug-commit-commit-approve: func() -> result<string, string>;
+
+  /// Unapprove a commit
+  delete-repositories-workspace-repo-slug-commit-commit-approve: func() -> result<string, string>;
+
+  /// List a commit's comments
+  record get-repositories-workspace-repo-slug-commit-commit-comments-params {
+    /// Query string to narrow down the response as per
+    /// [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    q: option<string>,
+    /// Field by which the results should be sorted as per
+    /// [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-commit-commit-comments: func(params: get-repositories-workspace-repo-slug-commit-commit-comments-params) -> result<string, string>;
+
+  /// Create comment for a commit
+  record post-repositories-workspace-repo-slug-commit-commit-comments-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-commit-commit-comments: func(params: post-repositories-workspace-repo-slug-commit-commit-comments-params) -> result<string, string>;
+
+  /// Get a commit comment
+  get-repositories-workspace-repo-slug-commit-commit-comments-comment-id: func() -> result<string, string>;
+
+  /// Update a commit comment
+  record put-repositories-workspace-repo-slug-commit-commit-comments-comment-id-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-repositories-workspace-repo-slug-commit-commit-comments-comment-id: func(params: put-repositories-workspace-repo-slug-commit-commit-comments-comment-id-params) -> result<string, string>;
+
+  /// Delete a commit comment
+  delete-repositories-workspace-repo-slug-commit-commit-comments-comment-id: func() -> result<string, string>;
+
+  /// List commits
+  get-repositories-workspace-repo-slug-commits: func() -> result<string, string>;
+
+  /// List commits with include/exclude
+  post-repositories-workspace-repo-slug-commits: func() -> result<string, string>;
+
+  /// List commits for revision
+  get-repositories-workspace-repo-slug-commits-revision: func() -> result<string, string>;
+
+  /// List commits for revision using include/exclude
+  post-repositories-workspace-repo-slug-commits-revision: func() -> result<string, string>;
+
+  /// Compare two commits
+  record get-repositories-workspace-repo-slug-diff-spec-params {
+    /// Generate diffs with <n> lines of context instead of the usual three.
+    context: option<s32>,
+    /// Limit the diff to a particular file (this parameter
+    /// can be repeated for multiple paths).
+    path: option<string>,
+    /// Generate diffs that ignore whitespace.
+    ignore-whitespace: option<bool>,
+    /// Generate diffs that include binary files, true if omitted.
+    binary: option<bool>,
+    /// Whether to perform rename detection, true if omitted.
+    renames: option<bool>,
+    /// This parameter is deprecated and will be removed at the end
+    /// of 2022. The 'topic' parameter should be used instead. The
+    merge: option<bool>,
+    /// If true, returns 2-way 'three-dot' diff.
+    /// This is a diff between the source commit and the merge base
+    topic: option<bool>
+  }
+  get-repositories-workspace-repo-slug-diff-spec: func(params: get-repositories-workspace-repo-slug-diff-spec-params) -> result<string, string>;
+
+  /// Compare two commit diff stats
+  get-repositories-workspace-repo-slug-diffstat-spec: func() -> result<string, string>;
+
+  /// Get the common ancestor between two commits
+  get-repositories-workspace-repo-slug-merge-base-revspec: func() -> result<string, string>;
+
+  /// Get a patch for two commits
+  get-repositories-workspace-repo-slug-patch-spec: func() -> result<string, string>;
+
+}
+
+interface properties {
+  enum application-property-attributes-item-enum {
+    public,
+    read-only,
+  }
+
+  /// Get a commit application property
+  record get-commit-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit.
+    commit: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  get-commit-hosted-property-value: func(params: get-commit-hosted-property-value-params) -> result<string, string>;
+
+  /// Update a commit application property
+  record update-commit-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit.
+    commit: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string,
+    attributes: option<list<application-property-attributes-item-enum>>
+  }
+  update-commit-hosted-property-value: func(params: update-commit-hosted-property-value-params) -> result<string, string>;
+
+  /// Delete a commit application property
+  record delete-commit-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit.
+    commit: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  delete-commit-hosted-property-value: func(params: delete-commit-hosted-property-value-params) -> result<string, string>;
+
+  /// Get a repository application property
+  record get-repository-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  get-repository-hosted-property-value: func(params: get-repository-hosted-property-value-params) -> result<string, string>;
+
+  /// Update a repository application property
+  record update-repository-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string,
+    attributes: option<list<application-property-attributes-item-enum>>
+  }
+  update-repository-hosted-property-value: func(params: update-repository-hosted-property-value-params) -> result<string, string>;
+
+  /// Delete a repository application property
+  record delete-repository-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  delete-repository-hosted-property-value: func(params: delete-repository-hosted-property-value-params) -> result<string, string>;
+
+  /// Get a pull request application property
+  record get-pull-request-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The pull request ID.
+    pullrequest-id: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  get-pull-request-hosted-property-value: func(params: get-pull-request-hosted-property-value-params) -> result<string, string>;
+
+  /// Update a pull request application property
+  record update-pull-request-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The pull request ID.
+    pullrequest-id: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string,
+    attributes: option<list<application-property-attributes-item-enum>>
+  }
+  update-pull-request-hosted-property-value: func(params: update-pull-request-hosted-property-value-params) -> result<string, string>;
+
+  /// Delete a pull request application property
+  record delete-pull-request-hosted-property-value-params {
+    /// The repository container; either the workspace slug or the UUID in curly braces.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The pull request ID.
+    pullrequest-id: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  delete-pull-request-hosted-property-value: func(params: delete-pull-request-hosted-property-value-params) -> result<string, string>;
+
+  /// Get a user application property
+  record retrieve-user-hosted-property-value-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  retrieve-user-hosted-property-value: func(params: retrieve-user-hosted-property-value-params) -> result<string, string>;
+
+  /// Update a user application property
+  record update-user-hosted-property-value-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string,
+    attributes: option<list<application-property-attributes-item-enum>>
+  }
+  update-user-hosted-property-value: func(params: update-user-hosted-property-value-params) -> result<string, string>;
+
+  /// Delete a user application property
+  record delete-user-hosted-property-value-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// The key of the Connect app.
+    app-key: string,
+    /// The name of the property.
+    property-name: string
+  }
+  delete-user-hosted-property-value: func(params: delete-user-hosted-property-value-params) -> result<string, string>;
+
+}
+
+interface reports {
+  record report-annotation {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// List reports
+  record get-reports-for-commit-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit for which to retrieve reports.
+    commit: string
+  }
+  get-reports-for-commit: func(params: get-reports-for-commit-params) -> result<string, string>;
+
+  /// Get a report
+  record get-report-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit the report belongs to.
+    commit: string,
+    /// Either the uuid or external-id of the report.
+    report-id: string
+  }
+  get-report: func(params: get-report-params) -> result<string, string>;
+
+  /// Create or update a report
+  record create-or-update-report-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit the report belongs to.
+    commit: string,
+    /// Either the uuid or external-id of the report.
+    report-id: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-or-update-report: func(params: create-or-update-report-params) -> result<string, string>;
+
+  /// Delete a report
+  record delete-report-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit the report belongs to.
+    commit: string,
+    /// Either the uuid or external-id of the report.
+    report-id: string
+  }
+  delete-report: func(params: delete-report-params) -> result<string, string>;
+
+  /// List annotations
+  record get-annotations-for-report-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit for which to retrieve reports.
+    commit: string,
+    /// Uuid or external-if of the report for which to get annotations for.
+    report-id: string
+  }
+  get-annotations-for-report: func(params: get-annotations-for-report-params) -> result<string, string>;
+
+  /// Bulk create or update annotations
+  record bulk-create-or-update-annotations-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit for which to retrieve reports.
+    commit: string,
+    /// Uuid or external-if of the report for which to get annotations for.
+    report-id: string,
+    body: list<report-annotation>
+  }
+  bulk-create-or-update-annotations: func(params: bulk-create-or-update-annotations-params) -> result<string, string>;
+
+  /// Get an annotation
+  record get-annotation-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit the report belongs to.
+    commit: string,
+    /// Either the uuid or external-id of the report.
+    report-id: string,
+    /// Either the uuid or external-id of the annotation.
+    annotation-id: string
+  }
+  get-annotation: func(params: get-annotation-params) -> result<string, string>;
+
+  /// Create or update an annotation
+  record create-or-update-annotation-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit the report belongs to.
+    commit: string,
+    /// Either the uuid or external-id of the report.
+    report-id: string,
+    /// Either the uuid or external-id of the annotation.
+    annotation-id: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-or-update-annotation: func(params: create-or-update-annotation-params) -> result<string, string>;
+
+  /// Delete an annotation
+  record delete-annotation-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The commit the annotation belongs to.
+    commit: string,
+    /// Either the uuid or external-id of the annotation.
+    report-id: string,
+    /// Either the uuid or external-id of the annotation.
+    annotation-id: string
+  }
+  delete-annotation: func(params: delete-annotation-params) -> result<string, string>;
+
+}
+
+interface commit-statuses {
+  /// List commit statuses for a commit
+  record get-repositories-workspace-repo-slug-commit-commit-statuses-params {
+    /// Query string to narrow down the response as per
+    /// [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    q: option<string>,
+    /// Field by which the results should be sorted as per
+    /// [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-commit-commit-statuses: func(params: get-repositories-workspace-repo-slug-commit-commit-statuses-params) -> result<string, string>;
+
+  /// Create a build status for a commit
+  record post-repositories-workspace-repo-slug-commit-commit-statuses-build-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-commit-commit-statuses-build: func(params: post-repositories-workspace-repo-slug-commit-commit-statuses-build-params) -> result<string, string>;
+
+  /// Get a build status for a commit
+  get-repositories-workspace-repo-slug-commit-commit-statuses-build-key: func() -> result<string, string>;
+
+  /// Update a build status for a commit
+  record put-repositories-workspace-repo-slug-commit-commit-statuses-build-key-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-repositories-workspace-repo-slug-commit-commit-statuses-build-key: func(params: put-repositories-workspace-repo-slug-commit-commit-statuses-build-key-params) -> result<string, string>;
+
+}
+
+interface issue-tracker {
+  enum issue-change-message-markup-enum {
+    markdown,
+    creole,
+    plaintext,
+  }
+
+  record issue {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record issue-change-changes {
+    assignee: option<issue-change-changes-assignee>,
+    component: option<issue-change-changes-component>,
+    content: option<issue-change-changes-content>,
+    kind: option<issue-change-changes-kind>,
+    milestone: option<issue-change-changes-milestone>,
+    priority: option<issue-change-changes-priority>,
+    state: option<issue-change-changes-state>,
+    title: option<issue-change-changes-title>,
+    version: option<issue-change-changes-version>
+  }
+
+  record issue-change-changes-assignee {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-component {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-content {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-kind {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-milestone {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-priority {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-state {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-title {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-changes-version {
+    new: option<string>,
+    old: option<string>
+  }
+
+  record issue-change-links {
+    /// A link to a resource related to this object.
+    issue: option<issue-change-links-issue>,
+    /// A link to a resource related to this object.
+    self: option<issue-change-links-self>
+  }
+
+  /// A link to a resource related to this object.
+  record issue-change-links-issue {
+    href: option<string>,
+    name: option<string>
+  }
+
+  /// A link to a resource related to this object.
+  record issue-change-links-self {
+    href: option<string>,
+    name: option<string>
+  }
+
+  record issue-change-message {
+    /// The user's content rendered as HTML.
+    html: option<string>,
+    /// The type of markup language the raw content is to be interpreted in.
+    markup: option<issue-change-message-markup-enum>,
+    /// The text as it was typed by a user.
+    raw: option<string>
+  }
+
+  record account {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// List components
+  get-repositories-workspace-repo-slug-components: func() -> result<string, string>;
+
+  /// Get a component for issues
+  get-repositories-workspace-repo-slug-components-component-id: func() -> result<string, string>;
+
+  /// List issues
+  get-repositories-workspace-repo-slug-issues: func() -> result<string, string>;
+
+  /// Create an issue
+  record post-repositories-workspace-repo-slug-issues-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-issues: func(params: post-repositories-workspace-repo-slug-issues-params) -> result<string, string>;
+
+  /// Export issues
+  record post-repositories-workspace-repo-slug-issues-export-params {
+    include-attachments: option<bool>,
+    project-key: option<string>,
+    project-name: option<string>,
+    send-email: option<bool>,
+    type-op: string
+  }
+  post-repositories-workspace-repo-slug-issues-export: func(params: post-repositories-workspace-repo-slug-issues-export-params) -> result<string, string>;
+
+  /// Check issue export status
+  get-repositories-workspace-repo-slug-issues-export-repo-name-issues-task-id-zip: func() -> result<string, string>;
+
+  /// Check issue import status
+  get-repositories-workspace-repo-slug-issues-import: func() -> result<string, string>;
+
+  /// Import issues
+  post-repositories-workspace-repo-slug-issues-import: func() -> result<string, string>;
+
+  /// Get an issue
+  get-repositories-workspace-repo-slug-issues-issue-id: func() -> result<string, string>;
+
+  /// Update an issue
+  put-repositories-workspace-repo-slug-issues-issue-id: func() -> result<string, string>;
+
+  /// Delete an issue
+  delete-repositories-workspace-repo-slug-issues-issue-id: func() -> result<string, string>;
+
+  /// List attachments for an issue
+  get-repositories-workspace-repo-slug-issues-issue-id-attachments: func() -> result<string, string>;
+
+  /// Upload an attachment to an issue
+  post-repositories-workspace-repo-slug-issues-issue-id-attachments: func() -> result<string, string>;
+
+  /// Get attachment for an issue
+  get-repositories-workspace-repo-slug-issues-issue-id-attachments-path: func() -> result<string, string>;
+
+  /// Delete an attachment for an issue
+  delete-repositories-workspace-repo-slug-issues-issue-id-attachments-path: func() -> result<string, string>;
+
+  /// List changes on an issue
+  record get-repositories-workspace-repo-slug-issues-issue-id-changes-params {
+    /// 
+    /// Query string to narrow down the response. See
+    q: option<string>,
+    /// 
+    /// Name of a response property to sort results. See
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-issues-issue-id-changes: func(params: get-repositories-workspace-repo-slug-issues-issue-id-changes-params) -> result<string, string>;
+
+  /// Modify the state of an issue
+  record post-repositories-workspace-repo-slug-issues-issue-id-changes-params {
+    changes: option<issue-change-changes>,
+    created-on: option<string>,
+    issue: option<issue>,
+    links: option<issue-change-links>,
+    message: option<issue-change-message>,
+    name: option<string>,
+    type-op: string,
+    user: option<account>
+  }
+  post-repositories-workspace-repo-slug-issues-issue-id-changes: func(params: post-repositories-workspace-repo-slug-issues-issue-id-changes-params) -> result<string, string>;
+
+  /// Get issue change object
+  get-repositories-workspace-repo-slug-issues-issue-id-changes-change-id: func() -> result<string, string>;
+
+  /// List comments on an issue
+  record get-repositories-workspace-repo-slug-issues-issue-id-comments-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>
+  }
+  get-repositories-workspace-repo-slug-issues-issue-id-comments: func(params: get-repositories-workspace-repo-slug-issues-issue-id-comments-params) -> result<string, string>;
+
+  /// Create a comment on an issue
+  record post-repositories-workspace-repo-slug-issues-issue-id-comments-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-issues-issue-id-comments: func(params: post-repositories-workspace-repo-slug-issues-issue-id-comments-params) -> result<string, string>;
+
+  /// Get a comment on an issue
+  get-repositories-workspace-repo-slug-issues-issue-id-comments-comment-id: func() -> result<string, string>;
+
+  /// Update a comment on an issue
+  record put-repositories-workspace-repo-slug-issues-issue-id-comments-comment-id-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-repositories-workspace-repo-slug-issues-issue-id-comments-comment-id: func(params: put-repositories-workspace-repo-slug-issues-issue-id-comments-comment-id-params) -> result<string, string>;
+
+  /// Delete a comment on an issue
+  delete-repositories-workspace-repo-slug-issues-issue-id-comments-comment-id: func() -> result<string, string>;
+
+  /// Check if current user voted for an issue
+  get-repositories-workspace-repo-slug-issues-issue-id-vote: func() -> result<string, string>;
+
+  /// Vote for an issue
+  put-repositories-workspace-repo-slug-issues-issue-id-vote: func() -> result<string, string>;
+
+  /// Remove vote for an issue
+  delete-repositories-workspace-repo-slug-issues-issue-id-vote: func() -> result<string, string>;
+
+  /// Check if current user is watching a issue
+  get-repositories-workspace-repo-slug-issues-issue-id-watch: func() -> result<string, string>;
+
+  /// Watch an issue
+  put-repositories-workspace-repo-slug-issues-issue-id-watch: func() -> result<string, string>;
+
+  /// Stop watching an issue
+  delete-repositories-workspace-repo-slug-issues-issue-id-watch: func() -> result<string, string>;
+
+  /// List milestones
+  get-repositories-workspace-repo-slug-milestones: func() -> result<string, string>;
+
+  /// Get a milestone
+  get-repositories-workspace-repo-slug-milestones-milestone-id: func() -> result<string, string>;
+
+  /// List defined versions for issues
+  get-repositories-workspace-repo-slug-versions: func() -> result<string, string>;
+
+  /// Get a defined version for issues
+  get-repositories-workspace-repo-slug-versions-version-id: func() -> result<string, string>;
+
+}
+
+interface deployments {
+  /// List repository deploy keys
+  get-repositories-workspace-repo-slug-deploy-keys: func() -> result<string, string>;
+
+  /// Add a repository deploy key
+  post-repositories-workspace-repo-slug-deploy-keys: func() -> result<string, string>;
+
+  /// Get a repository deploy key
+  get-repositories-workspace-repo-slug-deploy-keys-key-id: func() -> result<string, string>;
+
+  /// Update a repository deploy key
+  put-repositories-workspace-repo-slug-deploy-keys-key-id: func() -> result<string, string>;
+
+  /// Delete a repository deploy key
+  delete-repositories-workspace-repo-slug-deploy-keys-key-id: func() -> result<string, string>;
+
+  /// List deployments
+  record get-deployments-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-deployments-for-repository: func(params: get-deployments-for-repository-params) -> result<string, string>;
+
+  /// Get a deployment
+  record get-deployment-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The deployment UUID.
+    deployment-uuid: string
+  }
+  get-deployment-for-repository: func(params: get-deployment-for-repository-params) -> result<string, string>;
+
+  /// List environments
+  record get-environments-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-environments-for-repository: func(params: get-environments-for-repository-params) -> result<string, string>;
+
+  /// Create an environment
+  record create-environment-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-environment: func(params: create-environment-params) -> result<string, string>;
+
+  /// Get an environment
+  record get-environment-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The environment UUID.
+    environment-uuid: string
+  }
+  get-environment-for-repository: func(params: get-environment-for-repository-params) -> result<string, string>;
+
+  /// Delete an environment
+  record delete-environment-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The environment UUID.
+    environment-uuid: string
+  }
+  delete-environment-for-repository: func(params: delete-environment-for-repository-params) -> result<string, string>;
+
+  /// Update an environment
+  record update-environment-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The environment UUID.
+    environment-uuid: string
+  }
+  update-environment-for-repository: func(params: update-environment-for-repository-params) -> result<string, string>;
+
+  /// List project deploy keys
+  get-workspaces-workspace-projects-project-key-deploy-keys: func() -> result<string, string>;
+
+  /// Create a project deploy key
+  post-workspaces-workspace-projects-project-key-deploy-keys: func() -> result<string, string>;
+
+  /// Get a project deploy key
+  get-workspaces-workspace-projects-project-key-deploy-keys-key-id: func() -> result<string, string>;
+
+  /// Delete a deploy key from a project
+  delete-workspaces-workspace-projects-project-key-deploy-keys-key-id: func() -> result<string, string>;
+
+}
+
+interface pipelines {
+  /// List variables for an environment
+  record get-deployment-variables-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The environment.
+    environment-uuid: string
+  }
+  get-deployment-variables: func(params: get-deployment-variables-params) -> result<string, string>;
+
+  /// Create a variable for an environment
+  record create-deployment-variable-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The environment.
+    environment-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-deployment-variable: func(params: create-deployment-variable-params) -> result<string, string>;
+
+  /// Update a variable for an environment
+  record update-deployment-variable-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The environment.
+    environment-uuid: string,
+    /// The UUID of the variable to update.
+    variable-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-deployment-variable: func(params: update-deployment-variable-params) -> result<string, string>;
+
+  /// Delete a variable for an environment
+  record delete-deployment-variable-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The environment.
+    environment-uuid: string,
+    /// The UUID of the variable to delete.
+    variable-uuid: string
+  }
+  delete-deployment-variable: func(params: delete-deployment-variable-params) -> result<string, string>;
+
+  /// List pipelines
+  record get-pipelines-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-pipelines-for-repository: func(params: get-pipelines-for-repository-params) -> result<string, string>;
+
+  /// Run a pipeline
+  record create-pipeline-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-pipeline-for-repository: func(params: create-pipeline-for-repository-params) -> result<string, string>;
+
+  /// List caches
+  record get-repository-pipeline-caches-params {
+    /// The account.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-repository-pipeline-caches: func(params: get-repository-pipeline-caches-params) -> result<string, string>;
+
+  /// Delete caches
+  record delete-repository-pipeline-caches-params {
+    /// The account.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The cache name.
+    name: string
+  }
+  delete-repository-pipeline-caches: func(params: delete-repository-pipeline-caches-params) -> result<string, string>;
+
+  /// Delete a cache
+  record delete-repository-pipeline-cache-params {
+    /// The account.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the cache to delete.
+    cache-uuid: string
+  }
+  delete-repository-pipeline-cache: func(params: delete-repository-pipeline-cache-params) -> result<string, string>;
+
+  /// Get cache content URI
+  record get-repository-pipeline-cache-content-uri-params {
+    /// The account.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the cache.
+    cache-uuid: string
+  }
+  get-repository-pipeline-cache-content-uri: func(params: get-repository-pipeline-cache-content-uri-params) -> result<string, string>;
+
+  /// Get a pipeline
+  record get-pipeline-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The pipeline UUID.
+    pipeline-uuid: string
+  }
+  get-pipeline-for-repository: func(params: get-pipeline-for-repository-params) -> result<string, string>;
+
+  /// List steps for a pipeline
+  record get-pipeline-steps-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string
+  }
+  get-pipeline-steps-for-repository: func(params: get-pipeline-steps-for-repository-params) -> result<string, string>;
+
+  /// Get a step of a pipeline
+  record get-pipeline-step-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string,
+    /// The UUID of the step.
+    step-uuid: string
+  }
+  get-pipeline-step-for-repository: func(params: get-pipeline-step-for-repository-params) -> result<string, string>;
+
+  /// Get log file for a step
+  record get-pipeline-step-log-for-repository-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string,
+    /// The UUID of the step.
+    step-uuid: string
+  }
+  get-pipeline-step-log-for-repository: func(params: get-pipeline-step-log-for-repository-params) -> result<string, string>;
+
+  /// Get the logs for the build container or a service container for a given step of a pipeline.
+  record get-pipeline-container-log-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string,
+    /// The UUID of the step.
+    step-uuid: string,
+    /// For the main build container specify the step UUID; for a service container specify the service container UUID
+    log-uuid: string
+  }
+  get-pipeline-container-log: func(params: get-pipeline-container-log-params) -> result<string, string>;
+
+  /// Get a summary of test reports for a given step of a pipeline.
+  record get-pipeline-test-reports-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string,
+    /// The UUID of the step.
+    step-uuid: string
+  }
+  get-pipeline-test-reports: func(params: get-pipeline-test-reports-params) -> result<string, string>;
+
+  /// Get test cases for a given step of a pipeline.
+  record get-pipeline-test-report-test-cases-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string,
+    /// The UUID of the step.
+    step-uuid: string
+  }
+  get-pipeline-test-report-test-cases: func(params: get-pipeline-test-report-test-cases-params) -> result<string, string>;
+
+  /// Get test case reasons (output) for a given test case in a step of a pipeline.
+  record get-pipeline-test-report-test-case-reasons-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string,
+    /// The UUID of the step.
+    step-uuid: string,
+    /// The UUID of the test case.
+    test-case-uuid: string
+  }
+  get-pipeline-test-report-test-case-reasons: func(params: get-pipeline-test-report-test-case-reasons-params) -> result<string, string>;
+
+  /// Stop a pipeline
+  record stop-pipeline-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the pipeline.
+    pipeline-uuid: string
+  }
+  stop-pipeline: func(params: stop-pipeline-params) -> result<string, string>;
+
+  /// Get configuration
+  record get-repository-pipeline-config-params {
+    /// The account.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-repository-pipeline-config: func(params: get-repository-pipeline-config-params) -> result<string, string>;
+
+  /// Update configuration
+  record update-repository-pipeline-config-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-repository-pipeline-config: func(params: update-repository-pipeline-config-params) -> result<string, string>;
+
+  /// Update the next build number
+  record update-repository-build-number-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-repository-build-number: func(params: update-repository-build-number-params) -> result<string, string>;
+
+  /// List schedules
+  record get-repository-pipeline-schedules-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-repository-pipeline-schedules: func(params: get-repository-pipeline-schedules-params) -> result<string, string>;
+
+  /// Create a schedule
+  record create-repository-pipeline-schedule-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-repository-pipeline-schedule: func(params: create-repository-pipeline-schedule-params) -> result<string, string>;
+
+  /// Get a schedule
+  record get-repository-pipeline-schedule-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The uuid of the schedule.
+    schedule-uuid: string
+  }
+  get-repository-pipeline-schedule: func(params: get-repository-pipeline-schedule-params) -> result<string, string>;
+
+  /// Update a schedule
+  record update-repository-pipeline-schedule-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The uuid of the schedule.
+    schedule-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-repository-pipeline-schedule: func(params: update-repository-pipeline-schedule-params) -> result<string, string>;
+
+  /// Delete a schedule
+  record delete-repository-pipeline-schedule-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The uuid of the schedule.
+    schedule-uuid: string
+  }
+  delete-repository-pipeline-schedule: func(params: delete-repository-pipeline-schedule-params) -> result<string, string>;
+
+  /// List executions of a schedule
+  record get-repository-pipeline-schedule-executions-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The uuid of the schedule.
+    schedule-uuid: string
+  }
+  get-repository-pipeline-schedule-executions: func(params: get-repository-pipeline-schedule-executions-params) -> result<string, string>;
+
+  /// Get SSH key pair
+  record get-repository-pipeline-ssh-key-pair-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-repository-pipeline-ssh-key-pair: func(params: get-repository-pipeline-ssh-key-pair-params) -> result<string, string>;
+
+  /// Update SSH key pair
+  record update-repository-pipeline-key-pair-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-repository-pipeline-key-pair: func(params: update-repository-pipeline-key-pair-params) -> result<string, string>;
+
+  /// Delete SSH key pair
+  record delete-repository-pipeline-key-pair-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  delete-repository-pipeline-key-pair: func(params: delete-repository-pipeline-key-pair-params) -> result<string, string>;
+
+  /// List known hosts
+  record get-repository-pipeline-known-hosts-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-repository-pipeline-known-hosts: func(params: get-repository-pipeline-known-hosts-params) -> result<string, string>;
+
+  /// Create a known host
+  record create-repository-pipeline-known-host-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-repository-pipeline-known-host: func(params: create-repository-pipeline-known-host-params) -> result<string, string>;
+
+  /// Get a known host
+  record get-repository-pipeline-known-host-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the known host to retrieve.
+    known-host-uuid: string
+  }
+  get-repository-pipeline-known-host: func(params: get-repository-pipeline-known-host-params) -> result<string, string>;
+
+  /// Update a known host
+  record update-repository-pipeline-known-host-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the known host to update.
+    known-host-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-repository-pipeline-known-host: func(params: update-repository-pipeline-known-host-params) -> result<string, string>;
+
+  /// Delete a known host
+  record delete-repository-pipeline-known-host-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the known host to delete.
+    known-host-uuid: string
+  }
+  delete-repository-pipeline-known-host: func(params: delete-repository-pipeline-known-host-params) -> result<string, string>;
+
+  /// List variables for a repository
+  record get-repository-pipeline-variables-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string
+  }
+  get-repository-pipeline-variables: func(params: get-repository-pipeline-variables-params) -> result<string, string>;
+
+  /// Create a variable for a repository
+  record create-repository-pipeline-variable-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-repository-pipeline-variable: func(params: create-repository-pipeline-variable-params) -> result<string, string>;
+
+  /// Get a variable for a repository
+  record get-repository-pipeline-variable-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the variable to retrieve.
+    variable-uuid: string
+  }
+  get-repository-pipeline-variable: func(params: get-repository-pipeline-variable-params) -> result<string, string>;
+
+  /// Update a variable for a repository
+  record update-repository-pipeline-variable-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the variable to update.
+    variable-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-repository-pipeline-variable: func(params: update-repository-pipeline-variable-params) -> result<string, string>;
+
+  /// Delete a variable for a repository
+  record delete-repository-pipeline-variable-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The repository.
+    repo-slug: string,
+    /// The UUID of the variable to delete.
+    variable-uuid: string
+  }
+  delete-repository-pipeline-variable: func(params: delete-repository-pipeline-variable-params) -> result<string, string>;
+
+  /// List variables for an account
+  record get-pipeline-variables-for-team-params {
+    /// The account.
+    username: string
+  }
+  get-pipeline-variables-for-team: func(params: get-pipeline-variables-for-team-params) -> result<string, string>;
+
+  /// Create a variable for a user
+  record create-pipeline-variable-for-team-params {
+    /// The account.
+    username: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-pipeline-variable-for-team: func(params: create-pipeline-variable-for-team-params) -> result<string, string>;
+
+  /// Get a variable for a team
+  record get-pipeline-variable-for-team-params {
+    /// The account.
+    username: string,
+    /// The UUID of the variable to retrieve.
+    variable-uuid: string
+  }
+  get-pipeline-variable-for-team: func(params: get-pipeline-variable-for-team-params) -> result<string, string>;
+
+  /// Update a variable for a team
+  record update-pipeline-variable-for-team-params {
+    /// The account.
+    username: string,
+    /// The UUID of the variable.
+    variable-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-pipeline-variable-for-team: func(params: update-pipeline-variable-for-team-params) -> result<string, string>;
+
+  /// Delete a variable for a team
+  record delete-pipeline-variable-for-team-params {
+    /// The account.
+    username: string,
+    /// The UUID of the variable to delete.
+    variable-uuid: string
+  }
+  delete-pipeline-variable-for-team: func(params: delete-pipeline-variable-for-team-params) -> result<string, string>;
+
+  /// List variables for a user
+  record get-pipeline-variables-for-user-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string
+  }
+  get-pipeline-variables-for-user: func(params: get-pipeline-variables-for-user-params) -> result<string, string>;
+
+  /// Create a variable for a user
+  record create-pipeline-variable-for-user-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-pipeline-variable-for-user: func(params: create-pipeline-variable-for-user-params) -> result<string, string>;
+
+  /// Get a variable for a user
+  record get-pipeline-variable-for-user-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// The UUID of the variable to retrieve.
+    variable-uuid: string
+  }
+  get-pipeline-variable-for-user: func(params: get-pipeline-variable-for-user-params) -> result<string, string>;
+
+  /// Update a variable for a user
+  record update-pipeline-variable-for-user-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// The UUID of the variable.
+    variable-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-pipeline-variable-for-user: func(params: update-pipeline-variable-for-user-params) -> result<string, string>;
+
+  /// Delete a variable for a user
+  record delete-pipeline-variable-for-user-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// The UUID of the variable to delete.
+    variable-uuid: string
+  }
+  delete-pipeline-variable-for-user: func(params: delete-pipeline-variable-for-user-params) -> result<string, string>;
+
+  /// Get OpenID configuration for OIDC in Pipelines
+  record get-oidc-configuration-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string
+  }
+  get-oidc-configuration: func(params: get-oidc-configuration-params) -> result<string, string>;
+
+  /// Get keys for OIDC in Pipelines
+  record get-oidc-keys-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string
+  }
+  get-oidc-keys: func(params: get-oidc-keys-params) -> result<string, string>;
+
+  /// List variables for a workspace
+  record get-pipeline-variables-for-workspace-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string
+  }
+  get-pipeline-variables-for-workspace: func(params: get-pipeline-variables-for-workspace-params) -> result<string, string>;
+
+  /// Create a variable for a workspace
+  record create-pipeline-variable-for-workspace-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  create-pipeline-variable-for-workspace: func(params: create-pipeline-variable-for-workspace-params) -> result<string, string>;
+
+  /// Get variable for a workspace
+  record get-pipeline-variable-for-workspace-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The UUID of the variable to retrieve.
+    variable-uuid: string
+  }
+  get-pipeline-variable-for-workspace: func(params: get-pipeline-variable-for-workspace-params) -> result<string, string>;
+
+  /// Update variable for a workspace
+  record update-pipeline-variable-for-workspace-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The UUID of the variable.
+    variable-uuid: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  update-pipeline-variable-for-workspace: func(params: update-pipeline-variable-for-workspace-params) -> result<string, string>;
+
+  /// Delete a variable for a workspace
+  record delete-pipeline-variable-for-workspace-params {
+    /// This can either be the workspace ID (slug) or the workspace UUID surrounded by curly-braces, for example `{workspace UUID}`.
+    workspace: string,
+    /// The UUID of the variable to delete.
+    variable-uuid: string
+  }
+  delete-pipeline-variable-for-workspace: func(params: delete-pipeline-variable-for-workspace-params) -> result<string, string>;
+
+}
+
+interface downloads {
+  /// List download artifacts
+  get-repositories-workspace-repo-slug-downloads: func() -> result<string, string>;
+
+  /// Upload a download artifact
+  post-repositories-workspace-repo-slug-downloads: func() -> result<string, string>;
+
+  /// Get a download artifact link
+  get-repositories-workspace-repo-slug-downloads-filename: func() -> result<string, string>;
+
+  /// Delete a download artifact
+  delete-repositories-workspace-repo-slug-downloads-filename: func() -> result<string, string>;
+
+}
+
+interface source {
+  enum get-repositories-workspace-repo-slug-src-format-enum {
+    meta,
+  }
+
+  enum get-repositories-workspace-repo-slug-src-commit-path-format-enum {
+    meta,
+    rendered,
+  }
+
+  /// List commits that modified a file
+  record get-repositories-workspace-repo-slug-filehistory-commit-path-params {
+    /// 
+    /// When `true`, Bitbucket will follow the history of the file across
+    renames: option<string>,
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>,
+    /// 
+    /// Name of a response property sort the result by as per
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-filehistory-commit-path: func(params: get-repositories-workspace-repo-slug-filehistory-commit-path-params) -> result<string, string>;
+
+  /// Get the root directory of the main branch
+  record get-repositories-workspace-repo-slug-src-params {
+    /// Instead of returning the file's contents, return the (json) meta data for it.
+    format: option<get-repositories-workspace-repo-slug-src-format-enum>
+  }
+  get-repositories-workspace-repo-slug-src: func(params: get-repositories-workspace-repo-slug-src-params) -> result<string, string>;
+
+  /// Create a commit by uploading a file
+  record post-repositories-workspace-repo-slug-src-params {
+    /// The commit message. When omitted, Bitbucket uses a canned string.
+    message: option<string>,
+    /// 
+    /// The raw string to be used as the new commit's author.
+    author: option<string>,
+    /// 
+    /// A comma-separated list of SHA1s of the commits that should
+    parents: option<string>,
+    /// 
+    /// Optional field that declares the files that the request is
+    files: option<string>,
+    /// 
+    /// The name of the branch that the new commit should be
+    branch: option<string>
+  }
+  post-repositories-workspace-repo-slug-src: func(params: post-repositories-workspace-repo-slug-src-params) -> result<string, string>;
+
+  /// Get file or directory contents
+  record get-repositories-workspace-repo-slug-src-commit-path-params {
+    /// If 'meta' is provided, returns the (json) meta data for the contents of the file.  If 'rendered' is provided, returns the contents of a non-binary file in HTML-formatted rendered markup. Since Git does not generally track what text encoding scheme is used, this endpoint attempts to detect the most appropriate character encoding. While usually correct, determining the character encoding can be ambiguous which in exceptional cases can lead to misinterpretation of the characters. As such, the raw element in the response object should not be treated as equivalent to the file's actual contents.
+    format: option<get-repositories-workspace-repo-slug-src-commit-path-format-enum>,
+    /// Optional filter expression as per [filtering and sorting](/cloud/bitbucket/rest/intro/#filtering).
+    q: option<string>,
+    /// Optional sorting parameter as per [filtering and sorting](/cloud/bitbucket/rest/intro/#sorting-query-results).
+    sort: option<string>,
+    /// If provided, returns the contents of the repository and its subdirectories recursively until the specified max_depth of nested directories. When omitted, this defaults to 1.
+    max-depth: option<s32>
+  }
+  get-repositories-workspace-repo-slug-src-commit-path: func(params: get-repositories-workspace-repo-slug-src-commit-path-params) -> result<string, string>;
+
+}
+
+interface refs {
+  /// List branches and tags
+  record get-repositories-workspace-repo-slug-refs-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>,
+    /// 
+    /// Field by which the results should be sorted as per
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-refs: func(params: get-repositories-workspace-repo-slug-refs-params) -> result<string, string>;
+
+  /// List open branches
+  record get-repositories-workspace-repo-slug-refs-branches-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>,
+    /// 
+    /// Field by which the results should be sorted as per
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-refs-branches: func(params: get-repositories-workspace-repo-slug-refs-branches-params) -> result<string, string>;
+
+  /// Create a branch
+  post-repositories-workspace-repo-slug-refs-branches: func() -> result<string, string>;
+
+  /// Get a branch
+  get-repositories-workspace-repo-slug-refs-branches-name: func() -> result<string, string>;
+
+  /// Delete a branch
+  delete-repositories-workspace-repo-slug-refs-branches-name: func() -> result<string, string>;
+
+  /// List tags
+  record get-repositories-workspace-repo-slug-refs-tags-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>,
+    /// 
+    /// Field by which the results should be sorted as per
+    sort: option<string>
+  }
+  get-repositories-workspace-repo-slug-refs-tags: func(params: get-repositories-workspace-repo-slug-refs-tags-params) -> result<string, string>;
+
+  /// Create a tag
+  record post-repositories-workspace-repo-slug-refs-tags-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-repositories-workspace-repo-slug-refs-tags: func(params: post-repositories-workspace-repo-slug-refs-tags-params) -> result<string, string>;
+
+  /// Get a tag
+  get-repositories-workspace-repo-slug-refs-tags-name: func() -> result<string, string>;
+
+  /// Delete a tag
+  delete-repositories-workspace-repo-slug-refs-tags-name: func() -> result<string, string>;
+
+}
+
+interface snippets {
+  enum get-snippets-role-enum {
+    owner,
+    contributor,
+    member,
+  }
+
+  /// List snippets
+  record get-snippets-params {
+    /// Filter down the result based on the authenticated user's role (`owner`, `contributor`, or `member`).
+    role: option<get-snippets-role-enum>
+  }
+  get-snippets: func(params: get-snippets-params) -> result<string, string>;
+
+  /// Create a snippet
+  record post-snippets-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-snippets: func(params: post-snippets-params) -> result<string, string>;
+
+  /// List snippets in a workspace
+  record get-snippets-workspace-params {
+    /// Filter down the result based on the authenticated user's role (`owner`, `contributor`, or `member`).
+    role: option<get-snippets-role-enum>
+  }
+  get-snippets-workspace: func(params: get-snippets-workspace-params) -> result<string, string>;
+
+  /// Create a snippet for a workspace
+  record post-snippets-workspace-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-snippets-workspace: func(params: post-snippets-workspace-params) -> result<string, string>;
+
+  /// Get a snippet
+  get-snippets-workspace-encoded-id: func() -> result<string, string>;
+
+  /// Update a snippet
+  put-snippets-workspace-encoded-id: func() -> result<string, string>;
+
+  /// Delete a snippet
+  delete-snippets-workspace-encoded-id: func() -> result<string, string>;
+
+  /// List comments on a snippet
+  get-snippets-workspace-encoded-id-comments: func() -> result<string, string>;
+
+  /// Create a comment on a snippet
+  record post-snippets-workspace-encoded-id-comments-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-snippets-workspace-encoded-id-comments: func(params: post-snippets-workspace-encoded-id-comments-params) -> result<string, string>;
+
+  /// Get a comment on a snippet
+  get-snippets-workspace-encoded-id-comments-comment-id: func() -> result<string, string>;
+
+  /// Update a comment on a snippet
+  record put-snippets-workspace-encoded-id-comments-comment-id-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-snippets-workspace-encoded-id-comments-comment-id: func(params: put-snippets-workspace-encoded-id-comments-comment-id-params) -> result<string, string>;
+
+  /// Delete a comment on a snippet
+  delete-snippets-workspace-encoded-id-comments-comment-id: func() -> result<string, string>;
+
+  /// List snippet changes
+  get-snippets-workspace-encoded-id-commits: func() -> result<string, string>;
+
+  /// Get a previous snippet change
+  get-snippets-workspace-encoded-id-commits-revision: func() -> result<string, string>;
+
+  /// Get a snippet's raw file at HEAD
+  get-snippets-workspace-encoded-id-files-path: func() -> result<string, string>;
+
+  /// Check if the current user is watching a snippet
+  get-snippets-workspace-encoded-id-watch: func() -> result<string, string>;
+
+  /// Watch a snippet
+  put-snippets-workspace-encoded-id-watch: func() -> result<string, string>;
+
+  /// Stop watching a snippet
+  delete-snippets-workspace-encoded-id-watch: func() -> result<string, string>;
+
+  /// List users watching a snippet
+  get-snippets-workspace-encoded-id-watchers: func() -> result<string, string>;
+
+  /// Get a previous revision of a snippet
+  get-snippets-workspace-encoded-id-node-id: func() -> result<string, string>;
+
+  /// Update a previous revision of a snippet
+  put-snippets-workspace-encoded-id-node-id: func() -> result<string, string>;
+
+  /// Delete a previous revision of a snippet
+  delete-snippets-workspace-encoded-id-node-id: func() -> result<string, string>;
+
+  /// Get a snippet's raw file
+  get-snippets-workspace-encoded-id-node-id-files-path: func() -> result<string, string>;
+
+  /// Get snippet changes between versions
+  record get-snippets-workspace-encoded-id-revision-diff-params {
+    /// When used, only one the diff of the specified file will be returned.
+    path: option<string>
+  }
+  get-snippets-workspace-encoded-id-revision-diff: func(params: get-snippets-workspace-encoded-id-revision-diff-params) -> result<string, string>;
+
+  /// Get snippet patch between versions
+  get-snippets-workspace-encoded-id-revision-patch: func() -> result<string, string>;
+
+}
+
+interface search {
+  /// Search for code in a team's repositories
+  record search-team-params {
+    /// The account to search in; either the username or the UUID in curly braces
+    username: string,
+    /// The search query
+    search-query: string,
+    /// Which page of the search results to retrieve
+    page: option<s32>,
+    /// How many search results to retrieve per page
+    pagelen: option<s32>
+  }
+  search-team: func(params: search-team-params) -> result<string, string>;
+
+  /// Search for code in a user's repositories
+  record search-account-params {
+    /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
+    selected-user: string,
+    /// The search query
+    search-query: string,
+    /// Which page of the search results to retrieve
+    page: option<s32>,
+    /// How many search results to retrieve per page
+    pagelen: option<s32>
+  }
+  search-account: func(params: search-account-params) -> result<string, string>;
+
+  /// Search for code in a workspace
+  record search-workspace-params {
+    /// The workspace to search in; either the slug or the UUID in curly braces
+    workspace: string,
+    /// The search query
+    search-query: string,
+    /// Which page of the search results to retrieve
+    page: option<s32>,
+    /// How many search results to retrieve per page
+    pagelen: option<s32>
+  }
+  search-workspace: func(params: search-workspace-params) -> result<string, string>;
+
+}
+
+interface users {
+  /// Get current user
+  get-user: func() -> result<string, string>;
+
+  /// List email addresses for current user
+  get-user-emails: func() -> result<string, string>;
+
+  /// Get an email address for current user
+  get-user-emails-email: func() -> result<string, string>;
+
+  /// Get a user
+  get-users-selected-user: func() -> result<string, string>;
+
+}
+
+interface workspaces {
+  enum get-workspaces-role-enum {
+    owner,
+    collaborator,
+    member,
+  }
+
+  /// List workspaces for the current user
+  record get-user-permissions-workspaces-params {
+    /// 
+    /// Query string to narrow down the response. See
+    q: option<string>,
+    /// 
+    /// Name of a response property to sort results. See
+    sort: option<string>
+  }
+  get-user-permissions-workspaces: func(params: get-user-permissions-workspaces-params) -> result<string, string>;
+
+  /// List workspaces for user
+  record get-workspaces-params {
+    /// 
+    ///             Filters the workspaces based on the authenticated user's role on each workspace.
+    role: option<get-workspaces-role-enum>,
+    /// 
+    /// Query string to narrow down the response. See
+    q: option<string>,
+    /// 
+    /// Name of a response property to sort results. See
+    sort: option<string>
+  }
+  get-workspaces: func(params: get-workspaces-params) -> result<string, string>;
+
+  /// Get a workspace
+  get-workspaces-workspace: func() -> result<string, string>;
+
+  /// List webhooks for a workspace
+  get-workspaces-workspace-hooks: func() -> result<string, string>;
+
+  /// Create a webhook for a workspace
+  post-workspaces-workspace-hooks: func() -> result<string, string>;
+
+  /// Get a webhook for a workspace
+  get-workspaces-workspace-hooks-uid: func() -> result<string, string>;
+
+  /// Update a webhook for a workspace
+  put-workspaces-workspace-hooks-uid: func() -> result<string, string>;
+
+  /// Delete a webhook for a workspace
+  delete-workspaces-workspace-hooks-uid: func() -> result<string, string>;
+
+  /// List users in a workspace
+  get-workspaces-workspace-members: func() -> result<string, string>;
+
+  /// Get user membership for a workspace
+  get-workspaces-workspace-members-member: func() -> result<string, string>;
+
+  /// List user permissions in a workspace
+  record get-workspaces-workspace-permissions-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>
+  }
+  get-workspaces-workspace-permissions: func(params: get-workspaces-workspace-permissions-params) -> result<string, string>;
+
+  /// List all repository permissions for a workspace
+  record get-workspaces-workspace-permissions-repositories-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>,
+    /// 
+    /// Name of a response property sort the result by as per
+    sort: option<string>
+  }
+  get-workspaces-workspace-permissions-repositories: func(params: get-workspaces-workspace-permissions-repositories-params) -> result<string, string>;
+
+  /// List a repository permissions for a workspace
+  record get-workspaces-workspace-permissions-repositories-repo-slug-params {
+    /// 
+    /// Query string to narrow down the response as per
+    q: option<string>,
+    /// 
+    /// Name of a response property sort the result by as per
+    sort: option<string>
+  }
+  get-workspaces-workspace-permissions-repositories-repo-slug: func(params: get-workspaces-workspace-permissions-repositories-repo-slug-params) -> result<string, string>;
+
+  /// List projects in a workspace
+  get-workspaces-workspace-projects: func() -> result<string, string>;
+
+}
+
+interface ssh {
+  /// List SSH keys
+  get-users-selected-user-ssh-keys: func() -> result<string, string>;
+
+  /// Add a new SSH key
+  record post-users-selected-user-ssh-keys-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-users-selected-user-ssh-keys: func(params: post-users-selected-user-ssh-keys-params) -> result<string, string>;
+
+  /// Get a SSH key
+  get-users-selected-user-ssh-keys-key-id: func() -> result<string, string>;
+
+  /// Update a SSH key
+  record put-users-selected-user-ssh-keys-key-id-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-users-selected-user-ssh-keys-key-id: func(params: put-users-selected-user-ssh-keys-key-id-params) -> result<string, string>;
+
+  /// Delete a SSH key
+  delete-users-selected-user-ssh-keys-key-id: func() -> result<string, string>;
+
+}
+
+interface projects {
+  /// Create a project in a workspace
+  record post-workspaces-workspace-projects-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-workspaces-workspace-projects: func(params: post-workspaces-workspace-projects-params) -> result<string, string>;
+
+  /// Get a project for a workspace
+  get-workspaces-workspace-projects-project-key: func() -> result<string, string>;
+
+  /// Update a project for a workspace
+  record put-workspaces-workspace-projects-project-key-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  put-workspaces-workspace-projects-project-key: func(params: put-workspaces-workspace-projects-project-key-params) -> result<string, string>;
+
+  /// Delete a project for a workspace
+  delete-workspaces-workspace-projects-project-key: func() -> result<string, string>;
+
+  /// List the default reviewers in a project
+  get-workspaces-workspace-projects-project-key-default-reviewers: func() -> result<string, string>;
+
+  /// Get a default reviewer
+  get-workspaces-workspace-projects-project-key-default-reviewers-selected-user: func() -> result<string, string>;
+
+  /// Add the specific user as a default reviewer for the project
+  put-workspaces-workspace-projects-project-key-default-reviewers-selected-user: func() -> result<string, string>;
+
+  /// Remove the specific user from the project's default reviewers
+  delete-workspaces-workspace-projects-project-key-default-reviewers-selected-user: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export addon;
+  export webhooks;
+  export pullrequests;
+  export repositories;
+  export branch-restrictions;
+  export branching-model;
+  export commits;
+  export properties;
+  export reports;
+  export commit-statuses;
+  export issue-tracker;
+  export deployments;
+  export pipelines;
+  export downloads;
+  export source;
+  export refs;
+  export snippets;
+  export search;
+  export users;
+  export workspaces;
+  export ssh;
+  export projects;
+}

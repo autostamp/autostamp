@@ -1,0 +1,375 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `auth` | `Authorization: Bearer <secret>` |
+package autostamp:lufthansa@0.2.0;
+
+interface baggage {
+  /// Baggage Trip and Contact
+  record baggage-trip-and-contact-params {
+    /// Bag tag number, PNR, boarding card or FQTV ID
+    search-id: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string
+  }
+  baggage-trip-and-contact: func(params: baggage-trip-and-contact-params) -> result<string, string>;
+
+}
+
+
+interface offers {
+  /// All Fares
+  record all-fares-params {
+    /// Specifies in which catalogue the fares need to be searched (e.g.'4U;OS').
+    catalogues: string,
+    /// Enter journey origin (e.g 'FRA').
+    origin: string,
+    /// Enter journey destination (e.g 'MAD').
+    destination: string,
+    /// Enter journey travel-date (e.g 2016-10-20)
+    travel-date: string,
+    /// Enter journey return-date (e.g 2016-10-31)'.
+    return-date: option<string>,
+    /// Enter the required cabin class (e.g econonmy, business etc.). (Acceptable values are: "", "economy", "premium economy", "business", "first")
+    cabin-class: option<string>,
+    /// Specifies the type and number of travelers (e.g. '(adult=2;child=2;infant=1)') For LH only (adult=1) possible.
+    travelers: option<string>,
+    /// Mandatory for 4U. Specifies, which fares to be returned, such as basic, smart, best, smartflex, bestflex . (Acceptable values are: "", "basic", "smart", "best", "smartflex", "bestflex")
+    fare-family: option<string>,
+    /// Austrian Airlines only - specify the web tracking id to be used in OS Deep link.
+    trackingid: option<string>,
+    /// Mandatory http header:  application/xml or application/json
+    accept: option<string>
+  }
+  all-fares: func(params: all-fares-params) -> result<string, string>;
+
+  /// Best Fares
+  record best-fares-params {
+    /// Search fares from these carriers' catalogues (e.g. '4U;OS;LH')
+    catalogues: string,
+    /// Journey origin. 3-letter IATA airport code (e.g. 'FRA')
+    origin: string,
+    /// Journey destination. 3-letter IATA airport code (e.g. 'MAD')
+    destination: string,
+    /// Journey travel-date (YYYY-MM-DD)
+    travel-date: string,
+    /// Trip duration in days (e.g. '7')
+    trip-duration: string,
+    /// Fare range: 'byday' or 'bymonth' (Acceptable values are: "byday", "bymonth")
+    range: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Cabin class: 'economy', 'premium_economy', 'business', 'first' (Acceptable values are: "", "economy", "premium_economy", "business", "first")
+    cabin-class: option<string>,
+    /// Country code of requestor. 2-letter ISO 3166-1 country code (e.g. 'de')
+    country: option<string>,
+    /// Austrian Airlines only - specify the web tracking id to be used in OS Deep link.
+    trackingid: option<string>,
+    /// Fare family: basic, smart, best, smartflex, bestflex - Germanwings only (Acceptable values are: "", "basic", "smart", "best", "smartflex", "bestflex")
+    fare-family: option<string>
+  }
+  best-fares: func(params: best-fares-params) -> result<string, string>;
+
+  /// Deep Links
+  record deep-links-params {
+    /// Carrier for which the deep link will be created (e.g. 'LH')
+    catalogues: string,
+    /// Deep link tracking ID
+    trackingid: string,
+    /// 2-letter ISO 3166-1 country code
+    country: string,
+    /// 2-letter ISO 3166-1 language code
+    lang: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Journey origin. 3-letter IATA airport or city code (e.g. 'FRA')
+    origin: option<string>,
+    /// Journey origin airport or city name (e.g. 'frankfurt')
+    origin-name: option<string>,
+    /// Journey destination. 3-letter IATA airport or city code (e.g. 'MAD')
+    destination: option<string>,
+    /// Journey destination airport or city name (e.g. 'madrid')
+    destination-name: option<string>,
+    /// Journey travel-date (YYYY-MM-DD)
+    travel-date: option<string>,
+    /// Journey return-date (YYYY-MM-DD)
+    return-date: option<string>,
+    /// Cabin class: 'economy', 'premium_economy', 'business', 'first' (Acceptable values are: "", "economy", "premium_economy", "business", "first")
+    cabin-class: option<string>,
+    /// Outbound flight segments in the sequence of travel (e.g. 'LH096;LH480')
+    outbound-segments: option<string>,
+    /// Flight segments in the sequence of travel (e.g. 'LH7465;LH431')
+    return-segments: option<string>,
+    /// Type and number of travelers (e.g. '(adult=2;child=2;infant=1)')
+    travelers: option<string>,
+    /// Travel fare (e.g. '1341.45')
+    fare: option<string>,
+    /// Travel net fare. Total fare less taxes and charges (e.g. '1140')
+    net-fare: option<string>,
+    /// Fare currency (e.g. 'EUR')
+    fare-currency: option<string>,
+    /// Deep link partner id (e.g. '1247')
+    partnerid: option<string>,
+    /// Deep link encryption-key
+    encryption-key: option<string>
+  }
+  deep-links: func(params: deep-links-params) -> result<string, string>;
+
+  /// LH Deep Links - FFP
+  record lh-deep-links-ffp-params {
+    /// Carrier for which the deep link will be created (e.g. 'LH')
+    catalogues: string,
+    /// Journey origin. 3-letter IATA airport or city code (e.g. 'FRA')
+    origin: string,
+    /// Journey destination. 3-letter IATA airport or city code (e.g. 'MAD')
+    destination: string,
+    /// Journey travel-date (YYYY-MM-DD)
+    travel-date: string,
+    /// Deep link tracking ID
+    trackingid: string,
+    /// 2-letter ISO 3166-1 country code
+    country: string,
+    /// 2-letter ISO 3166-1 language code
+    lang: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Journey return-date (YYYY-MM-DD)
+    return-date: option<string>,
+    /// Cabin class: 'economy', 'premium_economy', 'business', 'first' (Acceptable values are: "", "economy", "premium_economy", "business", "first")
+    cabin-class: option<string>,
+    /// Type and number of travelers (e.g. '(adult=2;child=2;infant=1)')
+    travelers: option<string>,
+    /// Deep link partner id (e.g. '1247')
+    partnerid: option<string>,
+    /// Deep link encryption-key
+    encryption-key: option<string>
+  }
+  lh-deep-links-ffp: func(params: lh-deep-links-ffp-params) -> result<string, string>;
+
+  /// LH Deep Links - ITCO
+  record lh-deep-links-itco-params {
+    /// Carrier for which the deep link will be created (e.g. 'LH')
+    catalogues: string,
+    /// Journey origin. 3-letter IATA airport or city code (e.g. 'FRA')
+    origin: string,
+    /// Journey destination. 3-letter IATA airport or city code (e.g. 'MAD')
+    destination: string,
+    /// Journey travel-date (YYYY-MM-DD)
+    travel-date: string,
+    /// Outbound flight segments in the sequence of travel (e.g. 'LH096;LH480')
+    outbound-segments: string,
+    /// Travel fare (e.g. '1341.45')
+    fare: string,
+    /// Fare currency (e.g. 'EUR')
+    fare-currency: string,
+    /// Deep link tracking ID
+    trackingid: string,
+    /// 2-letter ISO 3166-1 country code
+    country: string,
+    /// 2-letter ISO 3166-1 language code
+    lang: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Journey return-date (YYYY-MM-DD)
+    return-date: option<string>,
+    /// Cabin class: 'economy', 'premium_economy', 'business', 'first' (Acceptable values are: "", "economy", "premium_economy", "business", "first")
+    cabin-class: option<string>,
+    /// Flight segments in the sequence of travel (e.g. 'LH7465;LH431')
+    return-segments: option<string>,
+    /// Type and number of travelers (e.g. '(adult=2;child=2;infant=1)')
+    travelers: option<string>,
+    /// Travel net fare. Total fare less taxes and charges (e.g. '1140')
+    net-fare: option<string>,
+    /// Deep link partner id (e.g. '1247')
+    partnerid: option<string>,
+    /// Deep link encryption-key
+    encryption-key: option<string>
+  }
+  lh-deep-links-itco: func(params: lh-deep-links-itco-params) -> result<string, string>;
+
+  /// Fares
+  record fares-params {
+    /// Search fares from these carriers' catalogues - currently active for Germanwings only  (4U)
+    catalogues: string,
+    /// Journey details  e.g. (origin=TXL;destination=CGN;travel-date=2016-12-15;return-date=2016-12-20;cabin=Economy)
+    segments: string,
+    /// Include fares for these carriers e.g. ('4U;LH')
+    carriers: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Type and number of travelers e.g. (adult=1;child=1;infant=1)
+    travelers: option<string>,
+    /// Fares family: basic,smart, best, smartflex, bestflex - Germanwings only (Acceptable values are: "", "basic", "smart", "best", "smartflex", "bestflex")
+    fare-types: option<string>
+  }
+  fares: func(params: fares-params) -> result<string, string>;
+
+  /// Lowest Fares
+  record lowest-fares-params {
+    /// Search fares from these carriers' catalogues e.g. '4U;OS;LH'
+    catalogues: string,
+    /// Journey origin. 3-letter IATA aiport code e.g. 'FRA'
+    origin: string,
+    /// Journey destination. 3-letter IATA airport code e.g. 'MAD'
+    destination: string,
+    /// Journey travel-date YYYY-MM-DD
+    travel-date: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Journey return-date - mandatory for OS and LH searches YYYY-MM-DD
+    return-date: option<string>,
+    /// Cabin class: 'economy', 'premium_economy', 'business', 'first' (Acceptable values are: "", "economy", "premium_economy", "business", "first")
+    cabin-class: option<string>,
+    /// Type and number of travelers e.g. '(adult=2;child=2;infant=1)'. For LH only (adult=1) possible
+    travelers: option<string>,
+    /// Fare family: basic, smart, best, smartflex, bestflex - Germanwings only (Acceptable values are: "", "basic", "smart", "best", "smartflex", "bestflex")
+    fare-family: option<string>,
+    /// Country code of requestor. 2-letter ISO 3166-1 country code (e.g. 'de')
+    country: option<string>
+  }
+  lowest-fares: func(params: lowest-fares-params) -> result<string, string>;
+
+  /// Fares Subscriptions
+  record fares-subscriptions-params {
+    /// Journey origin. 3-leter IATA airport code (e.g. 'FRA')
+    origin: string,
+    /// Journey destination. 3-letter IATA airport code (e.g. 'MAD')
+    destination: string,
+    /// Cabin class: 'economy', 'premium_economy', 'business', 'first' (Acceptable values are: "", "economy", "premium_economy", "business", "first")
+    cabin-class: string,
+    /// Trip duration in days (e.g. '7')
+    trip-duration: string,
+    /// Email Address')
+    email: string,
+    /// 2-letter ISO 3166-1 language code
+    lang: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// 2-letter ISO 3166-1 country code
+    country: option<string>,
+    /// Tracking parameter
+    trackingid: option<string>
+  }
+  fares-subscriptions: func(params: fares-subscriptions-params) -> result<string, string>;
+
+  /// OND Route
+  record ond-route-params {
+    /// Enter either the orgin city or orgin country code (e.g 'FRA' or 'DE'). Enter '*' for all
+    origin: string,
+    /// Enter either the destination city or country code (e.g 'MAD' or 'ES'). Enter '*' for all
+    destination: string,
+    /// Mandatory http header:  application/xml or application/json
+    accept: string,
+    /// Carrier for which the OND will be retrieved (e.g. 'LH')
+    catalogues: option<string>,
+    /// Number of records returned per request. Defaults to 20, maximum is 100 (if a value bigger than 100 is given, 100 will be taken)
+    limit: option<string>,
+    /// Number of records skipped. Defaults to 0
+    offset: option<string>
+  }
+  ond-route: func(params: ond-route-params) -> result<string, string>;
+
+  /// OND Status
+  record ond-status-params {
+    /// Mandatory http header:  application/xml or application/json
+    accept: string,
+    /// Carrier for which the OND will be retrieved (e.g. 'LH')
+    catalogues: option<string>,
+    /// Enter if newly added routes should be returned in the response. (Acceptable values are: "", "true", "false")
+    new-routes: option<string>,
+    /// Enter if old (deleted) routes should be returned in the response. (Acceptable values are: "", "true", "false")
+    old-routes: option<string>
+  }
+  ond-status: func(params: ond-status-params) -> result<string, string>;
+
+  /// Top OND
+  record top-ond-params {
+    /// Mandatory http header:  application/xml or application/json
+    accept: string,
+    /// Carrier for which the OND will be retrieved (e.g. 'LH')
+    catalogues: option<string>,
+    /// Enter the origin country code (e.g. 'DE'). Leave empty to search Top OND across all countries
+    origin: option<string>
+  }
+  top-ond: func(params: top-ond-params) -> result<string, string>;
+
+}
+
+interface orders {
+  /// Orders
+  record orders-params {
+    /// Unique order identifier
+    order-id: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Surname of traveller
+    name: string
+  }
+  orders: func(params: orders-params) -> result<string, string>;
+
+}
+
+interface preflight {
+  /// Auto Check-In
+  record auto-check-in-params {
+    /// Ticket number
+    ticketnumber: string,
+    /// Email address
+    email-address: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string
+  }
+  auto-check-in: func(params: auto-check-in-params) -> result<string, string>;
+
+}
+
+interface promotions {
+  /// Price Offers
+  record price-offers-params {
+    /// Departure city. 3-letter IATA city code
+    origin: string,
+    /// Destination city. 3-letter IATA city code
+    destination: string,
+    /// Departure date in local time (YYYY-MM-DD)
+    departure-date: string,
+    /// Return date in local time (YYYY-MM-DD)
+    return-date: string,
+    /// Optional parameter.
+    service: option<string>
+  }
+  price-offers: func(params: price-offers-params) -> result<string, string>;
+
+}
+
+interface reference-data {
+  /// Seat Details
+  record seat-details-params {
+    /// Aircraft type. 3-character IATA equipment code
+    aircraft-code: string,
+    /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
+    accept: string,
+    /// Cabin class: M, E, C, F (Acceptable values are: "", "M", "E", "C", "F")
+    cabin-code: string,
+    /// 2-letter ISO 3166-1 language code
+    lang: option<string>
+  }
+  seat-details: func(params: seat-details-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export baggage;
+  export offers;
+  export orders;
+  export preflight;
+  export promotions;
+  export reference-data;
+}

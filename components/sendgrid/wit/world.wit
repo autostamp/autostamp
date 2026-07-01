@@ -1,0 +1,3075 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `Authorization` | header `Authorization` |
+package autostamp:sendgrid@0.2.0;
+
+interface ip-access-management {
+  record post-access-settings-whitelist-body-ips-item {
+    /// An IP address that you want to allow.
+    ip: string
+  }
+
+  /// Retrieve all recent access attempts
+  record get-access-settings-activity-params {
+    /// Limits the number of IPs to return.
+    limit: option<s32>
+  }
+  get-access-settings-activity: func(params: get-access-settings-activity-params) -> result<string, string>;
+
+  /// Retrieve a list of currently allowed IPs
+  get-access-settings-whitelist: func() -> result<string, string>;
+
+  /// Add one or more IPs to the allow list
+  record post-access-settings-whitelist-params {
+    /// An array containing the IP(s) you want to allow.
+    ips: list<post-access-settings-whitelist-body-ips-item>
+  }
+  post-access-settings-whitelist: func(params: post-access-settings-whitelist-params) -> result<string, string>;
+
+  /// Remove one or more IPs from the allow list
+  record delete-access-settings-whitelist-params {
+    /// An array of the IDs of the IP address that you want to remove from your allow list.
+    ids: option<list<s32>>
+  }
+  delete-access-settings-whitelist: func(params: delete-access-settings-whitelist-params) -> result<string, string>;
+
+  /// Retrieve a specific allowed IP
+  get-access-settings-whitelist-rule-id: func() -> result<string, string>;
+
+  /// Remove a specific IP from the allowed list
+  delete-access-settings-whitelist-rule-id: func() -> result<string, string>;
+
+}
+
+
+interface alerts {
+  enum post-alerts-body-type-op-enum {
+    stats-notification,
+    usage-limit,
+  }
+
+  /// Retrieve all alerts
+  get-alerts: func() -> result<string, string>;
+
+  /// Create a new Alert
+  record post-alerts-params {
+    on-behalf-of: option<string>,
+    /// The email address the alert will be sent to.
+    /// Example: test@example.com
+    email-to: string,
+    /// Required for stats_notification. How frequently the alert will be sent.
+    /// Example: daily
+    frequency: option<string>,
+    /// Required for usage_alert. When this usage threshold is reached, the alert will be sent.
+    /// Example: 90
+    percentage: option<s32>,
+    /// The type of alert you want to create. Can be either usage_limit or stats_notification.
+    /// Example: usage_limit
+    type-op: post-alerts-body-type-op-enum
+  }
+  post-alerts: func(params: post-alerts-params) -> result<string, string>;
+
+  /// Retrieve a specific alert
+  get-alerts-alert-id: func() -> result<string, string>;
+
+  /// Update an alert
+  record patch-alerts-alert-id-params {
+    /// The new email address you want your alert to be sent to.
+    /// Example: test@example.com
+    email-to: option<string>,
+    /// The new frequency at which to send the stats_notification alert.
+    /// Example: monthly
+    frequency: option<string>,
+    /// The new percentage threshold at which the usage_limit alert will be sent.
+    /// Example: 90
+    percentage: option<s32>
+  }
+  patch-alerts-alert-id: func(params: patch-alerts-alert-id-params) -> result<string, string>;
+
+  /// Delete an alert
+  delete-alerts-alert-id: func() -> result<string, string>;
+
+}
+
+interface api-keys {
+  /// Retrieve all API Keys belonging to the authenticated user
+  record get-api-keys-params {
+    limit: option<s32>
+  }
+  get-api-keys: func(params: get-api-keys-params) -> result<string, string>;
+
+  /// Create API keys
+  record create-api-keys-params {
+    /// The name you will use to describe this API Key.
+    name: string,
+    /// The individual permissions that you are giving to this API Key.
+    scopes: option<list<string>>
+  }
+  create-api-keys: func(params: create-api-keys-params) -> result<string, string>;
+
+  /// Retrieve an existing API Key
+  get-api-keys-api-key-id: func() -> result<string, string>;
+
+  /// Update API key name and scopes
+  record put-api-keys-api-key-id-params {
+    name: string,
+    scopes: option<list<string>>
+  }
+  put-api-keys-api-key-id: func(params: put-api-keys-api-key-id-params) -> result<string, string>;
+
+  /// Update API key name
+  record patch-api-keys-api-key-id-params {
+    /// The new name of the API Key.
+    name: string
+  }
+  patch-api-keys-api-key-id: func(params: patch-api-keys-api-key-id-params) -> result<string, string>;
+
+  /// Delete API keys
+  delete-api-keys-api-key-id: func() -> result<string, string>;
+
+}
+
+interface suppressions-unsubscribe-groups {
+  /// Retrieve all suppression groups associated with the user.
+  record get-asm-groups-params {
+    id: option<s32>
+  }
+  get-asm-groups: func(params: get-asm-groups-params) -> result<string, string>;
+
+  /// Create a new suppression group
+  record post-asm-groups-params {
+    /// A brief description of your suppression group. Required when creating a group.
+    description: option<string>,
+    /// Indicates if you would like this to be your default suppression group.
+    is-default: option<bool>,
+    /// The name of your suppression group. Required when creating a group.
+    name: option<string>
+  }
+  post-asm-groups: func(params: post-asm-groups-params) -> result<string, string>;
+
+  /// Get information on a single suppression group.
+  get-asm-groups-group-id: func() -> result<string, string>;
+
+  /// Update a suppression group.
+  record patch-asm-groups-group-id-params {
+    body: option<string>
+  }
+  patch-asm-groups-group-id: func(params: patch-asm-groups-group-id-params) -> result<string, string>;
+
+  /// Delete a Suppression Group
+  delete-asm-groups-group-id: func() -> result<string, string>;
+
+}
+
+interface suppressions-suppressions {
+  /// Retrieve all suppressions for a suppression group
+  get-asm-groups-group-id-suppressions: func() -> result<string, string>;
+
+  /// Add suppressions to a suppression group
+  record post-asm-groups-group-id-suppressions-params {
+    /// The array of email addresses to add or find.
+    recipient-emails: list<string>
+  }
+  post-asm-groups-group-id-suppressions: func(params: post-asm-groups-group-id-suppressions-params) -> result<string, string>;
+
+  /// Search for suppressions within a group
+  record post-asm-groups-group-id-suppressions-search-params {
+    /// The array of email addresses to add or find.
+    recipient-emails: list<string>
+  }
+  post-asm-groups-group-id-suppressions-search: func(params: post-asm-groups-group-id-suppressions-search-params) -> result<string, string>;
+
+  /// Delete a suppression from a suppression group
+  delete-asm-groups-group-id-suppressions-email: func() -> result<string, string>;
+
+  /// Retrieve all suppressions
+  get-asm-suppressions: func() -> result<string, string>;
+
+  /// Retrieve all suppression groups for an email address
+  get-asm-suppressions-email: func() -> result<string, string>;
+
+}
+
+interface suppressions-global-suppressions {
+  /// Add recipient addresses to the global suppression group.
+  record post-asm-suppressions-global-params {
+    /// The array of email addresses to add or find.
+    recipient-emails: list<string>
+  }
+  post-asm-suppressions-global: func(params: post-asm-suppressions-global-params) -> result<string, string>;
+
+  /// Retrieve a Global Suppression
+  get-asm-suppressions-global-email: func() -> result<string, string>;
+
+  /// Delete a Global Suppression
+  delete-asm-suppressions-global-email: func() -> result<string, string>;
+
+  /// Retrieve all global suppressions
+  record get-suppression-unsubscribes-params {
+    /// Refers start of the time range in unix timestamp when an unsubscribe email was created (inclusive).
+    start-time: option<s32>,
+    /// Refers end of the time range in unix timestamp when an unsubscribe email was created (inclusive).
+    end-time: option<s32>,
+    /// The number of results to display on each page.
+    limit: option<s32>,
+    /// The point in the list of results to begin displaying global suppressions.
+    offset: option<s32>
+  }
+  get-suppression-unsubscribes: func(params: get-suppression-unsubscribes-params) -> result<string, string>;
+
+}
+
+interface stats {
+  enum get-geo-stats-country-enum {
+    us,
+    ca,
+  }
+
+  /// Retrieve email statistics by browser.
+  record get-browsers-stats-params {
+    /// The browsers to get statistics for. You can include up to 10 different browsers by including this parameter multiple times.
+    browsers: option<string>
+  }
+  get-browsers-stats: func(params: get-browsers-stats-params) -> result<string, string>;
+
+  /// Retrieve email statistics by client type.
+  get-clients-stats: func() -> result<string, string>;
+
+  /// Retrieve stats by a specific client type.
+  get-clients-client-type-stats: func() -> result<string, string>;
+
+  /// Retrieve email statistics by device type.
+  get-devices-stats: func() -> result<string, string>;
+
+  /// Retrieve email statistics by country and state/province.
+  record get-geo-stats-params {
+    /// The country you would like to see statistics for. Currently only supported for US and CA.
+    country: option<get-geo-stats-country-enum>
+  }
+  get-geo-stats: func(params: get-geo-stats-params) -> result<string, string>;
+
+  /// Retrieve email statistics by mailbox provider.
+  record get-mailbox-providers-stats-params {
+    /// The mail box providers to get statistics for. You can include up to 10 by including this parameter multiple times.
+    mailbox-providers: option<string>
+  }
+  get-mailbox-providers-stats: func(params: get-mailbox-providers-stats-params) -> result<string, string>;
+
+  /// Retrieve global email statistics
+  get-stats: func() -> result<string, string>;
+
+}
+
+interface campaigns-api {
+  enum campaign-request-editor-enum {
+    code,
+    design,
+  }
+
+  /// Retrieve all Campaigns
+  record get-campaigns-params {
+    /// The number of results you would like to receive at a time.
+    limit: option<s32>,
+    /// The index of the first campaign to return, where 0 is the first campaign.
+    offset: option<s32>
+  }
+  get-campaigns: func(params: get-campaigns-params) -> result<string, string>;
+
+  /// Create a Campaign
+  record post-campaigns-params {
+    /// The categories you would like associated to this campaign.
+    categories: option<list<string>>,
+    /// This is the url of the custom unsubscribe page that you provide for customers to unsubscribe from your suppression groups.
+    custom-unsubscribe-url: option<string>,
+    /// The editor used in the UI.
+    editor: option<campaign-request-editor-enum>,
+    /// The HTML of your marketing email.
+    html-content: option<string>,
+    /// The pool of IPs that you would like to send this email from.
+    ip-pool: option<string>,
+    /// The IDs of the lists you are sending this campaign to. You can have both segment IDs and list IDs
+    list-ids: option<list<s32>>,
+    /// The plain text content of your emails.
+    plain-content: option<string>,
+    /// The segment IDs that you are sending this list to. You can have both segment IDs and list IDs. Segments are limited to 10 segment IDs.
+    segment-ids: option<list<s32>>,
+    /// The ID of the "sender" identity that you have created. Your recipients will see this as the "from" on your marketing emails.
+    sender-id: option<s32>,
+    /// The subject of your campaign that your recipients will see.
+    subject: option<string>,
+    /// The suppression group that this marketing email belongs to, allowing recipients to opt-out of emails of this type.
+    suppression-group-id: option<s32>,
+    /// The display title of your campaign. This will be viewable by you in the Marketing Campaigns UI.
+    title: string
+  }
+  post-campaigns: func(params: post-campaigns-params) -> result<string, string>;
+
+  /// Retrieve a single campaign
+  get-campaigns-campaign-id: func() -> result<string, string>;
+
+  /// Update a Campaign
+  record patch-campaigns-campaign-id-params {
+    /// The categories you want to tag on this campaign.
+    categories: list<string>,
+    /// The HTML content of this campaign.
+    html-content: string,
+    /// The plain content of this campaign.
+    plain-content: string,
+    /// The subject line for your campaign.
+    subject: string,
+    /// The title of the campaign.
+    title: string
+  }
+  patch-campaigns-campaign-id: func(params: patch-campaigns-campaign-id-params) -> result<string, string>;
+
+  /// Delete a Campaign
+  delete-campaigns-campaign-id: func() -> result<string, string>;
+
+  /// View Scheduled Time of a Campaign
+  get-campaigns-campaign-id-schedules: func() -> result<string, string>;
+
+  /// Schedule a Campaign
+  record post-campaigns-campaign-id-schedules-params {
+    /// The unix timestamp for the date and time you would like your campaign to be sent out.
+    send-at: s32
+  }
+  post-campaigns-campaign-id-schedules: func(params: post-campaigns-campaign-id-schedules-params) -> result<string, string>;
+
+  /// Update a Scheduled Campaign
+  record patch-campaigns-campaign-id-schedules-params {
+    send-at: s64
+  }
+  patch-campaigns-campaign-id-schedules: func(params: patch-campaigns-campaign-id-schedules-params) -> result<string, string>;
+
+  /// Unschedule a Scheduled Campaign
+  delete-campaigns-campaign-id-schedules: func() -> result<string, string>;
+
+  /// Send a Campaign
+  post-campaigns-campaign-id-schedules-now: func() -> result<string, string>;
+
+  /// Send a Test Campaign
+  record post-campaigns-campaign-id-schedules-test-params {
+    /// The email address that should receive the test campaign.
+    to: string
+  }
+  post-campaigns-campaign-id-schedules-test: func(params: post-campaigns-campaign-id-schedules-test-params) -> result<string, string>;
+
+}
+
+interface categories {
+  enum get-categories-stats-aggregated-by-enum {
+    day,
+    week,
+    month,
+  }
+
+  enum get-categories-stats-sums-sort-by-direction-enum {
+    desc,
+    asc,
+  }
+
+  /// Retrieve all categories
+  record get-categories-params {
+    /// The number of categories to display per page.
+    limit: option<s32>,
+    /// Allows you to perform a prefix search on this particular category.
+    category: option<string>,
+    /// The point in the list that you would like to begin displaying results.
+    offset: option<s32>
+  }
+  get-categories: func(params: get-categories-params) -> result<string, string>;
+
+  /// Retrieve Email Statistics for Categories
+  record get-categories-stats-params {
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>,
+    /// The individual categories that you want to retrieve statistics for. You may include up to 10 different categories.
+    categories: string,
+    /// The number of results to include.
+    limit: option<s32>,
+    /// The number of results to skip.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-categories-stats-aggregated-by-enum>
+  }
+  get-categories-stats: func(params: get-categories-stats-params) -> result<string, string>;
+
+  /// Retrieve sums of email stats for each category [Needs: Stats object defined, has category ID?]
+  record get-categories-stats-sums-params {
+    /// The metric that you want to sort by.  Must be a single metric.
+    sort-by-metric: option<string>,
+    /// The direction you want to sort.
+    sort-by-direction: option<get-categories-stats-sums-sort-by-direction-enum>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>,
+    /// Limits the number of results returned.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-categories-stats-aggregated-by-enum>
+  }
+  get-categories-stats-sums: func(params: get-categories-stats-sums-params) -> result<string, string>;
+
+}
+
+interface contacts-api-custom-fields {
+  /// Retrieve all custom fields
+  get-contactdb-custom-fields: func() -> result<string, string>;
+
+  /// Create a Custom Field
+  record post-contactdb-custom-fields-params {
+    name: option<string>,
+    type-op: option<string>
+  }
+  post-contactdb-custom-fields: func(params: post-contactdb-custom-fields-params) -> result<string, string>;
+
+  /// Retrieve a Custom Field
+  get-contactdb-custom-fields-custom-field-id: func() -> result<string, string>;
+
+  /// Delete a Custom Field
+  delete-contactdb-custom-fields-custom-field-id: func() -> result<string, string>;
+
+  /// Retrieve reserved fields
+  get-contactdb-reserved-fields: func() -> result<string, string>;
+
+}
+
+interface contacts-api-lists {
+  /// Retrieve all lists
+  get-contactdb-lists: func() -> result<string, string>;
+
+  /// Create a List
+  record post-contactdb-lists-params {
+    name: string
+  }
+  post-contactdb-lists: func(params: post-contactdb-lists-params) -> result<string, string>;
+
+  /// Delete Multiple lists
+  record delete-contactdb-lists-params {
+    body: option<list<s32>>
+  }
+  delete-contactdb-lists: func(params: delete-contactdb-lists-params) -> result<string, string>;
+
+  /// Retrieve a single list
+  record get-contactdb-lists-list-id-params {
+    /// The ID of the list to retrieve.
+    list-id: option<s32>
+  }
+  get-contactdb-lists-list-id: func(params: get-contactdb-lists-list-id-params) -> result<string, string>;
+
+  /// Update a List
+  record patch-contactdb-lists-list-id-params {
+    /// The ID of the list you are updating.
+    list-id: s32,
+    /// The new name for your list. 
+    name: string
+  }
+  patch-contactdb-lists-list-id: func(params: patch-contactdb-lists-list-id-params) -> result<string, string>;
+
+  /// Delete a List
+  record delete-contactdb-lists-list-id-params {
+    /// Adds the ability to delete all contacts on the list in addition to deleting the list.
+    delete-contacts: option<bool>,
+    body: option<string>
+  }
+  delete-contactdb-lists-list-id: func(params: delete-contactdb-lists-list-id-params) -> result<string, string>;
+
+  /// Retrieve all recipients on a List
+  record get-contactdb-lists-list-id-recipients-params {
+    /// Page index of first recipient to return (must be a positive integer)
+    page: option<s32>,
+    /// Number of recipients to return at a time (must be a positive integer between 1 and 1000)
+    page-size: option<s32>,
+    /// The ID of the list whose recipients you are requesting.
+    list-id: s32
+  }
+  get-contactdb-lists-list-id-recipients: func(params: get-contactdb-lists-list-id-recipients-params) -> result<string, string>;
+
+  /// Add Multiple Recipients to a List
+  record post-contactdb-lists-list-id-recipients-params {
+    body: option<list<s32>>
+  }
+  post-contactdb-lists-list-id-recipients: func(params: post-contactdb-lists-list-id-recipients-params) -> result<string, string>;
+
+  /// Add a Single Recipient to a List
+  post-contactdb-lists-list-id-recipients-recipient-id: func() -> result<string, string>;
+
+  /// Delete a Single Recipient from a Single List
+  record delete-contactdb-lists-list-id-recipients-recipient-id-params {
+    /// The ID of the list you are taking this recipient away from.
+    list-id: s32,
+    /// The ID of the recipient to take off the list.
+    recipient-id: s32,
+    body: option<string>
+  }
+  delete-contactdb-lists-list-id-recipients-recipient-id: func(params: delete-contactdb-lists-list-id-recipients-recipient-id-params) -> result<string, string>;
+
+}
+
+interface contacts-api-recipients {
+  record post-contactdb-recipients-body-item {
+    age: option<s32>,
+    /// The email address of the recipient.
+    email: string,
+    /// The first name of the recipient.
+    first-name: option<string>,
+    /// The last name of the recipient.
+    last-name: option<string>
+  }
+
+  record patch-contactdb-recipients-body-item {
+    email: string,
+    /// The first name of the recipient. This is one of the default custom fields.
+    first-name: option<string>,
+    /// The last name of the recipient. This is one of the default custom fields.
+    last-name: option<string>
+  }
+
+  /// Retrieve recipients
+  record get-contactdb-recipients-params {
+    /// Page index of first recipients to return (must be a positive integer)
+    page: option<s32>,
+    /// Number of recipients to return at a time (must be a positive integer between 1 and 1000)
+    page-size: option<s32>
+  }
+  get-contactdb-recipients: func(params: get-contactdb-recipients-params) -> result<string, string>;
+
+  /// Add recipients
+  record post-contactdb-recipients-params {
+    body: option<list<post-contactdb-recipients-body-item>>
+  }
+  post-contactdb-recipients: func(params: post-contactdb-recipients-params) -> result<string, string>;
+
+  /// Update Recipient
+  record patch-contactdb-recipients-params {
+    body: option<list<patch-contactdb-recipients-body-item>>
+  }
+  patch-contactdb-recipients: func(params: patch-contactdb-recipients-params) -> result<string, string>;
+
+  /// Delete Recipients
+  record delete-contactdb-recipients-params {
+    body: option<list<string>>
+  }
+  delete-contactdb-recipients: func(params: delete-contactdb-recipients-params) -> result<string, string>;
+
+  /// Retrieve the count of billable recipients
+  get-contactdb-recipients-billable-count: func() -> result<string, string>;
+
+  /// Retrieve a Count of Recipients
+  get-contactdb-recipients-count: func() -> result<string, string>;
+
+  /// Search recipients
+  record get-contactdb-recipients-search-params {
+    field-name: option<string>
+  }
+  get-contactdb-recipients-search: func(params: get-contactdb-recipients-search-params) -> result<string, string>;
+
+  /// Search recipients
+  record post-contactdb-recipients-search-params {
+    conditions: list<string>,
+    list-id: s32
+  }
+  post-contactdb-recipients-search: func(params: post-contactdb-recipients-search-params) -> result<string, string>;
+
+  /// Retrieve a single recipient
+  get-contactdb-recipients-recipient-id: func() -> result<string, string>;
+
+  /// Delete a Recipient
+  delete-contactdb-recipients-recipient-id: func() -> result<string, string>;
+
+  /// Retrieve the lists that a recipient is on
+  get-contactdb-recipients-recipient-id-lists: func() -> result<string, string>;
+
+  /// Get Recipient Upload Status
+  get-contactdb-status: func() -> result<string, string>;
+
+}
+
+interface contacts-api-segments {
+  enum contactdb-segments-conditions-and-or-enum {
+    and,
+    or,
+    empty,
+  }
+
+  enum contactdb-segments-conditions-operator-enum {
+    eq,
+    ne,
+    lt,
+    gt,
+    contains,
+  }
+
+  record contactdb-segments-conditions {
+    and-or: option<contactdb-segments-conditions-and-or-enum>,
+    field: string,
+    operator: contactdb-segments-conditions-operator-enum,
+    value: string
+  }
+
+  /// Retrieve all segments
+  get-contactdb-segments: func() -> result<string, string>;
+
+  /// Create a Segment
+  record post-contactdb-segments-params {
+    /// The conditions for a recipient to be included in this segment.
+    conditions: list<contactdb-segments-conditions>,
+    /// The list id from which to make this segment. Not including this ID will mean your segment is created from the main contactdb rather than a list.
+    list-id: option<s32>,
+    /// The name of this segment.
+    name: string,
+    /// The count of recipients in this list. This is not included on creation of segments.
+    recipient-count: option<f64>
+  }
+  post-contactdb-segments: func(params: post-contactdb-segments-params) -> result<string, string>;
+
+  /// Retrieve a segment
+  record get-contactdb-segments-segment-id-params {
+    /// The ID of the segment you want to request.
+    segment-id: s32
+  }
+  get-contactdb-segments-segment-id: func(params: get-contactdb-segments-segment-id-params) -> result<string, string>;
+
+  /// Update a segment
+  record patch-contactdb-segments-segment-id-params {
+    /// The ID of the segment you are updating.
+    segment-id: option<string>,
+    /// The conditions by which this segment should be created.
+    conditions: option<list<contactdb-segments-conditions>>,
+    /// The list ID you would like this segment to be built from.
+    list-id: option<f64>,
+    name: string
+  }
+  patch-contactdb-segments-segment-id: func(params: patch-contactdb-segments-segment-id-params) -> result<string, string>;
+
+  /// Delete a segment
+  record delete-contactdb-segments-segment-id-params {
+    /// True to delete all contacts matching the segment in addition to deleting the segment
+    delete-contacts: option<bool>,
+    body: option<string>
+  }
+  delete-contactdb-segments-segment-id: func(params: delete-contactdb-segments-segment-id-params) -> result<string, string>;
+
+  /// Retrieve recipients on a segment
+  record get-contactdb-segments-segment-id-recipients-params {
+    page: option<s32>,
+    page-size: option<s32>
+  }
+  get-contactdb-segments-segment-id-recipients: func(params: get-contactdb-segments-segment-id-recipients-params) -> result<string, string>;
+
+}
+
+interface designs-api {
+  enum design-duplicate-input-editor-enum {
+    code,
+    design,
+  }
+
+  /// List Designs
+  list-designs: func() -> result<string, string>;
+
+  /// Create Design
+  record post-designs-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-designs: func(params: post-designs-params) -> result<string, string>;
+
+  /// List SendGrid Pre-built Designs
+  list-sendgrid-pre-built-designs: func() -> result<string, string>;
+
+  /// Get SendGrid Pre-built Design
+  get-sendgrid-pre-built-design: func() -> result<string, string>;
+
+  /// Duplicate SendGrid Pre-built Design
+  record post-sendgrid-pre-built-design-params {
+    /// The editor used in the UI.
+    editor: option<design-duplicate-input-editor-enum>,
+    /// The name of the new design.
+    name: option<string>
+  }
+  post-sendgrid-pre-built-design: func(params: post-sendgrid-pre-built-design-params) -> result<string, string>;
+
+  /// Get Design
+  get-design: func() -> result<string, string>;
+
+  /// Duplicate Design
+  record post-design-params {
+    /// The editor used in the UI.
+    editor: option<design-duplicate-input-editor-enum>,
+    /// The name of the new design.
+    name: option<string>
+  }
+  post-design: func(params: post-design-params) -> result<string, string>;
+
+  /// Update Design
+  record put-design-params {
+    /// The list of categories applied to the design
+    categories: option<list<string>>,
+    /// If true, plain_content is always generated from html_content. If false, plain_content is not altered.
+    generate-plain-content: option<bool>,
+    /// The HTML content of the Design.
+    html-content: option<string>,
+    /// Name of the Design.
+    name: option<string>,
+    /// Plain text content of the Design.
+    plain-content: option<string>,
+    /// Subject of the Design.
+    subject: option<string>
+  }
+  put-design: func(params: put-design-params) -> result<string, string>;
+
+  /// Delete Design
+  delete-design: func() -> result<string, string>;
+
+}
+
+interface ip-addresses {
+  enum get-ips-sort-by-direction-enum {
+    desc,
+    asc,
+  }
+
+  /// Retrieve all IP addresses
+  record get-ips-params {
+    /// The IP address to get
+    ip: option<string>,
+    /// Should we exclude reverse DNS records (whitelabels)?
+    exclude-whitelabels: option<bool>,
+    /// The number of IPs you want returned at the same time.
+    limit: option<s32>,
+    /// The offset for the number of IPs that you are requesting.
+    offset: option<s32>,
+    /// The subuser you are requesting for.
+    subuser: option<string>,
+    /// The direction to sort the results.
+    sort-by-direction: option<get-ips-sort-by-direction-enum>
+  }
+  get-ips: func(params: get-ips-params) -> result<string, string>;
+
+  /// Add IPs
+  record post-ips-params {
+    /// The amount of IPs to add to the account.
+    count: s32,
+    /// Array of usernames to be assigned a send IP.
+    subusers: option<list<string>>,
+    /// Whether or not to warmup the IPs being added.
+    warmup: option<bool>
+  }
+  post-ips: func(params: post-ips-params) -> result<string, string>;
+
+  /// Retrieve all assigned IPs
+  get-ips-assigned: func() -> result<string, string>;
+
+  /// Get remaining IPs count
+  get-ips-remaining: func() -> result<string, string>;
+
+  /// Retrieve all IP pools an IP address belongs to
+  get-ips-ip-address: func() -> result<string, string>;
+
+}
+
+interface ip-pools {
+  /// Retrieve all IP pools
+  get-ips-pools: func() -> result<string, string>;
+
+  /// Create an IP pool
+  record post-ips-pools-params {
+    /// The name of your new IP pool.
+    name: string
+  }
+  post-ips-pools: func(params: post-ips-pools-params) -> result<string, string>;
+
+  /// Retrieve all the IPs in a specified pool
+  get-ips-pools-pool-name: func() -> result<string, string>;
+
+  /// Rename an IP pool
+  record put-ips-pools-pool-name-params {
+    /// The new name for your IP pool.
+    name: option<string>
+  }
+  put-ips-pools-pool-name: func(params: put-ips-pools-pool-name-params) -> result<string, string>;
+
+  /// Delete an IP pool
+  delete-ips-pools-pool-name: func() -> result<string, string>;
+
+  /// Add an IP address to a pool
+  record post-ips-pools-pool-name-ips-params {
+    /// The IP address that you want to add to the named pool.
+    ip: option<string>
+  }
+  post-ips-pools-pool-name-ips: func(params: post-ips-pools-pool-name-ips-params) -> result<string, string>;
+
+  /// Remove an IP address from a pool
+  delete-ips-pools-pool-name-ips-ip: func() -> result<string, string>;
+
+}
+
+interface ip-warmup {
+  /// Retrieve all IPs currently in warmup
+  get-ips-warmup: func() -> result<string, string>;
+
+  /// Start warming up an IP address
+  record post-ips-warmup-params {
+    /// The IP address that you want to begin warming up.
+    ip: option<string>
+  }
+  post-ips-warmup: func(params: post-ips-warmup-params) -> result<string, string>;
+
+  /// Retrieve the warmup status for a specific IP address
+  get-ips-warmup-ip-address: func() -> result<string, string>;
+
+  /// Stop warming up an IP address
+  delete-ips-warmup-ip-address: func() -> result<string, string>;
+
+}
+
+interface cancel-scheduled-sends {
+  enum post-user-scheduled-sends-body-status-enum {
+    pause,
+    cancel,
+  }
+
+  enum patch-user-scheduled-sends-batch-id-body-status-enum {
+    cancel,
+    pause,
+  }
+
+  /// Create a batch ID
+  post-mail-batch: func() -> result<string, string>;
+
+  /// Validate batch ID
+  get-mail-batch-batch-id: func() -> result<string, string>;
+
+  /// Retrieve all scheduled sends
+  get-user-scheduled-sends: func() -> result<string, string>;
+
+  /// Cancel or pause a scheduled send
+  record post-user-scheduled-sends-params {
+    /// The batch ID is the identifier that your scheduled mail sends share.
+    batch-id: string,
+    /// The status of the send you would like to implement. This can be pause or cancel. To delete a pause or cancel status see DELETE /v3/user/scheduled_sends/{batch_id}
+    status: post-user-scheduled-sends-body-status-enum
+  }
+  post-user-scheduled-sends: func(params: post-user-scheduled-sends-params) -> result<string, string>;
+
+  /// Retrieve scheduled send
+  get-user-scheduled-sends-batch-id: func() -> result<string, string>;
+
+  /// Update a scheduled send
+  record patch-user-scheduled-sends-batch-id-params {
+    /// The status you would like the scheduled send to have.
+    status: patch-user-scheduled-sends-batch-id-body-status-enum
+  }
+  patch-user-scheduled-sends-batch-id: func(params: patch-user-scheduled-sends-batch-id-params) -> result<string, string>;
+
+  /// Delete a cancellation or pause from a scheduled send
+  delete-user-scheduled-sends-batch-id: func() -> result<string, string>;
+
+}
+
+interface mail-send {
+  enum post-mail-send-body-attachments-item-disposition-enum {
+    inline,
+    attachment,
+  }
+
+  /// An object allowing you to specify how to handle unsubscribes.
+  record post-mail-send-body-asm {
+    /// The unsubscribe group to associate with this email.
+    group-id: s32,
+    /// An array containing the unsubscribe groups that you would like to be displayed on the unsubscribe preferences page.
+    groups-to-display: option<list<s32>>
+  }
+
+  record post-mail-send-body-attachments-item {
+    /// The Base64 encoded content of the attachment.
+    content: string,
+    /// The attachment's content ID. This is used when the disposition is set to `“inline”` and the attachment is an image, allowing the file to be displayed within the body of your email.
+    content-id: option<string>,
+    /// The attachment's content-disposition, specifying how you would like the attachment to be displayed. For example, `“inline”` results in the attached file are displayed automatically within the message while `“attachment”` results in the attached file require some action to be taken before it is displayed, such as opening or downloading the file.
+    disposition: option<post-mail-send-body-attachments-item-disposition-enum>,
+    /// The attachment's filename.
+    filename: string,
+    /// The MIME type of the content you are attaching (e.g., `“text/plain”` or `“text/html”`).
+    type-op: option<string>
+  }
+
+  record post-mail-send-body-content-item {
+    /// The MIME type of the content you are including in your email (e.g., `“text/plain”` or `“text/html”`).
+    type-op: string,
+    /// The actual content of the specified MIME type that you are including in your email.
+    value: string
+  }
+
+  record from-email-object {
+    /// The 'From' email address used to deliver the message. This address should be a verified sender in your Twilio SendGrid account.
+    email: string,
+    /// A name or title associated with the sending email address.
+    name: option<string>
+  }
+
+  /// An object containing key/value pairs of header names and the value to substitute for them. The key/value pairs must be strings. You must ensure these are properly encoded if they contain unicode characters. These headers cannot be one of the reserved headers.
+  record post-mail-send-body-headers {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// A collection of different mail settings that you can use to specify how you would like this email to be handled.
+  record post-mail-send-body-mail-settings {
+    /// Allows you to bypass the bounce list to ensure that the email is delivered to recipients. Spam report and unsubscribe lists will still be checked; addresses on these other lists will not receive the message. This filter cannot be combined with the `bypass_list_management` filter. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+    bypass-bounce-management: option<post-mail-send-body-mail-settings-bypass-bounce-management>,
+    /// Allows you to bypass all unsubscribe groups and suppressions to ensure that the email is delivered to every single recipient. This should only be used in emergencies when it is absolutely necessary that every recipient receives your email. This filter cannot be combined with any other bypass filters. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+    bypass-list-management: option<post-mail-send-body-mail-settings-bypass-list-management>,
+    /// Allows you to bypass the spam report list to ensure that the email is delivered to recipients. Bounce and unsubscribe lists will still be checked; addresses on these other lists will not receive the message. This filter cannot be combined with the `bypass_list_management` filter. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+    bypass-spam-management: option<post-mail-send-body-mail-settings-bypass-spam-management>,
+    /// Allows you to bypass the global unsubscribe list to ensure that the email is delivered to recipients. Bounce and spam report lists will still be checked; addresses on these other lists will not receive the message. This filter applies only to global unsubscribes and will not bypass group unsubscribes. This filter cannot be combined with the `bypass_list_management` filter. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+    bypass-unsubscribe-management: option<post-mail-send-body-mail-settings-bypass-unsubscribe-management>,
+    /// The default footer that you would like included on every email.
+    footer: option<post-mail-send-body-mail-settings-footer>,
+    /// Sandbox Mode allows you to send a test email to ensure that your request body is valid and formatted correctly.
+    sandbox-mode: option<post-mail-send-body-mail-settings-sandbox-mode>
+  }
+
+  /// Allows you to bypass the bounce list to ensure that the email is delivered to recipients. Spam report and unsubscribe lists will still be checked; addresses on these other lists will not receive the message. This filter cannot be combined with the `bypass_list_management` filter. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+  record post-mail-send-body-mail-settings-bypass-bounce-management {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>
+  }
+
+  /// Allows you to bypass all unsubscribe groups and suppressions to ensure that the email is delivered to every single recipient. This should only be used in emergencies when it is absolutely necessary that every recipient receives your email. This filter cannot be combined with any other bypass filters. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+  record post-mail-send-body-mail-settings-bypass-list-management {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>
+  }
+
+  /// Allows you to bypass the spam report list to ensure that the email is delivered to recipients. Bounce and unsubscribe lists will still be checked; addresses on these other lists will not receive the message. This filter cannot be combined with the `bypass_list_management` filter. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+  record post-mail-send-body-mail-settings-bypass-spam-management {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>
+  }
+
+  /// Allows you to bypass the global unsubscribe list to ensure that the email is delivered to recipients. Bounce and spam report lists will still be checked; addresses on these other lists will not receive the message. This filter applies only to global unsubscribes and will not bypass group unsubscribes. This filter cannot be combined with the `bypass_list_management` filter. See our [documentation](https://sendgrid.com/docs/ui/sending-email/index-suppressions/#bypass-suppressions) for more about bypass filters.
+  record post-mail-send-body-mail-settings-bypass-unsubscribe-management {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>
+  }
+
+  /// The default footer that you would like included on every email.
+  record post-mail-send-body-mail-settings-footer {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>,
+    /// The HTML content of your footer.
+    html: option<string>,
+    /// The plain text content of your footer.
+    text: option<string>
+  }
+
+  /// Sandbox Mode allows you to send a test email to ensure that your request body is valid and formatted correctly.
+  record post-mail-send-body-mail-settings-sandbox-mode {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>
+  }
+
+  record post-mail-send-body-personalizations-item {
+    /// An array of recipients who will receive a blind carbon copy of your email. Each object in this array must contain the recipient's email address. Each object in the array may optionally contain the recipient's name.
+    bcc: option<list<cc-bcc-email-object>>,
+    /// An array of recipients who will receive a copy of your email. Each object in this array must contain the recipient's email address. Each object in the array may optionally contain the recipient's name.
+    cc: option<list<cc-bcc-email-object>>,
+    /// Values that are specific to this personalization that will be carried along with the email and its activity data. Substitutions will not be made on custom arguments, so any string that is entered into this parameter will be assumed to be the custom argument that you would like to be used. This field may not exceed 10,000 bytes.
+    custom-args: option<post-mail-send-body-personalizations-item-custom-args>,
+    /// Dynamic template data is available using Handlebars syntax in Dynamic Transactional Templates. This field should be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "variable_name":"value to insert".
+    dynamic-template-data: option<post-mail-send-body-personalizations-item-dynamic-template-data>,
+    from-op: option<from-email-object>,
+    /// A collection of JSON key/value pairs allowing you to specify handling instructions for your email. You may not overwrite the following headers: `x-sg-id`, `x-sg-eid`, `received`, `dkim-signature`, `Content-Type`, `Content-Transfer-Encoding`, `To`, `From`, `Subject`, `Reply-To`, `CC`, `BCC`
+    headers: option<post-mail-send-body-personalizations-item-headers>,
+    /// A unix timestamp allowing you to specify when your email should be delivered. Scheduling delivery more than 72 hours in advance is forbidden.
+    send-at: option<s32>,
+    /// The subject of your email. See character length requirements according to [RFC 2822](http://stackoverflow.com/questions/1592291/what-is-the-email-subject-length-limit#answer-1592310).
+    subject: option<string>,
+    /// Substitutions allow you to insert data without using Dynamic Transactional Templates. This field should **not** be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "substitution_tag":"value to substitute". The key/value pairs must be strings. These substitutions will apply to the text and html content of the body of your email, in addition to the `subject` and `reply-to` parameters. The total collective size of your substitutions may not exceed 10,000 bytes per personalization object.
+    substitutions: option<post-mail-send-body-personalizations-item-substitutions>,
+    to: to-email-array
+  }
+
+  record cc-bcc-email-object {
+    /// The intended recipient's email address.
+    email: string,
+    /// The intended recipient's name.
+    name: option<string>
+  }
+
+  /// Values that are specific to this personalization that will be carried along with the email and its activity data. Substitutions will not be made on custom arguments, so any string that is entered into this parameter will be assumed to be the custom argument that you would like to be used. This field may not exceed 10,000 bytes.
+  record post-mail-send-body-personalizations-item-custom-args {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Dynamic template data is available using Handlebars syntax in Dynamic Transactional Templates. This field should be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "variable_name":"value to insert".
+  record post-mail-send-body-personalizations-item-dynamic-template-data {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// A collection of JSON key/value pairs allowing you to specify handling instructions for your email. You may not overwrite the following headers: `x-sg-id`, `x-sg-eid`, `received`, `dkim-signature`, `Content-Type`, `Content-Transfer-Encoding`, `To`, `From`, `Subject`, `Reply-To`, `CC`, `BCC`
+  record post-mail-send-body-personalizations-item-headers {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Substitutions allow you to insert data without using Dynamic Transactional Templates. This field should **not** be used in combination with a Dynamic Transactional Template, which can be identified by a `template_id` starting with `d-`. This field is a collection of key/value pairs following the pattern "substitution_tag":"value to substitute". The key/value pairs must be strings. These substitutions will apply to the text and html content of the body of your email, in addition to the `subject` and `reply-to` parameters. The total collective size of your substitutions may not exceed 10,000 bytes per personalization object.
+  record post-mail-send-body-personalizations-item-substitutions {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record to-email-array {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record reply-to-email-object {
+    /// The email address where any replies or bounces will be returned.
+    email: string,
+    /// A name or title associated with the `reply_to` email address.
+    name: option<string>
+  }
+
+  record post-mail-send-body-reply-to-list-item {
+    /// The email address where any replies or bounces will be returned.
+    email: string,
+    /// A name or title associated with the `reply_to_list` email address.
+    name: option<string>
+  }
+
+  /// Settings to determine how you would like to track the metrics of how your recipients interact with your email.
+  record post-mail-send-body-tracking-settings {
+    /// Allows you to track if a recipient clicked a link in your email.
+    click-tracking: option<post-mail-send-body-tracking-settings-click-tracking>,
+    /// Allows you to enable tracking provided by Google Analytics.
+    ganalytics: option<post-mail-send-body-tracking-settings-ganalytics>,
+    /// Allows you to track if the email was opened by including a single pixel image in the body of the content. When the pixel is loaded, Twilio SendGrid can log that the email was opened.
+    open-tracking: option<post-mail-send-body-tracking-settings-open-tracking>,
+    /// Allows you to insert a subscription management link at the bottom of the text and HTML bodies of your email. If you would like to specify the location of the link within your email, you may use the `substitution_tag`.
+    subscription-tracking: option<post-mail-send-body-tracking-settings-subscription-tracking>
+  }
+
+  /// Allows you to track if a recipient clicked a link in your email.
+  record post-mail-send-body-tracking-settings-click-tracking {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>,
+    /// Indicates if this setting should be included in the `text/plain` portion of your email.
+    enable-text: option<bool>
+  }
+
+  /// Allows you to enable tracking provided by Google Analytics.
+  record post-mail-send-body-tracking-settings-ganalytics {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>,
+    /// The name of the campaign.
+    utm-campaign: option<string>,
+    /// Used to differentiate your campaign from advertisements.
+    utm-content: option<string>,
+    /// Name of the marketing medium. (e.g. Email)
+    utm-medium: option<string>,
+    /// Name of the referrer source. (e.g. Google, SomeDomain.com, or Marketing Email)
+    utm-source: option<string>,
+    /// Used to identify any paid keywords.
+    utm-term: option<string>
+  }
+
+  /// Allows you to track if the email was opened by including a single pixel image in the body of the content. When the pixel is loaded, Twilio SendGrid can log that the email was opened.
+  record post-mail-send-body-tracking-settings-open-tracking {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>,
+    /// Allows you to specify a substitution tag that you can insert in the body of your email at a location that you desire. This tag will be replaced by the open tracking pixel.
+    substitution-tag: option<string>
+  }
+
+  /// Allows you to insert a subscription management link at the bottom of the text and HTML bodies of your email. If you would like to specify the location of the link within your email, you may use the `substitution_tag`.
+  record post-mail-send-body-tracking-settings-subscription-tracking {
+    /// Indicates if this setting is enabled.
+    enable: option<bool>,
+    /// HTML to be appended to the email with the subscription tracking link. You may control where the link is by using the tag <% %>
+    html: option<string>,
+    /// A tag that will be replaced with the unsubscribe URL. for example: `[unsubscribe_url]`. If this parameter is used, it will override both the `text` and `html` parameters. The URL of the link will be placed at the substitution tag’s location with no additional formatting.
+    substitution-tag: option<string>,
+    /// Text to be appended to the email with the subscription tracking link. You may control where the link is by using the tag <% %>
+    text: option<string>
+  }
+
+  /// v3 Mail Send
+  record post-mail-send-params {
+    /// An object allowing you to specify how to handle unsubscribes.
+    asm: option<post-mail-send-body-asm>,
+    /// An array of objects where you can specify any attachments you want to include.
+    attachments: option<list<post-mail-send-body-attachments-item>>,
+    /// An ID representing a batch of emails to be sent at the same time. Including a `batch_id` in your request allows you include this email in that batch. It also enables you to cancel or pause the delivery of that batch. For more information, see the [Cancel Scheduled Sends API](https://sendgrid.com/docs/api-reference/).
+    batch-id: option<string>,
+    /// An array of category names for this message. Each category name may not exceed 255 characters. 
+    categories: option<list<string>>,
+    /// An array where you can specify the content of your email. You can include multiple [MIME types](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types) of content, but you must specify at least one MIME type. To include more than one MIME type, add another object to the array containing the `type` and `value` parameters.
+    content: list<post-mail-send-body-content-item>,
+    /// Values that are specific to the entire send that will be carried along with the email and its activity data.  Key/value pairs must be strings. Substitutions will not be made on custom arguments, so any string that is entered into this parameter will be assumed to be the custom argument that you would like to be used. This parameter is overridden by `custom_args` set at the personalizations level. Total `custom_args` size may not exceed 10,000 bytes.
+    custom-args: option<string>,
+    from-op: from-email-object,
+    /// An object containing key/value pairs of header names and the value to substitute for them. The key/value pairs must be strings. You must ensure these are properly encoded if they contain unicode characters. These headers cannot be one of the reserved headers.
+    headers: option<post-mail-send-body-headers>,
+    /// The IP Pool that you would like to send this email from.
+    ip-pool-name: option<string>,
+    /// A collection of different mail settings that you can use to specify how you would like this email to be handled.
+    mail-settings: option<post-mail-send-body-mail-settings>,
+    /// An array of messages and their metadata. Each object within personalizations can be thought of as an envelope - it defines who should receive an individual message and how that message should be handled. See our [Personalizations documentation](https://sendgrid.com/docs/for-developers/sending-email/personalizations/) for examples.
+    personalizations: list<post-mail-send-body-personalizations-item>,
+    reply-to: option<reply-to-email-object>,
+    /// An array of recipients who will receive replies and/or bounces. Each object in this array must contain the recipient's email address. Each object in the array may optionally contain the recipient's name. You can either choose to use “reply_to” field or “reply_to_list” but not both.
+    reply-to-list: option<list<post-mail-send-body-reply-to-list-item>>,
+    /// A unix timestamp allowing you to specify when you want your email to be delivered. This may be overridden by the `send_at` parameter set at the personalizations level. Delivery cannot be scheduled more than 72 hours in advance. If you have the flexibility, it's better to schedule mail for off-peak times. Most emails are scheduled and sent at the top of the hour or half hour. Scheduling email to avoid peak times — for example, scheduling at 10:53 — can result in lower deferral rates due to the reduced traffic during off-peak times.
+    send-at: option<s32>,
+    /// The global or 'message level' subject of your email. This may be overridden by subject lines set in personalizations.
+    subject: string,
+    /// An email template ID. A template that contains a subject and content — either text or html — will override any subject and content values specified at the personalizations or message level.
+    template-id: option<string>,
+    /// Settings to determine how you would like to track the metrics of how your recipients interact with your email.
+    tracking-settings: option<post-mail-send-body-tracking-settings>
+  }
+  post-mail-send: func(params: post-mail-send-params) -> result<string, string>;
+
+}
+
+interface settings-mail {
+  /// Retrieve all mail settings
+  record get-mail-settings-params {
+    /// The number of settings to return.
+    limit: option<s32>,
+    /// Where in the list of results to begin displaying settings.
+    offset: option<s32>
+  }
+  get-mail-settings: func(params: get-mail-settings-params) -> result<string, string>;
+
+  /// Retrieve address whitelist mail settings
+  get-mail-settings-address-whitelist: func() -> result<string, string>;
+
+  /// Update address whitelist mail settings
+  record patch-mail-settings-address-whitelist-params {
+    /// Indicates if your email address whitelist is enabled.
+    enabled: option<bool>,
+    /// Either a single email address that you want whitelisted or a domain, for which all email addresses belonging to this domain will be whitelisted.
+    list-op: option<list<string>>
+  }
+  patch-mail-settings-address-whitelist: func(params: patch-mail-settings-address-whitelist-params) -> result<string, string>;
+
+  /// Retrieve bounce purge mail settings
+  get-mail-settings-bounce-purge: func() -> result<string, string>;
+
+  /// Update bounce purge mail settings
+  record patch-mail-settings-bounce-purge-params {
+    /// Indicates if the bounce purge mail setting is enabled.
+    enabled: option<bool>,
+    /// The number of days after which SendGrid will purge all contacts from your hard bounces suppression lists.
+    hard-bounces: option<s32>,
+    /// The number of days after which SendGrid will purge all contacts from your soft bounces suppression lists.
+    soft-bounces: option<s32>
+  }
+  patch-mail-settings-bounce-purge: func(params: patch-mail-settings-bounce-purge-params) -> result<string, string>;
+
+  /// Retrieve footer mail settings
+  get-mail-settings-footer: func() -> result<string, string>;
+
+  /// Update footer mail settings
+  record patch-mail-settings-footer-params {
+    /// Indicates if the Footer mail setting is currently enabled.
+    enabled: option<bool>,
+    /// The custom HTML content of your email footer.
+    html-content: option<string>,
+    /// The plain text content of your email footer.
+    plain-content: option<string>
+  }
+  patch-mail-settings-footer: func(params: patch-mail-settings-footer-params) -> result<string, string>;
+
+  /// Retrieve forward bounce mail settings
+  get-mail-settings-forward-bounce: func() -> result<string, string>;
+
+  /// Update forward bounce mail settings
+  record patch-mail-settings-forward-bounce-params {
+    /// The email address that you would like your bounce reports forwarded to.
+    email: option<string>,
+    /// Indicates if the bounce forwarding mail setting is enabled.
+    enabled: option<bool>
+  }
+  patch-mail-settings-forward-bounce: func(params: patch-mail-settings-forward-bounce-params) -> result<string, string>;
+
+  /// Retrieve forward spam mail settings
+  get-mail-settings-forward-spam: func() -> result<string, string>;
+
+  /// Update forward spam mail settings
+  record patch-mail-settings-forward-spam-params {
+    /// The email address where you would like the spam reports to be forwarded.
+    email: option<string>,
+    /// Indicates if the Forward Spam setting is enabled.
+    enabled: option<bool>
+  }
+  patch-mail-settings-forward-spam: func(params: patch-mail-settings-forward-spam-params) -> result<string, string>;
+
+  /// Retrieve legacy template mail settings
+  get-mail-settings-template: func() -> result<string, string>;
+
+  /// Update template mail settings
+  record patch-mail-settings-template-params {
+    /// Indicates if you want to enable the legacy email template mail setting.
+    enabled: option<bool>,
+    /// The new HTML content for your legacy email template.
+    html-content: option<string>
+  }
+  patch-mail-settings-template: func(params: patch-mail-settings-template-params) -> result<string, string>;
+
+}
+
+interface contacts {
+  enum post-mc-contacts-exports-body-file-type-enum {
+    csv,
+    json,
+  }
+
+  enum put-mc-contacts-imports-body-file-type-enum {
+    csv,
+  }
+
+  record contact-request {
+    /// The first line of the address.
+    address-line-v1: option<string>,
+    /// An optional second line for the address.
+    address-line-v2: option<string>,
+    /// Additional emails associated with the contact.
+    alternate-emails: option<list<string>>,
+    /// The contact's city.
+    city: option<string>,
+    /// The contact's country. Can be a full name or an abbreviation.
+    country: option<string>,
+    custom-fields: option<custom-fields-by-id>,
+    /// The contact's primary email. This is required to be a valid email.
+    email: string,
+    /// The contact's personal name.
+    first-name: option<string>,
+    /// The contact's family name.
+    last-name: option<string>,
+    /// The contact's ZIP code or other postal code.
+    postal-code: option<string>,
+    /// The contact's state, province, or region.
+    state-province-region: option<string>
+  }
+
+  record custom-fields-by-id {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record post-mc-contacts-exports-body-notifications {
+    email: option<bool>
+  }
+
+  /// Get Sample Contacts
+  get-mc-contats: func() -> result<string, string>;
+
+  /// Add or Update a Contact
+  record put-mc-contacts-params {
+    /// One or more contacts objects that you intend to upsert. The available fields for a contact, including the required `email` field are described below.
+    contacts: list<contact-request>,
+    /// An array of List ID strings that this contact will be added to.
+    list-ids: option<list<string>>
+  }
+  put-mc-contacts: func(params: put-mc-contacts-params) -> result<string, string>;
+
+  /// Delete Contacts
+  record delete-mc-contacts-params {
+    /// Must be set to `"true"` to delete all contacts.
+    delete-all-contacts: option<string>,
+    /// A comma-separated list of contact IDs.
+    ids: option<string>
+  }
+  delete-mc-contacts: func(params: delete-mc-contacts-params) -> result<string, string>;
+
+  /// Get Batched Contacts by IDs
+  record post-marketing-contacts-batch-params {
+    ids: list<string>
+  }
+  post-marketing-contacts-batch: func(params: post-marketing-contacts-batch-params) -> result<string, string>;
+
+  /// Get Total Contact Count
+  get-mc-contacts-count: func() -> result<string, string>;
+
+  /// Get All Existing Exports
+  get-marketing-contacts-exports: func() -> result<string, string>;
+
+  /// Export Contacts
+  record post-mc-contacts-exports-params {
+    /// File type for export file. Choose from `json` or `csv`.
+    file-type: option<post-mc-contacts-exports-body-file-type-enum>,
+    /// IDs of the contact lists you want to export.
+    list-ids: option<list<string>>,
+    /// The maximum size of an export file in MB. Note that when this option is specified, multiple output files may be returned from the export.
+    max-file-size: option<s32>,
+    notifications: option<post-mc-contacts-exports-body-notifications>,
+    /// IDs of the contact segments you want to export.
+    segment-ids: option<list<string>>
+  }
+  post-mc-contacts-exports: func(params: post-mc-contacts-exports-params) -> result<string, string>;
+
+  /// Export Contacts Status
+  get-mc-contacts-exports-id: func() -> result<string, string>;
+
+  /// Import Contacts
+  record put-mc-contacts-imports-params {
+    /// Import file header to reserved/custom field mapping.
+    field-mappings: list<string>,
+    /// Upload file type.
+    file-type: put-mc-contacts-imports-body-file-type-enum,
+    /// All contacts will be added to each of the specified lists.
+    list-ids: option<list<string>>
+  }
+  put-mc-contacts-imports: func(params: put-mc-contacts-imports-params) -> result<string, string>;
+
+  /// Import Contacts Status
+  get-marketing-contacts-imports-id: func() -> result<string, string>;
+
+  /// Search Contacts
+  record post-mc-contacts-search-params {
+    query: string
+  }
+  post-mc-contacts-search: func(params: post-mc-contacts-search-params) -> result<string, string>;
+
+  /// Get Contacts by Emails
+  record post-marketing-contacts-search-emails-params {
+    /// One or more primary emails and/or alternate emails to search through your contacts for.
+    emails: list<string>
+  }
+  post-marketing-contacts-search-emails: func(params: post-marketing-contacts-search-emails-params) -> result<string, string>;
+
+  /// Get a Contact by ID
+  get-mc-contacts-id: func() -> result<string, string>;
+
+}
+
+interface custom-fields {
+  enum post-mc-field-definitions-body-field-type-enum {
+    text,
+    number,
+    date,
+  }
+
+  /// Get All Field Definitions
+  get-mc-field-definitions: func() -> result<string, string>;
+
+  /// Create Custom Field Definition
+  record post-mc-field-definitions-params {
+    field-type: post-mc-field-definitions-body-field-type-enum,
+    name: string
+  }
+  post-mc-field-definitions: func(params: post-mc-field-definitions-params) -> result<string, string>;
+
+  /// Update Custom Field Definition
+  record patch-mc-field-definitions-custom-field-id-params {
+    name: string
+  }
+  patch-mc-field-definitions-custom-field-id: func(params: patch-mc-field-definitions-custom-field-id-params) -> result<string, string>;
+
+  /// Delete Custom Field Definition
+  delete-mc-field-definitions-custom-field-id: func() -> result<string, string>;
+
+}
+
+interface lists {
+  /// Get All Lists
+  record get-mc-lists-params {
+    /// Maximum number of elements to return. Defaults to 100, returns 1000 max
+    page-size: option<f64>,
+    page-token: option<string>
+  }
+  get-mc-lists: func(params: get-mc-lists-params) -> result<string, string>;
+
+  /// Create List
+  record post-mc-lists-params {
+    /// Your name for your list
+    name: string
+  }
+  post-mc-lists: func(params: post-mc-lists-params) -> result<string, string>;
+
+  /// Get a List by ID
+  record get-mc-lists-id-params {
+    /// Setting this parameter to the true  will cause the contact_sample to be returned
+    contact-sample: option<bool>
+  }
+  get-mc-lists-id: func(params: get-mc-lists-id-params) -> result<string, string>;
+
+  /// Update List
+  record patch-mc-lists-id-params {
+    /// Your name for your list.
+    name: option<string>
+  }
+  patch-mc-lists-id: func(params: patch-mc-lists-id-params) -> result<string, string>;
+
+  /// Delete a list
+  record delete-lists-id-params {
+    /// Flag indicates that all contacts on the list are also to be deleted.
+    delete-contacts: option<bool>
+  }
+  delete-lists-id: func(params: delete-lists-id-params) -> result<string, string>;
+
+  /// Remove Contacts from a List
+  record delete-mc-lists-id-contacts-params {
+    /// comma separated list of contact ids
+    contact-ids: string
+  }
+  delete-mc-lists-id-contacts: func(params: delete-mc-lists-id-contacts-params) -> result<string, string>;
+
+  /// Get List Contact Count
+  get-mc-lists-id-contacts-count: func() -> result<string, string>;
+
+}
+
+interface segmenting-contacts {
+  /// Get List of Segments
+  record get-marketing-segments-params {
+    /// A comma separated list of list ids to be used when searching for segments with the specified parent_list_id, no more than 50 is allowed
+    parent-list-ids: option<string>,
+    /// If set to `true` segments with an empty value of `parent_list_id` will be returned in the filter.  If the value is not present it defaults to 'false'.
+    no-parent-list-id: option<bool>
+  }
+  get-marketing-segments: func(params: get-marketing-segments-params) -> result<string, string>;
+
+  /// Create Segment
+  record post-marketing-segments-params {
+    body: option<string>
+  }
+  post-marketing-segments: func(params: post-marketing-segments-params) -> result<string, string>;
+
+  /// Bulk Delete Segments
+  record post-marketing-segments-delete-params {
+    ids: option<list<string>>
+  }
+  post-marketing-segments-delete: func(params: post-marketing-segments-delete-params) -> result<string, string>;
+
+  /// Get Segment by ID
+  record get-marketing-segments-segment-id-params {
+    /// Defaults to `false`.  Set to `true` to return the parsed SQL AST as a JSON object in the field `query_json`
+    query-json: option<bool>
+  }
+  get-marketing-segments-segment-id: func(params: get-marketing-segments-segment-id-params) -> result<string, string>;
+
+  /// Update Segment
+  record patch-marketing-segments-segment-id-params {
+    /// Name of the segment.
+    name: string,
+    /// The array of list ids to filter contacts on when building this segment. It allows only one such list id for now. We will support more in future
+    parent-list-ids: option<list<string>>,
+    /// SQL query which will filter contacts based on the conditions provided
+    query-dsl: string
+  }
+  patch-marketing-segments-segment-id: func(params: patch-marketing-segments-segment-id-params) -> result<string, string>;
+
+  /// Delete Segment
+  delete-marketing-segments-segment-id: func() -> result<string, string>;
+
+}
+
+interface segmenting-contacts-v2-beta {
+  /// Get List of Segments
+  record get-segments-params {
+    /// A comma separated list up to 50 in size, to filter segments on.  Only segments that have any of these list ids as the parent list will be retrieved. This is different from the parameter of the same name used when creating a segment.
+    parent-list-ids: option<string>,
+    /// If set to `true` segments with an empty value of `parent_list_id` will be returned in the filter.  If the value is not present it defaults to 'false'.
+    no-parent-list-id: option<bool>
+  }
+  get-segments: func(params: get-segments-params) -> result<string, string>;
+
+  /// Create Segment
+  record post-segments-params {
+    /// Name of the segment.
+    name: string,
+    /// The array of list ids to filter contacts on when building this segment. It allows only one such list id for now. We will support more in future
+    parent-list-ids: option<list<string>>,
+    /// SQL query which will filter contacts based on the conditions provided
+    query-dsl: string
+  }
+  post-segments: func(params: post-segments-params) -> result<string, string>;
+
+  /// Get Segment by ID
+  record get-segments-segment-id-params {
+    /// Defaults to `true`. Set to `false` to exclude the contacts_sample in the response.
+    contacts-sample: option<bool>
+  }
+  get-segments-segment-id: func(params: get-segments-segment-id-params) -> result<string, string>;
+
+  /// Update Segment
+  record patch-segments-segment-id-params {
+    /// Name of the segment.
+    name: option<string>,
+    /// SQL query which will filter contacts based on the conditions provided
+    query-dsl: option<string>
+  }
+  patch-segments-segment-id: func(params: patch-segments-segment-id-params) -> result<string, string>;
+
+  /// Delete segment
+  delete-segments-segment-id: func() -> result<string, string>;
+
+}
+
+interface senders {
+  record post-marketing-senders-body-from-op {
+    /// This is where the email will appear to originate from for your recipient
+    email: string,
+    /// This is the name appended to the from email field. IE - Your name or company name.
+    name: string
+  }
+
+  record post-marketing-senders-body-reply-to {
+    /// This is the email that your recipient will reply to.
+    email: string,
+    /// This is the name appended to the reply to email field. IE - Your name or company name.
+    name: option<string>
+  }
+
+  /// Create a Sender Identity
+  record post-marketing-senders-params {
+    /// The physical address of the sender identity.
+    address: string,
+    /// Additional sender identity address information.
+    address-v2: option<string>,
+    /// The city of the sender identity.
+    city: string,
+    /// The country of the sender identity.
+    country: string,
+    from-op: post-marketing-senders-body-from-op,
+    /// A nickname for the sender identity. Not used for sending.
+    nickname: string,
+    reply-to: option<post-marketing-senders-body-reply-to>,
+    /// The state of the sender identity.
+    state: option<string>,
+    /// The zipcode of the sender identity.
+    zip: option<string>
+  }
+  post-marketing-senders: func(params: post-marketing-senders-params) -> result<string, string>;
+
+}
+
+interface single-sends {
+  enum singlesend-request-email-config-editor-enum {
+    code,
+    design,
+  }
+
+  enum singlesend-search-status-item-enum {
+    draft,
+    scheduled,
+    triggered,
+  }
+
+  enum put-marketing-singlesends-id-schedule-body-send-at-enum {
+    now,
+  }
+
+  record singlesend-request-email-config {
+    /// The URL allowing recipients to unsubscribe — you must provide this or the `suppression_group_id`.
+    custom-unsubscribe-url: option<string>,
+    /// A `design_id` can be used in place of `html_content`, `plain_content`, and/or `subject`. You can retrieve a design's ID from the ["List Designs" endpoint](https://sendgrid.api-docs.io/v3.0/designs-api/list-designs) or by pulling it from the design's detail page URL in the Marketing Campaigns App.
+    design-id: option<string>,
+    /// The editor — `"design"` or `"code"` — used to modify the Single Send's design in the Marketing Campaigns App.
+    editor: option<singlesend-request-email-config-editor-enum>,
+    /// If set to `true`, `plain_content` is always generated from `html_content`. If set to false, `plain_content` is not altered.
+    generate-plain-content: option<bool>,
+    /// The HTML content of the Single Send. Do not include this field when using a `design_id`.
+    html-content: option<string>,
+    /// The name of the IP Pool from which the Single Send emails are sent.
+    ip-pool: option<string>,
+    /// The plain text content of the Single Send. Do not include this field when using a `design_id`.
+    plain-content: option<string>,
+    /// The ID of the verified Sender. You can retrieve a verified Sender's ID from the ["Get Verified Senders" endpoint](https://sendgrid.api-docs.io/v3.0/sender-verification/get-verified-senders) or by pulling it from the Sender's detail page URL in the SendGrid App.
+    sender-id: option<s32>,
+    /// The subject line of the Single Send. Do not include this field when using a `design_id`.
+    subject: option<string>,
+    /// The ID of the Suppression Group to allow recipients to unsubscribe — you must provide this or the `custom_unsubscribe_url`.
+    suppression-group-id: option<s32>
+  }
+
+  record singlesend-request-send-to {
+    /// Set to `true` to send to All Contacts. If set to `false`, at least one `list_ids` or `segment_ids` value must be provided before the Single Send is scheduled to be sent to recipients.
+    all: option<bool>,
+    /// The recipient List IDs that will receive the Single Send.
+    list-ids: option<list<string>>,
+    /// The recipient Segment IDs that will receive the Single Send.
+    segment-ids: option<list<string>>
+  }
+
+  /// Get All Single Sends
+  record get-marketing-singlesends-params {
+    page-size: option<s32>,
+    page-token: option<string>
+  }
+  get-marketing-singlesends: func(params: get-marketing-singlesends-params) -> result<string, string>;
+
+  /// Create Single Send
+  record post-marketing-singlesends-params {
+    /// The categories to associate with this Single Send.
+    categories: option<list<string>>,
+    email-config: option<singlesend-request-email-config>,
+    /// The name of the Single Send.
+    name: string,
+    /// The ISO 8601 time at which to send the Single Send — this must be set for a future time.
+    send-at: option<string>,
+    send-to: option<singlesend-request-send-to>
+  }
+  post-marketing-singlesends: func(params: post-marketing-singlesends-params) -> result<string, string>;
+
+  /// Bulk Delete Single Sends
+  record delete-marketing-singlesends-params {
+    /// Single Send IDs to delete
+    ids: option<list<string>>
+  }
+  delete-marketing-singlesends: func(params: delete-marketing-singlesends-params) -> result<string, string>;
+
+  /// Get All Categories
+  get-marketing-singlesends-categories: func() -> result<string, string>;
+
+  /// Get Single Sends Search
+  record post-marketing-singlesends-search-params {
+    page-size: option<s32>,
+    page-token: option<string>,
+    /// categories to associate with this Single Send, match any single send that has at least one of the categories
+    categories: option<list<string>>,
+    /// leading and trailing wildcard search on name of the Single Send
+    name: option<string>,
+    /// current status of the Single Send
+    status: option<list<singlesend-search-status-item-enum>>
+  }
+  post-marketing-singlesends-search: func(params: post-marketing-singlesends-search-params) -> result<string, string>;
+
+  /// Get Single Send by ID
+  get-marketing-singlesends-id: func() -> result<string, string>;
+
+  /// Duplicate Single Send
+  record post-marketing-singlesends-id-params {
+    /// The name of the duplicate Single Send. If you choose to leave the name field blank, your duplicate will be assigned the name of the Single Send it was copied from with the text 'Copy of ' prepended to it. The end of the new Single Send name, including 'Copy of ', will be trimmed if the name exceeds the character limit.
+    name: option<string>
+  }
+  post-marketing-singlesends-id: func(params: post-marketing-singlesends-id-params) -> result<string, string>;
+
+  /// Update Single Send
+  record patch-marketing-singlesends-id-params {
+    /// The categories to associate with this Single Send.
+    categories: option<list<string>>,
+    email-config: option<singlesend-request-email-config>,
+    /// The name of the Single Send.
+    name: string,
+    /// The ISO 8601 time at which to send the Single Send — this must be set for a future time.
+    send-at: option<string>,
+    send-to: option<singlesend-request-send-to>
+  }
+  patch-marketing-singlesends-id: func(params: patch-marketing-singlesends-id-params) -> result<string, string>;
+
+  /// Delete Single Send by ID
+  delete-marketing-singlesends-id: func() -> result<string, string>;
+
+  /// Schedule Single Send
+  record put-marketing-singlesends-id-schedule-params {
+    /// This is the ISO 8601 time at which to send the Single Send; must be in future, or the string "now"
+    send-at: put-marketing-singlesends-id-schedule-body-send-at-enum
+  }
+  put-marketing-singlesends-id-schedule: func(params: put-marketing-singlesends-id-schedule-params) -> result<string, string>;
+
+  /// Delete Single Send Schedule
+  delete-marketing-singlesends-id-schedule: func() -> result<string, string>;
+
+}
+
+interface marketing-campaigns-stats {
+  /// Get All Automation Stats
+  record getall-automation-stats-params {
+    /// This endpoint returns all automation IDs if no `automation_ids` are specified.
+    automation-ids: option<list<string>>
+  }
+  getall-automation-stats: func(params: getall-automation-stats-params) -> result<string, string>;
+
+  /// Export Automation Stats
+  record get-automations-stats-export-params {
+    /// The IDs of Automations for which to export stats.
+    ids: option<list<string>>,
+    /// The [IANA Area/Region](https://en.wikipedia.org/wiki/Tz_database#Names_of_time_zones) string representing the timezone in which the stats are to be presented; i.e. `"America/Chicago"`. This parameter changes the timezone format only; it does not alter which stats are returned.
+    timezone: option<string>
+  }
+  get-automations-stats-export: func(params: get-automations-stats-export-params) -> result<string, string>;
+
+  /// Get Automation Stats by ID
+  get-automation-stat: func() -> result<string, string>;
+
+  /// Get Automation Click Tracking Stats by ID
+  get-automation-link-stat: func() -> result<string, string>;
+
+  /// Get All Single Sends Stats
+  record getall-singlesend-stats-params {
+    /// This endpoint returns all Single Send IDs if no IDs are included in `singlesend_ids`.
+    singlesend-ids: option<list<string>>
+  }
+  getall-singlesend-stats: func(params: getall-singlesend-stats-params) -> result<string, string>;
+
+  /// Export Single Send Stats
+  record get-singlesend-stats-export-params {
+    /// The IDs of Single Sends for which to export stats.
+    ids: option<list<string>>,
+    /// The [IANA Area/Region](https://en.wikipedia.org/wiki/Tz_database#Names_of_time_zones) string representing the timezone in which the stats are to be presented; i.e. `"America/Chicago"`. This parameter changes the timezone format only; it does not alter which stats are returned.
+    timezone: option<string>
+  }
+  get-singlesend-stats-export: func(params: get-singlesend-stats-export-params) -> result<string, string>;
+
+  /// Get Single Send Stats by ID
+  get-singlesend-stat: func() -> result<string, string>;
+
+  /// Get Single Send Click Tracking Stats by ID
+  get-singlesend-link-stat: func() -> result<string, string>;
+
+}
+
+interface send-test-email {
+  /// Send a Test Marketing Email
+  record post-marketing-test-send-email-params {
+    /// A custom unsubscribe URL.
+    custom-unsubscribe-url: option<string>,
+    /// An array of email addresses you want to send the test message to.
+    emails: list<string>,
+    /// You can either specify this address or specify a verified sender ID.
+    from-address: option<string>,
+    /// This ID must belong to a verified sender. Alternatively, you may supply a `from_address` email.
+    sender-id: option<s32>,
+    suppression-group-id: option<s32>,
+    /// The ID of the template that you would like to use. If you use a template that contains a subject and content (either text or HTML), then those values specified at the personalizations or message level will not be used.
+    template-id: string,
+    ///  You can override the active template with an alternative template version by passing the version ID in this field. If this field is blank, the active template version will be used.
+    version-id-override: option<string>
+  }
+  post-marketing-test-send-email: func(params: post-marketing-test-send-email-params) -> result<string, string>;
+
+}
+
+interface query {
+  /// Filter all messages
+  record get-messages-params {
+    /// Use the query syntax  to filter your email activity.
+    query: string,
+    /// The number of messages returned. This parameter must be greater than 0 and less than or equal to 1000
+    limit: option<f64>,
+    x-query-id: option<string>,
+    x-cursor: option<string>
+  }
+  get-messages: func(params: get-messages-params) -> result<string, string>;
+
+  /// Filter messages by message ID
+  get-v3-messages-msg-id: func() -> result<string, string>;
+
+}
+
+interface csv-ui-only {
+  /// Request CSV
+  record post-v3-messages-download-params {
+    /// Uses a SQL like syntax to indicate which messages to include in the CSV
+    query: option<string>
+  }
+  post-v3-messages-download: func(params: post-v3-messages-download-params) -> result<string, string>;
+
+  /// Download CSV
+  get-v3-messages-download-download-uuid: func() -> result<string, string>;
+
+}
+
+interface settings-partner {
+  /// Returns a list of all partner settings.
+  record get-partner-settings-params {
+    /// The number of settings to return per page.
+    limit: option<s32>,
+    /// The paging offset.
+    offset: option<s32>
+  }
+  get-partner-settings: func(params: get-partner-settings-params) -> result<string, string>;
+
+  /// Returns all New Relic partner settings.
+  get-partner-settings-new-relic: func() -> result<string, string>;
+
+  /// Updates New Relic partner settings.
+  record patch-partner-settings-new-relic-params {
+    /// Indicates if your subuser statistics will be sent to your New Relic Dashboard.
+    enable-subuser-statistics: option<bool>,
+    /// Indicates if this partner setting is enabled.
+    enabled: option<bool>,
+    /// The license key for your New Relic account.
+    license-key: option<string>
+  }
+  patch-partner-settings-new-relic: func(params: patch-partner-settings-new-relic-params) -> result<string, string>;
+
+}
+
+interface api-key-permissions {
+  /// Retrieve a list of scopes for which this user has access.
+  get-scopes: func() -> result<string, string>;
+
+}
+
+interface teammates {
+  /// Retrieve access requests
+  record get-v3-scopes-requests-params {
+    /// Optional field to limit the number of results returned.
+    limit: option<s32>,
+    /// Optional beginning point in the list to retrieve from.
+    offset: option<s32>
+  }
+  get-v3-scopes-requests: func(params: get-v3-scopes-requests-params) -> result<string, string>;
+
+  /// Deny access request
+  delete-v3-scopes-requests-request-id: func() -> result<string, string>;
+
+  /// Approve access request
+  patch-v3-scopes-requests-approve-id: func() -> result<string, string>;
+
+  /// Retrieve all teammates
+  record get-v3-teammates-params {
+    /// Number of items to return
+    limit: option<s32>,
+    /// Paging offset
+    offset: option<s32>
+  }
+  get-v3-teammates: func(params: get-v3-teammates-params) -> result<string, string>;
+
+  /// Invite teammate
+  record post-v3-teammates-params {
+    /// New teammate's email
+    email: string,
+    /// Set to true if teammate should be an admin user
+    is-admin: bool,
+    /// Set to specify list of scopes that teammate should have. Should be empty if teammate is an admin.
+    scopes: list<string>
+  }
+  post-v3-teammates: func(params: post-v3-teammates-params) -> result<string, string>;
+
+  /// Retrieve all pending teammates
+  get-v3-teammates-pending: func() -> result<string, string>;
+
+  /// Delete pending teammate
+  delete-v3-teammates-pending-token: func() -> result<string, string>;
+
+  /// Resend teammate invite
+  post-v3-teammates-pending-token-resend: func() -> result<string, string>;
+
+  /// Retrieve specific teammate
+  get-v3-teammates-username: func() -> result<string, string>;
+
+  /// Update teammate's permissions
+  record patch-v3-teammates-username-params {
+    /// Set to True if this teammate should be promoted to an admin user. If True, scopes should be an empty array.
+    is-admin: bool,
+    /// Provide list of scopes that should be given to teammate. If specifying list of scopes, is_admin should be set to False.
+    scopes: list<string>
+  }
+  patch-v3-teammates-username: func(params: patch-v3-teammates-username-params) -> result<string, string>;
+
+  /// Delete teammate
+  delete-v3-teammates-username: func() -> result<string, string>;
+
+}
+
+interface sender-identities-api {
+  record sender-id-request-from-op {
+    /// The email address from which your recipient will receive emails.
+    email: option<string>,
+    /// The name appended to the from email field. Typically your name or company name.
+    name: option<string>
+  }
+
+  record sender-id-request-reply-to {
+    /// The email address to which your recipient will reply.
+    email: option<string>,
+    /// The name appended to the reply to email field. Typically your name or company name.
+    name: option<string>
+  }
+
+  /// Get all Sender Identities
+  get-v3-senders: func() -> result<string, string>;
+
+  /// Create a Sender Identity
+  record post-senders-params {
+    body: option<string>
+  }
+  post-senders: func(params: post-senders-params) -> result<string, string>;
+
+  /// View a Sender Identity
+  get-v3-senders-sender-id: func() -> result<string, string>;
+
+  /// Update a Sender Identity
+  record patch-v3-senders-sender-id-params {
+    /// The physical address of the sender identity.
+    address: option<string>,
+    /// Additional sender identity address information.
+    address-v2: option<string>,
+    /// The city of the sender identity.
+    city: option<string>,
+    /// The country of the sender identity.
+    country: option<string>,
+    from-op: option<sender-id-request-from-op>,
+    /// A nickname for the sender identity. Not used for sending.
+    nickname: option<string>,
+    reply-to: option<sender-id-request-reply-to>,
+    /// The state of the sender identity.
+    state: option<string>,
+    /// The zipcode of the sender identity.
+    zip: option<string>
+  }
+  patch-v3-senders-sender-id: func(params: patch-v3-senders-sender-id-params) -> result<string, string>;
+
+  /// Delete a Sender Identity
+  delete-v3-senders-sender-id: func() -> result<string, string>;
+
+  /// Resend Sender Identity Verification
+  post-v3-senders-sender-id-resend-verification: func() -> result<string, string>;
+
+}
+
+interface certificates {
+  /// Create an SSO Certificate
+  record post-sso-certificates-params {
+    /// Indicates if the certificate is enabled.
+    enabled: option<bool>,
+    /// An ID that matches a certificate to a specific IdP integration. This is the `id` returned by the "Get All SSO Integrations" endpoint.
+    integration-id: string,
+    /// This public certificate allows SendGrid to verify that SAML requests it receives are signed by an IdP that it recognizes.
+    public-certificate: string
+  }
+  post-sso-certificates: func(params: post-sso-certificates-params) -> result<string, string>;
+
+  /// Get an SSO Certificate
+  get-sso-certificates-cert-id: func() -> result<string, string>;
+
+  /// Update SSO Certificate
+  record patch-sso-certificates-cert-id-params {
+    /// Indicates whether or not the certificate is enabled.
+    enabled: option<bool>,
+    /// An ID that matches a certificate to a specific IdP integration.
+    integration-id: option<string>,
+    /// This public certificate allows SendGrid to verify that SAML requests it receives are signed by an IdP that it recognizes.
+    public-certificate: option<string>
+  }
+  patch-sso-certificates-cert-id: func(params: patch-sso-certificates-cert-id-params) -> result<string, string>;
+
+  /// Delete an SSO Certificate
+  delete-sso-certificates-cert-id: func() -> result<string, string>;
+
+  /// Get All SSO Certificates by Integration
+  get-sso-integrations-integration-id-certificates: func() -> result<string, string>;
+
+}
+
+interface single-sign-on-settings {
+  /// Get All SSO Integrations
+  record get-sso-integrations-params {
+    /// If this parameter is set to `true`, the response will include the `completed_integration` field.
+    si: option<bool>
+  }
+  get-sso-integrations: func(params: get-sso-integrations-params) -> result<string, string>;
+
+  /// Create an SSO Integration
+  record post-sso-integrations-params {
+    /// Indicates if the integration is complete.
+    completed-integration: option<bool>,
+    /// Indicates if the integration is enabled.
+    enabled: bool,
+    /// An identifier provided by your IdP to identify Twilio SendGrid in the SAML interaction. This is called the "SAML Issuer ID" in the Twilio SendGrid UI.
+    entity-id: string,
+    /// The name of your integration. This name can be anything that makes sense for your organization (eg. Twilio SendGrid)
+    name: string,
+    /// The IdP's SAML POST endpoint. This endpoint should receive requests and initiate an SSO login flow. This is called the "Embed Link" in the Twilio SendGrid UI.
+    signin-url: string,
+    /// This URL is relevant only for an IdP-initiated authentication flow. If a user authenticates from their IdP, this URL will return them to their IdP when logging out.
+    signout-url: string
+  }
+  post-sso-integrations: func(params: post-sso-integrations-params) -> result<string, string>;
+
+  /// Get an SSO Integration
+  record get-sso-integrations-id-params {
+    /// If this parameter is set to `true`, the response will include the `completed_integration` field.
+    si: option<bool>
+  }
+  get-sso-integrations-id: func(params: get-sso-integrations-id-params) -> result<string, string>;
+
+  /// Update an SSO Integration
+  record patch-sso-integrations-id-params {
+    /// If this parameter is set to `true`, the response will include the `completed_integration` field.
+    si: option<bool>,
+    /// Indicates if the integration is complete.
+    completed-integration: option<bool>,
+    /// Indicates if the integration is enabled.
+    enabled: bool,
+    /// An identifier provided by your IdP to identify Twilio SendGrid in the SAML interaction. This is called the "SAML Issuer ID" in the Twilio SendGrid UI.
+    entity-id: string,
+    /// The name of your integration. This name can be anything that makes sense for your organization (eg. Twilio SendGrid)
+    name: string,
+    /// The IdP's SAML POST endpoint. This endpoint should receive requests and initiate an SSO login flow. This is called the "Embed Link" in the Twilio SendGrid UI.
+    signin-url: string,
+    /// This URL is relevant only for an IdP-initiated authentication flow. If a user authenticates from their IdP, this URL will return them to their IdP when logging out.
+    signout-url: string
+  }
+  patch-sso-integrations-id: func(params: patch-sso-integrations-id-params) -> result<string, string>;
+
+  /// Delete an SSO Integration
+  delete-sso-integrations-id: func() -> result<string, string>;
+
+}
+
+interface single-sign-on-teammates {
+  /// Create SSO Teammate
+  record post-sso-teammates-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-sso-teammates: func(params: post-sso-teammates-params) -> result<string, string>;
+
+  /// Edit an SSO Teammate
+  record patch-sso-teammates-username-params {
+    first-name: option<string>,
+    is-admin: option<bool>,
+    last-name: option<string>,
+    scopes: option<list<string>>
+  }
+  patch-sso-teammates-username: func(params: patch-sso-teammates-username-params) -> result<string, string>;
+
+}
+
+interface subusers-api {
+  /// List all Subusers
+  record get-subusers-params {
+    /// The username of this subuser.
+    username: option<string>,
+    /// The number of results you would like to get in each request.
+    limit: option<s32>,
+    /// The number of subusers to skip.
+    offset: option<s32>
+  }
+  get-subusers: func(params: get-subusers-params) -> result<string, string>;
+
+  /// Create Subuser
+  record post-subusers-params {
+    /// The email address of the subuser.
+    email: string,
+    /// The IP addresses that should be assigned to this subuser.
+    ips: list<string>,
+    /// The password this subuser will use when logging into SendGrid.
+    password: string,
+    /// The username for this subuser.
+    username: string
+  }
+  post-subusers: func(params: post-subusers-params) -> result<string, string>;
+
+  /// Retrieve Subuser Reputations
+  record get-subusers-reputations-params {
+    usernames: option<string>
+  }
+  get-subusers-reputations: func(params: get-subusers-reputations-params) -> result<string, string>;
+
+  /// Enable/disable a subuser
+  record patch-subusers-subuser-name-params {
+    /// Whether or not this subuser is disabled. True means disabled, False means enabled.
+    disabled: option<bool>
+  }
+  patch-subusers-subuser-name: func(params: patch-subusers-subuser-name-params) -> result<string, string>;
+
+  /// Delete a subuser
+  delete-subusers-subuser-name: func() -> result<string, string>;
+
+  /// Update IPs assigned to a subuser
+  record put-subusers-subuser-name-ips-params {
+    body: option<list<string>>
+  }
+  put-subusers-subuser-name-ips: func(params: put-subusers-subuser-name-ips-params) -> result<string, string>;
+
+}
+
+interface subuser-statistics {
+  enum get-subusers-stats-aggregated-by-enum {
+    day,
+    week,
+    month,
+  }
+
+  enum get-subusers-stats-monthly-sort-by-metric-enum {
+    blocks,
+    bounces,
+    clicks,
+    delivered,
+    opens,
+    requests,
+    unique-clicks,
+    unique-opens,
+    unsubscribes,
+  }
+
+  enum get-subusers-stats-monthly-sort-by-direction-enum {
+    desc,
+    asc,
+  }
+
+  /// Retrieve email statistics for your subusers.
+  record get-subusers-stats-params {
+    /// Limits the number of results returned per page.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results from.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-subusers-stats-aggregated-by-enum>,
+    /// The subuser you want to retrieve statistics for. You may include this parameter up to 10 times to retrieve statistics for multiple subusers.
+    subusers: string,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today.
+    end-date: option<string>
+  }
+  get-subusers-stats: func(params: get-subusers-stats-params) -> result<string, string>;
+
+  /// Retrieve monthly stats for all subusers
+  record get-subusers-stats-monthly-params {
+    /// The date of the month to retrieve statistics for. Must be formatted YYYY-MM-DD
+    date: string,
+    /// A substring search of your subusers.
+    subuser: option<string>,
+    /// The metric that you want to sort by. Metrics that you can sort by are: `blocks`, `bounces`, `clicks`, `delivered`, `opens`, `requests`, `unique_clicks`, `unique_opens`, and `unsubscribes`.'
+    sort-by-metric: option<get-subusers-stats-monthly-sort-by-metric-enum>,
+    /// The direction you want to sort.
+    sort-by-direction: option<get-subusers-stats-monthly-sort-by-direction-enum>,
+    /// Optional field to limit the number of results returned.
+    limit: option<s32>,
+    /// Optional beginning point in the list to retrieve from.
+    offset: option<s32>
+  }
+  get-subusers-stats-monthly: func(params: get-subusers-stats-monthly-params) -> result<string, string>;
+
+  /// Retrieve the totals for each email statistic metric for all subusers.
+  record get-subusers-stats-sums-params {
+    /// The direction you want to sort. 
+    sort-by-direction: option<get-subusers-stats-monthly-sort-by-direction-enum>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>,
+    /// Limits the number of results returned per page.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results from.
+    offset: option<s32>,
+    /// How to group the statistics. Defaults to today. Must follow format YYYY-MM-DD.
+    aggregated-by: option<string>,
+    /// The metric that you want to sort by.  Must be a single metric.
+    sort-by-metric: option<string>
+  }
+  get-subusers-stats-sums: func(params: get-subusers-stats-sums-params) -> result<string, string>;
+
+  /// Retrieve the monthly email statistics for a single subuser
+  record get-subusers-subuser-name-stats-monthly-params {
+    /// The date of the month to retrieve statistics for. Must be formatted YYYY-MM-DD
+    date: string,
+    /// The metric that you want to sort by. Metrics that you can sort by are: `blocks`, `bounces`, `clicks`, `delivered`, `opens`, `requests`, `unique_clicks`, `unique_opens`, and `unsubscribes`.'
+    sort-by-metric: option<string>,
+    /// The direction you want to sort.
+    sort-by-direction: option<get-subusers-stats-monthly-sort-by-direction-enum>,
+    /// Optional field to limit the number of results returned.
+    limit: option<s32>,
+    /// Optional beginning point in the list to retrieve from.
+    offset: option<s32>
+  }
+  get-subusers-subuser-name-stats-monthly: func(params: get-subusers-subuser-name-stats-monthly-params) -> result<string, string>;
+
+}
+
+interface subuser-monitor-settings {
+  /// Retrieve monitor settings for a subuser
+  get-subusers-subuser-name-monitor: func() -> result<string, string>;
+
+  /// Create monitor settings
+  record post-subusers-subuser-name-monitor-params {
+    /// The email address to which Sendgrid should send emails for monitoring.
+    email: string,
+    /// The frequency at which to forward monitoring emails. An email will be sent when your subuser sends this many (e.g., 1,000) emails.
+    frequency: f64
+  }
+  post-subusers-subuser-name-monitor: func(params: post-subusers-subuser-name-monitor-params) -> result<string, string>;
+
+  /// Update Monitor Settings for a subuser
+  record put-subusers-subuser-name-monitor-params {
+    /// The email address to which Sendgrid should send emails for monitoring.
+    email: string,
+    /// The frequency at which to forward monitoring emails. An email will be sent when your subuser sends this many (e.g., 1,000) emails.
+    frequency: f64
+  }
+  put-subusers-subuser-name-monitor: func(params: put-subusers-subuser-name-monitor-params) -> result<string, string>;
+
+  /// Delete monitor settings
+  delete-subusers-subuser-name-monitor: func() -> result<string, string>;
+
+}
+
+interface blocks-api {
+  /// Retrieve all blocks
+  record get-suppression-blocks-params {
+    /// The start of the time range when a blocked email was created (inclusive). This is a unix timestamp.
+    start-time: option<s32>,
+    /// The end of the time range when a blocked email was created (inclusive). This is a unix timestamp.
+    end-time: option<s32>,
+    /// Limit the number of results to be displayed per page.
+    limit: option<s32>,
+    /// The point in the list to begin displaying results.
+    offset: option<s32>
+  }
+  get-suppression-blocks: func(params: get-suppression-blocks-params) -> result<string, string>;
+
+  /// Delete blocks
+  record delete-suppression-blocks-params {
+    /// Indicates if you want to delete all blocked email addresses.
+    delete-all: option<bool>,
+    /// The specific blocked email addresses that you want to delete.
+    emails: option<list<string>>
+  }
+  delete-suppression-blocks: func(params: delete-suppression-blocks-params) -> result<string, string>;
+
+  /// Retrieve a specific block
+  get-suppression-blocks-email: func() -> result<string, string>;
+
+  /// Delete a specific block
+  delete-suppression-blocks-email: func() -> result<string, string>;
+
+}
+
+interface bounces-api {
+  /// Retrieve all bounces
+  record get-suppression-bounces-params {
+    /// Refers start of the time range in unix timestamp when a bounce was created (inclusive).
+    start-time: option<s32>,
+    /// Refers end of the time range in unix timestamp when a bounce was created (inclusive).
+    end-time: option<s32>,
+    accept: string
+  }
+  get-suppression-bounces: func(params: get-suppression-bounces-params) -> result<string, string>;
+
+  /// Delete bounces
+  record delete-suppression-bounces-params {
+    /// This parameter allows you to delete **every** email in your bounce list. This should not be used with the emails parameter.
+    delete-all: option<bool>,
+    /// Delete multiple emails from your bounce list at the same time. This should not be used with the delete_all parameter.
+    emails: option<list<string>>
+  }
+  delete-suppression-bounces: func(params: delete-suppression-bounces-params) -> result<string, string>;
+
+  /// Retrieve a Bounce
+  get-suppression-bounces-email: func() -> result<string, string>;
+
+  /// Delete a bounce
+  record delete-suppression-bounces-email-params {
+    /// The email address you would like to remove from the bounce list.
+    email-address: string,
+    body: option<string>
+  }
+  delete-suppression-bounces-email: func(params: delete-suppression-bounces-email-params) -> result<string, string>;
+
+}
+
+interface invalid-emails-api {
+  /// Retrieve all invalid emails
+  record get-suppression-invalid-emails-params {
+    /// Refers start of the time range in unix timestamp when an invalid email was created (inclusive).
+    start-time: option<s32>,
+    /// Refers end of the time range in unix timestamp when an invalid email was created (inclusive).
+    end-time: option<s32>,
+    /// Limit the number of results to be displayed per page.
+    limit: option<s32>,
+    /// Paging offset. The point in the list to begin displaying results.
+    offset: option<s32>
+  }
+  get-suppression-invalid-emails: func(params: get-suppression-invalid-emails-params) -> result<string, string>;
+
+  /// Delete invalid emails
+  record delete-suppression-invalid-emails-params {
+    /// Indicates if you want to remove all email address from the invalid emails list.
+    delete-all: option<bool>,
+    /// The list of specific email addresses that you want to remove.
+    emails: option<list<string>>
+  }
+  delete-suppression-invalid-emails: func(params: delete-suppression-invalid-emails-params) -> result<string, string>;
+
+  /// Retrieve a specific invalid email
+  get-suppression-invalid-emails-email: func() -> result<string, string>;
+
+  /// Delete a specific invalid email
+  delete-suppression-invalid-emails-email: func() -> result<string, string>;
+
+}
+
+interface spam-reports-api {
+  /// Retrieve all spam reports
+  record get-suppression-spam-reports-params {
+    /// The start of the time range when a spam report was created (inclusive). This is a unix timestamp.
+    start-time: option<s32>,
+    /// The end of the time range when a spam report was created (inclusive). This is a unix timestamp.
+    end-time: option<s32>,
+    /// Limit the number of results to be displayed per page.
+    limit: option<s32>,
+    /// Paging offset. The point in the list to begin displaying results.
+    offset: option<s32>
+  }
+  get-suppression-spam-reports: func(params: get-suppression-spam-reports-params) -> result<string, string>;
+
+  /// Delete spam reports
+  record delete-suppression-spam-reports-params {
+    /// Indicates if you want to delete all email addresses on the spam report list.
+    delete-all: option<bool>,
+    /// A list of specific email addresses that you want to remove from the spam report list.
+    emails: option<list<string>>
+  }
+  delete-suppression-spam-reports: func(params: delete-suppression-spam-reports-params) -> result<string, string>;
+
+  /// Retrieve a specific spam report
+  get-suppression-spam-reports-email: func() -> result<string, string>;
+
+  /// Delete a specific spam report
+  delete-suppression-spam-reports-email: func() -> result<string, string>;
+
+}
+
+interface transactional-templates {
+  enum get-templates-generations-enum {
+    legacy,
+    dynamic,
+    legacy-dynamic,
+  }
+
+  enum post-templates-body-generation-enum {
+    legacy,
+    dynamic,
+  }
+
+  /// Retrieve paged transactional templates.
+  record get-templates-params {
+    /// Comma-delimited list specifying which generations of templates to return. Options are `legacy`, `dynamic` or `legacy,dynamic`.
+    generations: option<get-templates-generations-enum>,
+    /// The number of templates to be returned in each page of results
+    page-size: f64,
+    /// A token corresponding to a specific page of results, as provided by metadata
+    page-token: option<string>
+  }
+  get-templates: func(params: get-templates-params) -> result<string, string>;
+
+  /// Create a transactional template.
+  record post-templates-params {
+    /// Defines whether the template supports dynamic replacement.
+    generation: option<post-templates-body-generation-enum>,
+    /// The name for the new transactional template.
+    name: string
+  }
+  post-templates: func(params: post-templates-params) -> result<string, string>;
+
+  /// Retrieve a single transactional template.
+  get-templates-template-id: func() -> result<string, string>;
+
+  /// Duplicate a transactional template.
+  record post-templates-template-id-params {
+    /// The name for the new transactional template.
+    name: option<string>
+  }
+  post-templates-template-id: func(params: post-templates-template-id-params) -> result<string, string>;
+
+  /// Edit a transactional template.
+  record patch-templates-template-id-params {
+    /// The name of the transactional template.
+    name: option<string>
+  }
+  patch-templates-template-id: func(params: patch-templates-template-id-params) -> result<string, string>;
+
+  /// Delete a template.
+  delete-templates-template-id: func() -> result<string, string>;
+
+}
+
+interface transactional-templates-versions {
+  enum transactional-template-version-create-editor-enum {
+    code,
+    design,
+  }
+
+  /// Create a new transactional template version.
+  record post-templates-template-id-versions-params {
+    /// Set the version as the active version associated with the template (0 is inactive, 1 is active). Only one version of a template can be active. The first version created for a template will automatically be set to Active.
+    active: option<s32>,
+    /// The editor used in the UI.
+    editor: option<transactional-template-version-create-editor-enum>,
+    /// If true, plain_content is always generated from html_content. If false, plain_content is not altered.
+    generate-plain-content: option<bool>,
+    /// The HTML content of the version. Maximum of 1048576 bytes allowed.
+    html-content: option<string>,
+    /// Name of the transactional template version.
+    name: string,
+    /// Text/plain content of the transactional template version. Maximum of 1048576 bytes allowed.
+    plain-content: option<string>,
+    /// Subject of the new transactional template version.
+    subject: string,
+    /// For dynamic templates only, the mock json data that will be used for template preview and test sends.
+    test-data: option<string>
+  }
+  post-templates-template-id-versions: func(params: post-templates-template-id-versions-params) -> result<string, string>;
+
+  /// Retrieve a specific transactional template version.
+  get-templates-template-id-versions-version-id: func() -> result<string, string>;
+
+  /// Edit a transactional template version.
+  record patch-templates-template-id-versions-version-id-params {
+    /// Set the version as the active version associated with the template (0 is inactive, 1 is active). Only one version of a template can be active. The first version created for a template will automatically be set to Active.
+    active: option<s32>,
+    /// The editor used in the UI.
+    editor: option<transactional-template-version-create-editor-enum>,
+    /// If true, plain_content is always generated from html_content. If false, plain_content is not altered.
+    generate-plain-content: option<bool>,
+    /// The HTML content of the version. Maximum of 1048576 bytes allowed.
+    html-content: option<string>,
+    /// Name of the transactional template version.
+    name: string,
+    /// Text/plain content of the transactional template version. Maximum of 1048576 bytes allowed.
+    plain-content: option<string>,
+    /// Subject of the new transactional template version.
+    subject: string,
+    /// For dynamic templates only, the mock json data that will be used for template preview and test sends.
+    test-data: option<string>
+  }
+  patch-templates-template-id-versions-version-id: func(params: patch-templates-template-id-versions-version-id-params) -> result<string, string>;
+
+  /// Delete a transactional template version.
+  delete-templates-template-id-versions-version-id: func() -> result<string, string>;
+
+  /// Activate a transactional template version.
+  post-templates-template-id-versions-version-id-activate: func() -> result<string, string>;
+
+}
+
+interface settings-tracking {
+  /// Retrieve Tracking Settings
+  get-tracking-settings: func() -> result<string, string>;
+
+  /// Retrieve Click Track Settings
+  get-tracking-settings-click: func() -> result<string, string>;
+
+  /// Update Click Tracking Settings
+  record patch-tracking-settings-click-params {
+    /// The setting you want to use for click tracking.
+    enabled: option<bool>
+  }
+  patch-tracking-settings-click: func(params: patch-tracking-settings-click-params) -> result<string, string>;
+
+  /// Retrieve Google Analytics Settings
+  get-tracking-settings-google-analytics: func() -> result<string, string>;
+
+  /// Update Google Analytics Settings
+  record patch-tracking-settings-google-analytics-params {
+    /// Indicates if Google Analytics is enabled.
+    enabled: option<bool>,
+    /// The name of the campaign.
+    utm-campaign: option<string>,
+    /// Used to differentiate ads
+    utm-content: option<string>,
+    /// Name of the marketing medium (e.g. "Email").
+    utm-medium: option<string>,
+    /// Name of the referrer source. 
+    utm-source: option<string>,
+    /// Any paid keywords.
+    utm-term: option<string>
+  }
+  patch-tracking-settings-google-analytics: func(params: patch-tracking-settings-google-analytics-params) -> result<string, string>;
+
+  /// Get Open Tracking Settings
+  get-tracking-settings-open: func() -> result<string, string>;
+
+  /// Update Open Tracking Settings
+  record patch-tracking-settings-open-params {
+    /// The new status that you want to set for open tracking.
+    enabled: option<bool>
+  }
+  patch-tracking-settings-open: func(params: patch-tracking-settings-open-params) -> result<string, string>;
+
+  /// Retrieve Subscription Tracking Settings
+  get-tracking-settings-subscription: func() -> result<string, string>;
+
+  /// Update Subscription Tracking Settings
+  record patch-tracking-settings-subscription-params {
+    /// Indicates if subscription tracking is enabled.
+    enabled: option<bool>,
+    /// The information and HTML for your unsubscribe link. 
+    html-content: option<string>,
+    /// The HTML that will be displayed on the page that your customers will see after clicking unsubscribe, hosted on SendGrid’s server.
+    landing: option<string>,
+    /// The information in plain text for your unsubscribe link. You should have the “<% %>” tag in your content, otherwise the user will have no URL for unsubscribing.
+    plain-content: option<string>,
+    /// Your custom defined replacement tag for your templates. Use this tag to place your unsubscribe content anywhere in your emailtemplate.
+    replace: option<string>,
+    /// The URL where you would like your users sent to unsubscribe.
+    url: option<string>
+  }
+  patch-tracking-settings-subscription: func(params: patch-tracking-settings-subscription-params) -> result<string, string>;
+
+}
+
+interface users-api {
+  /// Get a user's account information.
+  get-user-account: func() -> result<string, string>;
+
+  /// Retrieve your credit balance
+  get-user-credits: func() -> result<string, string>;
+
+  /// Retrieve your account email address
+  get-user-email: func() -> result<string, string>;
+
+  /// Update your account email address
+  record put-user-email-params {
+    /// The new email address that you would like to use for your account.
+    email: option<string>
+  }
+  put-user-email: func(params: put-user-email-params) -> result<string, string>;
+
+  /// Update your password
+  record put-user-password-params {
+    /// The new password you would like to use for your account.
+    new-password: string,
+    /// The old password for your account.
+    old-password: string
+  }
+  put-user-password: func(params: put-user-password-params) -> result<string, string>;
+
+  /// Get a user's profile
+  get-user-profile: func() -> result<string, string>;
+
+  /// Update a user's profile
+  record patch-user-profile-params {
+    /// The street address for this user profile.
+    address: option<string>,
+    /// An optional second line for the street address of this user profile.
+    address2: option<string>,
+    /// The city for the user profile.
+    city: option<string>,
+    /// That company that this user profile is associated with.
+    company: option<string>,
+    /// Th country of this user profile.
+    country: option<string>,
+    /// The first name of the user.
+    first-name: option<string>,
+    /// The last name of the user.
+    last-name: option<string>,
+    /// The phone number for the user.
+    phone: option<string>,
+    /// The state for this user.
+    state: option<string>,
+    /// The website associated with this user.
+    website: option<string>,
+    /// The zip code for this user.
+    zip: option<string>
+  }
+  patch-user-profile: func(params: patch-user-profile-params) -> result<string, string>;
+
+  /// Retrieve your username
+  get-user-username: func() -> result<string, string>;
+
+  /// Update your username
+  record put-user-username-params {
+    /// The new username you would like to use for your account.
+    username: option<string>
+  }
+  put-user-username: func(params: put-user-username-params) -> result<string, string>;
+
+}
+
+interface settings-enforced-tls {
+  /// Retrieve current Enforced TLS settings.
+  get-user-settings-enforced-tls: func() -> result<string, string>;
+
+  /// Update Enforced TLS settings
+  record patch-user-settings-enforced-tls-params {
+    /// Indicates if you want to require your recipients to support TLS. 
+    require-tls: option<bool>,
+    /// Indicates if you want to require your recipients to have a valid certificate.
+    require-valid-cert: option<bool>
+  }
+  patch-user-settings-enforced-tls: func(params: patch-user-settings-enforced-tls-params) -> result<string, string>;
+
+}
+
+interface webhooks {
+  enum get-user-webhooks-parse-stats-aggregated-by-enum {
+    day,
+    week,
+    month,
+  }
+
+  /// Retrieve Event Webhook settings
+  get-user-webhooks-event-settings: func() -> result<string, string>;
+
+  /// Update Event Notification Settings
+  record patch-user-webhooks-event-settings-params {
+    /// Receiving server could not or would not accept message.
+    bounce: bool,
+    /// Recipient clicked on a link within the message. You need to enable Click Tracking for getting this type of event.
+    click: bool,
+    /// Recipient's email server temporarily rejected message.
+    deferred: bool,
+    /// Message has been successfully delivered to the receiving server.
+    delivered: bool,
+    /// You may see the following drop reasons: Invalid SMTPAPI header, Spam Content (if spam checker app enabled), Unsubscribed Address, Bounced Address, Spam Reporting Address, Invalid, Recipient List over Package Quota
+    dropped: bool,
+    /// Indicates if the event webhook is enabled.
+    enabled: bool,
+    /// Recipient resubscribes to specific group by updating preferences. You need to enable Subscription Tracking for getting this type of event.
+    group-resubscribe: bool,
+    /// Recipient unsubscribe from specific group, by either direct link or updating preferences. You need to enable Subscription Tracking for getting this type of event.
+    group-unsubscribe: bool,
+    /// The client ID Twilio SendGrid sends to your OAuth server or service provider to generate an OAuth access token. When passing data in this field, you must also include the oauth_token_url field.
+    oauth-client-id: option<string>,
+    /// This secret is needed only once to create an access token. SendGrid will store this secret, allowing you to update your Client ID and Token URL without passing the secret to SendGrid again.  When passing data in this field, you must also include the oauth_client_id and oauth_token_url fields.
+    oauth-client-secret: option<string>,
+    /// The URL where Twilio SendGrid sends the Client ID and Client Secret to generate an access token. This should be your OAuth server or service provider. When passing data in this field, you must also include the oauth_client_id field.
+    oauth-token-url: option<string>,
+    /// Recipient has opened the HTML message. You need to enable Open Tracking for getting this type of event.
+    open: bool,
+    /// Message has been received and is ready to be delivered.
+    processed: bool,
+    /// Recipient marked a message as spam.
+    spam-report: bool,
+    /// Recipient clicked on message's subscription management link. You need to enable Subscription Tracking for getting this type of event.
+    unsubscribe: bool,
+    /// The URL that you want the event webhook to POST to.
+    url: string
+  }
+  patch-user-webhooks-event-settings: func(params: patch-user-webhooks-event-settings-params) -> result<string, string>;
+
+  /// Retrieve Signed Webhook Public Key
+  get-user-webhooks-event-settings-signed: func() -> result<string, string>;
+
+  /// Enable/Disable Signed Webhook
+  record patch-user-webhooks-event-settings-signed-params {
+    enabled: bool
+  }
+  patch-user-webhooks-event-settings-signed: func(params: patch-user-webhooks-event-settings-signed-params) -> result<string, string>;
+
+  /// Test Event Notification Settings
+  record post-user-webhooks-event-test-params {
+    /// The client ID Twilio SendGrid sends to your OAuth server or service provider to generate an OAuth access token. When passing data in this field, you must also include the oauth_client_secret and oauth_token_url fields.
+    oauth-client-id: option<string>,
+    /// This secret is needed only once to create an access token. SendGrid will store this secret, allowing you to update your Client ID and Token URL without passing the secret to SendGrid again.  When passing data in this field, you must also include the oauth_client_id and oauth_token_url fields.
+    oauth-client-secret: option<string>,
+    /// The URL where Twilio SendGrid sends the Client ID and Client Secret to generate an access token. This should be your OAuth server or service provider.  When passing data in this field, you must also include the oauth_client_id and oauth_client_secret fields.
+    oauth-token-url: option<string>,
+    /// The URL where you would like the test notification to be sent.
+    url: option<string>
+  }
+  post-user-webhooks-event-test: func(params: post-user-webhooks-event-test-params) -> result<string, string>;
+
+  /// Retrieve all parse settings
+  get-user-webhooks-parse-settings: func() -> result<string, string>;
+
+  /// Retrieves Inbound Parse Webhook statistics.
+  record get-user-webhooks-parse-stats-params {
+    /// The number of statistics to return on each page.
+    limit: option<string>,
+    /// The number of statistics to skip.
+    offset: option<string>,
+    /// How you would like the statistics to by grouped. 
+    aggregated-by: option<get-user-webhooks-parse-stats-aggregated-by-enum>,
+    /// The starting date of the statistics you want to retrieve. Must be in the format YYYY-MM-DD
+    start-date: string,
+    /// The end date of the statistics you want to retrieve. Must be in the format YYYY-MM-DD
+    end-date: option<string>
+  }
+  get-user-webhooks-parse-stats: func(params: get-user-webhooks-parse-stats-params) -> result<string, string>;
+
+}
+
+interface settings-inbound-parse {
+  /// Create a parse setting
+  record post-user-webhooks-parse-settings-params {
+    /// A specific and unique domain or subdomain that you have created to use exclusively to parse your incoming email. For example, `parse.yourdomain.com`.
+    hostname: option<string>,
+    /// Indicates if you would like SendGrid to post the original MIME-type content of your parsed email. When this parameter is set to `true`, SendGrid will send a JSON payload of the content of your email.
+    send-raw: option<bool>,
+    /// Indicates if you would like SendGrid to check the content parsed from your emails for spam before POSTing them to your domain.
+    spam-check: option<bool>,
+    /// The public URL where you would like SendGrid to POST the data parsed from your email. Any emails sent with the given hostname provided (whose MX records have been updated to point to SendGrid) will be parsed and POSTed to this URL.
+    url: option<string>
+  }
+  post-user-webhooks-parse-settings: func(params: post-user-webhooks-parse-settings-params) -> result<string, string>;
+
+  /// Retrieve a specific parse setting
+  get-user-webhooks-parse-settings-hostname: func() -> result<string, string>;
+
+  /// Update a parse setting
+  record patch-user-webhooks-parse-settings-hostname-params {
+    /// A specific and unique domain or subdomain that you have created to use exclusively to parse your incoming email. For example, `parse.yourdomain.com`.
+    hostname: option<string>,
+    /// Indicates if you would like SendGrid to post the original MIME-type content of your parsed email. When this parameter is set to `true`, SendGrid will send a JSON payload of the content of your email.
+    send-raw: option<bool>,
+    /// Indicates if you would like SendGrid to check the content parsed from your emails for spam before POSTing them to your domain.
+    spam-check: option<bool>,
+    /// The public URL where you would like SendGrid to POST the data parsed from your email. Any emails sent with the given hostname provided (whose MX records have been updated to point to SendGrid) will be parsed and POSTed to this URL.
+    url: option<string>
+  }
+  patch-user-webhooks-parse-settings-hostname: func(params: patch-user-webhooks-parse-settings-hostname-params) -> result<string, string>;
+
+  /// Delete a parse setting
+  delete-user-webhooks-parse-settings-hostname: func() -> result<string, string>;
+
+}
+
+interface email-address-validation {
+  /// Validate an email
+  record post-validations-email-params {
+    /// The email address that you want to validate.
+    email: string,
+    /// A one-word classifier for where this validation originated.
+    source: option<string>
+  }
+  post-validations-email: func(params: post-validations-email-params) -> result<string, string>;
+
+}
+
+interface sender-verification {
+  /// Get All Verified Senders
+  record get-verified-senders-params {
+    limit: option<f64>,
+    last-seen-id: option<f64>,
+    id: option<s32>
+  }
+  get-verified-senders: func(params: get-verified-senders-params) -> result<string, string>;
+
+  /// Create Verified Sender Request
+  record post-verified-senders-params {
+    address: option<string>,
+    address2: option<string>,
+    city: option<string>,
+    country: option<string>,
+    from-email: string,
+    from-name: option<string>,
+    nickname: string,
+    reply-to: string,
+    reply-to-name: option<string>,
+    state: option<string>,
+    zip: option<string>
+  }
+  post-verified-senders: func(params: post-verified-senders-params) -> result<string, string>;
+
+  /// Domain Warn List
+  get-verified-senders-domains: func() -> result<string, string>;
+
+  /// Resend Verified Sender Request
+  post-verified-senders-resend-id: func() -> result<string, string>;
+
+  /// Completed Steps
+  get-verified-senders-steps-completed: func() -> result<string, string>;
+
+  /// Verify Sender Request
+  get-verified-senders-verify-token: func() -> result<string, string>;
+
+  /// Edit Verified Sender
+  record patch-verified-senders-id-params {
+    address: option<string>,
+    address2: option<string>,
+    city: option<string>,
+    country: option<string>,
+    from-email: string,
+    from-name: option<string>,
+    nickname: string,
+    reply-to: string,
+    reply-to-name: option<string>,
+    state: option<string>,
+    zip: option<string>
+  }
+  patch-verified-senders-id: func(params: patch-verified-senders-id-params) -> result<string, string>;
+
+  /// Delete Verified Sender
+  delete-verified-senders-id: func() -> result<string, string>;
+
+}
+
+interface email-cname-records {
+  /// Email DNS records to a co-worker
+  record post-whitelabel-dns-email-params {
+    /// The ID of your SendGrid domain record.
+    domain-id: s32,
+    /// The email address to send the DNS information to.
+    email: string,
+    link-id: s32,
+    /// A custom text block to include in the email body sent with the records.
+    message: option<string>
+  }
+  post-whitelabel-dns-email: func(params: post-whitelabel-dns-email-params) -> result<string, string>;
+
+}
+
+interface domain-authentication {
+  /// List all authenticated domains
+  record get-whitelabel-domains-params {
+    /// Number of domains to return.
+    limit: option<s32>,
+    /// Paging offset.
+    offset: option<s32>,
+    /// Exclude subuser domains from the result.
+    exclude-subusers: option<bool>,
+    /// The username associated with an authenticated domain.
+    username: option<string>,
+    /// Search for authenticated domains.
+    domain: option<string>
+  }
+  get-whitelabel-domains: func(params: get-whitelabel-domains-params) -> result<string, string>;
+
+  /// Authenticate a domain
+  record post-whitelabel-domains-params {
+    /// Whether to allow SendGrid to manage your SPF records, DKIM keys, and DKIM key rotation.
+    automatic-security: option<bool>,
+    /// Add a custom DKIM selector. Accepts three letters or numbers.
+    custom-dkim-selector: option<string>,
+    /// Specify whether to use a custom SPF or allow SendGrid to manage your SPF. This option is only available to authenticated domains set up for manual security.
+    custom-spf: option<bool>,
+    /// Whether to use this authenticated domain as the fallback if no authenticated domains match the sender's domain.
+    default: option<bool>,
+    /// Domain being authenticated.
+    domain: string,
+    /// The IP addresses that will be included in the custom SPF record for this authenticated domain.
+    ips: option<list<string>>,
+    /// The subdomain to use for this authenticated domain.
+    subdomain: option<string>,
+    /// The username associated with this domain.
+    username: option<string>
+  }
+  post-whitelabel-domains: func(params: post-whitelabel-domains-params) -> result<string, string>;
+
+  /// Get the default authentication
+  record get-whitelabel-domains-default-params {
+    /// The domain to find a default authentication.
+    domain: option<string>
+  }
+  get-whitelabel-domains-default: func(params: get-whitelabel-domains-default-params) -> result<string, string>;
+
+  /// List the authenticated domain associated with the given user.
+  record get-whitelabel-domains-subuser-params {
+    /// Username for the subuser to find associated authenticated domain.
+    username: string
+  }
+  get-whitelabel-domains-subuser: func(params: get-whitelabel-domains-subuser-params) -> result<string, string>;
+
+  /// Disassociate an authenticated domain from a given user.
+  record delete-whitelabel-domains-subuser-params {
+    /// Username for the subuser to find associated authenticated domain.
+    username: option<string>
+  }
+  delete-whitelabel-domains-subuser: func(params: delete-whitelabel-domains-subuser-params) -> result<string, string>;
+
+  /// Retrieve an authenticated domain
+  get-whitelabel-domains-domain-id: func() -> result<string, string>;
+
+  /// Update an authenticated domain
+  record patch-whitelabel-domains-domain-id-params {
+    /// Indicates whether to generate a custom SPF record for manual security.
+    custom-spf: option<bool>,
+    /// Indicates whether this is the default authenticated domain.
+    default: option<bool>
+  }
+  patch-whitelabel-domains-domain-id: func(params: patch-whitelabel-domains-domain-id-params) -> result<string, string>;
+
+  /// Delete an authenticated domain.
+  delete-whitelabel-domains-domain-id: func() -> result<string, string>;
+
+  /// Associate an authenticated domain with a given user.
+  record post-whitelabel-domains-domain-id-subuser-params {
+    /// Username to associate with the authenticated domain.
+    username: string
+  }
+  post-whitelabel-domains-domain-id-subuser: func(params: post-whitelabel-domains-domain-id-subuser-params) -> result<string, string>;
+
+  /// Add an IP to an authenticated domain
+  record post-whitelabel-domains-id-ips-params {
+    /// IP to associate with the domain. Used for manually specifying IPs for custom SPF.
+    ip: string
+  }
+  post-whitelabel-domains-id-ips: func(params: post-whitelabel-domains-id-ips-params) -> result<string, string>;
+
+  /// Remove an IP from an authenticated domain.
+  delete-whitelabel-domains-id-ips-ip: func() -> result<string, string>;
+
+  /// Validate a domain authentication.
+  post-whitelabel-domains-id-validate: func() -> result<string, string>;
+
+}
+
+interface reverse-dns {
+  /// Retrieve all reverse DNS records
+  record get-whitelabel-ips-params {
+    /// The maximum number of results to retrieve.
+    limit: option<s32>,
+    /// The point in the list of results to begin retrieving IP addresses from.
+    offset: option<s32>,
+    /// The IP address segment that you'd like to use in a prefix search.
+    ip: option<string>
+  }
+  get-whitelabel-ips: func(params: get-whitelabel-ips-params) -> result<string, string>;
+
+  /// Set up reverse DNS
+  record post-whitelabel-ips-params {
+    /// The root, or sending, domain that will be used to send message from the IP address.
+    domain: string,
+    /// The IP address for which you want to set up reverse DNS.
+    ip: string,
+    /// The subdomain that will be used to send emails from the IP address. This should be the same as the subdomain used to set up an authenticated domain.
+    subdomain: option<string>
+  }
+  post-whitelabel-ips: func(params: post-whitelabel-ips-params) -> result<string, string>;
+
+  /// Retrieve a reverse DNS record
+  get-whitelabel-ips-id: func() -> result<string, string>;
+
+  /// Delete a reverse DNS record
+  delete-whitelabel-ips-id: func() -> result<string, string>;
+
+  /// Validate a reverse DNS record
+  post-whitelabel-ips-id-validate: func() -> result<string, string>;
+
+}
+
+interface link-branding {
+  /// Retrieve all branded links
+  record get-whitelabel-links-params {
+    /// Limits the number of results returned per page.
+    limit: option<s32>
+  }
+  get-whitelabel-links: func(params: get-whitelabel-links-params) -> result<string, string>;
+
+  /// Create a branded link
+  record post-whitelabel-links-params {
+    /// Indicates if you want to use this link branding as the default or fallback. When setting a new default, the existing default link branding will have its default status removed automatically.
+    default: option<bool>,
+    /// The root domain for the subdomain that you are creating the link branding for. This should match your FROM email address.
+    domain: string,
+    /// The subdomain to create the link branding for. Must be different from the subdomain you used for authenticating your domain.
+    subdomain: option<string>
+  }
+  post-whitelabel-links: func(params: post-whitelabel-links-params) -> result<string, string>;
+
+  /// Retrieve the default branded link
+  record get-whitelabel-links-default-params {
+    /// The domain to match against when finding the default branded link.
+    domain: option<string>
+  }
+  get-whitelabel-links-default: func(params: get-whitelabel-links-default-params) -> result<string, string>;
+
+  /// Retrieve a subuser's branded link
+  record get-whitelabel-links-subuser-params {
+    /// The username of the subuser to retrieve associated branded links for.
+    username: string
+  }
+  get-whitelabel-links-subuser: func(params: get-whitelabel-links-subuser-params) -> result<string, string>;
+
+  /// Disassociate a branded link from a subuser
+  record delete-whitelabel-links-subuser-params {
+    /// The username of the subuser account that you want to disassociate a branded link from.
+    username: string
+  }
+  delete-whitelabel-links-subuser: func(params: delete-whitelabel-links-subuser-params) -> result<string, string>;
+
+  /// Retrieve a branded link
+  get-whitelabel-links-id: func() -> result<string, string>;
+
+  /// Update a branded link
+  record patch-whitelabel-links-id-params {
+    /// Indicates if the branded link is set as the default. When setting a new default, the existing default link branding will have its default status removed automatically.
+    default: option<bool>
+  }
+  patch-whitelabel-links-id: func(params: patch-whitelabel-links-id-params) -> result<string, string>;
+
+  /// Delete a branded link
+  delete-whitelabel-links-id: func() -> result<string, string>;
+
+  /// Validate a branded link
+  post-whitelabel-links-id-validate: func() -> result<string, string>;
+
+  /// Associate a branded link with a subuser
+  record post-whitelabel-links-link-id-subuser-params {
+    /// The username of the subuser account that you want to associate the branded link with.
+    username: option<string>
+  }
+  post-whitelabel-links-link-id-subuser: func(params: post-whitelabel-links-link-id-subuser-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export ip-access-management;
+  export alerts;
+  export api-keys;
+  export suppressions-unsubscribe-groups;
+  export suppressions-suppressions;
+  export suppressions-global-suppressions;
+  export stats;
+  export campaigns-api;
+  export categories;
+  export contacts-api-custom-fields;
+  export contacts-api-lists;
+  export contacts-api-recipients;
+  export contacts-api-segments;
+  export designs-api;
+  export ip-addresses;
+  export ip-pools;
+  export ip-warmup;
+  export cancel-scheduled-sends;
+  export mail-send;
+  export settings-mail;
+  export contacts;
+  export custom-fields;
+  export lists;
+  export segmenting-contacts;
+  export segmenting-contacts-v2-beta;
+  export senders;
+  export single-sends;
+  export marketing-campaigns-stats;
+  export send-test-email;
+  export query;
+  export csv-ui-only;
+  export settings-partner;
+  export api-key-permissions;
+  export teammates;
+  export sender-identities-api;
+  export certificates;
+  export single-sign-on-settings;
+  export single-sign-on-teammates;
+  export subusers-api;
+  export subuser-statistics;
+  export subuser-monitor-settings;
+  export blocks-api;
+  export bounces-api;
+  export invalid-emails-api;
+  export spam-reports-api;
+  export transactional-templates;
+  export transactional-templates-versions;
+  export settings-tracking;
+  export users-api;
+  export settings-enforced-tls;
+  export webhooks;
+  export settings-inbound-parse;
+  export email-address-validation;
+  export sender-verification;
+  export email-cname-records;
+  export domain-authentication;
+  export reverse-dns;
+  export link-branding;
+}

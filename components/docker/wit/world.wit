@@ -1,0 +1,103 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `HubAuth` | `Authorization: Bearer <secret>` |
+package autostamp:docker@0.2.0;
+
+interface discovery {
+  /// Get namespaces and repos
+  get-namespaces: func() -> result<string, string>;
+
+  /// Get namespace
+  record get-namespace-params {
+    /// Namespace to fetch data for
+    namespace: string
+  }
+  get-namespace: func(params: get-namespace-params) -> result<string, string>;
+
+}
+
+
+interface namespaces {
+  /// Get years with data
+  record get-namespace-years-params {
+    /// Namespace to fetch data for
+    namespace: string
+  }
+  get-namespace-years: func(params: get-namespace-years-params) -> result<string, string>;
+
+  /// Get timespans with data
+  record get-namespace-timespans-params {
+    /// Namespace to fetch data for
+    namespace: string,
+    /// Year to fetch data for
+    year: string,
+    /// Type of timespan to fetch data for
+    timespantype: string
+  }
+  get-namespace-timespans: func(params: get-namespace-timespans-params) -> result<string, string>;
+
+  /// Get namespace metadata for timespan
+  record get-namespace-timespan-metadata-params {
+    /// Namespace to fetch data for
+    namespace: string,
+    /// Year to fetch data for
+    year: string,
+    /// Type of timespan to fetch data for
+    timespantype: string,
+    /// Timespan to fetch data for
+    timespan: string
+  }
+  get-namespace-timespan-metadata: func(params: get-namespace-timespan-metadata-params) -> result<string, string>;
+
+  /// Get namespace data for timespan
+  record get-namespace-data-by-timespan-params {
+    /// Namespace to fetch data for
+    namespace: string,
+    /// Year to fetch data for
+    year: string,
+    /// Type of timespan to fetch data for
+    timespantype: string,
+    /// Timespan to fetch data for
+    timespan: string,
+    /// Type of data to fetch
+    dataview: string
+  }
+  get-namespace-data-by-timespan: func(params: get-namespace-data-by-timespan-params) -> result<string, string>;
+
+}
+
+interface authentication {
+  /// Second factor authentication.
+  record post-users2-fa-login-params {
+    /// The Time-based One-Time Password of the Docker Hub account to authenticate with.
+    code: string,
+    /// The intermediate 2FA token returned from `/v2/users/login` API.
+    login-v2fa-token: string
+  }
+  post-users2-fa-login: func(params: post-users2-fa-login-params) -> result<string, string>;
+
+  /// Create an authentication token
+  record post-users-login-params {
+    /// The password or personal access token (PAT) of the Docker Hub account to authenticate with.
+    password: string,
+    /// The username of the Docker Hub account to authenticate with.
+    username: string
+  }
+  post-users-login: func(params: post-users-login-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export discovery;
+  export namespaces;
+  export authentication;
+}

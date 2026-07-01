@@ -1,0 +1,108 @@
+package autostamp:thetvdb@0.2.0;
+
+interface episodes {
+  get-episodes-id: func() -> result<string, string>;
+
+}
+
+
+interface languages {
+  get-languages: func() -> result<string, string>;
+
+  get-languages-id: func() -> result<string, string>;
+
+}
+
+interface authentication {
+  record post-login-params {
+    apikey: option<string>,
+    userkey: option<string>,
+    username: option<string>
+  }
+  post-login: func(params: post-login-params) -> result<string, string>;
+
+  get-refresh-token: func() -> result<string, string>;
+
+}
+
+interface movies {
+  get-movies-id: func() -> result<string, string>;
+
+  get-movieupdates: func() -> result<string, string>;
+
+}
+
+interface search {
+  get-search-series: func() -> result<string, string>;
+
+  get-search-series-params-v2: func() -> result<string, string>;
+
+}
+
+interface series {
+  get-series-id: func() -> result<string, string>;
+
+  get-series-id-actors: func() -> result<string, string>;
+
+  get-series-id-episodes: func() -> result<string, string>;
+
+  get-series-id-episodes-query: func() -> result<string, string>;
+
+  get-series-id-episodes-query-params-v2: func() -> result<string, string>;
+
+  get-series-id-episodes-summary: func() -> result<string, string>;
+
+  get-series-id-filter: func() -> result<string, string>;
+
+  get-series-id-filter-params-v2: func() -> result<string, string>;
+
+  get-series-id-images: func() -> result<string, string>;
+
+  get-series-id-images-query: func() -> result<string, string>;
+
+  get-series-id-images-query-params-v2: func() -> result<string, string>;
+
+}
+
+interface updates {
+  get-updated-query: func() -> result<string, string>;
+
+  get-updated-query-params-v2: func() -> result<string, string>;
+
+}
+
+interface users {
+  get-user: func() -> result<string, string>;
+
+  get-user-favorites: func() -> result<string, string>;
+
+  put-user-favorites-id: func() -> result<string, string>;
+
+  delete-user-favorites-id: func() -> result<string, string>;
+
+  get-user-ratings: func() -> result<string, string>;
+
+  get-user-ratings-query: func() -> result<string, string>;
+
+  get-user-ratings-query-params-v2: func() -> result<string, string>;
+
+  delete-user-ratings-item-type-item-id: func() -> result<string, string>;
+
+  put-user-ratings-item-type-item-id-item-rating: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export episodes;
+  export languages;
+  export authentication;
+  export movies;
+  export search;
+  export series;
+  export updates;
+  export users;
+}

@@ -1,0 +1,355 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `usertoken` | `Authorization: Basic base64(<secret>)` |
+package autostamp:tvmaze@0.2.0;
+
+interface auth {
+  /// Poll whether an authentication request was confirmed
+  record post-auth-poll-params {
+    token: option<string>
+  }
+  post-auth-poll: func(params: post-auth-poll-params) -> result<string, string>;
+
+  /// Start an authentication request
+  record post-auth-start-params {
+    /// The user's email address
+    email: option<string>,
+    /// Whether to email the user a confirmation link
+    email-confirmation: option<bool>
+  }
+  post-auth-start: func(params: post-auth-start-params) -> result<string, string>;
+
+  /// Validate your authentication credentials
+  get-auth-validate: func() -> result<string, string>;
+
+}
+
+
+interface scrobbling {
+  record post-scrobble-episodes-body-item {
+    /// The TVmaze episode ID
+    episode-id: option<s32>,
+    /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
+    marked-at: option<s32>,
+    type-op: option<mark-type>
+  }
+
+  /// 0 for watched, 1 for acquired, 2 for skipped
+  record mark-type {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record marked-episode-embedded {
+    episode: option<episode>
+  }
+
+  record episode {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record post-scrobble-shows-body-item {
+    /// The episode airdate
+    airdate: option<string>,
+    /// The episode number
+    episode: option<s32>,
+    /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
+    marked-at: option<s32>,
+    /// The season number
+    season: option<s32>,
+    type-op: option<mark-type>
+  }
+
+  /// Mark episodes as acquired or watched based on their IDs
+  record post-scrobble-episodes-params {
+    body: option<list<post-scrobble-episodes-body-item>>
+  }
+  post-scrobble-episodes: func(params: post-scrobble-episodes-params) -> result<string, string>;
+
+  /// Mark an episode as acquired or watched based on its ID
+  record put-scrobble-episodes-episode-id-params {
+    embedded: option<marked-episode-embedded>,
+    episode-id: option<s32>,
+    /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
+    marked-at: option<s32>,
+    type-op: option<mark-type>
+  }
+  put-scrobble-episodes-episode-id: func(params: put-scrobble-episodes-episode-id-params) -> result<string, string>;
+
+  /// Mark episodes within a show as acquired or watched based on their attributes
+  record post-scrobble-shows-params {
+    /// The show's TVmaze ID
+    tvmaze-id: option<s32>,
+    /// The show's TheTVDB ID
+    thetvdb-id: option<s32>,
+    /// The show's IMDB ID
+    imdb-id: option<s32>,
+    body: option<list<post-scrobble-shows-body-item>>
+  }
+  post-scrobble-shows: func(params: post-scrobble-shows-params) -> result<string, string>;
+
+  /// List watched and acquired episodes for a show
+  get-scrobble-shows-show-id: func() -> result<string, string>;
+
+}
+
+interface marked-episodes {
+  record marked-episode-embedded {
+    episode: option<episode>
+  }
+
+  record episode {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// 0 for watched, 1 for acquired, 2 for skipped
+  record mark-type {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List the marked episodes
+  record get-user-episodes-params {
+    /// Only return episodes from this specific show
+    show-id: option<s32>
+  }
+  get-user-episodes: func(params: get-user-episodes-params) -> result<string, string>;
+
+  /// Check if an episode is marked
+  get-user-episodes-episode-id: func() -> result<string, string>;
+
+  /// Mark an episode
+  record put-user-episodes-episode-id-params {
+    embedded: option<marked-episode-embedded>,
+    episode-id: option<s32>,
+    /// Epoch timestamp for when the user watched the episode, or 0 for unknown.
+    marked-at: option<s32>,
+    type-op: option<mark-type>
+  }
+  put-user-episodes-episode-id: func(params: put-user-episodes-episode-id-params) -> result<string, string>;
+
+  /// Unmark an episode
+  delete-user-episodes-episode-id: func() -> result<string, string>;
+
+}
+
+interface followed-networks {
+  enum get-user-follows-networks-embed-enum {
+    network,
+  }
+
+  /// List the followed networks
+  record get-user-follows-networks-params {
+    /// Embed full network info
+    embed: option<get-user-follows-networks-embed-enum>
+  }
+  get-user-follows-networks: func(params: get-user-follows-networks-params) -> result<string, string>;
+
+  /// Check if a network is followed
+  get-user-follows-networks-network-id: func() -> result<string, string>;
+
+  /// Follow a network
+  put-user-follows-networks-network-id: func() -> result<string, string>;
+
+  /// Unfollow a network
+  delete-user-follows-networks-network-id: func() -> result<string, string>;
+
+}
+
+interface followed-people {
+  enum get-user-follows-people-embed-enum {
+    person,
+  }
+
+  /// List the followed people
+  record get-user-follows-people-params {
+    /// Embed full person info
+    embed: option<get-user-follows-people-embed-enum>
+  }
+  get-user-follows-people: func(params: get-user-follows-people-params) -> result<string, string>;
+
+  /// Check if a person is followed
+  get-user-follows-people-person-id: func() -> result<string, string>;
+
+  /// Follow a person
+  put-user-follows-people-person-id: func() -> result<string, string>;
+
+  /// Unfollow a person
+  delete-user-follows-people-person-id: func() -> result<string, string>;
+
+}
+
+interface followed-shows {
+  enum get-user-follows-shows-embed-enum {
+    show,
+  }
+
+  /// List the followed shows
+  record get-user-follows-shows-params {
+    /// Embed full show info
+    embed: option<get-user-follows-shows-embed-enum>
+  }
+  get-user-follows-shows: func(params: get-user-follows-shows-params) -> result<string, string>;
+
+  /// Check if a show is followed
+  get-user-follows-shows-show-id: func() -> result<string, string>;
+
+  /// Follow a show
+  put-user-follows-shows-show-id: func() -> result<string, string>;
+
+  /// Unfollow a show
+  delete-user-follows-shows-show-id: func() -> result<string, string>;
+
+}
+
+interface followed-webchannels {
+  enum get-user-follows-webchannels-embed-enum {
+    webchannel,
+  }
+
+  /// List the followed webchannels
+  record get-user-follows-webchannels-params {
+    /// Embed full webchannel info
+    embed: option<get-user-follows-webchannels-embed-enum>
+  }
+  get-user-follows-webchannels: func(params: get-user-follows-webchannels-params) -> result<string, string>;
+
+  /// Check if a webchannel is followed
+  get-user-follows-webchannels-webchannel-id: func() -> result<string, string>;
+
+  /// Follow a webchannel
+  put-user-follows-webchannels-webchannel-id: func() -> result<string, string>;
+
+  /// Unfollow a webchannel
+  delete-user-follows-webchannels-webchannel-id: func() -> result<string, string>;
+
+}
+
+interface tagged-shows {
+  enum get-user-tags-tag-id-shows-embed-enum {
+    show,
+  }
+
+  /// List all tags
+  get-user-tags: func() -> result<string, string>;
+
+  /// Create a new tag
+  record post-user-tags-params {
+    id: option<s32>,
+    name: option<string>
+  }
+  post-user-tags: func(params: post-user-tags-params) -> result<string, string>;
+
+  /// Update a specific tag
+  record patch-user-tags-tag-id-params {
+    tag-id: string,
+    id: option<s32>,
+    name: option<string>
+  }
+  patch-user-tags-tag-id: func(params: patch-user-tags-tag-id-params) -> result<string, string>;
+
+  /// Delete a specific tag
+  record delete-user-tags-tag-id-params {
+    tag-id: string
+  }
+  delete-user-tags-tag-id: func(params: delete-user-tags-tag-id-params) -> result<string, string>;
+
+  /// List all shows under this tag
+  record get-user-tags-tag-id-shows-params {
+    tag-id: string,
+    /// Embed full show info
+    embed: option<get-user-tags-tag-id-shows-embed-enum>
+  }
+  get-user-tags-tag-id-shows: func(params: get-user-tags-tag-id-shows-params) -> result<string, string>;
+
+  /// Tag a show
+  record put-user-tags-tag-id-shows-show-id-params {
+    tag-id: string,
+    show-id: string
+  }
+  put-user-tags-tag-id-shows-show-id: func(params: put-user-tags-tag-id-shows-show-id-params) -> result<string, string>;
+
+  /// Untag a show
+  record delete-user-tags-tag-id-shows-show-id-params {
+    tag-id: string,
+    show-id: string
+  }
+  delete-user-tags-tag-id-shows-show-id: func(params: delete-user-tags-tag-id-shows-show-id-params) -> result<string, string>;
+
+}
+
+interface voted-episodes {
+  /// List the episodes voted for
+  get-user-votes-episodes: func() -> result<string, string>;
+
+  /// Check if an episode is voted for
+  get-user-votes-episodes-episode-id: func() -> result<string, string>;
+
+  /// Vote for an episode
+  record put-user-votes-episodes-episode-id-params {
+    episode-id: option<s32>,
+    /// The vote number
+    vote: option<s32>,
+    /// Epoch timestamp for when the user voted for the episode
+    voted-at: option<s32>
+  }
+  put-user-votes-episodes-episode-id: func(params: put-user-votes-episodes-episode-id-params) -> result<string, string>;
+
+  /// Remove an episode vote
+  delete-user-votes-episodes-episode-id: func() -> result<string, string>;
+
+}
+
+interface voted-shows {
+  enum get-user-votes-shows-embed-enum {
+    show,
+  }
+
+  /// List the shows voted for
+  record get-user-votes-shows-params {
+    /// Embed full show info
+    embed: option<get-user-votes-shows-embed-enum>
+  }
+  get-user-votes-shows: func(params: get-user-votes-shows-params) -> result<string, string>;
+
+  /// Check if a show is voted for
+  get-user-votes-shows-show-id: func() -> result<string, string>;
+
+  /// Vote for a show
+  record put-user-votes-shows-show-id-params {
+    show-id: option<s32>,
+    /// The vote number
+    vote: option<s32>,
+    /// Epoch timestamp for when the user voted for the episode
+    voted-at: option<s32>
+  }
+  put-user-votes-shows-show-id: func(params: put-user-votes-shows-show-id-params) -> result<string, string>;
+
+  /// Remove a show vote
+  delete-user-votes-shows-show-id: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export auth;
+  export scrobbling;
+  export marked-episodes;
+  export followed-networks;
+  export followed-people;
+  export followed-shows;
+  export followed-webchannels;
+  export tagged-shows;
+  export voted-episodes;
+  export voted-shows;
+}

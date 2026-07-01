@@ -1,0 +1,23 @@
+[package]
+name = "autostamp:musixmatch"
+version = "0.2.0+musixmatch-1.1.0"
+registry = "ghcr.io/autostamp/musixmatch"
+kind = "component"
+file = "build/musixmatch.wasm"
+description = "WebAssembly component bindings for the musixmatch API, generated from an OpenAPI document."
+source = "https://github.com/yoshuawuyts/openapi-bindgen"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies.components]
+
+[dependencies.interfaces."wasi:http"]
+registry = "ghcr.io"
+namespace = "webassembly"
+package = "wasi/http"
+version = "0.2.3"
+
+[dependencies.interfaces."wasmcloud:secrets"]
+registry = "ghcr.io"
+namespace = "wasmcloud"
+package = "interfaces/wasmcloud/secrets"
+version = "1.0.0"

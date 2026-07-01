@@ -1,0 +1,106 @@
+package autostamp:visualcrossing@0.2.0;
+
+interface timeline-weather-api-v15-day-forecast-request {
+  /// Historical and Forecast Weather API
+  record get-visual-crossing-web-services-rest-services-timeline-location-params {
+    /// Locaton of interest as an address, partial address or decimal latitude,longtude value
+    location: string,
+    /// data format of the output either json or CSV
+    content-type: option<string>,
+    unit-group: option<string>,
+    /// data to include in the output (required for CSV format - days,hours,alerts,current,events )
+    include-op: option<string>,
+    /// Language to use for weather descriptions
+    lang: option<string>,
+    key: string
+  }
+  get-visual-crossing-web-services-rest-services-timeline-location: func(params: get-visual-crossing-web-services-rest-services-timeline-location-params) -> result<string, string>;
+
+}
+
+
+interface timeline-weather-api-single-date-request {
+  /// Historical and Forecast Weather API
+  record get-visual-crossing-web-services-rest-services-timeline-location-startdate-params {
+    location: string,
+    startdate: string,
+    /// data format of the output either json or CSV
+    content-type: option<string>,
+    unit-group: option<string>,
+    /// data to include in the output (required for CSV format - days,hours,alerts,current,events )
+    include-op: option<string>,
+    /// Language to use for weather descriptions
+    lang: option<string>,
+    key: string
+  }
+  get-visual-crossing-web-services-rest-services-timeline-location-startdate: func(params: get-visual-crossing-web-services-rest-services-timeline-location-startdate-params) -> result<string, string>;
+
+}
+
+interface timeline-weather-api-date-range-request {
+  /// Historical and Forecast Weather API
+  record get-visual-crossing-web-services-rest-services-timeline-location-startdate-enddate-params {
+    location: string,
+    startdate: string,
+    enddate: string,
+    /// data format of the output either json or CSV
+    content-type: option<string>,
+    unit-group: option<string>,
+    /// data to include in the output (required for CSV format - days,hours,alerts,current,events )
+    include-op: option<string>,
+    /// Language to use for weather descriptions
+    lang: option<string>,
+    key: string
+  }
+  get-visual-crossing-web-services-rest-services-timeline-location-startdate-enddate: func(params: get-visual-crossing-web-services-rest-services-timeline-location-startdate-enddate-params) -> result<string, string>;
+
+}
+
+interface weather-forecast {
+  /// Weather Forecast API
+  record get-visual-crossing-web-services-rest-services-weatherdata-forecast-params {
+    send-as-datasource: option<bool>,
+    allow-asynch: option<bool>,
+    short-column-names: option<bool>,
+    locations: option<string>,
+    aggregate-hours: option<string>,
+    content-type: option<string>,
+    unit-group: option<string>,
+    key: option<string>
+  }
+  get-visual-crossing-web-services-rest-services-weatherdata-forecast: func(params: get-visual-crossing-web-services-rest-services-weatherdata-forecast-params) -> result<string, string>;
+
+}
+
+interface historical-weather {
+  /// Retrieves hourly or daily historical weather records.
+  record get-visual-crossing-web-services-rest-services-weatherdata-history-params {
+    max-distance: option<string>,
+    short-column-names: option<bool>,
+    end-date-time: option<string>,
+    aggregate-hours: option<string>,
+    collect-station-contributions: option<bool>,
+    start-date-time: option<string>,
+    max-stations: option<string>,
+    allow-asynch: option<bool>,
+    locations: option<string>,
+    include-normals: option<bool>,
+    content-type: option<string>,
+    unit-group: option<string>,
+    key: option<string>
+  }
+  get-visual-crossing-web-services-rest-services-weatherdata-history: func(params: get-visual-crossing-web-services-rest-services-weatherdata-history-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export timeline-weather-api-v15-day-forecast-request;
+  export timeline-weather-api-single-date-request;
+  export timeline-weather-api-date-range-request;
+  export weather-forecast;
+  export historical-weather;
+}

@@ -1,0 +1,497 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `aemAuth` | `Authorization: Basic base64(<secret>)` |
+package autostamp:adobe@0.2.0;
+
+interface cq {
+  record post-cq-actions-params {
+    authorizable-id: string,
+    changelog: string
+  }
+  post-cq-actions: func(params: post-cq-actions-params) -> result<string, string>;
+
+  get-login-page: func() -> result<string, string>;
+
+}
+
+
+interface sling {
+  record post-config-adobe-granite-saml-authentication-handler-params {
+    key-store-password: option<string>,
+    key-store-password-type-hint: option<string>,
+    service-ranking: option<s32>,
+    service-ranking-type-hint: option<string>,
+    idp-http-redirect: option<bool>,
+    idp-http-redirect-type-hint: option<string>,
+    create-user: option<bool>,
+    create-user-type-hint: option<string>,
+    default-redirect-url: option<string>,
+    default-redirect-url-type-hint: option<string>,
+    user-id-attribute: option<string>,
+    user-id-attribute-type-hint: option<string>,
+    default-groups: option<list<string>>,
+    default-groups-type-hint: option<string>,
+    idp-cert-alias: option<string>,
+    idp-cert-alias-type-hint: option<string>,
+    add-group-memberships: option<bool>,
+    add-group-memberships-type-hint: option<string>,
+    path: option<list<string>>,
+    path-type-hint: option<string>,
+    synchronize-attributes: option<list<string>>,
+    synchronize-attributes-type-hint: option<string>,
+    clock-tolerance: option<s32>,
+    clock-tolerance-type-hint: option<string>,
+    group-membership-attribute: option<string>,
+    group-membership-attribute-type-hint: option<string>,
+    idp-url: option<string>,
+    idp-url-type-hint: option<string>,
+    logout-url: option<string>,
+    logout-url-type-hint: option<string>,
+    service-provider-entity-id: option<string>,
+    service-provider-entity-id-type-hint: option<string>,
+    assertion-consumer-service-url: option<string>,
+    assertion-consumer-service-url-type-hint: option<string>,
+    handle-logout: option<bool>,
+    handle-logout-type-hint: option<string>,
+    sp-private-key-alias: option<string>,
+    sp-private-key-alias-type-hint: option<string>,
+    use-encryption: option<bool>,
+    use-encryption-type-hint: option<string>,
+    name-id-format: option<string>,
+    name-id-format-type-hint: option<string>,
+    digest-method: option<string>,
+    digest-method-type-hint: option<string>,
+    signature-method: option<string>,
+    signature-method-type-hint: option<string>,
+    user-intermediate-path: option<string>,
+    user-intermediate-path-type-hint: option<string>
+  }
+  post-config-adobe-granite-saml-authentication-handler: func(params: post-config-adobe-granite-saml-authentication-handler-params) -> result<string, string>;
+
+  record post-config-apache-felix-jetty-based-http-service-params {
+    org-apache-felix-https-nio: option<bool>,
+    org-apache-felix-https-nio-type-hint: option<string>,
+    org-apache-felix-https-keystore: option<string>,
+    org-apache-felix-https-keystore-type-hint: option<string>,
+    org-apache-felix-https-keystore-password: option<string>,
+    org-apache-felix-https-keystore-password-type-hint: option<string>,
+    org-apache-felix-https-keystore-key: option<string>,
+    org-apache-felix-https-keystore-key-type-hint: option<string>,
+    org-apache-felix-https-keystore-key-password: option<string>,
+    org-apache-felix-https-keystore-key-password-type-hint: option<string>,
+    org-apache-felix-https-truststore: option<string>,
+    org-apache-felix-https-truststore-type-hint: option<string>,
+    org-apache-felix-https-truststore-password: option<string>,
+    org-apache-felix-https-truststore-password-type-hint: option<string>,
+    org-apache-felix-https-clientcertificate: option<string>,
+    org-apache-felix-https-clientcertificate-type-hint: option<string>,
+    org-apache-felix-https-enable: option<bool>,
+    org-apache-felix-https-enable-type-hint: option<string>,
+    org-osgi-service-http-port-secure: option<string>,
+    org-osgi-service-http-port-secure-type-hint: option<string>
+  }
+  post-config-apache-felix-jetty-based-http-service: func(params: post-config-apache-felix-jetty-based-http-service-params) -> result<string, string>;
+
+  record post-config-apache-http-components-proxy-configuration-params {
+    proxy-host: option<string>,
+    proxy-host-type-hint: option<string>,
+    proxy-port: option<s32>,
+    proxy-port-type-hint: option<string>,
+    proxy-exceptions: option<list<string>>,
+    proxy-exceptions-type-hint: option<string>,
+    proxy-enabled: option<bool>,
+    proxy-enabled-type-hint: option<string>,
+    proxy-user: option<string>,
+    proxy-user-type-hint: option<string>,
+    proxy-password: option<string>,
+    proxy-password-type-hint: option<string>
+  }
+  post-config-apache-http-components-proxy-configuration: func(params: post-config-apache-http-components-proxy-configuration-params) -> result<string, string>;
+
+  record post-config-apache-sling-dav-ex-servlet-params {
+    alias: option<string>,
+    alias-type-hint: option<string>,
+    dav-create-absolute-uri: option<bool>,
+    dav-create-absolute-uri-type-hint: option<string>
+  }
+  post-config-apache-sling-dav-ex-servlet: func(params: post-config-apache-sling-dav-ex-servlet-params) -> result<string, string>;
+
+  record post-config-apache-sling-referrer-filter-params {
+    allow-empty: option<bool>,
+    allow-empty-type-hint: option<string>,
+    allow-hosts: option<string>,
+    allow-hosts-type-hint: option<string>,
+    allow-hosts-regexp: option<string>,
+    allow-hosts-regexp-type-hint: option<string>,
+    filter-methods: option<string>,
+    filter-methods-type-hint: option<string>
+  }
+  post-config-apache-sling-referrer-filter: func(params: post-config-apache-sling-referrer-filter-params) -> result<string, string>;
+
+  record post-config-apache-sling-get-servlet-params {
+    json-maximumresults: option<string>,
+    json-maximumresults-type-hint: option<string>,
+    enable-html: option<bool>,
+    enable-html-type-hint: option<string>,
+    enable-txt: option<bool>,
+    enable-txt-type-hint: option<string>,
+    enable-xml: option<bool>,
+    enable-xml-type-hint: option<string>
+  }
+  post-config-apache-sling-get-servlet: func(params: post-config-apache-sling-get-servlet-params) -> result<string, string>;
+
+  record post-config-property-params {
+    config-node-name: string
+  }
+  post-config-property: func(params: post-config-property-params) -> result<string, string>;
+
+  record get-query-params {
+    path: string,
+    p-limit: f64,
+    v1-property: string,
+    v1-property-value: string
+  }
+  get-query: func(params: get-query-params) -> result<string, string>;
+
+  record post-query-params {
+    path: string,
+    p-limit: f64,
+    v1-property: string,
+    v1-property-value: string
+  }
+  post-query: func(params: post-query-params) -> result<string, string>;
+
+  record get-package-params {
+    group: string,
+    name: string,
+    version: string
+  }
+  get-package: func(params: get-package-params) -> result<string, string>;
+
+  record get-package-filter-params {
+    group: string,
+    name: string,
+    version: string
+  }
+  get-package-filter: func(params: get-package-filter-params) -> result<string, string>;
+
+  record get-agents-params {
+    runmode: string
+  }
+  get-agents: func(params: get-agents-params) -> result<string, string>;
+
+  record get-agent-params {
+    runmode: string,
+    name: string
+  }
+  get-agent: func(params: get-agent-params) -> result<string, string>;
+
+  record post-agent-params {
+    runmode: string,
+    name: string,
+    jcr-content-cq-distribute: option<bool>,
+    jcr-content-cq-distribute-type-hint: option<string>,
+    jcr-content-cq-name: option<string>,
+    jcr-content-cq-template: option<string>,
+    jcr-content-enabled: option<bool>,
+    jcr-content-jcr-description: option<string>,
+    jcr-content-jcr-last-modified: option<string>,
+    jcr-content-jcr-last-modified-by: option<string>,
+    jcr-content-jcr-mixin-types: option<string>,
+    jcr-content-jcr-title: option<string>,
+    jcr-content-log-level: option<string>,
+    jcr-content-no-status-update: option<bool>,
+    jcr-content-no-versioning: option<bool>,
+    jcr-content-protocol-connect-timeout: option<f64>,
+    jcr-content-protocol-http-connection-closed: option<bool>,
+    jcr-content-protocol-http-expired: option<string>,
+    jcr-content-protocol-http-headers: option<list<string>>,
+    jcr-content-protocol-http-headers-type-hint: option<string>,
+    jcr-content-protocol-http-method: option<string>,
+    jcr-content-protocol-https-relaxed: option<bool>,
+    jcr-content-protocol-interface: option<string>,
+    jcr-content-protocol-socket-timeout: option<f64>,
+    jcr-content-protocol-version: option<string>,
+    jcr-content-proxy-ntlm-domain: option<string>,
+    jcr-content-proxy-ntlm-host: option<string>,
+    jcr-content-proxy-host: option<string>,
+    jcr-content-proxy-password: option<string>,
+    jcr-content-proxy-port: option<f64>,
+    jcr-content-proxy-user: option<string>,
+    jcr-content-queue-batch-max-size: option<f64>,
+    jcr-content-queue-batch-mode: option<string>,
+    jcr-content-queue-batch-wait-time: option<f64>,
+    jcr-content-retry-delay: option<string>,
+    jcr-content-reverse-replication: option<bool>,
+    jcr-content-serialization-type: option<string>,
+    jcr-content-sling-resource-type: option<string>,
+    jcr-content-ssl: option<string>,
+    jcr-content-transport-ntlm-domain: option<string>,
+    jcr-content-transport-ntlm-host: option<string>,
+    jcr-content-transport-password: option<string>,
+    jcr-content-transport-uri: option<string>,
+    jcr-content-transport-user: option<string>,
+    jcr-content-trigger-distribute: option<bool>,
+    jcr-content-trigger-modified: option<bool>,
+    jcr-content-trigger-on-off-time: option<bool>,
+    jcr-content-trigger-receive: option<bool>,
+    jcr-content-trigger-specific: option<bool>,
+    jcr-content-user-id: option<string>,
+    jcr-primary-type: option<string>,
+    operation: option<string>
+  }
+  post-agent: func(params: post-agent-params) -> result<string, string>;
+
+  record delete-agent-params {
+    runmode: string,
+    name: string
+  }
+  delete-agent: func(params: delete-agent-params) -> result<string, string>;
+
+  post-truststore-pkcs12: func() -> result<string, string>;
+
+  get-truststore: func() -> result<string, string>;
+
+  record post-authorizables-params {
+    authorizable-id: string,
+    intermediate-path: string,
+    create-user: option<string>,
+    create-group: option<string>,
+    rep-password: option<string>,
+    profile-given-name: option<string>
+  }
+  post-authorizables: func(params: post-authorizables-params) -> result<string, string>;
+
+  record post-truststore-params {
+    operation: option<string>,
+    new-password: option<string>,
+    re-password: option<string>,
+    key-store-type: option<string>,
+    remove-alias: option<string>
+  }
+  post-truststore: func(params: post-truststore-params) -> result<string, string>;
+
+  get-truststore-info: func() -> result<string, string>;
+
+  record post-tree-activation-params {
+    ignoredeactivated: bool,
+    onlymodified: bool,
+    path: string,
+    cmd: string
+  }
+  post-tree-activation: func(params: post-tree-activation-params) -> result<string, string>;
+
+  record post-authorizable-keystore-params {
+    intermediate-path: string,
+    authorizable-id: string,
+    operation: option<string>,
+    current-password: option<string>,
+    new-password: option<string>,
+    re-password: option<string>,
+    key-password: option<string>,
+    key-store-pass: option<string>,
+    alias: option<string>,
+    new-alias: option<string>,
+    remove-alias: option<string>
+  }
+  post-authorizable-keystore: func(params: post-authorizable-keystore-params) -> result<string, string>;
+
+  record get-authorizable-keystore-params {
+    intermediate-path: string,
+    authorizable-id: string
+  }
+  get-authorizable-keystore: func(params: get-authorizable-keystore-params) -> result<string, string>;
+
+  record get-keystore-params {
+    intermediate-path: string,
+    authorizable-id: string
+  }
+  get-keystore: func(params: get-keystore-params) -> result<string, string>;
+
+  record post-path-params {
+    path: string,
+    jcr-primary-type: string,
+    name: string
+  }
+  post-path: func(params: post-path-params) -> result<string, string>;
+
+  record get-node-params {
+    path: string,
+    name: string
+  }
+  get-node: func(params: get-node-params) -> result<string, string>;
+
+  record post-node-params {
+    path: string,
+    name: string,
+    operation: option<string>,
+    delete-authorizable: option<string>
+  }
+  post-node: func(params: post-node-params) -> result<string, string>;
+
+  record delete-node-params {
+    path: string,
+    name: string
+  }
+  delete-node: func(params: delete-node-params) -> result<string, string>;
+
+  record post-node-rw-params {
+    path: string,
+    name: string,
+    add-members: option<string>
+  }
+  post-node-rw: func(params: post-node-rw-params) -> result<string, string>;
+
+}
+
+interface custom {
+  record post-config-aem-password-reset-params {
+    pwdreset-authorizables: option<list<string>>,
+    pwdreset-authorizables-type-hint: option<string>
+  }
+  post-config-aem-password-reset: func(params: post-config-aem-password-reset-params) -> result<string, string>;
+
+  record post-config-aem-health-check-servlet-params {
+    bundles-ignored: option<list<string>>,
+    bundles-ignored-type-hint: option<string>
+  }
+  post-config-aem-health-check-servlet: func(params: post-config-aem-health-check-servlet-params) -> result<string, string>;
+
+  record get-aem-health-check-params {
+    tags: option<string>,
+    combine-tags-or: option<bool>
+  }
+  get-aem-health-check: func(params: get-aem-health-check-params) -> result<string, string>;
+
+}
+
+interface crx {
+  record post-set-password-params {
+    old: string,
+    plain: string,
+    verify: string
+  }
+  post-set-password: func(params: post-set-password-params) -> result<string, string>;
+
+  get-install-status: func() -> result<string, string>;
+
+  record post-package-service-params {
+    cmd: string
+  }
+  post-package-service: func(params: post-package-service-params) -> result<string, string>;
+
+  record post-package-service-json-params {
+    path: string,
+    cmd: string,
+    group-name: option<string>,
+    package-name: option<string>,
+    package-version: option<string>,
+    charset: option<string>,
+    force: option<bool>,
+    recursive: option<bool>
+  }
+  post-package-service-json: func(params: post-package-service-json-params) -> result<string, string>;
+
+  get-package-manager-servlet: func() -> result<string, string>;
+
+  record post-package-update-params {
+    group-name: string,
+    package-name: string,
+    version: string,
+    path: string,
+    filter: option<string>,
+    charset: option<string>
+  }
+  post-package-update: func(params: post-package-update-params) -> result<string, string>;
+
+  get-crxde-status: func() -> result<string, string>;
+
+}
+
+interface granite {
+  record ssl-setup-params {
+    keystore-password: string,
+    keystore-password-confirm: string,
+    truststore-password: string,
+    truststore-password-confirm: string,
+    https-hostname: string,
+    https-port: string
+  }
+  ssl-setup: func(params: ssl-setup-params) -> result<string, string>;
+
+}
+
+interface console {
+  record post-bundle-params {
+    name: string,
+    action: string
+  }
+  post-bundle: func(params: post-bundle-params) -> result<string, string>;
+
+  record get-bundle-info-params {
+    name: string
+  }
+  get-bundle-info: func(params: get-bundle-info-params) -> result<string, string>;
+
+  get-config-mgr: func() -> result<string, string>;
+
+  record post-saml-configuration-params {
+    post: option<bool>,
+    apply: option<bool>,
+    delete: option<bool>,
+    action: option<string>,
+    location: option<string>,
+    path: option<list<string>>,
+    service-ranking: option<s32>,
+    idp-url: option<string>,
+    idp-cert-alias: option<string>,
+    idp-http-redirect: option<bool>,
+    service-provider-entity-id: option<string>,
+    assertion-consumer-service-url: option<string>,
+    sp-private-key-alias: option<string>,
+    key-store-password: option<string>,
+    default-redirect-url: option<string>,
+    user-id-attribute: option<string>,
+    use-encryption: option<bool>,
+    create-user: option<bool>,
+    add-group-memberships: option<bool>,
+    group-membership-attribute: option<string>,
+    default-groups: option<list<string>>,
+    name-id-format: option<string>,
+    synchronize-attributes: option<list<string>>,
+    handle-logout: option<bool>,
+    logout-url: option<string>,
+    clock-tolerance: option<s32>,
+    digest-method: option<string>,
+    signature-method: option<string>,
+    user-intermediate-path: option<string>,
+    propertylist: option<list<string>>
+  }
+  post-saml-configuration: func(params: post-saml-configuration-params) -> result<string, string>;
+
+  record post-jmx-repository-params {
+    action: string
+  }
+  post-jmx-repository: func(params: post-jmx-repository-params) -> result<string, string>;
+
+  get-aem-product-info: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export cq;
+  export sling;
+  export custom;
+  export crx;
+  export granite;
+  export console;
+}

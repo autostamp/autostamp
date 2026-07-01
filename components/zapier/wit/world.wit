@@ -1,0 +1,46 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `SessionAuth` | cookie `sessionid` |
+package autostamp:zapier@0.2.0;
+
+interface api {
+  /// Check
+  check: func() -> result<string, string>;
+
+  /// Get Configuration Link
+  get-configuration-link: func() -> result<string, string>;
+
+  /// Get Execution Log Endpoint
+  record get-execution-log-endpoint-params {
+    execution-log-id: string
+  }
+  get-execution-log-endpoint: func(params: get-execution-log-endpoint-params) -> result<string, string>;
+
+  /// List Exposed Actions
+  list-exposed-actions: func() -> result<string, string>;
+
+  /// Execute App Action Endpoint
+  record execute-app-action-endpoint-params {
+    exposed-app-action-id: string,
+    /// Plain english instructions. Provide as much detail as possible, even if other fields are present.
+    instructions: string,
+    /// If true, we will not execute the action, but will return the params of the preview.
+    preview-only: option<bool>
+  }
+  execute-app-action-endpoint: func(params: execute-app-action-endpoint-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export api;
+}

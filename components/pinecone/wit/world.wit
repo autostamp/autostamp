@@ -1,0 +1,199 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `ApiKey` | header `Api-Key` |
+package autostamp:pinecone@0.2.0;
+
+interface index-operations {
+  /// The unique name of a collection.
+  record collection-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The unique name of an index.
+  record index-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The number of dimensions in the vector representation
+  record vector-dimensionality {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Configuration for the behavior of Pinecone's internal metadata index. By default, all metadata is indexed; when metadata_config is present, only specified metadata fields are indexed.
+  record index-metadata-config {
+    indexed: option<string>
+  }
+
+  /// The vector similarity metric of the index
+  record index-metric {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The pod type
+  record pod-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// List collections
+  list-collections: func() -> result<string, string>;
+
+  /// Create collection
+  record create-collection-params {
+    name: collection-name,
+    source: index-name
+  }
+  create-collection: func(params: create-collection-params) -> result<string, string>;
+
+  /// Describe collection
+  describe-collection: func() -> result<string, string>;
+
+  /// Delete Collection
+  delete-collection: func() -> result<string, string>;
+
+  /// List indexes
+  list-indexes: func() -> result<string, string>;
+
+  /// Create index
+  record create-index-params {
+    dimension: vector-dimensionality,
+    metadata-config: option<index-metadata-config>,
+    metric: option<index-metric>,
+    name: index-name,
+    pod-type: option<pod-type>,
+    /// The number of pods for the index to use,including replicas.
+    pods: option<s32>,
+    /// The number of replicas. Replicas duplicate your index. They provide higher availability and throughput.
+    replicas: option<s32>,
+    source-collection: option<collection-name>
+  }
+  create-index: func(params: create-index-params) -> result<string, string>;
+
+  /// Describe index
+  describe-index: func() -> result<string, string>;
+
+  /// Configure index
+  record configure-index-params {
+    pod-type: option<pod-type>,
+    /// The desired number of replicas for the index.
+    replicas: option<s32>
+  }
+  configure-index: func(params: configure-index-params) -> result<string, string>;
+
+  /// Delete Index
+  delete-index: func() -> result<string, string>;
+
+}
+
+
+interface vector-operations {
+  /// If this parameter is present, the operation only affects vectors that satisfy the filter. See https://www.pinecone.io/docs/metadata-filtering/.
+  record vector-filter {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// The unique ID of a vector
+  record vector-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// An index namespace name
+  record namespace-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Vector sparse data. Represented as a list of indices and a list of corresponded values, which must be the same length.
+  record sparse-vector-data {
+    /// The indices of the sparse data.
+    indices: list<s64>,
+    /// The corresponding values of the sparse data, which must be the same length as the indices.
+    values: list<f64>
+  }
+
+  /// Vector dense data. This should be the same length as the dimension of the index being queried.
+  record vector-data {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record vector-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Describe Index Stats
+  record describe-index-stats-params {
+    filter: option<vector-filter>
+  }
+  describe-index-stats: func(params: describe-index-stats-params) -> result<string, string>;
+
+  /// Query
+  record query-params {
+    filter: option<vector-filter>,
+    id: option<vector-id>,
+    include-metadata: option<bool>,
+    include-values: option<bool>,
+    namespace: option<namespace-name>,
+    sparse-vector: option<sparse-vector-data>,
+    /// The number of results to return for each query.
+    top-k: s64,
+    vector: option<vector-data>
+  }
+  query: func(params: query-params) -> result<string, string>;
+
+  /// Delete
+  record delete-params {
+    delete-all: option<bool>,
+    filter: option<vector-filter>,
+    ids: option<string>,
+    namespace: option<namespace-name>
+  }
+  delete: func(params: delete-params) -> result<string, string>;
+
+  /// Fetch
+  record fetch-params {
+    ids: string,
+    namespace: option<namespace-name>
+  }
+  fetch: func(params: fetch-params) -> result<string, string>;
+
+  /// Fetch
+  record update-params {
+    /// The vector's unique ID
+    id: string,
+    namespace: option<namespace-name>,
+    set-metadata: option<vector-metadata>,
+    sparse-values: option<sparse-vector-data>,
+    values: option<vector-data>
+  }
+  update: func(params: update-params) -> result<string, string>;
+
+  /// Upsert
+  record upsert-params {
+    namespace: option<namespace-name>,
+    vectors: string
+  }
+  upsert: func(params: upsert-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export index-operations;
+  export vector-operations;
+}

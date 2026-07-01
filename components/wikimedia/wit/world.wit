@@ -1,0 +1,607 @@
+package autostamp:wikimedia@0.2.0;
+
+interface feed-content-availability {
+  /// Gets availability of featured feed content for the apps by wiki domain.
+  get-feed-availability: func() -> result<string, string>;
+
+}
+
+
+interface math {
+  /// Check and normalize a TeX formula.
+  record post-media-math-check-type-params {
+    /// The input type of the given formula; can be tex or inline-tex
+    type-op: string,
+    /// The formula to check
+    q: string
+  }
+  post-media-math-check-type: func(params: post-media-math-check-type-params) -> result<string, string>;
+
+  /// Get a previously-stored formula
+  record get-media-math-formula-hash-params {
+    /// The hash string of the previous POST data
+    hash: string
+  }
+  get-media-math-formula-hash: func(params: get-media-math-formula-hash-params) -> result<string, string>;
+
+  /// Get rendered formula in the given format.
+  record get-media-math-render-format-hash-params {
+    /// The output format; can be svg or mml
+    format: string,
+    /// The hash string of the previous POST data
+    hash: string
+  }
+  get-media-math-render-format-hash: func(params: get-media-math-render-format-hash-params) -> result<string, string>;
+
+}
+
+interface bytes-difference-data {
+  /// Get the sum of absolute value of text bytes difference between current edit and
+  /// previous one.
+  record get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// Time unit for the response data. As of today, supported values are daily and monthly
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-bytes-difference-absolute-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+
+  /// Get the sum of absolute text bytes difference per page.
+  record get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// The page-title to request absolute bytes-difference for. Should be prefixed with the
+    /// page canonical namespace.
+    page-title: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// Time unit for the response data. As of today, supported values are daily and monthly
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-bytes-difference-absolute-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<string, string>;
+
+  /// Get the sum of net text bytes difference between current edit and previous one.
+  record get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// Time unit for the response data. As of today, supported values are daily and monthly
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-bytes-difference-net-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+
+  /// Get the sum of net text bytes difference per page.
+  record get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// The page-title to request net bytes-difference for. Should be prefixed with the
+    /// page canonical namespace.
+    page-title: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// Time unit for the response data. As of today, supported values are daily and monthly
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-bytes-difference-net-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<string, string>;
+
+}
+
+interface edited-pages-data {
+  /// Get edited-pages counts for a project.
+  record get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edited-pages in content
+    /// namespaces) or non-content (edited-pages in non-content namespaces). If you are
+    page-type: string,
+    /// If you want to filter by activity-level, use one of 1..4-edits, 5..24-edits,
+    /// 25..99-edits or 100..-edits. If you are interested in edited-pages regardless
+    activity-level: string,
+    /// The time unit for the response data. As of today, supported values are
+    /// daily and monthly.
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end: func(params: get-metrics-edited-pages-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params) -> result<string, string>;
+
+  /// Get new pages counts for a project.
+  record get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (new pages in content
+    /// namespaces) or non-content (new pages in non-content namespaces). If you are
+    page-type: string,
+    /// The time unit for the response data. As of today, supported values are
+    /// daily and monthly.
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-edited-pages-new-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+
+  /// Get top 100 edited-pages by absolute bytes-difference.
+  record get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// The year of the date for which to retrieve top edited-pages, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top edited-pages, in MM format. If you want to get the top edited-pages of a whole month, the day parameter should be all-days.
+    month: string,
+    /// The day of the date for which to retrieve top edited-pages, in DD format, or all-days for a monthly value.
+    day: string
+  }
+  get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+
+  /// Get top 100 edited-pages by edits count.
+  record get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// The year of the date for which to retrieve top edited-pages, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top edited-pages, in MM format. If you want to get the top edited-pages of a whole month, the day parameter should be all-days.
+    month: string,
+    /// The day of the date for which to retrieve top edited-pages, in DD format, or all-days for a monthly value.
+    day: string
+  }
+  get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-edits-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+
+  /// Get top 100 edited-pages by net bytes-difference.
+  record get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// The year of the date for which to retrieve top edited-pages, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top edited-pages, in MM format. If you want to get the top edited-pages of a whole month, the day parameter should be all-days.
+    month: string,
+    /// The day of the date for which to retrieve top edited-pages, in DD format, or all-days for a monthly value.
+    day: string
+  }
+  get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-edited-pages-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+
+}
+
+interface editors-data {
+  /// Get editors counts for a project.
+  record get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits made in content
+    /// namespaces) or non-content (edits made in non-content namespaces). If you are
+    page-type: string,
+    /// If you want to filter by activity-level, use one of 1..4-edits, 5..24-edits,
+    /// 25..99-edits or 100..-edits. If you are interested in editors regardless
+    activity-level: string,
+    /// The time unit for the response data. As of today, supported values are
+    /// daily and monthly.
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end: func(params: get-metrics-editors-aggregate-project-editor-type-page-type-activity-level-granularity-start-end-params) -> result<string, string>;
+
+  /// Get top 100 editors by absolute bytes-difference.
+  record get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// The year of the date for which to retrieve top editors, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top editors, in MM format. If you want to get the top editors of a whole month, the day parameter should be all-days.
+    month: string,
+    /// The day of the date for which to retrieve top editors, in DD format, or all-days for a monthly value.
+    day: string
+  }
+  get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-absolute-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+
+  /// Get top 100 editors by edits count.
+  record get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// The year of the date for which to retrieve top editors, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top editors, in MM format. If you want to get the top editors of a whole month, the day parameter should be all-days.
+    month: string,
+    /// The day of the date for which to retrieve top editors, in DD format, or all-days for a monthly value.
+    day: string
+  }
+  get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-edits-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+
+  /// Get top 100 editors by net bytes-difference.
+  record get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// The year of the date for which to retrieve top editors, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top editors, in MM format. If you want to get the top editors of a whole month, the day parameter should be all-days.
+    month: string,
+    /// The day of the date for which to retrieve top editors, in DD format, or all-days for a monthly value.
+    day: string
+  }
+  get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day: func(params: get-metrics-editors-top-by-net-bytes-difference-project-editor-type-page-type-year-month-day-params) -> result<string, string>;
+
+}
+
+interface edits-data {
+  /// Get edits counts for a project.
+  record get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging
+    editor-type: string,
+    /// If you want to filter by page-type, use one of content (edits on pages in content
+    /// namespaces) or non-content (edits on pages in non-content namespaces). If you are
+    page-type: string,
+    /// The time unit for the response data. As of today, supported values are
+    /// daily and monthly.
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end: func(params: get-metrics-edits-aggregate-project-editor-type-page-type-granularity-start-end-params) -> result<string, string>;
+
+  /// Get edit counts for a page in a project.
+  record get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// The page-title to request edits for. It should be prefixed with canonical namespace.
+    /// Spaces will be converted to underscores.
+    page-title: string,
+    /// If you want to filter by editor-type, use one of anonymous, group-bot (registered
+    /// accounts belonging to the bot group), name-bot (registered accounts not belonging to
+    editor-type: string,
+    /// Time unit for the response data. As of today, supported values are daily and monthly
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end: func(params: get-metrics-edits-per-page-project-page-title-editor-type-granularity-start-end-params) -> result<string, string>;
+
+}
+
+interface legacy-data {
+  record get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// If you want to filter by access site, use one of desktop-site or mobile-site. If you are interested in pagecounts regardless of access site use all-sites.
+    access-site: string,
+    /// The time unit for the response data. As of today, the supported granularities for
+    /// this endpoint are hourly, daily and monthly.
+    granularity: string,
+    /// The timestamp of the first hour/day/month to include, in YYYYMMDDHH format.
+    start: string,
+    /// The timestamp of the last hour/day/month to include, in YYYYMMDDHH format.
+    /// In hourly and daily granularities this value is inclusive, in the monthly granularity
+    end: string
+  }
+  get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end: func(params: get-metrics-legacy-pagecounts-aggregate-project-access-site-granularity-start-end-params) -> result<string, string>;
+
+}
+
+interface pageviews-data {
+  /// Get pageview counts for a project.
+  record get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end-params {
+    /// If you want to filter by project, use the domain of any Wikimedia project,
+    /// for example 'en.wikipedia.org', 'www.mediawiki.org' or 'commons.wikimedia.org'.
+    project: string,
+    /// If you want to filter by access method, use one of desktop, mobile-app or mobile-web.
+    /// If you are interested in pageviews regardless of access method, use all-access.
+    access: string,
+    /// If you want to filter by agent type, use one of user or spider. If you are interested
+    /// in pageviews regardless of agent type, use all-agents.
+    agent: string,
+    /// The time unit for the response data. As of today, the supported granularities for this
+    /// endpoint are hourly, daily, and monthly.
+    granularity: string,
+    /// The timestamp of the first hour/day/month to include, in YYYYMMDDHH format
+    start: string,
+    /// The timestamp of the last hour/day/month to include, in YYYYMMDDHH format
+    end: string
+  }
+  get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end: func(params: get-metrics-pageviews-aggregate-project-access-agent-granularity-start-end-params) -> result<string, string>;
+
+  /// Get pageview counts for a page.
+  record get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end-params {
+    /// If you want to filter by project, use the domain of any Wikimedia project,
+    /// for example 'en.wikipedia.org', 'www.mediawiki.org' or 'commons.wikimedia.org'.
+    project: string,
+    /// If you want to filter by access method, use one of desktop, mobile-app
+    /// or mobile-web. If you are interested in pageviews regardless of access method,
+    access: string,
+    /// If you want to filter by agent type, use one of user, bot or spider. If you are
+    /// interested in pageviews regardless of agent type, use all-agents.
+    agent: string,
+    /// 'The title of any article in the specified project. Any spaces should be replaced
+    /// with underscores. It also should be URI-encoded, so that non-URI-safe characters like
+    article: string,
+    /// The time unit for the response data. As of today, the only supported granularity for
+    /// this endpoint is daily and monthly.
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD or YYYYMMDDHH format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD or YYYYMMDDHH format
+    end: string
+  }
+  get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end: func(params: get-metrics-pageviews-per-article-project-access-agent-article-granularity-start-end-params) -> result<string, string>;
+
+  /// Get pageviews by country and access method.
+  record get-metrics-pageviews-top-by-country-project-access-year-month-params {
+    /// If you want to filter by project, use the domain of any Wikimedia project,
+    /// for example 'en.wikipedia.org', 'www.mediawiki.org' or 'commons.wikimedia.org'.
+    project: string,
+    /// If you want to filter by access method, use one of desktop, mobile-app or mobile-web.
+    /// If you are interested in pageviews regardless of access method, use all-access.
+    access: string,
+    /// The year of the date for which to retrieve top countries, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top countries, in MM format.
+    month: string
+  }
+  get-metrics-pageviews-top-by-country-project-access-year-month: func(params: get-metrics-pageviews-top-by-country-project-access-year-month-params) -> result<string, string>;
+
+  /// Get the most viewed articles for a project.
+  record get-metrics-pageviews-top-project-access-year-month-day-params {
+    /// If you want to filter by project, use the domain of any Wikimedia project,
+    /// for example 'en.wikipedia.org', 'www.mediawiki.org' or 'commons.wikimedia.org'.
+    project: string,
+    /// If you want to filter by access method, use one of desktop, mobile-app or mobile-web.
+    /// If you are interested in pageviews regardless of access method, use all-access.
+    access: string,
+    /// The year of the date for which to retrieve top articles, in YYYY format.
+    year: string,
+    /// The month of the date for which to retrieve top articles, in MM format. If you want
+    /// to get the top articles of a whole month, the day parameter should be all-days.
+    month: string,
+    /// The day of the date for which to retrieve top articles, in DD format.
+    day: string
+  }
+  get-metrics-pageviews-top-project-access-year-month-day: func(params: get-metrics-pageviews-top-project-access-year-month-day-params) -> result<string, string>;
+
+}
+
+interface registered-users-data {
+  /// Get newly registered users counts for a project.
+  record get-metrics-registered-users-new-project-granularity-start-end-params {
+    /// The name of any Wikimedia project formatted like {language code}.{project name},
+    /// for example en.wikipedia. You may pass en.wikipedia.org and the .org will be stripped
+    project: string,
+    /// The time unit for the response data. As of today, supported values are
+    /// daily and monthly.
+    granularity: string,
+    /// The date of the first day to include, in YYYYMMDD format
+    start: string,
+    /// The date of the last day to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-registered-users-new-project-granularity-start-end: func(params: get-metrics-registered-users-new-project-granularity-start-end-params) -> result<string, string>;
+
+}
+
+interface unique-devices-data {
+  /// Get unique devices count per project
+  record get-metrics-unique-devices-project-access-site-granularity-start-end-params {
+    /// If you want to filter by project, use the domain of any Wikimedia project,
+    /// for example 'en.wikipedia.org', 'www.mediawiki.org' or 'commons.wikimedia.org'.
+    project: string,
+    /// If you want to filter by accessed site, use one of desktop-site or mobile-site.
+    /// If you are interested in unique devices regardless of accessed site, use or all-sites.
+    access-site: string,
+    /// The time unit for the response data. As of today, the supported granularities
+    /// for this endpoint are daily and monthly.
+    granularity: string,
+    /// The timestamp of the first day/month to include, in YYYYMMDD format
+    start: string,
+    /// The timestamp of the last day/month to include, in YYYYMMDD format
+    end: string
+  }
+  get-metrics-unique-devices-project-access-site-granularity-start-end: func(params: get-metrics-unique-devices-project-access-site-granularity-start-end-params) -> result<string, string>;
+
+}
+
+interface transform {
+  /// Machine-translate content
+  record post-transform-html-from-from-lang-to-to-lang-params {
+    /// The source language code
+    from-lang: string,
+    /// The target language code
+    to-lang: string,
+    /// The HTML content to translate
+    html: string
+  }
+  post-transform-html-from-from-lang-to-to-lang: func(params: post-transform-html-from-from-lang-to-to-lang-params) -> result<string, string>;
+
+  /// Machine-translate content
+  record post-transform-html-from-from-lang-to-to-lang-provider-params {
+    /// The source language code
+    from-lang: string,
+    /// The target language code
+    to-lang: string,
+    /// The machine translation provider id
+    provider: string,
+    /// The HTML content to translate
+    html: string
+  }
+  post-transform-html-from-from-lang-to-to-lang-provider: func(params: post-transform-html-from-from-lang-to-to-lang-provider-params) -> result<string, string>;
+
+  /// Lists the language pairs supported by the back-end
+  get-transform-list-languagepairs: func() -> result<string, string>;
+
+  /// Lists the tools available for a language pair
+  record get-transform-list-pair-from-to-params {
+    /// The source language code
+    from-op: string,
+    /// The target language code
+    to: string
+  }
+  get-transform-list-pair-from-to: func(params: get-transform-list-pair-from-to-params) -> result<string, string>;
+
+  /// Lists the tools and language pairs available for the given tool category
+  record get-transform-list-tool-tool-params {
+    /// The tool category to list tools and language pairs for
+    tool: string
+  }
+  get-transform-list-tool-tool: func(params: get-transform-list-tool-tool-params) -> result<string, string>;
+
+  /// Lists the tools and language pairs available for the given tool category
+  record get-transform-list-tool-tool-from-params {
+    /// The tool category to list tools and language pairs for
+    tool: string,
+    /// The source language code
+    from-op: string
+  }
+  get-transform-list-tool-tool-from: func(params: get-transform-list-tool-tool-from-params) -> result<string, string>;
+
+  /// Lists the tools and language pairs available for the given tool category
+  record get-transform-list-tool-tool-from-to-params {
+    /// The tool category to list tools and language pairs for
+    tool: string,
+    /// The source language code
+    from-op: string,
+    /// The target language code
+    to: string
+  }
+  get-transform-list-tool-tool-from-to: func(params: get-transform-list-tool-tool-from-to-params) -> result<string, string>;
+
+  /// Fetch the dictionary meaning of a word
+  record get-transform-word-from-from-lang-to-to-lang-word-params {
+    /// The source language code
+    from-lang: string,
+    /// The target language code
+    to-lang: string,
+    /// The word to lookup
+    word: string
+  }
+  get-transform-word-from-from-lang-to-to-lang-word: func(params: get-transform-word-from-from-lang-to-to-lang-word-params) -> result<string, string>;
+
+  /// Fetch the dictionary meaning of a word
+  record get-transform-word-from-from-lang-to-to-lang-word-provider-params {
+    /// The source language code
+    from-lang: string,
+    /// The target language code
+    to-lang: string,
+    /// The word to lookup
+    word: string,
+    /// The dictionary provider id
+    provider: string
+  }
+  get-transform-word-from-from-lang-to-to-lang-word-provider: func(params: get-transform-word-from-from-lang-to-to-lang-word-provider-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export feed-content-availability;
+  export math;
+  export bytes-difference-data;
+  export edited-pages-data;
+  export editors-data;
+  export edits-data;
+  export legacy-data;
+  export pageviews-data;
+  export registered-users-data;
+  export unique-devices-data;
+  export transform;
+}

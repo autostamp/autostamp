@@ -1,0 +1,30 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `api_key` | query `api_key` |
+package autostamp:nasa@0.2.0;
+
+interface request-tag {
+  /// Returns images
+  record get-apod-params {
+    /// The date of the APOD image to retrieve
+    date: option<string>,
+    /// Retrieve the URL for the high resolution image
+    hd: option<bool>
+  }
+  get-apod: func(params: get-apod-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export request-tag;
+}

@@ -1,0 +1,2024 @@
+package autostamp:snyk@0.2.0;
+
+interface audit-logs {
+  enum get-group-level-audit-logs-body-filters-event-enum {
+    api-access,
+    group-cloud-config-settings-edit,
+    group-create,
+    group-delete,
+    group-edit,
+    group-feature-flags-edit,
+    group-notification-settings-edit,
+    group-org-add,
+    group-org-remove,
+    group-policy-create,
+    group-policy-delete,
+    group-policy-edit,
+    group-request-access-settings-edit,
+    group-role-create,
+    group-role-edit,
+    group-service-account-create,
+    group-service-account-delete,
+    group-service-account-edit,
+    group-settings-edit,
+    group-settings-feature-flag-edit,
+    group-sso-auth0-connection-create,
+    group-sso-auth0-connection-edit,
+    group-sso-add,
+    group-sso-create,
+    group-sso-delete,
+    group-sso-edit,
+    group-sso-membership-sync,
+    group-sso-remove,
+    group-tag-create,
+    group-tag-delete,
+    group-user-add,
+    group-user-provision-accept,
+    group-user-provision-create,
+    group-user-provision-delete,
+    group-user-remove,
+    group-user-role-edit,
+  }
+
+  enum get-organization-level-audit-logs-body-filters-event-enum {
+    api-access,
+    org-cloud-config-settings-edit,
+    org-create,
+    org-delete,
+    org-edit,
+    org-ignore-policy-edit,
+    org-integration-create,
+    org-integration-delete,
+    org-integration-edit,
+    org-integration-settings-edit,
+    org-language-settings-edit,
+    org-license-rule-create,
+    org-license-rule-delete,
+    org-license-rule-edit,
+    org-notification-settings-edit,
+    org-org-source-create,
+    org-org-source-delete,
+    org-org-source-edit,
+    org-policy-edit,
+    org-project-add,
+    org-project-attributes-edit,
+    org-project-delete,
+    org-project-edit,
+    org-project-fix-pr-auto-open,
+    org-project-fix-pr-manual-open,
+    org-project-ignore-create,
+    org-project-ignore-delete,
+    org-project-ignore-edit,
+    org-project-monitor,
+    org-project-pr-check-edit,
+    org-project-remove,
+    org-project-settings-delete,
+    org-project-settings-edit,
+    org-project-stop-monitor,
+    org-project-tag-add,
+    org-project-tag-remove,
+    org-project-test,
+    org-request-access-settings-edit,
+    org-sast-settings-edit,
+    org-service-account-create,
+    org-service-account-delete,
+    org-service-account-edit,
+    org-service-account-membership-upsert,
+    org-settings-feature-flag-edit,
+    org-target-create,
+    org-target-delete,
+    org-user-add,
+    org-user-invite,
+    org-user-invite-accept,
+    org-user-invite-revoke,
+    org-user-invite-link-accept,
+    org-user-invite-link-create,
+    org-user-invite-link-revoke,
+    org-user-leave,
+    org-user-provision-accept,
+    org-user-provision-create,
+    org-user-provision-delete,
+    org-user-remove,
+    org-user-role-create,
+    org-user-role-delete,
+    org-user-role-details-edit,
+    org-user-role-edit,
+    org-user-role-permissions-edit,
+    org-webhook-add,
+    org-webhook-delete,
+  }
+
+  record get-group-level-audit-logs-body-filters {
+    /// User email address. Will fetch only audit logs originated from this user's actions. Ignored if the userId filter is set.
+    email: option<string>,
+    /// Will return only logs for this specific event. Only one of event and excludeEvent may be specified in a request.
+    event: option<get-group-level-audit-logs-body-filters-event-enum>,
+    /// Will return logs except logs for this event. Only one of event and excludeEvent may be specified in a request.
+    exclude-event: option<get-group-level-audit-logs-body-filters-event-enum>,
+    /// Will return only logs for this specific project.
+    project-id: option<string>,
+    /// User public ID. Will fetch only audit logs originated from this user's actions.
+    user-id: option<string>
+  }
+
+  record get-organization-level-audit-logs-body-filters {
+    /// User email address. Will fetch only audit logs originated from this user's actions. Ignored if the userId filter is set.
+    email: option<string>,
+    /// Will return only logs for this specific event. Only one of event and excludeEvent may be specified in a request.
+    event: option<get-organization-level-audit-logs-body-filters-event-enum>,
+    /// Will return logs except logs for this event. Only one of event and excludeEvent may be specified in a request.
+    exclude-event: option<get-organization-level-audit-logs-body-filters-event-enum>,
+    /// Will return only logs for this specific project.
+    project-id: option<string>,
+    /// User public ID. Will fetch only audit logs originated from this user's actions.
+    user-id: option<string>
+  }
+
+  /// Get group level audit logs
+  record get-group-level-audit-logs-params {
+    /// The group ID. The `API_KEY` must have access to this group.
+    group-id: string,
+    /// The date you wish to fetch results from, in the format YYYY-MM-DD. Default is 3 months ago. Please note that logs are only available for past 3 months.
+    from-op: option<string>,
+    /// The date you wish to fetch results until, in the format YYYY-MM-DD. Default is today. Please note that logs are only available for past 3 months.
+    to: option<string>,
+    /// The page of results to request. Audit logs are returned in page sizes of 100
+    page: option<f64>,
+    /// The sort order of the returned audit logs by date. Values: `ASC`, `DESC`. Default: `DESC`.
+    sort-order: option<string>,
+    filters: option<get-group-level-audit-logs-body-filters>
+  }
+  get-group-level-audit-logs: func(params: get-group-level-audit-logs-params) -> result<string, string>;
+
+  /// Get organization level audit logs
+  record get-organization-level-audit-logs-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The date you wish to fetch results from, in the format YYYY-MM-DD. Default is 3 months ago. Please note that logs are only available for past 3 months.
+    from-op: option<string>,
+    /// The date you wish to fetch results until, in the format YYYY-MM-DD. Default is today. Please note that logs are only available for past 3 months.
+    to: option<string>,
+    /// The page of results to request. Audit logs are returned in page sizes of 100.
+    page: option<f64>,
+    /// The sort order of the returned audit logs by date. Values: `ASC`, `DESC`. Default: `DESC`.
+    sort-order: option<string>,
+    filters: option<get-organization-level-audit-logs-body-filters>
+  }
+  get-organization-level-audit-logs: func(params: get-organization-level-audit-logs-params) -> result<string, string>;
+
+}
+
+
+interface groups {
+  /// List all members in a group
+  record list-all-members-in-a-group-params {
+    /// The group ID. The `API_KEY` must have access admin to this group.
+    group-id: string
+  }
+  list-all-members-in-a-group: func(params: list-all-members-in-a-group-params) -> result<string, string>;
+
+  /// Add a member to an organization within a group
+  record add-a-member-to-an-organization-within-a-group-params {
+    /// The group ID. The `API_KEY` must have access admin to this group.
+    group-id: string,
+    /// The organization ID we want to add the member to. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The role of the user, "admin" or "collaborator".
+    role: option<string>,
+    /// The id of the user.
+    user-id: option<string>
+  }
+  add-a-member-to-an-organization-within-a-group: func(params: add-a-member-to-an-organization-within-a-group-params) -> result<string, string>;
+
+  /// List all organizations in a group
+  record list-all-organizations-in-a-group-params {
+    /// The group ID. The `API_KEY` must have READ access to this group and LIST organizations access in this group.
+    group-id: string,
+    /// The number of results to return (maximum is 100).
+    per-page: option<f64>,
+    /// For pagination - offset (from which to start returning results).
+    page: option<f64>,
+    /// Only organizations that have a name that **starts with** this value (case insensitive) will be returned.
+    name: option<string>
+  }
+  list-all-organizations-in-a-group: func(params: list-all-organizations-in-a-group-params) -> result<string, string>;
+
+  /// List all roles in a group
+  record list-all-roles-in-a-group-params {
+    /// The group ID. The `API_KEY` must have READ access to this group.
+    group-id: string
+  }
+  list-all-roles-in-a-group: func(params: list-all-roles-in-a-group-params) -> result<string, string>;
+
+  /// View group settings
+  record view-group-settings-params {
+    /// The group ID. The `API_KEY` must have admin access to this group.
+    group-id: string
+  }
+  view-group-settings: func(params: view-group-settings-params) -> result<string, string>;
+
+  /// Update group settings
+  record update-group-settings-params {
+    /// Automatically added
+    group-id: string
+  }
+  update-group-settings: func(params: update-group-settings-params) -> result<string, string>;
+
+  /// List all tags in a group
+  record list-all-tags-in-a-group-params {
+    /// The group ID. The `API_KEY` must have access admin to this group.
+    group-id: string,
+    /// The number of results to return (the default is 1000).
+    per-page: option<f64>,
+    /// The offset from which to start returning results from.
+    page: option<f64>
+  }
+  list-all-tags-in-a-group: func(params: list-all-tags-in-a-group-params) -> result<string, string>;
+
+  /// Delete tag from group
+  record delete-tag-from-group-params {
+    /// The group ID. The `API_KEY` must have access admin to this group.
+    group-id: string,
+    /// force delete tag that has entities (default is `false`).
+    force: option<bool>,
+    /// Valid tag key.
+    key: option<string>,
+    /// Valid tag value.
+    value: option<string>
+  }
+  delete-tag-from-group: func(params: delete-tag-from-group-params) -> result<string, string>;
+
+}
+
+interface monitor {
+  /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
+  record monitor-dep-graph-body-dep-graph {
+    /// Graph object references each pkg and how they depend on each other through the deps property.
+    graph: monitor-dep-graph-body-dep-graph-graph,
+    /// Package manager information.
+    pkg-manager: monitor-dep-graph-body-dep-graph-pkg-manager,
+    /// Array of package dependencies.
+    pkgs: list<string>,
+    /// Snyk DepGraph library schema version.
+    schema-version: string
+  }
+
+  /// Graph object references each pkg and how they depend on each other through the deps property.
+  record monitor-dep-graph-body-dep-graph-graph {
+    /// Array of node objects.
+    nodes: list<string>,
+    /// Root node id. Note the root node name is used as your project name.
+    root-node-id: string
+  }
+
+  /// Package manager information.
+  record monitor-dep-graph-body-dep-graph-pkg-manager {
+    /// Package manager name.
+    name: string,
+    /// A list of package repositories (i.e. maven-central, or npm) that defaults to the canonical package registry for the given package manager.
+    repositories: option<list<string>>
+  }
+
+  /// Project metadata
+  record monitor-dep-graph-body-meta {
+    /// Required for a NuGet or Paket DepGraph only. Specify the target framework in your project file using Target Framework Monikers (TFMs). For example, netstandard1.0, netcoreapp1.0 or net452. Test each framework separately if you have multiple defined.
+    target-framework: option<string>
+  }
+
+  /// Monitor Dep Graph
+  record monitor-dep-graph-params {
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>,
+    /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
+    dep-graph: monitor-dep-graph-body-dep-graph,
+    /// Project metadata
+    meta: option<monitor-dep-graph-body-meta>
+  }
+  monitor-dep-graph: func(params: monitor-dep-graph-params) -> result<string, string>;
+
+}
+
+interface organizations {
+  enum set-notification-settings-body-new-issues-remediations-issue-severity-enum {
+    all,
+    high,
+  }
+
+  enum set-notification-settings-body-new-issues-remediations-issue-type-enum {
+    all,
+    vuln,
+    license,
+    none,
+  }
+
+  record set-notification-settings-body-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: set-notification-settings-body-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: set-notification-settings-body-new-issues-remediations-issue-type-enum
+  }
+
+  record set-notification-settings-body-project-imported {
+    /// Whether notifications should be sent
+    enabled: bool
+  }
+
+  record set-notification-settings-body-test-limit {
+    /// Whether notifications should be sent
+    enabled: bool
+  }
+
+  record set-notification-settings-body-weekly-report {
+    /// Whether notifications should be sent
+    enabled: bool
+  }
+
+  /// Can only be updated if `API_KEY` has edit access to request access settings.
+  record update-organization-settings-body-request-access {
+    /// Whether requesting access to the organization is enabled.
+    enabled: bool
+  }
+
+  /// Create a new organization
+  record create-a-new-organization-params {
+    /// The group ID. The `API_KEY` must have access to this group.
+    group-id: option<string>,
+    /// The name of the new organization
+    name: string,
+    /// The id of an organization to copy settings from.
+    /// 
+    source-org-id: option<string>
+  }
+  create-a-new-organization: func(params: create-a-new-organization-params) -> result<string, string>;
+
+  /// Remove organization
+  record remove-organization-params {
+    /// The organization ID. The `API_KEY` must have permission to delete the provided organization. Currently this operation is only supported for organizations without any projects.
+    org-id: string
+  }
+  remove-organization: func(params: remove-organization-params) -> result<string, string>;
+
+  /// Invite users
+  record invite-users-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The email of the user.
+    email: option<string>,
+    /// (optional) Set the role as admin.
+    is-admin: option<bool>
+  }
+  invite-users: func(params: invite-users-params) -> result<string, string>;
+
+  /// List Members
+  record list-members-params {
+    /// The organization ID.
+    org-id: string,
+    /// Include group administrators who also have access to this organization.
+    include-group-admins: option<bool>
+  }
+  list-members: func(params: list-members-params) -> result<string, string>;
+
+  /// Update a member's role in the organization
+  record update-a-member-s-role-in-the-organization-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The user ID.
+    user-id: string,
+    /// The new role public ID to update the user to.
+    role-public-id: option<string>
+  }
+  update-a-member-s-role-in-the-organization: func(params: update-a-member-s-role-in-the-organization-params) -> result<string, string>;
+
+  /// Update a member in the organization
+  record update-a-member-in-the-organization-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The user ID.
+    user-id: string,
+    /// The new role of the user, "admin" or "collaborator".
+    role: option<string>
+  }
+  update-a-member-in-the-organization: func(params: update-a-member-in-the-organization-params) -> result<string, string>;
+
+  /// Remove a member from the organization
+  record remove-a-member-from-the-organization-params {
+    /// The organization ID. The `API_KEY` must admin have access to this organization.
+    org-id: string,
+    /// The user ID we want to remove.
+    user-id: string
+  }
+  remove-a-member-from-the-organization: func(params: remove-a-member-from-the-organization-params) -> result<string, string>;
+
+  /// Get organization notification settings
+  record get-org-org-id-notification-settings-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string
+  }
+  get-org-org-id-notification-settings: func(params: get-org-org-id-notification-settings-params) -> result<string, string>;
+
+  /// Set notification settings
+  record set-notification-settings-params {
+    /// Automatically added
+    org-id: string,
+    new-issues-remediations: option<set-notification-settings-body-new-issues-remediations>,
+    project-imported: option<set-notification-settings-body-project-imported>,
+    test-limit: option<set-notification-settings-body-test-limit>,
+    weekly-report: option<set-notification-settings-body-weekly-report>
+  }
+  set-notification-settings: func(params: set-notification-settings-params) -> result<string, string>;
+
+  /// List pending user provisions
+  record list-pending-user-provisions-params {
+    /// The organization ID.
+    org-id: string
+  }
+  list-pending-user-provisions: func(params: list-pending-user-provisions-params) -> result<string, string>;
+
+  /// Provision a user to the organization
+  record provision-a-user-to-the-organization-params {
+    /// The organization ID. The `API_KEY` must not exceed the permissions being granted to the provisioned user.
+    org-id: string,
+    /// The email of the user.
+    email: string,
+    /// Deprecated. Name of the role to grant this user. Must be one of `ADMIN`, `COLLABORATOR`, or `RESTRICTED_COLLABORATOR`. This field is invalid if `rolePublicId` is supplied with the request.
+    role: option<string>,
+    /// ID of the role to grant this user.
+    role-public-id: option<string>
+  }
+  provision-a-user-to-the-organization: func(params: provision-a-user-to-the-organization-params) -> result<string, string>;
+
+  /// Delete pending user provision
+  record delete-pending-user-provision-params {
+    /// The organization ID.
+    org-id: string
+  }
+  delete-pending-user-provision: func(params: delete-pending-user-provision-params) -> result<string, string>;
+
+  /// View organization settings
+  record view-organization-settings-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string
+  }
+  view-organization-settings: func(params: view-organization-settings-params) -> result<string, string>;
+
+  /// Update organization settings
+  record update-organization-settings-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// Can only be updated if `API_KEY` has edit access to request access settings.
+    request-access: option<update-organization-settings-body-request-access>
+  }
+  update-organization-settings: func(params: update-organization-settings-params) -> result<string, string>;
+
+  /// List all the organizations a user belongs to
+  list-all-the-organizations-a-user-belongs-to: func() -> result<string, string>;
+
+}
+
+interface dependencies {
+  enum list-all-dependencies-sort-by-enum {
+    projects,
+    dependency,
+    severity,
+    dependencies-with-issues,
+  }
+
+  enum list-all-dependencies-order-enum {
+    asc,
+    desc,
+  }
+
+  record list-all-dependencies-body-filters {
+    /// Status of the dependency. Requires reporting entitlement. Options: `deprecated` - Include only deprecated packages; `notDeprecated` - Include all packages that are not marked as deprecated; `any` - Include all packages (default)
+    dep-status: option<string>,
+    /// The list of dependency IDs to filter the results by (i.e amdefine@1.0.1 or org.javassist:javassist@3.18.1-GA)
+    dependencies: option<string>,
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of license IDs to filter the results by
+    licenses: option<string>,
+    /// The list of project IDs to filter the results by
+    projects: option<string>,
+    /// The severities to filter the results by
+    severity: option<list<string>>
+  }
+
+  /// List all dependencies
+  record list-all-dependencies-params {
+    /// The organization ID to list projects for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The field to sort results by.
+    sort-by: option<list-all-dependencies-sort-by-enum>,
+    /// The direction to sort results by.
+    order: option<list-all-dependencies-order-enum>,
+    /// The page of results to fetch.
+    page: option<f64>,
+    /// The number of results to fetch per page (maximum is 1000).
+    per-page: option<f64>,
+    filters: option<list-all-dependencies-body-filters>
+  }
+  list-all-dependencies: func(params: list-all-dependencies-params) -> result<string, string>;
+
+}
+
+interface entitlements {
+  /// Get an organization's entitlement value
+  record get-an-organization-s-entitlement-value-params {
+    /// The organization ID to query the entitlement for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The entitlement to query.
+    entitlement-key: string
+  }
+  get-an-organization-s-entitlement-value: func(params: get-an-organization-s-entitlement-value-params) -> result<string, string>;
+
+  /// List all entitlements
+  record list-all-entitlements-params {
+    /// The organization ID to list entitlements for. The `API_KEY` must have access to this organization.
+    org-id: string
+  }
+  list-all-entitlements: func(params: list-all-entitlements-params) -> result<string, string>;
+
+}
+
+interface integrations {
+  enum update-body-pull-request-assignment-type-op-enum {
+    auto,
+    manual,
+  }
+
+  /// Defines automatic remediation policies
+  record update-body-auto-remediation-prs {
+    /// If true, allows automatic remediation of prioritized backlog issues
+    backlog-prs-enabled: option<bool>,
+    /// If true, allows automatic remediation of newly identified issues, or older issues where a fix has been identified
+    fresh-prs-enabled: option<bool>,
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// Defines manual remediation policies
+  record update-body-manual-remediation-prs {
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// assign Snyk pull requests
+  record update-body-pull-request-assignment {
+    /// an array of usernames that have contributed to the organization's project(s).
+    assignees: option<list<string>>,
+    /// if the organization's project(s) will assign Snyk pull requests.
+    enabled: option<bool>,
+    /// a string representing the type of assignment your projects require.
+    type-op: option<update-body-pull-request-assignment-type-op-enum>
+  }
+
+  /// List
+  record list-op-params {
+    /// The organization public ID. The `API_KEY` must have admin access to this organization.
+    org-id: string
+  }
+  list-op: func(params: list-op-params) -> result<string, string>;
+
+  /// Add new integration
+  record add-new-integration-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    body: option<string>
+  }
+  add-new-integration: func(params: add-new-integration-params) -> result<string, string>;
+
+  /// Update existing integration
+  record update-existing-integration-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The unique identifier for the configured integration. This can be found on the [Integration page in the Settings area](https://app.snyk.io/manage/integrations) for all integrations that have been configured.
+    integration-id: string,
+    body: option<string>
+  }
+  update-existing-integration: func(params: update-existing-integration-params) -> result<string, string>;
+
+  /// Delete credentials
+  record delete-credentials-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The integration ID.
+    integration-id: string
+  }
+  delete-credentials: func(params: delete-credentials-params) -> result<string, string>;
+
+  /// Provision new broker token
+  record provision-new-broker-token-params {
+    /// The `API_KEY` must have access to this organization.
+    org-id: string,
+    integration-id: string
+  }
+  provision-new-broker-token: func(params: provision-new-broker-token-params) -> result<string, string>;
+
+  /// Switch between broker tokens
+  record switch-between-broker-tokens-params {
+    /// The `API_KEY` must have access to this organization.
+    org-id: string,
+    integration-id: string
+  }
+  switch-between-broker-tokens: func(params: switch-between-broker-tokens-params) -> result<string, string>;
+
+  /// Clone an integration (with settings and credentials)
+  record clone-an-integration-with-settings-and-credentials-params {
+    /// Source organization public ID to clone integration settings from. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// Source integration public ID to clone.
+    integration-id: string,
+    /// The organization public ID. The `API_KEY` must have access to this organization.
+    destination-org-public-id: string
+  }
+  clone-an-integration-with-settings-and-credentials: func(params: clone-an-integration-with-settings-and-credentials-params) -> result<string, string>;
+
+  /// Retrieve
+  record retrieve-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The unique identifier for the configured integration. This can be found on the [Integration page in the Settings area](https://app.snyk.io/manage/integrations) for all integrations that have been configured.
+    integration-id: string
+  }
+  retrieve: func(params: retrieve-params) -> result<string, string>;
+
+  /// Update
+  record update-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The unique identifier for the configured integration. This can be found on the [Integration page in the Settings area](https://app.snyk.io/manage/integrations) for all integrations that have been configured.
+    integration-id: string,
+    /// Defines if the functionality is enabled
+    auto-dep-upgrade-enabled: option<bool>,
+    /// A list of strings defining what dependencies should be ignored
+    auto-dep-upgrade-ignored-dependencies: option<list<string>>,
+    /// A limit on how many automatic dependency upgrade PRs can be opened simultaneously
+    auto-dep-upgrade-limit: option<f64>,
+    /// The age (in days) that an automatic dependency check is valid for
+    auto-dep-upgrade-min-age: option<f64>,
+    /// Defines automatic remediation policies
+    auto-remediation-prs: option<update-body-auto-remediation-prs>,
+    /// If true, will automatically detect and scan Dockerfiles in your Git repositories, surface base image vulnerabilities and recommend possible fixes
+    dockerfile-scm-enabled: option<bool>,
+    /// Defines manual remediation policies
+    manual-remediation-prs: option<update-body-manual-remediation-prs>,
+    /// assign Snyk pull requests
+    pull-request-assignment: option<update-body-pull-request-assignment>,
+    /// If an opened PR should fail to be validated if any vulnerable dependencies have been detected
+    pull-request-fail-on-any-vulns: option<bool>,
+    /// If an opened PR only should fail its validation if any dependencies are marked as being of high severity
+    pull-request-fail-only-for-high-severity: option<bool>,
+    /// If opened PRs should be tested
+    pull-request-test-enabled: option<bool>
+  }
+  update: func(params: update-params) -> result<string, string>;
+
+  /// Get existing integration by type
+  record get-existing-integration-by-type-params {
+    /// The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// Integration type.
+    type-op: string
+  }
+  get-existing-integration-by-type: func(params: get-existing-integration-by-type-params) -> result<string, string>;
+
+}
+
+interface import-projects {
+  /// Import targets
+  record import-targets-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The unique identifier for the configured integration. This can be found on the [Integration page in the Settings area](https://app.snyk.io/manage/integrations) for all integrations that have been configured.
+    integration-id: string,
+    body: option<string>
+  }
+  import-targets: func(params: import-targets-params) -> result<string, string>;
+
+  /// Get import job details
+  record get-import-job-details-params {
+    /// The organization ID. The `API_KEY` must have admin access to this organization.
+    org-id: string,
+    /// The unique identifier for the configured integration. This can be found on the [Integration page in the Settings area](https://app.snyk.io/manage/integrations) for all integrations that have been configured.
+    integration-id: string,
+    /// The ID of the job. This can be found in the Location response header from the corresponding POST request that triggered the import job.
+    job-id: string
+  }
+  get-import-job-details: func(params: get-import-job-details-params) -> result<string, string>;
+
+}
+
+interface licenses {
+  enum list-all-licenses-sort-by-enum {
+    license,
+    dependencies,
+    projects,
+    severity,
+  }
+
+  enum list-all-licenses-order-enum {
+    asc,
+    desc,
+  }
+
+  record list-all-licenses-body-filters {
+    /// The list of dependency IDs to filter the results by
+    dependencies: option<string>,
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of license IDs to filter the results by
+    licenses: option<string>,
+    /// The list of project IDs to filter the results by
+    projects: option<string>,
+    /// The severities to filter the results by
+    severity: option<list<string>>
+  }
+
+  /// List all licenses
+  record list-all-licenses-params {
+    /// The organization ID to list projects for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The field to sort results by.
+    sort-by: option<list-all-licenses-sort-by-enum>,
+    /// The direction to sort results by.
+    order: option<list-all-licenses-order-enum>,
+    filters: option<list-all-licenses-body-filters>
+  }
+  list-all-licenses: func(params: list-all-licenses-params) -> result<string, string>;
+
+}
+
+interface projects {
+  enum add-ignore-body-reason-type-enum {
+    not-vulnerable,
+    wont-fix,
+    temporary-ignore,
+  }
+
+  enum update-project-settings-body-pull-request-assignment-type-op-enum {
+    auto,
+    manual,
+  }
+
+  /// Set to `null` to remove all ownership. User must be a member of the same organization as the project.
+  record update-a-project-body-owner {
+    /// A user to assign as the project owner.
+    id: option<string>
+  }
+
+  record list-all-aggregated-issues-body-filters {
+    /// The exploit maturity levels of issues to filter the results by (Non-IaC projects only)
+    exploit-maturity: option<list<string>>,
+    /// If set to `true`, only include issues which are ignored, if set to `false`, only include issues which are not ignored
+    ignored: option<bool>,
+    /// If set to `true`, only include issues which are patched, if set to `false`, only include issues which are not patched (Non-IaC projects only)
+    patched: option<bool>,
+    /// The priority to filter the issues by (Non-IaC projects only)
+    priority: option<list-all-aggregated-issues-body-filters-priority>,
+    /// The severity levels of issues to filter the results by
+    severities: option<list<string>>,
+    /// The type of issues to filter the results by (Non-IaC projects only)
+    types: option<list<string>>
+  }
+
+  /// The priority to filter the issues by (Non-IaC projects only)
+  record list-all-aggregated-issues-body-filters-priority {
+    /// Include issues where the priority score is between min and max
+    score: option<list-all-aggregated-issues-body-filters-priority-score>
+  }
+
+  /// Include issues where the priority score is between min and max
+  record list-all-aggregated-issues-body-filters-priority-score {
+    max: option<f64>,
+    min: option<f64>
+  }
+
+  record list-all-project-snapshots-body-filters {
+    /// For container projects, filter by the ID of the image
+    image-id: option<string>
+  }
+
+  record list-all-project-snapshot-aggregated-issues-body-filters {
+    /// The exploit maturity levels of issues to filter the results by (Non-IaC projects only)
+    exploit-maturity: option<list<string>>,
+    /// If set to `true`, only include issues which are ignored, if set to `false`, only include issues which are not ignored
+    ignored: option<bool>,
+    /// If set to `true`, only include issues which are patched, if set to `false`, only include issues which are not patched (Non-IaC projects only)
+    patched: option<bool>,
+    /// The priority to filter the issues by (Non-IaC projects only)
+    priority: option<list-all-project-snapshot-aggregated-issues-body-filters-priority>,
+    /// The severity levels of issues to filter the results by
+    severities: option<list<string>>,
+    /// The type of issues to filter the results by (Non-IaC projects only)
+    types: option<list<string>>
+  }
+
+  /// The priority to filter the issues by (Non-IaC projects only)
+  record list-all-project-snapshot-aggregated-issues-body-filters-priority {
+    /// Include issues where the priority score is between min and max
+    score: option<list-all-project-snapshot-aggregated-issues-body-filters-priority-score>
+  }
+
+  /// Include issues where the priority score is between min and max
+  record list-all-project-snapshot-aggregated-issues-body-filters-priority-score {
+    max: option<f64>,
+    min: option<f64>
+  }
+
+  record create-jira-issue-body-fields {
+    /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
+    issuetype: option<create-jira-issue-body-fields-issuetype>,
+    /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
+    project: option<create-jira-issue-body-fields-project>,
+    /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
+    summary: option<string>
+  }
+
+  /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
+  record create-jira-issue-body-fields-issuetype {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// See https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post for details of what to send as fields.
+  record create-jira-issue-body-fields-project {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Defines automatic remediation policies
+  record update-project-settings-body-auto-remediation-prs {
+    /// If true, allows automatic remediation of newly identified issues, or older issues where a fix has been identified
+    backlog-prs-enabled: option<bool>,
+    /// If true, allows automatic remediation of prioritized backlog issues
+    fresh-prs-enabled: option<bool>,
+    /// If true, allows using patched remediation
+    use-patch-remediation: option<bool>
+  }
+
+  /// assign Snyk pull requests
+  record update-project-settings-body-pull-request-assignment {
+    /// an array of usernames that have contributed to the organization's project(s).
+    assignees: option<list<string>>,
+    /// if the organization's project(s) will assign Snyk pull requests.
+    enabled: option<bool>,
+    /// a string representing the type of assignment your projects require.
+    type-op: option<update-project-settings-body-pull-request-assignment-type-op-enum>
+  }
+
+  record list-all-projects-body-filters {
+    /// When you filter by multiple values on a single attribute, you will return projects that have been assigned one or more of the values in the filter.
+    /// 
+    attributes: option<list-all-projects-body-filters-attributes>,
+    /// If set to `true`, only include projects which are monitored, if set to `false`, only include projects which are not monitored
+    is-monitored: option<bool>,
+    /// If supplied, only projects that have a name that **starts with** this value will be returned
+    name: option<string>,
+    /// If supplied, only projects that exactly match this origin will be returned
+    origin: option<string>,
+    tags: option<list-all-projects-body-filters-tags>,
+    /// If supplied, only projects that exactly match this type will be returned
+    type-op: option<string>
+  }
+
+  /// When you filter by multiple values on a single attribute, you will return projects that have been assigned one or more of the values in the filter.
+  /// 
+  /// When you filter by multiple attributes, you will return projects which have been assigned values of both attributes in the filter.
+  record list-all-projects-body-filters-attributes {
+    criticality: option<list<string>>,
+    environment: option<list<string>>,
+    lifecycle: option<list<string>>
+  }
+
+  record list-all-projects-body-filters-tags {
+    /// A project must have all provided tags in order to be included in the response. A maximum of 3 tags can be supplied.
+    includes: option<list<string>>
+  }
+
+  /// Retrieve a single project
+  record retrieve-a-single-project-params {
+    /// The organization ID the project belongs to. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID.
+    project-id: string
+  }
+  retrieve-a-single-project: func(params: retrieve-a-single-project-params) -> result<string, string>;
+
+  /// Update a project
+  record update-a-project-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string,
+    /// The branch that this project should be monitoring
+    branch: option<string>,
+    /// Set to `null` to remove all ownership. User must be a member of the same organization as the project.
+    owner: option<update-a-project-body-owner>
+  }
+  update-a-project: func(params: update-a-project-params) -> result<string, string>;
+
+  /// Delete a project
+  record delete-a-project-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string
+  }
+  delete-a-project: func(params: delete-a-project-params) -> result<string, string>;
+
+  /// Activate
+  record activate-params {
+    /// The organization ID the project belongs to. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID.
+    project-id: string
+  }
+  activate: func(params: activate-params) -> result<string, string>;
+
+  /// List all Aggregated issues
+  record list-all-aggregated-issues-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to return issues for.
+    project-id: string,
+    filters: option<list-all-aggregated-issues-body-filters>,
+    /// If set to `true`, Include issue's description, if set to `false` (by default), it won't (Non-IaC projects only)
+    include-description: option<bool>,
+    /// If set to `true`, Include issue's introducedThrough, if set to `false` (by default), it won't. It's for container only projects (Non-IaC projects only)
+    include-introduced-through: option<bool>
+  }
+  list-all-aggregated-issues: func(params: list-all-aggregated-issues-params) -> result<string, string>;
+
+  /// Applying attributes
+  record applying-attributes-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to remove a tag from
+    project-id: string,
+    criticality: option<list<string>>,
+    environment: option<list<string>>,
+    lifecycle: option<list<string>>
+  }
+  applying-attributes: func(params: applying-attributes-params) -> result<string, string>;
+
+  /// Deactivate
+  record deactivate-params {
+    /// The organization ID the project belongs to. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID.
+    project-id: string
+  }
+  deactivate: func(params: deactivate-params) -> result<string, string>;
+
+  /// Get Project dependency graph
+  record get-project-dependency-graph-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to return issues for.
+    project-id: string
+  }
+  get-project-dependency-graph: func(params: get-project-dependency-graph-params) -> result<string, string>;
+
+  /// List all project snapshots
+  record list-all-project-snapshots-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to return snapshots for.
+    project-id: string,
+    /// The number of results to return (the default is 10, the maximum is 100).
+    per-page: option<f64>,
+    /// The offset from which to start returning results from.
+    page: option<f64>,
+    filters: option<list-all-project-snapshots-body-filters>
+  }
+  list-all-project-snapshots: func(params: list-all-project-snapshots-params) -> result<string, string>;
+
+  /// List all project snapshot aggregated issues
+  record list-all-project-snapshot-aggregated-issues-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID.
+    project-id: string,
+    /// The snapshot ID. If set to latest, the most recent snapshot will be used.
+    snapshot-id: string,
+    filters: option<list-all-project-snapshot-aggregated-issues-body-filters>,
+    /// If set to `true`, Include issue's description, if set to `false` (by default), it won't (Non-IaC projects only)
+    include-description: option<bool>,
+    /// If set to `true`, Include issue's introducedThrough, if set to `false` (by default), it won't. It's for container only projects (Non-IaC projects only)
+    include-introduced-through: option<bool>
+  }
+  list-all-project-snapshot-aggregated-issues: func(params: list-all-project-snapshot-aggregated-issues-params) -> result<string, string>;
+
+  /// List all project snapshot issue paths
+  record list-all-project-snapshot-issue-paths-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID for which to return issue paths.
+    project-id: string,
+    /// The project snapshot ID for which to return issue paths. If set to `latest`, the most recent snapshot will be used. Use the "List all project snapshots" endpoint to find suitable values for this.
+    snapshot-id: string,
+    /// The issue ID for which to return issue paths.
+    issue-id: string,
+    /// The number of results to return per page (1 - 1000, inclusive).
+    per-page: option<f64>,
+    /// The page of results to return.
+    page: option<f64>
+  }
+  list-all-project-snapshot-issue-paths: func(params: list-all-project-snapshot-issue-paths-params) -> result<string, string>;
+
+  /// Retrieve ignore
+  record retrieve-ignore-params {
+    /// The organization ID to modify ignores for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to modify ignores for.
+    project-id: string,
+    /// The issue ID to modify ignores for. Can be a vulnerability or a license Issue.
+    issue-id: string
+  }
+  retrieve-ignore: func(params: retrieve-ignore-params) -> result<string, string>;
+
+  /// Add ignore
+  record add-ignore-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string,
+    /// Automatically added
+    issue-id: string,
+    /// Only ignore the issue if no upgrade or patch is available.
+    disregard-if-fixable: bool,
+    /// The timestamp that the issue will no longer be ignored.
+    expires: option<string>,
+    /// The path to ignore (default is `*` which represents all paths).
+    ignore-path: option<string>,
+    /// The reason that the issue was ignored.
+    reason: option<string>,
+    /// The classification of the ignore.
+    reason-type: add-ignore-body-reason-type-enum
+  }
+  add-ignore: func(params: add-ignore-params) -> result<string, string>;
+
+  /// Replace ignores
+  record replace-ignores-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string,
+    /// Automatically added
+    issue-id: string
+  }
+  replace-ignores: func(params: replace-ignores-params) -> result<string, string>;
+
+  /// Delete ignores
+  record delete-ignores-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string,
+    /// Automatically added
+    issue-id: string
+  }
+  delete-ignores: func(params: delete-ignores-params) -> result<string, string>;
+
+  /// List all ignores
+  record list-all-ignores-params {
+    /// The organization ID to list ignores for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to list ignores for.
+    project-id: string
+  }
+  list-all-ignores: func(params: list-all-ignores-params) -> result<string, string>;
+
+  /// Create jira issue
+  record create-jira-issue-params {
+    /// The issue ID to create Jira issue for.
+    issue-id: string,
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string,
+    fields: option<create-jira-issue-body-fields>
+  }
+  create-jira-issue: func(params: create-jira-issue-params) -> result<string, string>;
+
+  /// List all project issue paths
+  record list-all-project-issue-paths-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID for which to return issue paths.
+    project-id: string,
+    /// The issue ID for which to return issue paths.
+    issue-id: string,
+    /// The project snapshot ID for which to return issue paths. If set to `latest`, the most recent snapshot will be used. Use the "List all project snapshots" endpoint to find suitable values for this.
+    snapshot-id: option<string>,
+    /// The number of results to return per page (1 - 1000, inclusive).
+    per-page: option<f64>,
+    /// The page of results to return.
+    page: option<f64>
+  }
+  list-all-project-issue-paths: func(params: list-all-project-issue-paths-params) -> result<string, string>;
+
+  /// List all jira issues
+  record list-all-jira-issues-params {
+    /// The organization ID to list Jira issues for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to list Jira issues for.
+    project-id: string
+  }
+  list-all-jira-issues: func(params: list-all-jira-issues-params) -> result<string, string>;
+
+  /// Move project to a different organization
+  record move-project-to-a-different-organization-params {
+    /// The organization ID to which the project belongs. The API_KEY must have group admin permissions. If the project is moved to a new group, a personal level API key is needed.
+    org-id: string,
+    /// The project ID.
+    project-id: string,
+    /// The ID of the organization that the project should be moved to. The API_KEY must have group admin permissions. If the project is moved to a new group, a personal level API key is needed.
+    target-org-id: option<string>
+  }
+  move-project-to-a-different-organization: func(params: move-project-to-a-different-organization-params) -> result<string, string>;
+
+  /// List project settings
+  record list-project-settings-params {
+    /// The organization ID to which the project belongs. The API_KEY must have access to this organization.
+    org-id: string,
+    /// The project ID
+    project-id: string
+  }
+  list-project-settings: func(params: list-project-settings-params) -> result<string, string>;
+
+  /// Update project settings
+  record update-project-settings-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string,
+    /// If set to `true`, Snyk will raise dependency upgrade PRs automatically.
+    auto-dep-upgrade-enabled: option<bool>,
+    /// An array of comma-separated strings with names of dependencies you wish Snyk to ignore to upgrade.
+    auto-dep-upgrade-ignored-dependencies: option<list<string>>,
+    /// The limit on auto dependency upgrade PRs.
+    auto-dep-upgrade-limit: option<f64>,
+    /// The age (in days) that an automatic dependency check is valid for
+    auto-dep-upgrade-min-age: option<f64>,
+    /// Defines automatic remediation policies
+    auto-remediation-prs: option<update-project-settings-body-auto-remediation-prs>,
+    /// assign Snyk pull requests
+    pull-request-assignment: option<update-project-settings-body-pull-request-assignment>,
+    /// If set to `true`, fail Snyk Test if the repo has any vulnerabilities. Otherwise, fail only when the PR is adding a vulnerable dependency.
+    pull-request-fail-on-any-vulns: option<bool>,
+    /// If set to `true`, fail Snyk Test only for high and critical severity vulnerabilities
+    pull-request-fail-only-for-high-severity: option<bool>,
+    /// If set to `true`, Snyk Test checks PRs for vulnerabilities.:cq
+    pull-request-test-enabled: option<bool>
+  }
+  update-project-settings: func(params: update-project-settings-params) -> result<string, string>;
+
+  /// Delete project settings
+  record delete-project-settings-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string
+  }
+  delete-project-settings: func(params: delete-project-settings-params) -> result<string, string>;
+
+  /// Add a tag to a project
+  record add-a-tag-to-a-project-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to apply the tag to
+    project-id: string,
+    /// Alphanumeric including - and _ with a limit of 30 characters
+    key: option<string>,
+    /// Alphanumeric including - and _ with a limit of 50 characters
+    value: option<string>
+  }
+  add-a-tag-to-a-project: func(params: add-a-tag-to-a-project-params) -> result<string, string>;
+
+  /// Remove a tag from a project
+  record remove-a-tag-from-a-project-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to remove a tag from
+    project-id: string,
+    /// Alphanumeric including - and _ with a limit of 30 characters
+    key: option<string>,
+    /// Alphanumeric including - and _ with a limit of 50 characters
+    value: option<string>
+  }
+  remove-a-tag-from-a-project: func(params: remove-a-tag-from-a-project-params) -> result<string, string>;
+
+  /// List all projects
+  record list-all-projects-params {
+    /// The organization ID to list projects for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    filters: option<list-all-projects-body-filters>
+  }
+  list-all-projects: func(params: list-all-projects-params) -> result<string, string>;
+
+}
+
+interface webhooks {
+  /// List webhooks
+  record list-webhooks-params {
+    /// The organization ID to list projects for. The `API_KEY` must have access to this organization.
+    org-id: string
+  }
+  list-webhooks: func(params: list-webhooks-params) -> result<string, string>;
+
+  /// Create a webhook
+  record create-a-webhook-params {
+    /// The organization ID to list projects for. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// This is a password you create, that Snyk uses to sign our transports to you, so you be sure the notification is authentic. Your `secret` should: Be a random string with high entropy; Not be used for anything else; Only known to Snyk and your webhook transport consuming code;
+    secret: option<string>,
+    /// Webhooks can only be configured for URLs using the `https` protocol. `http` is not allowed.
+    url: option<string>
+  }
+  create-a-webhook: func(params: create-a-webhook-params) -> result<string, string>;
+
+  /// Retrieve a webhook
+  record retrieve-a-webhook-params {
+    /// The organization ID the project belongs to. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The webhook ID.
+    webhook-id: string
+  }
+  retrieve-a-webhook: func(params: retrieve-a-webhook-params) -> result<string, string>;
+
+  /// Delete a webhook
+  record delete-a-webhook-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    webhook-id: string
+  }
+  delete-a-webhook: func(params: delete-a-webhook-params) -> result<string, string>;
+
+  /// Ping a webhook
+  record ping-a-webhook-params {
+    /// The organization ID the project belongs to. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The webhook ID.
+    webhook-id: string
+  }
+  ping-a-webhook: func(params: ping-a-webhook-params) -> result<string, string>;
+
+}
+
+interface reporting-api {
+  enum get-issue-counts-group-by-enum {
+    severity,
+    fixable,
+    project-severity-fixable,
+  }
+
+  enum get-test-counts-group-by-enum {
+    is-private,
+    issues-prevented,
+  }
+
+  enum get-list-of-issues-sort-by-enum {
+    severity,
+    issue-title,
+    project-name,
+    is-fixed,
+    is-patched,
+    is-ignored,
+    introduced-date,
+    is-upgradable,
+    is-patchable,
+    priority-score,
+  }
+
+  enum get-list-of-issues-group-by-enum {
+    issue,
+  }
+
+  record get-issue-counts-body-filters {
+    /// If set to `true`, only include issues which are fixable, if set to `false`, only include issues which are not fixable. An issue is fixable if it is either upgradable, patchable or pinnable. Also see isUpgradable, isPatchable and isPinnable filters.
+    fixable: option<bool>,
+    /// If set to `true`, only include issues which are ignored, if set to `false`, only include issues which are not ignored
+    ignored: option<bool>,
+    /// If set to `true`, only include issues which are patchable, if set to `false`, only include issues which are not patchable
+    is-patchable: option<bool>,
+    /// If set to `true`, only include issues which are pinnable, if set to `false`, only include issues which are not pinnable
+    is-pinnable: option<bool>,
+    /// If set to `true`, only include issues which are upgradable, if set to `false`, only include issues which are not upgradable
+    is-upgradable: option<bool>,
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of org IDs to filter the results by
+    orgs: string,
+    /// If set to `true`, only include issues which are patched, if set to `false`, only include issues which are not patched
+    patched: option<bool>,
+    /// The priority score ranging between 0-1000
+    priority-score: option<get-issue-counts-body-filters-priority-score>,
+    /// The list of project IDs to filter issues by, max projects allowed is 1000
+    projects: option<string>,
+    /// The severity levels of issues to filter the results by
+    severity: option<list<string>>,
+    /// The type of issues to filter the results by
+    types: option<list<string>>
+  }
+
+  /// The priority score ranging between 0-1000
+  record get-issue-counts-body-filters-priority-score {
+    max: option<f64>,
+    min: option<f64>
+  }
+
+  record get-latest-issue-counts-body-filters {
+    /// If set to `true`, only include issues which are fixable, if set to `false`, only include issues which are not fixable. An issue is fixable if it is either upgradable, patchable or pinnable. Also see isUpgradable, isPatchable and isPinnable filters.
+    fixable: option<bool>,
+    /// If set to `true`, only include issues which are ignored, if set to `false`, only include issues which are not ignored
+    ignored: option<bool>,
+    /// If set to `true`, only include issues which are patchable, if set to `false`, only include issues which are not patchable
+    is-patchable: option<bool>,
+    /// If set to `true`, only include issues which are pinnable, if set to `false`, only include issues which are not pinnable
+    is-pinnable: option<bool>,
+    /// If set to `true`, only include issues which are upgradable, if set to `false`, only include issues which are not upgradable
+    is-upgradable: option<bool>,
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of org IDs to filter the results by
+    orgs: string,
+    /// If set to `true`, only include issues which are patched, if set to `false`, only include issues which are not patched
+    patched: option<bool>,
+    /// The priority score ranging between 0-1000
+    priority-score: option<get-latest-issue-counts-body-filters-priority-score>,
+    /// The list of project IDs to filter issues by, max projects allowed is 1000
+    projects: option<string>,
+    /// The severity levels of issues to filter the results by
+    severity: option<list<string>>,
+    /// The type of issues to filter the results by
+    types: option<list<string>>
+  }
+
+  /// The priority score ranging between 0-1000
+  record get-latest-issue-counts-body-filters-priority-score {
+    max: option<f64>,
+    min: option<f64>
+  }
+
+  record get-project-counts-body-filters {
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of org IDs to filter the results by
+    orgs: string,
+    /// The list of project IDs to filter the results by, max projects allowed is 1000
+    projects: option<string>
+  }
+
+  record get-latest-project-counts-body-filters {
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of org IDs to filter the results by
+    orgs: string,
+    /// The list of project IDs to filter the results by, max projects allowed is 1000
+    projects: option<string>
+  }
+
+  record get-test-counts-body-filters {
+    /// If set to `true`, only include tests which were conducted against private projects, if set to `false` only include tests which were conducted against public projects
+    is-private: option<bool>,
+    /// If set to `true`, only include tests which prevented issues from being introduced, if set to `false` only include tests which did not prevent issues from being introduced
+    issues-prevented: option<bool>,
+    /// The list of org IDs to filter the results by
+    orgs: string,
+    /// The list of project IDs to filter issues by, max projects allowed is 1000
+    projects: option<string>
+  }
+
+  record get-list-of-issues-body-filters {
+    /// The exploit maturity levels of issues to filter the results by
+    exploit-maturity: option<list<string>>,
+    /// If set to `true`, only include issues which are fixable, if set to `false`, only include issues which are not fixable. An issue is fixable if it is either upgradable, patchable or pinnable. Also see isUpgradable, isPatchable and isPinnable filters.
+    fixable: option<bool>,
+    /// Search term to filter issue name by, or an exact CVE or CWE
+    identifier: option<string>,
+    /// If set to `true`, only include issues which are ignored, if set to `false`, only include issues which are not ignored
+    ignored: option<bool>,
+    /// If set to `true`, only include issues which are fixed, if set to `false`, only include issues which are not fixed
+    is-fixed: option<bool>,
+    /// If set to `true`, only include issues which are patchable, if set to `false`, only include issues which are not patchable
+    is-patchable: option<bool>,
+    /// If set to `true`, only include issues which are pinnable, if set to `false`, only include issues which are not pinnable
+    is-pinnable: option<bool>,
+    /// If set to `true`, only include issues which are upgradable, if set to `false`, only include issues which are not upgradable
+    is-upgradable: option<bool>,
+    /// The list of issue IDs to filter issues by
+    issues: option<string>,
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of org IDs to filter the results by
+    orgs: string,
+    /// If set to `true`, only include issues which are patched, if set to `false`, only include issues which are not patched
+    patched: option<bool>,
+    /// The priority score ranging between 0-1000
+    priority-score: option<get-list-of-issues-body-filters-priority-score>,
+    /// The list of project IDs to filter issues by, max projects allowed is 1000
+    projects: option<string>,
+    /// The severity levels of issues to filter the results by
+    severity: option<list<string>>,
+    /// The type of issues to filter the results by
+    types: option<list<string>>
+  }
+
+  /// The priority score ranging between 0-1000
+  record get-list-of-issues-body-filters-priority-score {
+    max: option<f64>,
+    min: option<f64>
+  }
+
+  record get-list-of-latest-issues-body-filters {
+    /// The exploit maturity levels of issues to filter the results by
+    exploit-maturity: option<list<string>>,
+    /// If set to `true`, only include issues which are fixable, if set to `false`, only include issues which are not fixable. An issue is fixable if it is either upgradable, patchable or pinnable. Also see isUpgradable, isPatchable and isPinnable filters.
+    fixable: option<bool>,
+    /// Search term to filter issue name by, or an exact CVE or CWE
+    identifier: option<string>,
+    /// If set to `true`, only include issues which are ignored, if set to `false`, only include issues which are not ignored
+    ignored: option<bool>,
+    /// If set to `true`, only include issues which are fixed, if set to `false`, only include issues which are not fixed
+    is-fixed: option<bool>,
+    /// If set to `true`, only include issues which are patchable, if set to `false`, only include issues which are not patchable
+    is-patchable: option<bool>,
+    /// If set to `true`, only include issues which are pinnable, if set to `false`, only include issues which are not pinnable
+    is-pinnable: option<bool>,
+    /// If set to `true`, only include issues which are upgradable, if set to `false`, only include issues which are not upgradable
+    is-upgradable: option<bool>,
+    /// The list of issue IDs to filter issues by
+    issues: option<string>,
+    /// The type of languages to filter the results by
+    languages: option<list<string>>,
+    /// The list of org IDs to filter the results by
+    orgs: string,
+    /// If set to `true`, only include issues which are patched, if set to `false`, only include issues which are not patched
+    patched: option<bool>,
+    /// The priority score ranging between 0-1000
+    priority-score: option<get-list-of-latest-issues-body-filters-priority-score>,
+    /// The list of project IDs to filter issues by, max projects allowed is 1000
+    projects: option<string>,
+    /// The severity levels of issues to filter the results by
+    severity: option<list<string>>,
+    /// The type of issues to filter the results by
+    types: option<list<string>>
+  }
+
+  /// The priority score ranging between 0-1000
+  record get-list-of-latest-issues-body-filters-priority-score {
+    max: option<f64>,
+    min: option<f64>
+  }
+
+  /// Get issue counts
+  record get-issue-counts-params {
+    /// The date you wish to fetch results from, in the format `YYYY-MM-DD`
+    from-op: string,
+    /// The date you wish to fetch results until, in the format `YYYY-MM-DD`
+    to: string,
+    /// The field to group results by
+    group-by: option<get-issue-counts-group-by-enum>,
+    filters: option<get-issue-counts-body-filters>
+  }
+  get-issue-counts: func(params: get-issue-counts-params) -> result<string, string>;
+
+  /// Get latest issue counts
+  record get-latest-issue-counts-params {
+    /// The field to group results by
+    group-by: option<get-issue-counts-group-by-enum>,
+    filters: option<get-latest-issue-counts-body-filters>
+  }
+  get-latest-issue-counts: func(params: get-latest-issue-counts-params) -> result<string, string>;
+
+  /// Get project counts
+  record get-project-counts-params {
+    /// The date you wish to fetch results from, in the format `YYYY-MM-DD`
+    from-op: string,
+    /// The date you wish to fetch results until, in the format `YYYY-MM-DD`
+    to: string,
+    filters: option<get-project-counts-body-filters>
+  }
+  get-project-counts: func(params: get-project-counts-params) -> result<string, string>;
+
+  /// Get latest project counts
+  record get-latest-project-counts-params {
+    filters: option<get-latest-project-counts-body-filters>
+  }
+  get-latest-project-counts: func(params: get-latest-project-counts-params) -> result<string, string>;
+
+  /// Get test counts
+  record get-test-counts-params {
+    /// The date you wish to count tests from, in the format `YYYY-MM-DD`
+    from-op: string,
+    /// The date you wish to count tests until, in the format `YYYY-MM-DD`
+    to: string,
+    /// The field to group results by
+    group-by: option<get-test-counts-group-by-enum>,
+    filters: option<get-test-counts-body-filters>
+  }
+  get-test-counts: func(params: get-test-counts-params) -> result<string, string>;
+
+  /// Get list of issues
+  record get-list-of-issues-params {
+    /// The date you wish to fetch results from, in the format `YYYY-MM-DD`
+    from-op: string,
+    /// The date you wish to fetch results until, in the format `YYYY-MM-DD`
+    to: string,
+    /// The page of results to request
+    page: option<f64>,
+    /// The number of results to return per page (Maximum: 1000)
+    per-page: option<f64>,
+    /// The key to sort results by
+    sort-by: option<get-list-of-issues-sort-by-enum>,
+    /// The direction to sort results.
+    order: option<string>,
+    /// Set to issue to group the same issue in multiple projects
+    group-by: option<get-list-of-issues-group-by-enum>,
+    filters: option<get-list-of-issues-body-filters>
+  }
+  get-list-of-issues: func(params: get-list-of-issues-params) -> result<string, string>;
+
+  /// Get list of latest issues
+  record get-list-of-latest-issues-params {
+    /// The page of results to request
+    page: option<f64>,
+    /// The number of results to return per page (Maximum: 1000)
+    per-page: option<f64>,
+    /// The key to sort results by
+    sort-by: option<get-list-of-issues-sort-by-enum>,
+    /// The direction to sort results.
+    order: option<string>,
+    /// Set to issue to group the same issue in multiple projects
+    group-by: option<get-list-of-issues-group-by-enum>,
+    filters: option<get-list-of-latest-issues-body-filters>
+  }
+  get-list-of-latest-issues: func(params: get-list-of-latest-issues-params) -> result<string, string>;
+
+}
+
+interface test {
+  enum test-composer-json-composer-lock-file-body-encoding-enum {
+    plain,
+    base64,
+  }
+
+  /// The manifest files:
+  record test-composer-json-composer-lock-file-body-files {
+    /// a lockfile encoded according the the "encoding" field.
+    additional: list<string>,
+    /// the `composer.json` file, encoded according the the "encoding" field.
+    target: test-composer-json-composer-lock-file-body-files-target
+  }
+
+  /// the `composer.json` file, encoded according the the "encoding" field.
+  record test-composer-json-composer-lock-file-body-files-target {
+    contents: option<string>
+  }
+
+  /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
+  record test-dep-graph-body-dep-graph {
+    /// Graph object references each pkg and how they depend on each other through the deps property.
+    graph: test-dep-graph-body-dep-graph-graph,
+    /// Package manager information.
+    pkg-manager: test-dep-graph-body-dep-graph-pkg-manager,
+    /// Array of package dependencies.
+    pkgs: list<string>,
+    /// Snyk DepGraph library schema version.
+    schema-version: string
+  }
+
+  /// Graph object references each pkg and how they depend on each other through the deps property.
+  record test-dep-graph-body-dep-graph-graph {
+    /// Array of node objects.
+    nodes: list<string>,
+    /// Root node id.
+    root-node-id: string
+  }
+
+  /// Package manager information.
+  record test-dep-graph-body-dep-graph-pkg-manager {
+    /// Package manager name.
+    name: string,
+    /// A list of package repositories (i.e. maven-central, or npm) that defaults to the canonical package registry for the given package manager.
+    repositories: option<list<string>>
+  }
+
+  /// The manifest files:
+  record test-gopkg-toml-gopkg-lock-file-body-files {
+    /// a lockfile encoded according the the "encoding" field.
+    additional: list<string>,
+    /// the `Gopkg.toml` file, encoded according the the "encoding" field.
+    target: test-gopkg-toml-gopkg-lock-file-body-files-target
+  }
+
+  /// the `Gopkg.toml` file, encoded according the the "encoding" field.
+  record test-gopkg-toml-gopkg-lock-file-body-files-target {
+    contents: option<string>
+  }
+
+  /// The manifest files:
+  record test-vendor-json-file-body-files {
+    /// the `vendor.json` file, encoded according the the "encoding" field.
+    target: test-vendor-json-file-body-files-target
+  }
+
+  /// the `vendor.json` file, encoded according the the "encoding" field.
+  record test-vendor-json-file-body-files-target {
+    contents: option<string>
+  }
+
+  /// The manifest files:
+  record test-gradle-file-body-files {
+    /// the manifest file, encoded according the the "encoding" field.
+    target: test-gradle-file-body-files-target
+  }
+
+  /// the manifest file, encoded according the the "encoding" field.
+  record test-gradle-file-body-files-target {
+    /// The contents of the file, encoded according to the `encoding` field.
+    contents: string
+  }
+
+  /// The manifest files:
+  record test-maven-file-body-files {
+    /// additional manifest files (if needed), encoded according the the "encoding" field.
+    additional: option<list<string>>,
+    /// the main/root manifest file, encoded according the the "encoding" field.
+    target: test-maven-file-body-files-target
+  }
+
+  /// the main/root manifest file, encoded according the the "encoding" field.
+  record test-maven-file-body-files-target {
+    /// The contents of the file, encoded according to the `encoding` field.
+    contents: string
+  }
+
+  /// The manifest files:
+  record test-package-json-package-lock-json-file-body-files {
+    /// a lockfile can be sent (if needed), encoded according the the "encoding" field.
+    additional: option<list<string>>,
+    /// the `package.json` file, encoded according the the "encoding" field.
+    target: test-package-json-package-lock-json-file-body-files-target
+  }
+
+  /// the `package.json` file, encoded according the the "encoding" field.
+  record test-package-json-package-lock-json-file-body-files-target {
+    /// the contents of `package.json` as a string.
+    contents: string
+  }
+
+  /// The manifest files:
+  record test-requirements-txt-file-body-files {
+    /// the `requirements.txt` file, encoded according the the "encoding" field.
+    target: test-requirements-txt-file-body-files-target
+  }
+
+  /// the `requirements.txt` file, encoded according the the "encoding" field.
+  record test-requirements-txt-file-body-files-target {
+    /// the contents of `requirements.txt` as a string, encoded according to `encoding` above.
+    contents: string
+  }
+
+  /// The manifest files:
+  record test-gemfile-lock-file-body-files {
+    /// the `Gemfile.lock` file, encoded according the the "encoding" field.
+    target: test-gemfile-lock-file-body-files-target
+  }
+
+  /// the `Gemfile.lock` file, encoded according the the "encoding" field.
+  record test-gemfile-lock-file-body-files-target {
+    /// the contents of `Gemfile.lock` as a string.
+    contents: string
+  }
+
+  /// The manifest files:
+  record test-sbt-file-body-files {
+    /// the manifest file, encoded according the the "encoding" field.
+    target: test-sbt-file-body-files-target
+  }
+
+  /// the manifest file, encoded according the the "encoding" field.
+  record test-sbt-file-body-files-target {
+    /// The contents of the file, encoded according to the `encoding` field.
+    contents: string
+  }
+
+  /// The manifest files:
+  record test-package-json-yarn-lock-file-body-files {
+    /// a lockfile can be sent (if needed), encoded according the the "encoding" field.
+    additional: option<list<string>>,
+    /// the `package.json` file, encoded according the the "encoding" field.
+    target: test-package-json-yarn-lock-file-body-files-target
+  }
+
+  /// the `package.json` file, encoded according the the "encoding" field.
+  record test-package-json-yarn-lock-file-body-files-target {
+    /// the contents of `package.json` as a string.
+    contents: string
+  }
+
+  /// Test composer.json & composer.lock file
+  record test-composer-json-composer-lock-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-composer-json-composer-lock-file-body-files
+  }
+  test-composer-json-composer-lock-file: func(params: test-composer-json-composer-lock-file-params) -> result<string, string>;
+
+  /// Test Dep Graph
+  record test-dep-graph-params {
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>,
+    /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
+    dep-graph: test-dep-graph-body-dep-graph
+  }
+  test-dep-graph: func(params: test-dep-graph-params) -> result<string, string>;
+
+  /// Test Gopkg.toml & Gopkg.lock File
+  record test-gopkg-toml-gopkg-lock-file-params {
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>,
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-gopkg-toml-gopkg-lock-file-body-files
+  }
+  test-gopkg-toml-gopkg-lock-file: func(params: test-gopkg-toml-gopkg-lock-file-params) -> result<string, string>;
+
+  /// Test vendor.json File
+  record test-vendor-json-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-vendor-json-file-body-files
+  }
+  test-vendor-json-file: func(params: test-vendor-json-file-params) -> result<string, string>;
+
+  /// Test gradle file
+  record test-gradle-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-gradle-file-body-files
+  }
+  test-gradle-file: func(params: test-gradle-file-params) -> result<string, string>;
+
+  /// Test for issues in a public package by group, name and version
+  record test-for-issues-in-a-public-package-by-group-name-and-version-params {
+    /// The package's group ID.
+    group: string,
+    /// The package's artifact ID.
+    name: string,
+    /// The package version to test.
+    version: string,
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>,
+    /// The repository hosting this package. The default value is Maven Central. More than one value is supported, in order.
+    repository: option<string>
+  }
+  test-for-issues-in-a-public-package-by-group-name-and-version: func(params: test-for-issues-in-a-public-package-by-group-name-and-version-params) -> result<string, string>;
+
+  /// Test maven file
+  record test-maven-file-params {
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>,
+    /// The Maven repository hosting this package. The default value is Maven Central. More than one value is supported, in order.
+    repository: option<string>,
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-maven-file-body-files
+  }
+  test-maven-file: func(params: test-maven-file-params) -> result<string, string>;
+
+  /// Test for issues in a public package by group id, artifact id and version
+  record test-for-issues-in-a-public-package-by-group-id-artifact-id-and-version-params {
+    /// The package's group ID.
+    group-id: string,
+    /// The package's artifact ID.
+    artifact-id: string,
+    /// The package version to test.
+    version: string,
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>,
+    /// The Maven repository hosting this package. The default value is Maven Central. More than one value is supported, in order.
+    repository: option<string>
+  }
+  test-for-issues-in-a-public-package-by-group-id-artifact-id-and-version: func(params: test-for-issues-in-a-public-package-by-group-id-artifact-id-and-version-params) -> result<string, string>;
+
+  /// Test package.json & package-lock.json File
+  record test-package-json-package-lock-json-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-package-json-package-lock-json-file-body-files
+  }
+  test-package-json-package-lock-json-file: func(params: test-package-json-package-lock-json-file-params) -> result<string, string>;
+
+  /// Test for issues in a public package by name and version
+  record test-for-issues-in-a-public-package-by-name-and-version-params {
+    /// The package name. For scoped packages, **must** be url-encoded, so to test "@angular/core" version 4.3.2, one should `GET /test/npm/%40angular%2Fcore/4.3.2`.
+    package-name: string,
+    /// The Package version to test.
+    version: string,
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>
+  }
+  test-for-issues-in-a-public-package-by-name-and-version: func(params: test-for-issues-in-a-public-package-by-name-and-version-params) -> result<string, string>;
+
+  /// Test requirements.txt file
+  record test-requirements-txt-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-requirements-txt-file-body-files
+  }
+  test-requirements-txt-file: func(params: test-requirements-txt-file-params) -> result<string, string>;
+
+  /// Test for issues in a public package by name and version
+  record get-test-pip-package-name-version-params {
+    /// The package name.
+    package-name: string,
+    /// The Package version to test.
+    version: string,
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>
+  }
+  get-test-pip-package-name-version: func(params: get-test-pip-package-name-version-params) -> result<string, string>;
+
+  /// Test gemfile.lock file
+  record test-gemfile-lock-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-gemfile-lock-file-body-files
+  }
+  test-gemfile-lock-file: func(params: test-gemfile-lock-file-params) -> result<string, string>;
+
+  /// Test for issues in a public gem by name and version
+  record test-for-issues-in-a-public-gem-by-name-and-version-params {
+    /// The gem name.
+    gem-name: string,
+    /// The gem version to test.
+    version: string,
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>
+  }
+  test-for-issues-in-a-public-gem-by-name-and-version: func(params: test-for-issues-in-a-public-gem-by-name-and-version-params) -> result<string, string>;
+
+  /// Test sbt file
+  record test-sbt-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-sbt-file-body-files
+  }
+  test-sbt-file: func(params: test-sbt-file-params) -> result<string, string>;
+
+  /// Test for issues in a public package by group id, artifact id and version
+  record get-test-sbt-group-id-artifact-id-version-params {
+    /// The package's group ID.
+    group-id: string,
+    /// The package's artifact ID.
+    artifact-id: string,
+    /// The package version to test.
+    version: string,
+    /// The organization to test the package with. See "The Snyk organization for a request" above.
+    org: option<string>,
+    /// The repository hosting this package. The default value is Maven Central. More than one value is supported, in order.
+    repository: option<string>
+  }
+  get-test-sbt-group-id-artifact-id-version: func(params: get-test-sbt-group-id-artifact-id-version-params) -> result<string, string>;
+
+  /// Test package.json & yarn.lock File
+  record test-package-json-yarn-lock-file-params {
+    /// the encoding for the manifest files sent.
+    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    /// The manifest files:
+    files: test-package-json-yarn-lock-file-body-files
+  }
+  test-package-json-yarn-lock-file: func(params: test-package-json-yarn-lock-file-params) -> result<string, string>;
+
+}
+
+interface users {
+  enum modify-organization-notification-settings-body-new-issues-remediations-issue-severity-enum {
+    all,
+    high,
+  }
+
+  enum modify-organization-notification-settings-body-new-issues-remediations-issue-type-enum {
+    all,
+    vuln,
+    license,
+    none,
+  }
+
+  record modify-organization-notification-settings-body-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: modify-organization-notification-settings-body-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: modify-organization-notification-settings-body-new-issues-remediations-issue-type-enum
+  }
+
+  record modify-organization-notification-settings-body-project-imported {
+    /// Whether notifications should be sent
+    enabled: bool
+  }
+
+  record modify-organization-notification-settings-body-test-limit {
+    /// Whether notifications should be sent
+    enabled: bool
+  }
+
+  record modify-organization-notification-settings-body-weekly-report {
+    /// Whether notifications should be sent
+    enabled: bool
+  }
+
+  record modify-project-notification-settings-body-new-issues-remediations {
+    /// Whether notifications should be sent
+    enabled: bool,
+    /// The severity levels of issues to send notifications for (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-severity: modify-organization-notification-settings-body-new-issues-remediations-issue-severity-enum,
+    /// Filter the types of issue to include in notifications (only applicable for `new-remediations-vulnerabilities` notificationType)
+    issue-type: modify-organization-notification-settings-body-new-issues-remediations-issue-type-enum
+  }
+
+  /// Get My Details
+  get-my-details: func() -> result<string, string>;
+
+  /// Get organization notification settings
+  record get-organization-notification-settings-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string
+  }
+  get-organization-notification-settings: func(params: get-organization-notification-settings-params) -> result<string, string>;
+
+  /// Modify organization notification settings
+  record modify-organization-notification-settings-params {
+    /// Automatically added
+    org-id: string,
+    new-issues-remediations: option<modify-organization-notification-settings-body-new-issues-remediations>,
+    project-imported: option<modify-organization-notification-settings-body-project-imported>,
+    test-limit: option<modify-organization-notification-settings-body-test-limit>,
+    weekly-report: option<modify-organization-notification-settings-body-weekly-report>
+  }
+  modify-organization-notification-settings: func(params: modify-organization-notification-settings-params) -> result<string, string>;
+
+  /// Get project notification settings
+  record get-project-notification-settings-params {
+    /// The organization ID. The `API_KEY` must have access to this organization.
+    org-id: string,
+    /// The project ID to return notification settings for.
+    project-id: string
+  }
+  get-project-notification-settings: func(params: get-project-notification-settings-params) -> result<string, string>;
+
+  /// Modify project notification settings
+  record modify-project-notification-settings-params {
+    /// Automatically added
+    org-id: string,
+    /// Automatically added
+    project-id: string,
+    new-issues-remediations: option<modify-project-notification-settings-body-new-issues-remediations>
+  }
+  modify-project-notification-settings: func(params: modify-project-notification-settings-params) -> result<string, string>;
+
+  /// Get User Details
+  record get-user-details-params {
+    /// The users ID. The `API_KEY` must have admin access to at least one group or organization where the requested user is a member and must have the `api` entitlement on their preferred organization.
+    user-id: string
+  }
+  get-user-details: func(params: get-user-details-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export audit-logs;
+  export groups;
+  export monitor;
+  export organizations;
+  export dependencies;
+  export entitlements;
+  export integrations;
+  export import-projects;
+  export licenses;
+  export projects;
+  export webhooks;
+  export reporting-api;
+  export test;
+  export users;
+}

@@ -1,0 +1,119 @@
+package autostamp:polygon@0.2.0;
+
+interface stocks {
+  /// Available Companies
+  record get-v1-companies-params {
+    /// Which field to sort by. For desc place a `-` in front of the field name. eg `?sort=-marketcap`
+    sort: option<string>,
+    /// How many items to be on each page during pagination
+    perpage: option<f64>,
+    /// Which page of results to return
+    page: option<f64>
+  }
+  get-v1-companies: func(params: get-v1-companies-params) -> result<string, string>;
+
+  /// Historic Aggregates
+  record get-v1-historic-agg-size-symbol-date-params {
+    /// Size of the aggregation. `second` or `minute`
+    size: string,
+    /// Symbol of the company to retrieve
+    symbol: string,
+    /// Date/Day of the historic ticks to retreive
+    date: string,
+    /// Timestamp offset, used for pagination
+    offset: option<s32>,
+    /// Limit the size of response, max: 10000
+    limit: option<s32>
+  }
+  get-v1-historic-agg-size-symbol-date: func(params: get-v1-historic-agg-size-symbol-date-params) -> result<string, string>;
+
+  /// Historic Quotes
+  record get-v1-historic-quotes-symbol-date-params {
+    /// Symbol of the company to retrieve
+    symbol: string,
+    /// Date/Day of the historic ticks to retreive
+    date: string,
+    /// Timestamp offset, used for pagination
+    offset: option<s32>,
+    /// Limit the size of response, max: 10000
+    limit: option<s32>
+  }
+  get-v1-historic-quotes-symbol-date: func(params: get-v1-historic-quotes-symbol-date-params) -> result<string, string>;
+
+  /// Historic Trades
+  record get-v1-historic-trades-symbol-date-params {
+    /// Symbol of the company to retrieve
+    symbol: string,
+    /// Date/Day of the historic ticks to retreive
+    date: string,
+    /// Timestamp offset, used for pagination
+    offset: option<s32>,
+    /// Limit the size of response, max: 10000
+    limit: option<s32>
+  }
+  get-v1-historic-trades-symbol-date: func(params: get-v1-historic-trades-symbol-date-params) -> result<string, string>;
+
+  /// Last Trade for a Symbol
+  record get-v1-last-stocks-symbol-params {
+    /// Symbol of the stock to get
+    symbol: string
+  }
+  get-v1-last-stocks-symbol: func(params: get-v1-last-stocks-symbol-params) -> result<string, string>;
+
+  /// Last Quote for a Symbol
+  record get-v1-last-quote-stocks-symbol-params {
+    /// Symbol of the stock to get
+    symbol: string
+  }
+  get-v1-last-quote-stocks-symbol: func(params: get-v1-last-quote-stocks-symbol-params) -> result<string, string>;
+
+}
+
+
+interface currencies {
+  /// Available Currencies
+  get-v1-currencies: func() -> result<string, string>;
+
+  /// Historic Forex Ticks
+  record get-v1-historic-forex-from-to-date-params {
+    /// From Symbol of the currency pair
+    from-op: string,
+    /// To Symbol of the currency pair
+    to: string,
+    /// Date/Day of the historic ticks to retreive
+    date: string,
+    /// Timestamp offset, used for pagination
+    offset: option<s32>,
+    /// Limit the size of response, max: 10000
+    limit: option<s32>
+  }
+  get-v1-historic-forex-from-to-date: func(params: get-v1-historic-forex-from-to-date-params) -> result<string, string>;
+
+  /// Last Trade for a Currency Pair
+  record get-v1-last-currencies-from-to-params {
+    /// From Symbol of the pair
+    from-op: string,
+    /// To Symbol of the pair
+    to: string
+  }
+  get-v1-last-currencies-from-to: func(params: get-v1-last-currencies-from-to-params) -> result<string, string>;
+
+  /// Last Quote for a Currency Pair
+  record get-v1-last-quote-currencies-from-to-params {
+    /// From Symbol of the pair
+    from-op: string,
+    /// To Symbol of the pair
+    to: string
+  }
+  get-v1-last-quote-currencies-from-to: func(params: get-v1-last-quote-currencies-from-to-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export stocks;
+  export currencies;
+}

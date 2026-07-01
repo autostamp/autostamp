@@ -1,0 +1,1040 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `oauth2` | `Authorization: Bearer <secret>` |
+package autostamp:bungie@0.2.0;
+
+interface app {
+  record app-get-application-api-usage-params {
+    /// ID of the application to get usage statistics.
+    application-id: string,
+    /// End time for query. Goes to now if not specified.
+    end: option<string>,
+    /// Start time for query. Goes to 24 hours ago if not specified.
+    start: option<string>
+  }
+  app-get-application-api-usage: func(params: app-get-application-api-usage-params) -> result<string, string>;
+
+  app-get-bungie-applications: func() -> result<string, string>;
+
+}
+
+
+interface community-content {
+  record community-content-get-community-content-params {
+    /// The type of media to get
+    media-filter: string,
+    /// Zero based page
+    page: string,
+    /// The sort mode.
+    sort: string
+  }
+  community-content-get-community-content: func(params: community-content-get-community-content-params) -> result<string, string>;
+
+}
+
+interface content {
+  record content-get-content-by-id-params {
+    /// false
+    head: option<bool>,
+    id: string,
+    locale: string
+  }
+  content-get-content-by-id: func(params: content-get-content-by-id-params) -> result<string, string>;
+
+  record content-get-content-by-tag-and-type-params {
+    /// Not used.
+    head: option<bool>,
+    locale: string,
+    tag: string,
+    type-op: string
+  }
+  content-get-content-by-tag-and-type: func(params: content-get-content-by-tag-and-type-params) -> result<string, string>;
+
+  record content-get-content-type-params {
+    type-op: string
+  }
+  content-get-content-type: func(params: content-get-content-type-params) -> result<string, string>;
+
+  record content-rss-news-articles-params {
+    /// Optionally filter response to only include news items in a certain category.
+    categoryfilter: option<string>,
+    /// Optionally include full content body for each news item.
+    includebody: option<bool>,
+    /// Zero-based pagination token for paging through result sets.
+    page-token: string
+  }
+  content-rss-news-articles: func(params: content-rss-news-articles-params) -> result<string, string>;
+
+  record content-search-content-with-text-params {
+    /// Content type tag: Help, News, etc. Supply multiple ctypes separated by space.
+    ctype: option<string>,
+    /// Page number for the search results, starting with page 1.
+    currentpage: option<s32>,
+    /// Not used.
+    head: option<bool>,
+    locale: string,
+    /// Word or phrase for the search.
+    searchtext: option<string>,
+    /// For analytics, hint at the part of the app that triggered the search. Optional.
+    source: option<string>,
+    /// Tag used on the content to be searched.
+    tag: option<string>
+  }
+  content-search-content-with-text: func(params: content-search-content-with-text-params) -> result<string, string>;
+
+  record content-search-content-by-tag-and-type-params {
+    /// Page number for the search results starting with page 1.
+    currentpage: option<s32>,
+    /// Not used.
+    head: option<bool>,
+    /// Not used.
+    itemsperpage: option<s32>,
+    locale: string,
+    tag: string,
+    type-op: string
+  }
+  content-search-content-by-tag-and-type: func(params: content-search-content-by-tag-and-type-params) -> result<string, string>;
+
+  record content-search-help-articles-params {
+    searchtext: string,
+    size: string
+  }
+  content-search-help-articles: func(params: content-search-help-articles-params) -> result<string, string>;
+
+}
+
+interface destiny2 {
+  destiny2-equip-item: func() -> result<string, string>;
+
+  destiny2-equip-items: func() -> result<string, string>;
+
+  destiny2-insert-socket-plug: func() -> result<string, string>;
+
+  destiny2-insert-socket-plug-free: func() -> result<string, string>;
+
+  destiny2-pull-from-postmaster: func() -> result<string, string>;
+
+  destiny2-set-item-lock-state: func() -> result<string, string>;
+
+  destiny2-set-quest-tracked-state: func() -> result<string, string>;
+
+  destiny2-transfer-item: func() -> result<string, string>;
+
+  destiny2-clear-loadout: func() -> result<string, string>;
+
+  destiny2-equip-loadout: func() -> result<string, string>;
+
+  destiny2-snapshot-loadout: func() -> result<string, string>;
+
+  destiny2-update-loadout-identifiers: func() -> result<string, string>;
+
+  record destiny2-search-destiny-entities-params {
+    /// Page number to return, starting with 0.
+    page: option<s32>,
+    /// The string to use when searching for Destiny entities.
+    search-term: string,
+    /// The type of entity for whom you would like results. These correspond to the entity's definition contract name. For instance, if you are looking for items, this property should be 'DestinyInventoryItemDefinition'.
+    type-op: string
+  }
+  destiny2-search-destiny-entities: func(params: destiny2-search-destiny-entities-params) -> result<string, string>;
+
+  destiny2-awa-provide-authorization-result: func() -> result<string, string>;
+
+  record destiny2-awa-get-action-token-params {
+    /// The identifier for the advanced write action request.
+    correlation-id: string
+  }
+  destiny2-awa-get-action-token: func(params: destiny2-awa-get-action-token-params) -> result<string, string>;
+
+  destiny2-awa-initialize-request: func() -> result<string, string>;
+
+  destiny2-get-clan-banner-source: func() -> result<string, string>;
+
+  record destiny2-get-clan-weekly-reward-state-params {
+    /// A valid group id of clan.
+    group-id: string
+  }
+  destiny2-get-clan-weekly-reward-state: func(params: destiny2-get-clan-weekly-reward-state-params) -> result<string, string>;
+
+  destiny2-get-destiny-manifest: func() -> result<string, string>;
+
+  record destiny2-get-destiny-entity-definition-params {
+    /// The type of entity for whom you would like results. These correspond to the entity's definition contract name. For instance, if you are looking for items, this property should be 'DestinyInventoryItemDefinition'. PREVIEW: This endpoint is still in beta, and may experience rough edges. The schema is tentatively in final form, but there may be bugs that prevent desirable operation.
+    entity-type: string,
+    /// The hash identifier for the specific Entity you want returned.
+    hash-identifier: string
+  }
+  destiny2-get-destiny-entity-definition: func(params: destiny2-get-destiny-entity-definition-params) -> result<string, string>;
+
+  destiny2-get-public-milestones: func() -> result<string, string>;
+
+  record destiny2-get-public-milestone-content-params {
+    /// The identifier for the milestone to be returned.
+    milestone-hash: string
+  }
+  destiny2-get-public-milestone-content: func(params: destiny2-get-public-milestone-content-params) -> result<string, string>;
+
+  record destiny2-search-destiny-player-by-bungie-name-params {
+    /// A valid non-BungieNet membership type, or All. Indicates which memberships to return. You probably want this set to All.
+    membership-type: string
+  }
+  destiny2-search-destiny-player-by-bungie-name: func(params: destiny2-search-destiny-player-by-bungie-name-params) -> result<string, string>;
+
+  record destiny2-get-clan-aggregate-stats-params {
+    /// Group ID of the clan whose leaderboards you wish to fetch.
+    group-id: string,
+    /// List of game modes for which to get leaderboards. See the documentation for DestinyActivityModeType for valid values, and pass in string representation, comma delimited.
+    modes: option<string>
+  }
+  destiny2-get-clan-aggregate-stats: func(params: destiny2-get-clan-aggregate-stats-params) -> result<string, string>;
+
+  destiny2-get-historical-stats-definition: func() -> result<string, string>;
+
+  record destiny2-get-clan-leaderboards-params {
+    /// Group ID of the clan whose leaderboards you wish to fetch.
+    group-id: string,
+    /// Maximum number of top players to return. Use a large number to get entire leaderboard.
+    maxtop: option<s32>,
+    /// List of game modes for which to get leaderboards. See the documentation for DestinyActivityModeType for valid values, and pass in string representation, comma delimited.
+    modes: option<string>,
+    /// ID of stat to return rather than returning all Leaderboard stats.
+    statid: option<string>
+  }
+  destiny2-get-clan-leaderboards: func(params: destiny2-get-clan-leaderboards-params) -> result<string, string>;
+
+  record destiny2-get-leaderboards-for-character-params {
+    /// The specific character to build the leaderboard around for the provided Destiny Membership.
+    character-id: string,
+    /// The Destiny membershipId of the user to retrieve.
+    destiny-membership-id: string,
+    /// Maximum number of top players to return. Use a large number to get entire leaderboard.
+    maxtop: option<s32>,
+    /// A valid non-BungieNet membership type.
+    membership-type: string,
+    /// List of game modes for which to get leaderboards. See the documentation for DestinyActivityModeType for valid values, and pass in string representation, comma delimited.
+    modes: option<string>,
+    /// ID of stat to return rather than returning all Leaderboard stats.
+    statid: option<string>
+  }
+  destiny2-get-leaderboards-for-character: func(params: destiny2-get-leaderboards-for-character-params) -> result<string, string>;
+
+  record destiny2-get-post-game-carnage-report-params {
+    /// The ID of the activity whose PGCR is requested.
+    activity-id: string
+  }
+  destiny2-get-post-game-carnage-report: func(params: destiny2-get-post-game-carnage-report-params) -> result<string, string>;
+
+  record destiny2-report-offensive-post-game-carnage-report-player-params {
+    /// The ID of the activity where you ran into the brigand that you're reporting.
+    activity-id: string
+  }
+  destiny2-report-offensive-post-game-carnage-report-player: func(params: destiny2-report-offensive-post-game-carnage-report-player-params) -> result<string, string>;
+
+  record destiny2-get-public-vendors-params {
+    /// A comma separated list of components to return (as strings or numeric values). See the DestinyComponentType enum for valid components to request. You must request at least one component to receive results.
+    components: option<list<s32>>
+  }
+  destiny2-get-public-vendors: func(params: destiny2-get-public-vendors-params) -> result<string, string>;
+
+  record destiny2-get-historical-stats-params {
+    /// The id of the character to retrieve. You can omit this character ID or set it to 0 to get aggregate stats across all characters.
+    character-id: string,
+    /// Last day to return when daily stats are requested. Use the format YYYY-MM-DD. Currently, we cannot allow more than 31 days of daily data to be requested in a single request.
+    dayend: option<string>,
+    /// First day to return when daily stats are requested. Use the format YYYY-MM-DD. Currently, we cannot allow more than 31 days of daily data to be requested in a single request.
+    daystart: option<string>,
+    /// The Destiny membershipId of the user to retrieve.
+    destiny-membership-id: string,
+    /// Group of stats to include, otherwise only general stats are returned. Comma separated list is allowed. Values: General, Weapons, Medals
+    groups: option<list<s32>>,
+    /// A valid non-BungieNet membership type.
+    membership-type: string,
+    /// Game modes to return. See the documentation for DestinyActivityModeType for valid values, and pass in string representation, comma delimited.
+    modes: option<list<s32>>,
+    /// Indicates a specific period type to return. Optional. May be: Daily, AllTime, or Activity
+    period-type: option<s32>
+  }
+  destiny2-get-historical-stats: func(params: destiny2-get-historical-stats-params) -> result<string, string>;
+
+  record destiny2-get-activity-history-params {
+    /// The id of the character to retrieve.
+    character-id: string,
+    /// Number of rows to return
+    count: option<s32>,
+    /// The Destiny membershipId of the user to retrieve.
+    destiny-membership-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string,
+    /// A filter for the activity mode to be returned. None returns all activities. See the documentation for DestinyActivityModeType for valid values, and pass in string representation.
+    mode: option<s32>,
+    /// Page number to return, starting with 0.
+    page: option<s32>
+  }
+  destiny2-get-activity-history: func(params: destiny2-get-activity-history-params) -> result<string, string>;
+
+  record destiny2-get-destiny-aggregate-activity-stats-params {
+    /// The specific character whose activities should be returned.
+    character-id: string,
+    /// The Destiny membershipId of the user to retrieve.
+    destiny-membership-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-destiny-aggregate-activity-stats: func(params: destiny2-get-destiny-aggregate-activity-stats-params) -> result<string, string>;
+
+  record destiny2-get-unique-weapon-history-params {
+    /// The id of the character to retrieve.
+    character-id: string,
+    /// The Destiny membershipId of the user to retrieve.
+    destiny-membership-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-unique-weapon-history: func(params: destiny2-get-unique-weapon-history-params) -> result<string, string>;
+
+  record destiny2-get-historical-stats-for-account-params {
+    /// The Destiny membershipId of the user to retrieve.
+    destiny-membership-id: string,
+    /// Groups of stats to include, otherwise only general stats are returned. Comma separated list is allowed. Values: General, Weapons, Medals.
+    groups: option<list<s32>>,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-historical-stats-for-account: func(params: destiny2-get-historical-stats-for-account-params) -> result<string, string>;
+
+  record destiny2-get-leaderboards-params {
+    /// The Destiny membershipId of the user to retrieve.
+    destiny-membership-id: string,
+    /// Maximum number of top players to return. Use a large number to get entire leaderboard.
+    maxtop: option<s32>,
+    /// A valid non-BungieNet membership type.
+    membership-type: string,
+    /// List of game modes for which to get leaderboards. See the documentation for DestinyActivityModeType for valid values, and pass in string representation, comma delimited.
+    modes: option<string>,
+    /// ID of stat to return rather than returning all Leaderboard stats.
+    statid: option<string>
+  }
+  destiny2-get-leaderboards: func(params: destiny2-get-leaderboards-params) -> result<string, string>;
+
+  record destiny2-get-profile-params {
+    /// A comma separated list of components to return (as strings or numeric values). See the DestinyComponentType enum for valid components to request. You must request at least one component to receive results.
+    components: option<list<s32>>,
+    /// Destiny membership ID.
+    destiny-membership-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-profile: func(params: destiny2-get-profile-params) -> result<string, string>;
+
+  record destiny2-get-character-params {
+    /// ID of the character.
+    character-id: string,
+    /// A comma separated list of components to return (as strings or numeric values). See the DestinyComponentType enum for valid components to request. You must request at least one component to receive results.
+    components: option<list<s32>>,
+    /// Destiny membership ID.
+    destiny-membership-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-character: func(params: destiny2-get-character-params) -> result<string, string>;
+
+  record destiny2-get-collectible-node-details-params {
+    /// The Destiny Character ID of the character for whom we're getting collectible detail info.
+    character-id: string,
+    /// The hash identifier of the Presentation Node for whom we should return collectible details. Details will only be returned for collectibles that are direct descendants of this node.
+    collectible-presentation-node-hash: string,
+    /// A comma separated list of components to return (as strings or numeric values). See the DestinyComponentType enum for valid components to request. You must request at least one component to receive results.
+    components: option<list<s32>>,
+    /// Destiny membership ID of another user. You may be denied.
+    destiny-membership-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-collectible-node-details: func(params: destiny2-get-collectible-node-details-params) -> result<string, string>;
+
+  record destiny2-get-vendors-params {
+    /// The Destiny Character ID of the character for whom we're getting vendor info.
+    character-id: string,
+    /// A comma separated list of components to return (as strings or numeric values). See the DestinyComponentType enum for valid components to request. You must request at least one component to receive results.
+    components: option<list<s32>>,
+    /// Destiny membership ID of another user. You may be denied.
+    destiny-membership-id: string,
+    /// The filter of what vendors and items to return, if any.
+    filter: option<s32>,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-vendors: func(params: destiny2-get-vendors-params) -> result<string, string>;
+
+  record destiny2-get-vendor-params {
+    /// The Destiny Character ID of the character for whom we're getting vendor info.
+    character-id: string,
+    /// A comma separated list of components to return (as strings or numeric values). See the DestinyComponentType enum for valid components to request. You must request at least one component to receive results.
+    components: option<list<s32>>,
+    /// Destiny membership ID of another user. You may be denied.
+    destiny-membership-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string,
+    /// The Hash identifier of the Vendor to be returned.
+    vendor-hash: string
+  }
+  destiny2-get-vendor: func(params: destiny2-get-vendor-params) -> result<string, string>;
+
+  record destiny2-get-item-params {
+    /// A comma separated list of components to return (as strings or numeric values). See the DestinyComponentType enum for valid components to request. You must request at least one component to receive results.
+    components: option<list<s32>>,
+    /// The membership ID of the destiny profile.
+    destiny-membership-id: string,
+    /// The Instance ID of the destiny item.
+    item-instance-id: string,
+    /// A valid non-BungieNet membership type.
+    membership-type: string
+  }
+  destiny2-get-item: func(params: destiny2-get-item-params) -> result<string, string>;
+
+  record destiny2-get-linked-profiles-params {
+    /// (optional) if set to 'true', all memberships regardless of whether they're obscured by overrides will be returned. Normal privacy restrictions on account linking will still apply no matter what.
+    get-all-memberships: option<bool>,
+    /// The ID of the membership whose linked Destiny accounts you want returned. Make sure your membership ID matches its Membership Type: don't pass us a PSN membership ID and the XBox membership type, it's not going to work!
+    membership-id: string,
+    /// The type for the membership whose linked Destiny accounts you want returned.
+    membership-type: string
+  }
+  destiny2-get-linked-profiles: func(params: destiny2-get-linked-profiles-params) -> result<string, string>;
+
+}
+
+interface fireteam {
+  record fireteam-get-active-private-clan-fireteam-count-params {
+    /// The group id of the clan.
+    group-id: string
+  }
+  fireteam-get-active-private-clan-fireteam-count: func(params: fireteam-get-active-private-clan-fireteam-count-params) -> result<string, string>;
+
+  record fireteam-get-available-clan-fireteams-params {
+    /// The activity type to filter by.
+    activity-type: string,
+    /// The date range to grab available fireteams.
+    date-range: string,
+    /// If you wish the result to exclude immediate fireteams, set this to true. Immediate-only can be forced using the dateRange enum.
+    exclude-immediate: option<bool>,
+    /// The group id of the clan.
+    group-id: string,
+    /// An optional language filter.
+    lang-filter: option<string>,
+    /// Zero based page
+    page: string,
+    /// The platform filter.
+    platform: string,
+    /// Determines public/private filtering.
+    public-only: string,
+    /// Filters based on available slots
+    slot-filter: string
+  }
+  fireteam-get-available-clan-fireteams: func(params: fireteam-get-available-clan-fireteams-params) -> result<string, string>;
+
+  record fireteam-get-my-clan-fireteams-params {
+    /// If true, filter by clan. Otherwise, ignore the clan and show all of the user's fireteams.
+    group-filter: option<bool>,
+    /// The group id of the clan. (This parameter is ignored unless the optional query parameter groupFilter is true).
+    group-id: string,
+    /// If true, return fireteams that have been closed.
+    include-closed: string,
+    /// An optional language filter.
+    lang-filter: option<string>,
+    /// Deprecated parameter, ignored.
+    page: string,
+    /// The platform filter.
+    platform: string
+  }
+  fireteam-get-my-clan-fireteams: func(params: fireteam-get-my-clan-fireteams-params) -> result<string, string>;
+
+  record fireteam-get-clan-fireteam-params {
+    /// The unique id of the fireteam.
+    fireteam-id: string,
+    /// The group id of the clan.
+    group-id: string
+  }
+  fireteam-get-clan-fireteam: func(params: fireteam-get-clan-fireteam-params) -> result<string, string>;
+
+  record fireteam-search-public-available-clan-fireteams-params {
+    /// The activity type to filter by.
+    activity-type: string,
+    /// The date range to grab available fireteams.
+    date-range: string,
+    /// If you wish the result to exclude immediate fireteams, set this to true. Immediate-only can be forced using the dateRange enum.
+    exclude-immediate: option<bool>,
+    /// An optional language filter.
+    lang-filter: option<string>,
+    /// Zero based page
+    page: string,
+    /// The platform filter.
+    platform: string,
+    /// Filters based on available slots
+    slot-filter: string
+  }
+  fireteam-search-public-available-clan-fireteams: func(params: fireteam-search-public-available-clan-fireteams-params) -> result<string, string>;
+
+}
+
+interface forum {
+  record forum-get-core-topics-paged-params {
+    /// The category filter.
+    category-filter: string,
+    /// Comma seperated list of locales posts must match to return in the result list. Default 'en'
+    locales: option<string>,
+    /// Zero base page
+    page: string,
+    /// The date filter.
+    quick-date: string,
+    /// The sort mode.
+    sort: string
+  }
+  forum-get-core-topics-paged: func(params: forum-get-core-topics-paged-params) -> result<string, string>;
+
+  record forum-get-forum-tag-suggestions-params {
+    /// The partial tag input to generate suggestions from.
+    partialtag: option<string>
+  }
+  forum-get-forum-tag-suggestions: func(params: forum-get-forum-tag-suggestions-params) -> result<string, string>;
+
+  record forum-get-post-and-parent-params {
+    child-post-id: string,
+    /// If this value is not null or empty, banned posts are requested to be returned
+    showbanned: option<string>
+  }
+  forum-get-post-and-parent: func(params: forum-get-post-and-parent-params) -> result<string, string>;
+
+  record forum-get-post-and-parent-awaiting-approval-params {
+    child-post-id: string,
+    /// If this value is not null or empty, banned posts are requested to be returned
+    showbanned: option<string>
+  }
+  forum-get-post-and-parent-awaiting-approval: func(params: forum-get-post-and-parent-awaiting-approval-params) -> result<string, string>;
+
+  record forum-get-posts-threaded-paged-params {
+    get-parent-post: string,
+    page: string,
+    page-size: string,
+    parent-post-id: string,
+    reply-size: string,
+    root-thread-mode: string,
+    /// If this value is not null or empty, banned posts are requested to be returned
+    showbanned: option<string>,
+    sort-mode: string
+  }
+  forum-get-posts-threaded-paged: func(params: forum-get-posts-threaded-paged-params) -> result<string, string>;
+
+  record forum-get-posts-threaded-paged-from-child-params {
+    child-post-id: string,
+    page: string,
+    page-size: string,
+    reply-size: string,
+    root-thread-mode: string,
+    /// If this value is not null or empty, banned posts are requested to be returned
+    showbanned: option<string>,
+    sort-mode: string
+  }
+  forum-get-posts-threaded-paged-from-child: func(params: forum-get-posts-threaded-paged-from-child-params) -> result<string, string>;
+
+  record forum-get-topic-for-content-params {
+    content-id: string
+  }
+  forum-get-topic-for-content: func(params: forum-get-topic-for-content-params) -> result<string, string>;
+
+  record forum-get-topics-paged-params {
+    /// A category filter
+    category-filter: string,
+    /// The group, if any.
+    group: string,
+    /// Comma seperated list of locales posts must match to return in the result list. Default 'en'
+    locales: option<string>,
+    /// Zero paged page number
+    page: string,
+    /// Unused
+    page-size: string,
+    /// A date filter.
+    quick-date: string,
+    /// The sort mode.
+    sort: string,
+    /// The tags to search, if any.
+    tagstring: option<string>
+  }
+  forum-get-topics-paged: func(params: forum-get-topics-paged-params) -> result<string, string>;
+
+  record forum-get-poll-params {
+    /// The post id of the topic that has the poll.
+    topic-id: string
+  }
+  forum-get-poll: func(params: forum-get-poll-params) -> result<string, string>;
+
+  forum-get-recruitment-thread-summaries: func() -> result<string, string>;
+
+}
+
+interface x {
+  get-available-locales: func() -> result<string, string>;
+
+  record get-global-alerts-params {
+    /// Determines whether Streaming Alerts are included in results
+    includestreaming: option<bool>
+  }
+  get-global-alerts: func(params: get-global-alerts-params) -> result<string, string>;
+
+  get-common-settings: func() -> result<string, string>;
+
+  get-user-system-overrides: func() -> result<string, string>;
+
+}
+
+interface group-v2 {
+  group-v2-get-available-avatars: func() -> result<string, string>;
+
+  group-v2-get-available-themes: func() -> result<string, string>;
+
+  record group-v2-get-user-clan-invite-setting-params {
+    /// The Destiny membership type of the account we wish to access settings.
+    m-type: string
+  }
+  group-v2-get-user-clan-invite-setting: func(params: group-v2-get-user-clan-invite-setting-params) -> result<string, string>;
+
+  record group-v2-get-group-by-name-params {
+    /// Exact name of the group to find.
+    group-name: string,
+    /// Type of group to find.
+    group-type: string
+  }
+  group-v2-get-group-by-name: func(params: group-v2-get-group-by-name-params) -> result<string, string>;
+
+  group-v2-get-group-by-name-v2: func() -> result<string, string>;
+
+  record group-v2-get-recommended-groups-params {
+    /// Requested range in which to pull recommended groups
+    create-date-range: string,
+    /// Type of groups requested
+    group-type: string
+  }
+  group-v2-get-recommended-groups: func(params: group-v2-get-recommended-groups-params) -> result<string, string>;
+
+  record group-v2-recover-group-for-founder-params {
+    /// Type of group the supplied member founded.
+    group-type: string,
+    /// Membership ID to for which to find founded groups.
+    membership-id: string,
+    /// Membership type of the supplied membership ID.
+    membership-type: string
+  }
+  group-v2-recover-group-for-founder: func(params: group-v2-recover-group-for-founder-params) -> result<string, string>;
+
+  group-v2-group-search: func() -> result<string, string>;
+
+  record group-v2-get-potential-groups-for-member-params {
+    /// Filter apply to list of potential joined groups.
+    filter: string,
+    /// Type of group the supplied member applied.
+    group-type: string,
+    /// Membership ID to for which to find applied groups.
+    membership-id: string,
+    /// Membership type of the supplied membership ID.
+    membership-type: string
+  }
+  group-v2-get-potential-groups-for-member: func(params: group-v2-get-potential-groups-for-member-params) -> result<string, string>;
+
+  record group-v2-get-groups-for-member-params {
+    /// Filter apply to list of joined groups.
+    filter: string,
+    /// Type of group the supplied member founded.
+    group-type: string,
+    /// Membership ID to for which to find founded groups.
+    membership-id: string,
+    /// Membership type of the supplied membership ID.
+    membership-type: string
+  }
+  group-v2-get-groups-for-member: func(params: group-v2-get-groups-for-member-params) -> result<string, string>;
+
+  record group-v2-get-group-params {
+    /// Requested group's id.
+    group-id: string
+  }
+  group-v2-get-group: func(params: group-v2-get-group-params) -> result<string, string>;
+
+  record group-v2-abdicate-foundership-params {
+    /// The new founder for this group. Must already be a group admin.
+    founder-id-new: string,
+    /// The target group id.
+    group-id: string,
+    /// Membership type of the provided founderIdNew.
+    membership-type: string
+  }
+  group-v2-abdicate-foundership: func(params: group-v2-abdicate-foundership-params) -> result<string, string>;
+
+  record group-v2-get-admins-and-founder-of-group-params {
+    /// Page number (starting with 1). Each page has a fixed size of 50 items per page.
+    currentpage: s32,
+    /// The ID of the group.
+    group-id: string
+  }
+  group-v2-get-admins-and-founder-of-group: func(params: group-v2-get-admins-and-founder-of-group-params) -> result<string, string>;
+
+  record group-v2-get-banned-members-of-group-params {
+    /// Page number (starting with 1). Each page has a fixed size of 50 entries.
+    currentpage: s32,
+    /// Group ID whose banned members you are fetching
+    group-id: string
+  }
+  group-v2-get-banned-members-of-group: func(params: group-v2-get-banned-members-of-group-params) -> result<string, string>;
+
+  record group-v2-edit-group-params {
+    /// Group ID of the group to edit.
+    group-id: string
+  }
+  group-v2-edit-group: func(params: group-v2-edit-group-params) -> result<string, string>;
+
+  record group-v2-edit-clan-banner-params {
+    /// Group ID of the group to edit.
+    group-id: string
+  }
+  group-v2-edit-clan-banner: func(params: group-v2-edit-clan-banner-params) -> result<string, string>;
+
+  record group-v2-edit-founder-options-params {
+    /// Group ID of the group to edit.
+    group-id: string
+  }
+  group-v2-edit-founder-options: func(params: group-v2-edit-founder-options-params) -> result<string, string>;
+
+  record group-v2-get-members-of-group-params {
+    /// Page number (starting with 1). Each page has a fixed size of 50 items per page.
+    currentpage: s32,
+    /// The ID of the group.
+    group-id: string,
+    /// Filter out other member types. Use None for all members.
+    member-type: option<s32>,
+    /// The name fragment upon which a search should be executed for members with matching display or unique names.
+    name-search: option<string>
+  }
+  group-v2-get-members-of-group: func(params: group-v2-get-members-of-group-params) -> result<string, string>;
+
+  record group-v2-approve-pending-params {
+    /// ID of the group.
+    group-id: string,
+    /// The membership id being approved.
+    membership-id: string,
+    /// Membership type of the supplied membership ID.
+    membership-type: string
+  }
+  group-v2-approve-pending: func(params: group-v2-approve-pending-params) -> result<string, string>;
+
+  record group-v2-approve-all-pending-params {
+    /// ID of the group.
+    group-id: string
+  }
+  group-v2-approve-all-pending: func(params: group-v2-approve-all-pending-params) -> result<string, string>;
+
+  record group-v2-approve-pending-for-list-params {
+    /// ID of the group.
+    group-id: string
+  }
+  group-v2-approve-pending-for-list: func(params: group-v2-approve-pending-for-list-params) -> result<string, string>;
+
+  record group-v2-deny-all-pending-params {
+    /// ID of the group.
+    group-id: string
+  }
+  group-v2-deny-all-pending: func(params: group-v2-deny-all-pending-params) -> result<string, string>;
+
+  record group-v2-deny-pending-for-list-params {
+    /// ID of the group.
+    group-id: string
+  }
+  group-v2-deny-pending-for-list: func(params: group-v2-deny-pending-for-list-params) -> result<string, string>;
+
+  record group-v2-individual-group-invite-params {
+    /// ID of the group you would like to join.
+    group-id: string,
+    /// Membership id of the account being invited.
+    membership-id: string,
+    /// MembershipType of the account being invited.
+    membership-type: string
+  }
+  group-v2-individual-group-invite: func(params: group-v2-individual-group-invite-params) -> result<string, string>;
+
+  record group-v2-individual-group-invite-cancel-params {
+    /// ID of the group you would like to join.
+    group-id: string,
+    /// Membership id of the account being cancelled.
+    membership-id: string,
+    /// MembershipType of the account being cancelled.
+    membership-type: string
+  }
+  group-v2-individual-group-invite-cancel: func(params: group-v2-individual-group-invite-cancel-params) -> result<string, string>;
+
+  record group-v2-get-invited-individuals-params {
+    /// Page number (starting with 1). Each page has a fixed size of 50 items per page.
+    currentpage: s32,
+    /// ID of the group.
+    group-id: string
+  }
+  group-v2-get-invited-individuals: func(params: group-v2-get-invited-individuals-params) -> result<string, string>;
+
+  record group-v2-get-pending-memberships-params {
+    /// Page number (starting with 1). Each page has a fixed size of 50 items per page.
+    currentpage: s32,
+    /// ID of the group.
+    group-id: string
+  }
+  group-v2-get-pending-memberships: func(params: group-v2-get-pending-memberships-params) -> result<string, string>;
+
+  record group-v2-ban-member-params {
+    /// Group ID that has the member to ban.
+    group-id: string,
+    /// Membership ID of the member to ban from the group.
+    membership-id: string,
+    /// Membership type of the provided membership ID.
+    membership-type: string
+  }
+  group-v2-ban-member: func(params: group-v2-ban-member-params) -> result<string, string>;
+
+  record group-v2-kick-member-params {
+    /// Group ID to kick the user from.
+    group-id: string,
+    /// Membership ID to kick.
+    membership-id: string,
+    /// Membership type of the provided membership ID.
+    membership-type: string
+  }
+  group-v2-kick-member: func(params: group-v2-kick-member-params) -> result<string, string>;
+
+  record group-v2-edit-group-membership-params {
+    /// ID of the group to which the member belongs.
+    group-id: string,
+    /// Membership ID to modify.
+    membership-id: string,
+    /// Membership type of the provide membership ID.
+    membership-type: string,
+    /// New membertype for the specified member.
+    member-type: string
+  }
+  group-v2-edit-group-membership: func(params: group-v2-edit-group-membership-params) -> result<string, string>;
+
+  record group-v2-unban-member-params {
+    group-id: string,
+    /// Membership ID of the member to unban from the group
+    membership-id: string,
+    /// Membership type of the provided membership ID.
+    membership-type: string
+  }
+  group-v2-unban-member: func(params: group-v2-unban-member-params) -> result<string, string>;
+
+  record group-v2-get-group-optional-conversations-params {
+    /// Requested group's id.
+    group-id: string
+  }
+  group-v2-get-group-optional-conversations: func(params: group-v2-get-group-optional-conversations-params) -> result<string, string>;
+
+  record group-v2-add-optional-conversation-params {
+    /// Group ID of the group to edit.
+    group-id: string
+  }
+  group-v2-add-optional-conversation: func(params: group-v2-add-optional-conversation-params) -> result<string, string>;
+
+  record group-v2-edit-optional-conversation-params {
+    /// Conversation Id of the channel being edited.
+    conversation-id: string,
+    /// Group ID of the group to edit.
+    group-id: string
+  }
+  group-v2-edit-optional-conversation: func(params: group-v2-edit-optional-conversation-params) -> result<string, string>;
+
+}
+
+interface social {
+  social-get-friend-list: func() -> result<string, string>;
+
+  record social-issue-friend-request-params {
+    /// The membership id of the user you wish to add.
+    membership-id: string
+  }
+  social-issue-friend-request: func(params: social-issue-friend-request-params) -> result<string, string>;
+
+  record social-remove-friend-params {
+    /// The membership id of the user you wish to remove.
+    membership-id: string
+  }
+  social-remove-friend: func(params: social-remove-friend-params) -> result<string, string>;
+
+  social-get-friend-request-list: func() -> result<string, string>;
+
+  record social-accept-friend-request-params {
+    /// The membership id of the user you wish to accept.
+    membership-id: string
+  }
+  social-accept-friend-request: func(params: social-accept-friend-request-params) -> result<string, string>;
+
+  record social-decline-friend-request-params {
+    /// The membership id of the user you wish to decline.
+    membership-id: string
+  }
+  social-decline-friend-request: func(params: social-decline-friend-request-params) -> result<string, string>;
+
+  record social-remove-friend-request-params {
+    /// The membership id of the user you wish to remove.
+    membership-id: string
+  }
+  social-remove-friend-request: func(params: social-remove-friend-request-params) -> result<string, string>;
+
+  record social-get-platform-friend-list-params {
+    /// The platform friend type.
+    friend-platform: string,
+    /// The zero based page to return. Page size is 100.
+    page: string
+  }
+  social-get-platform-friend-list: func(params: social-get-platform-friend-list-params) -> result<string, string>;
+
+}
+
+interface tokens {
+  record tokens-apply-missing-partner-offers-without-claim-params {
+    /// The partner application identifier.
+    partner-application-id: string,
+    /// The bungie.net user to apply missing offers to. If not self, elevated permissions are required.
+    target-bnet-membership-id: string
+  }
+  tokens-apply-missing-partner-offers-without-claim: func(params: tokens-apply-missing-partner-offers-without-claim-params) -> result<string, string>;
+
+  tokens-claim-partner-offer: func() -> result<string, string>;
+
+  tokens-force-drops-repair: func() -> result<string, string>;
+
+  record tokens-get-partner-offer-sku-history-params {
+    /// The partner application identifier.
+    partner-application-id: string,
+    /// The bungie.net user to apply missing offers to. If not self, elevated permissions are required.
+    target-bnet-membership-id: string
+  }
+  tokens-get-partner-offer-sku-history: func(params: tokens-get-partner-offer-sku-history-params) -> result<string, string>;
+
+  record tokens-get-partner-reward-history-params {
+    /// The partner application identifier.
+    partner-application-id: string,
+    /// The bungie.net user to return reward history for.
+    target-bnet-membership-id: string
+  }
+  tokens-get-partner-reward-history: func(params: tokens-get-partner-reward-history-params) -> result<string, string>;
+
+  tokens-get-bungie-rewards-list: func() -> result<string, string>;
+
+  record tokens-get-bungie-rewards-for-platform-user-params {
+    /// users platform membershipId for requested user rewards. If not self, elevated permissions are required.
+    membership-id: string,
+    /// The target Destiny 2 membership type.
+    membership-type: string
+  }
+  tokens-get-bungie-rewards-for-platform-user: func(params: tokens-get-bungie-rewards-for-platform-user-params) -> result<string, string>;
+
+  record tokens-get-bungie-rewards-for-user-params {
+    /// bungie.net user membershipId for requested user rewards. If not self, elevated permissions are required.
+    membership-id: string
+  }
+  tokens-get-bungie-rewards-for-user: func(params: tokens-get-bungie-rewards-for-user-params) -> result<string, string>;
+
+}
+
+interface trending {
+  trending-get-trending-categories: func() -> result<string, string>;
+
+  record trending-get-trending-category-params {
+    /// The ID of the category for whom you want additional results.
+    category-id: string,
+    /// The page # of results to return.
+    page-number: string
+  }
+  trending-get-trending-category: func(params: trending-get-trending-category-params) -> result<string, string>;
+
+  record trending-get-trending-entry-detail-params {
+    /// The identifier for the entity to be returned.
+    identifier: string,
+    /// The type of entity to be returned.
+    trending-entry-type: string
+  }
+  trending-get-trending-entry-detail: func(params: trending-get-trending-entry-detail-params) -> result<string, string>;
+
+}
+
+interface user {
+  user-get-available-themes: func() -> result<string, string>;
+
+  record user-get-bungie-net-user-by-id-params {
+    /// The requested Bungie.net membership id.
+    id: string
+  }
+  user-get-bungie-net-user-by-id: func(params: user-get-bungie-net-user-by-id-params) -> result<string, string>;
+
+  record user-get-credential-types-for-target-account-params {
+    /// The user's membership id
+    membership-id: string
+  }
+  user-get-credential-types-for-target-account: func(params: user-get-credential-types-for-target-account-params) -> result<string, string>;
+
+  record user-get-membership-from-hard-linked-credential-params {
+    /// The credential to look up. Must be a valid SteamID64.
+    credential: string,
+    /// The credential type. 'SteamId' is the only valid value at present.
+    cr-type: string
+  }
+  user-get-membership-from-hard-linked-credential: func(params: user-get-membership-from-hard-linked-credential-params) -> result<string, string>;
+
+  record user-get-membership-data-by-id-params {
+    /// The membership ID of the target user.
+    membership-id: string,
+    /// Type of the supplied membership ID.
+    membership-type: string
+  }
+  user-get-membership-data-by-id: func(params: user-get-membership-data-by-id-params) -> result<string, string>;
+
+  user-get-membership-data-for-current-user: func() -> result<string, string>;
+
+  record user-get-sanitized-platform-display-names-params {
+    /// The requested membership id to load.
+    membership-id: string
+  }
+  user-get-sanitized-platform-display-names: func(params: user-get-sanitized-platform-display-names-params) -> result<string, string>;
+
+  record user-search-by-global-name-post-params {
+    /// The zero-based page of results you desire.
+    page: string
+  }
+  user-search-by-global-name-post: func(params: user-search-by-global-name-post-params) -> result<string, string>;
+
+  record user-search-by-global-name-prefix-params {
+    /// The display name prefix you're looking for.
+    display-name-prefix: string,
+    /// The zero-based page of results you desire.
+    page: string
+  }
+  user-search-by-global-name-prefix: func(params: user-search-by-global-name-prefix-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export app;
+  export community-content;
+  export content;
+  export destiny2;
+  export fireteam;
+  export forum;
+  export x;
+  export group-v2;
+  export social;
+  export tokens;
+  export trending;
+  export user;
+}

@@ -1,0 +1,375 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `jwtAuth` | `Authorization: Bearer <secret>` |
+package autostamp:nordigen@0.2.0;
+
+interface premium {
+  record retrieve-account-transactions-v2-params {
+    /// ISO 3166 two-character country code
+    country: option<string>,
+    date-from: option<string>,
+    date-to: option<string>,
+    id: string
+  }
+  retrieve-account-transactions-v2: func(params: retrieve-account-transactions-v2-params) -> result<string, string>;
+
+}
+
+
+interface accounts {
+  record retrieve-account-metadata-params {
+    id: string
+  }
+  retrieve-account-metadata: func(params: retrieve-account-metadata-params) -> result<string, string>;
+
+  record retrieve-account-balances-v2-params {
+    id: string
+  }
+  retrieve-account-balances-v2: func(params: retrieve-account-balances-v2-params) -> result<string, string>;
+
+  record retrieve-account-details-v2-params {
+    id: string
+  }
+  retrieve-account-details-v2: func(params: retrieve-account-details-v2-params) -> result<string, string>;
+
+  record retrieve-account-transactions-v2-v2-params {
+    date-from: option<string>,
+    date-to: option<string>,
+    id: string
+  }
+  retrieve-account-transactions-v2-v2: func(params: retrieve-account-transactions-v2-v2-params) -> result<string, string>;
+
+}
+
+interface agreements {
+  record retrieve-all-eu-as-for-an-end-user-v2-params {
+    /// Number of results to return per page.
+    limit: option<s32>,
+    /// The initial index from which to return the results.
+    offset: option<s32>
+  }
+  retrieve-all-eu-as-for-an-end-user-v2: func(params: retrieve-all-eu-as-for-an-end-user-v2-params) -> result<string, string>;
+
+  record create-eua-v2-params {
+    /// Array containing one or several values of ['balances', 'details', 'transactions']
+    access-scope: option<list<list<string>>>,
+    /// Number of days from acceptance that the access can be used.
+    access-valid-for-days: option<s32>,
+    /// an Institution ID for this EUA
+    institution-id: string,
+    /// Maximum number of days of transaction data to retrieve.
+    max-historical-days: option<s32>
+  }
+  create-eua-v2: func(params: create-eua-v2-params) -> result<string, string>;
+
+  record retrieve-eua-by-id-v2-params {
+    /// A UUID string identifying this end user agreement.
+    id: string
+  }
+  retrieve-eua-by-id-v2: func(params: retrieve-eua-by-id-v2-params) -> result<string, string>;
+
+  record delete-eua-by-id-v2-params {
+    /// A UUID string identifying this end user agreement.
+    id: string
+  }
+  delete-eua-by-id-v2: func(params: delete-eua-by-id-v2-params) -> result<string, string>;
+
+  record accept-eua-params {
+    /// A UUID string identifying this end user agreement.
+    id: string,
+    ip-address: string,
+    user-agent: string
+  }
+  accept-eua: func(params: accept-eua-params) -> result<string, string>;
+
+}
+
+interface institutions {
+  record retrieve-all-supported-institutions-in-a-given-country-params {
+    /// ISO 3166 two-character country code
+    country: option<string>,
+    /// Boolean value, indicating if payments are enabled
+    payments-enabled: option<string>
+  }
+  retrieve-all-supported-institutions-in-a-given-country: func(params: retrieve-all-supported-institutions-in-a-given-country-params) -> result<string, string>;
+
+  record retrieve-institution-params {
+    id: string
+  }
+  retrieve-institution: func(params: retrieve-institution-params) -> result<string, string>;
+
+}
+
+interface payments {
+  /// Periodic Payment Serializer.
+  record periodic-payment-request {
+    day-of-execution: option<string>,
+    end-date: option<string>,
+    /// Behavior when periodic payment dates fall on holiday.
+    /// 
+    execution-rule: option<string>,
+    frequency: option<string>,
+    start-date: string
+  }
+
+  /// * `AT` - Austria
+  /// * `BE` - Belgium
+  /// * `BG` - Bulgaria
+  /// * `HR` - Croatia
+  /// * `CY` - Cyprus
+  /// * `CZ` - Czechia
+  /// * `DK` - Denmark
+  /// * `EE` - Estonia
+  /// * `FI` - Finland
+  /// * `FR` - France
+  /// * `DE` - Germany
+  /// * `GR` - Greece
+  /// * `HU` - Hungary
+  /// * `IS` - Iceland
+  /// * `IE` - Ireland
+  /// * `IT` - Italy
+  /// * `LV` - Latvia
+  /// * `LI` - Liechtenstein
+  /// * `LT` - Lithuania
+  /// * `LU` - Luxembourg
+  /// * `MT` - Malta
+  /// * `NL` - Netherlands
+  /// * `NO` - Norway
+  /// * `PL` - Poland
+  /// * `PT` - Portugal
+  /// * `RO` - Romania
+  /// * `SK` - Slovakia
+  /// * `SI` - Slovenia
+  /// * `ES` - Spain
+  /// * `SE` - Sweden
+  /// * `GB` - United Kingdom
+  /// * `US` - United States of America
+  record address-country-enum {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Debtor account write serializer.
+  record debtor-account-write-request {
+    /// Debtor account type identifier
+    account: option<string>,
+    /// Debtor account address country
+    address-country: option<string>,
+    /// Debtor account address street
+    address-street: option<string>,
+    /// Debtor account currency
+    currency: option<string>,
+    /// Debtor account name
+    name: string,
+    /// Debtor account post code
+    post-code: option<string>,
+    /// Debtor account type
+    /// 
+    type-op: option<string>,
+    /// Debtor account type identifier
+    type-number: option<string>
+  }
+
+  record list-payments-params {
+    /// Number of results to return per page.
+    limit: option<s32>,
+    /// The initial index from which to return the results.
+    offset: option<s32>
+  }
+  list-payments: func(params: list-payments-params) -> result<string, string>;
+
+  record create-payment-params {
+    /// Registered creditor account
+    creditor-account: option<string>,
+    /// Creditor account
+    creditor-object: option<string>,
+    /// Payment Custom Payment ID
+    custom-payment-id: option<string>,
+    /// Debtor account
+    debtor-account: option<string>,
+    /// Payment description
+    description: option<string>,
+    /// Institution ID for Payment
+    institution-id: option<string>,
+    /// Instructed amount
+    instructed-amount: string,
+    /// Payment product
+    /// 
+    payment-product: option<string>,
+    periodic-payment: option<periodic-payment-request>,
+    /// Redirect URL to your application after payment is done
+    redirect: string,
+    /// Payment Execution date (for periodic payments)
+    requested-execution-date: option<string>,
+    /// Indicates whether payment should be submitted separately
+    submit-payment: option<bool>
+  }
+  create-payment: func(params: create-payment-params) -> result<string, string>;
+
+  retrieve-all-payment-creditor-accounts: func() -> result<string, string>;
+
+  record payments-creditors-list-params {
+    account: option<string>,
+    address-country: option<string>,
+    agent: option<string>,
+    currency: option<string>,
+    /// Number of results to return per page.
+    limit: option<s32>,
+    name: option<string>,
+    /// The initial index from which to return the results.
+    offset: option<s32>,
+    type-op: option<string>
+  }
+  payments-creditors-list: func(params: payments-creditors-list-params) -> result<string, string>;
+
+  record payments-creditors-create-params {
+    /// Creditor account type identifier
+    account: string,
+    address-country: option<address-country-enum>,
+    /// Creditor account address street
+    address-street: option<string>,
+    /// Creditor account BICFI Identifier
+    agent: option<string>,
+    /// Creditor account agent name
+    agent-name: option<string>,
+    /// Creditor account currency
+    currency: string,
+    /// an Institution ID for this CreditorAccount
+    institution-id: option<string>,
+    /// Creditor account name
+    name: string,
+    /// Creditor account address post code
+    post-code: option<string>,
+    /// Creditor account type
+    /// 
+    type-op: option<string>
+  }
+  payments-creditors-create: func(params: payments-creditors-create-params) -> result<string, string>;
+
+  record payments-creditors-retrieve-params {
+    id: string
+  }
+  payments-creditors-retrieve: func(params: payments-creditors-retrieve-params) -> result<string, string>;
+
+  record payments-creditors-destroy-params {
+    id: string
+  }
+  payments-creditors-destroy: func(params: payments-creditors-destroy-params) -> result<string, string>;
+
+  record list-minimum-required-fields-for-institution-params {
+    institution-id: string
+  }
+  list-minimum-required-fields-for-institution: func(params: list-minimum-required-fields-for-institution-params) -> result<string, string>;
+
+  record retrieve-payment-params {
+    id: string
+  }
+  retrieve-payment: func(params: retrieve-payment-params) -> result<string, string>;
+
+  record delete-periodic-payment-params {
+    id: string
+  }
+  delete-periodic-payment: func(params: delete-periodic-payment-params) -> result<string, string>;
+
+  record payments-submit-create-params {
+    id: string,
+    /// Registered creditor account
+    creditor-account: option<string>,
+    /// Creditor account
+    creditor-object: option<string>,
+    /// Payment Custom Payment ID
+    custom-payment-id: option<string>,
+    debtor-account: debtor-account-write-request,
+    /// Payment description
+    description: option<string>,
+    /// Institution ID for Payment
+    institution-id: option<string>,
+    /// Instructed amount
+    instructed-amount: string,
+    /// Payment product
+    /// 
+    payment-product: option<string>,
+    /// Redirect URL to your application after payment is done
+    redirect: string
+  }
+  payments-submit-create: func(params: payments-submit-create-params) -> result<string, string>;
+
+}
+
+interface requisitions {
+  record retrieve-all-requisitions-params {
+    /// Number of results to return per page.
+    limit: option<s32>,
+    /// The initial index from which to return the results.
+    offset: option<s32>
+  }
+  retrieve-all-requisitions: func(params: retrieve-all-requisitions-params) -> result<string, string>;
+
+  record requisition-created-params {
+    /// option to enable account selection view for the end user
+    account-selection: option<bool>,
+    /// EUA associated with this requisition
+    agreement: option<string>,
+    /// an Institution ID for this Requisition
+    institution-id: string,
+    /// redirect URL to your application after end-user authorization with ASPSP
+    redirect: string,
+    /// enable redirect back to the client after account list received
+    redirect-immediate: option<bool>,
+    /// additional ID to identify the end user
+    reference: option<string>,
+    /// optional SSN field to verify ownership of the account
+    ssn: option<string>,
+    /// A two-letter country code (ISO 639-1)
+    user-language: option<string>
+  }
+  requisition-created: func(params: requisition-created-params) -> result<string, string>;
+
+  record requisition-by-id-params {
+    /// A UUID string identifying this requisition.
+    id: string
+  }
+  requisition-by-id: func(params: requisition-by-id-params) -> result<string, string>;
+
+  record delete-requisition-by-id-v2-params {
+    /// A UUID string identifying this requisition.
+    id: string
+  }
+  delete-requisition-by-id-v2: func(params: delete-requisition-by-id-v2-params) -> result<string, string>;
+
+}
+
+interface token {
+  record jwt-obtain-params {
+    /// Secret id from /user-secrets/
+    secret-id: string,
+    /// Secret key from /user-secrets/
+    secret-key: string
+  }
+  jwt-obtain: func(params: jwt-obtain-params) -> result<string, string>;
+
+  record jwt-refresh-params {
+    refresh: string
+  }
+  jwt-refresh: func(params: jwt-refresh-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export premium;
+  export accounts;
+  export agreements;
+  export institutions;
+  export payments;
+  export requisitions;
+  export token;
+}

@@ -1,0 +1,25 @@
+package autostamp:googleapis@0.2.0;
+
+interface violating-sites {
+  abusiveexperiencereport-violating-sites-list: func() -> result<string, string>;
+
+}
+
+
+interface sites {
+  record abusiveexperiencereport-sites-get-params {
+    /// Required. The name of the site whose summary to get, e.g. `sites/http%3A%2F%2Fwww.google.com%2F`. Format: `sites/{site}`
+    name: string
+  }
+  abusiveexperiencereport-sites-get: func(params: abusiveexperiencereport-sites-get-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export violating-sites;
+  export sites;
+}

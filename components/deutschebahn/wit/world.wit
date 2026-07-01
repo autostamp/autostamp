@@ -1,0 +1,47 @@
+package autostamp:deutschebahn@0.2.0;
+
+interface reisezentren {
+  /// Get all station infos
+  record get-reisezentren-params {
+    /// A station name or part of it
+    name: option<string>
+  }
+  get-reisezentren: func(params: get-reisezentren-params) -> result<string, string>;
+
+  /// Get information about a station near a location
+  record get-reisezentren-loc-lat-lon-params {
+    /// Latitude
+    lat: string,
+    /// Longitude
+    lon: string
+  }
+  get-reisezentren-loc-lat-lon: func(params: get-reisezentren-loc-lat-lon-params) -> result<string, string>;
+
+  /// Get stations in a given radius
+  record get-reisezentren-loc-lat-lon-dist-params {
+    /// Latitude
+    lat: string,
+    /// Longitude
+    lon: string,
+    /// Radius
+    dist: string
+  }
+  get-reisezentren-loc-lat-lon-dist: func(params: get-reisezentren-loc-lat-lon-dist-params) -> result<string, string>;
+
+  /// Get information about a specific station
+  record get-reisezentren-id-params {
+    /// Station id
+    id: string
+  }
+  get-reisezentren-id: func(params: get-reisezentren-id-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export reisezentren;
+}

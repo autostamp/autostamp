@@ -1,0 +1,280 @@
+package autostamp:postmarkapp@0.2.0;
+
+interface domains-api {
+  /// List Domains
+  record list-domains-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// Number of records to return per request. Max 500.
+    count: s32,
+    /// Number of records to skip
+    offset: s32
+  }
+  list-domains: func(params: list-domains-params) -> result<string, string>;
+
+  /// Create a Domain
+  record create-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    name: option<string>,
+    return-path-domain: option<string>
+  }
+  create-domain: func(params: create-domain-params) -> result<string, string>;
+
+  /// Get a Domain
+  record get-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Domain that should be retrieved.
+    domainid: string
+  }
+  get-domain: func(params: get-domain-params) -> result<string, string>;
+
+  /// Update a Domain
+  record edit-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Domain that should be modified by the request.
+    domainid: string,
+    return-path-domain: option<string>
+  }
+  edit-domain: func(params: edit-domain-params) -> result<string, string>;
+
+  /// Delete a Domain
+  record delete-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Domain that should be deleted by the request.
+    domainid: string
+  }
+  delete-domain: func(params: delete-domain-params) -> result<string, string>;
+
+  /// Rotate DKIM Key
+  record rotate-dkim-key-for-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Sender Signature for which a new DKIM Key should be generated.
+    domainid: string
+  }
+  rotate-dkim-key-for-domain: func(params: rotate-dkim-key-for-domain-params) -> result<string, string>;
+
+  /// Request DNS Verification for DKIM
+  record request-dkim-verification-for-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Domain for which DKIM DNS records should be verified.
+    domainid: string
+  }
+  request-dkim-verification-for-domain: func(params: request-dkim-verification-for-domain-params) -> result<string, string>;
+
+  /// Request DNS Verification for Return-Path
+  record request-return-path-verification-for-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Domain for which Return-Path DNS records should be verified.
+    domainid: string
+  }
+  request-return-path-verification-for-domain: func(params: request-return-path-verification-for-domain-params) -> result<string, string>;
+
+  /// Request DNS Verification for SPF
+  record request-spf-verification-for-domain-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Domain for which SPF DNS records should be verified.
+    domainid: string
+  }
+  request-spf-verification-for-domain: func(params: request-spf-verification-for-domain-params) -> result<string, string>;
+
+}
+
+
+interface sender-signatures-api {
+  /// List Sender Signatures
+  record list-sender-signatures-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// Number of records to return per request. Max 500.
+    count: s32,
+    /// Number of records to skip
+    offset: s32
+  }
+  list-sender-signatures: func(params: list-sender-signatures-params) -> result<string, string>;
+
+  /// Create a Sender Signature
+  record create-sender-signature-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    from-email: option<string>,
+    name: option<string>,
+    reply-to-email: option<string>,
+    return-path-domain: option<string>
+  }
+  create-sender-signature: func(params: create-sender-signature-params) -> result<string, string>;
+
+  /// Get a Sender Signature
+  record get-sender-signature-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Sender Signature that should be retrieved.
+    signatureid: string
+  }
+  get-sender-signature: func(params: get-sender-signature-params) -> result<string, string>;
+
+  /// Update a Sender Signature
+  record edit-sender-signature-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Sender Signature that should be modified by the request.
+    signatureid: string,
+    name: option<string>,
+    reply-to-email: option<string>,
+    return-path-domain: option<string>
+  }
+  edit-sender-signature: func(params: edit-sender-signature-params) -> result<string, string>;
+
+  /// Delete a Sender Signature
+  record delete-sender-signature-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Sender Signature that should be deleted by the request.
+    signatureid: string
+  }
+  delete-sender-signature: func(params: delete-sender-signature-params) -> result<string, string>;
+
+  /// Request a new DKIM Key
+  record request-new-dkim-key-for-sender-signature-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Sender Signature for which a new DKIM Key should be generated.
+    signatureid: string
+  }
+  request-new-dkim-key-for-sender-signature: func(params: request-new-dkim-key-for-sender-signature-params) -> result<string, string>;
+
+  /// Resend Signature Confirmation Email
+  record resend-sender-signature-confirmation-email-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Sender Signature that should have its confirmation email resent.
+    signatureid: string
+  }
+  resend-sender-signature-confirmation-email: func(params: resend-sender-signature-confirmation-email-params) -> result<string, string>;
+
+  /// Request DNS Verification for SPF
+  record request-spf-verification-for-sender-signature-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID for the Sender Signature for which SPF DNS records should be verified.
+    signatureid: string
+  }
+  request-spf-verification-for-sender-signature: func(params: request-spf-verification-for-sender-signature-params) -> result<string, string>;
+
+}
+
+interface server-management-api {
+  enum create-server-payload-track-links-enum {
+    none,
+    html-and-text-tracking,
+    html-only-tracking,
+    text-only-tracking,
+  }
+
+  /// List servers
+  record list-servers-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// Number of servers to return per request.
+    count: s32,
+    /// Number of servers to skip.
+    offset: s32,
+    /// Filter by a specific server name
+    name: option<string>
+  }
+  list-servers: func(params: list-servers-params) -> result<string, string>;
+
+  /// Create a Server
+  record create-server-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    bounce-hook-url: option<string>,
+    click-hook-url: option<string>,
+    color: option<string>,
+    delivery-hook-url: option<string>,
+    inbound-domain: option<string>,
+    inbound-hook-url: option<string>,
+    inbound-spam-threshold: option<s32>,
+    name: option<string>,
+    open-hook-url: option<string>,
+    post-first-open-only: option<bool>,
+    raw-email-enabled: option<bool>,
+    smtp-api-activated: option<bool>,
+    track-links: option<create-server-payload-track-links-enum>,
+    track-opens: option<bool>
+  }
+  create-server: func(params: create-server-params) -> result<string, string>;
+
+  /// Get a Server
+  record get-server-information-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID of the Server to get.
+    serverid: string
+  }
+  get-server-information: func(params: get-server-information-params) -> result<string, string>;
+
+  /// Edit a Server
+  record edit-server-information-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID of the Server to update.
+    serverid: string,
+    bounce-hook-url: option<string>,
+    click-hook-url: option<string>,
+    color: option<string>,
+    delivery-hook-url: option<string>,
+    inbound-domain: option<string>,
+    inbound-hook-url: option<string>,
+    inbound-spam-threshold: option<s32>,
+    name: option<string>,
+    open-hook-url: option<string>,
+    post-first-open-only: option<bool>,
+    raw-email-enabled: option<bool>,
+    smtp-api-activated: option<bool>,
+    track-links: option<create-server-payload-track-links-enum>,
+    track-opens: option<bool>
+  }
+  edit-server-information: func(params: edit-server-information-params) -> result<string, string>;
+
+  /// Delete a Server
+  record delete-server-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    /// The ID of the Server that should be deleted.
+    serverid: string
+  }
+  delete-server: func(params: delete-server-params) -> result<string, string>;
+
+}
+
+interface templates-api {
+  /// Push templates from one server to another
+  record push-templates-params {
+    /// The token associated with the Account on which this request will operate.
+    x-postmark-account-token: string,
+    destination-server-id: option<s32>,
+    perform-changes: option<bool>,
+    source-server-id: option<s32>
+  }
+  push-templates: func(params: push-templates-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export domains-api;
+  export sender-signatures-api;
+  export server-management-api;
+  export templates-api;
+}

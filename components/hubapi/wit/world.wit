@@ -1,0 +1,45 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `private_apps_legacy` | header `private-app-legacy` |
+package autostamp:hubapi@0.2.0;
+
+interface custom-event-data {
+  /// Map of properties for the event in the format property internal name - property value
+  record behavioral-event-http-completion-request-properties {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Send custom event completion
+  record post-events-v3-send-send-params {
+    /// Email of visitor
+    email: option<string>,
+    /// Internal name of the event-type to trigger
+    event-name: string,
+    /// The object id that this event occurred on. Could be a contact id or a visitor id.
+    object-id: option<string>,
+    /// The time when this event occurred (if any). If this isn't set, the current time will be used
+    occurred-at: option<string>,
+    /// Map of properties for the event in the format property internal name - property value
+    properties: option<behavioral-event-http-completion-request-properties>,
+    /// User token
+    utk: option<string>,
+    uuid: option<string>
+  }
+  post-events-v3-send-send: func(params: post-events-v3-send-send-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export custom-event-data;
+}

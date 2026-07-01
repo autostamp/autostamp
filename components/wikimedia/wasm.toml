@@ -1,0 +1,23 @@
+[package]
+name = "autostamp:wikimedia"
+version = "0.2.0+wikimedia-1.0.0"
+registry = "ghcr.io/autostamp/wikimedia"
+kind = "component"
+file = "build/wikimedia.wasm"
+description = "WebAssembly component bindings for the wikimedia API, generated from an OpenAPI document."
+source = "https://github.com/yoshuawuyts/openapi-bindgen"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies.components]
+
+[dependencies.interfaces."wasmcloud:secrets"]
+registry = "ghcr.io"
+namespace = "wasmcloud"
+package = "interfaces/wasmcloud/secrets"
+version = "1.0.0"
+
+[dependencies.interfaces."wasi:http"]
+registry = "ghcr.io"
+namespace = "webassembly"
+package = "wasi/http"
+version = "0.2.3"

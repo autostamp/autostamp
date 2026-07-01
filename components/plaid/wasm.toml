@@ -1,0 +1,23 @@
+[package]
+name = "autostamp:plaid"
+version = "0.2.0+plaid-2020-09-14-1.345.1"
+registry = "ghcr.io/autostamp/plaid"
+kind = "component"
+file = "build/plaid.wasm"
+description = "WebAssembly component bindings for the plaid API, generated from an OpenAPI document."
+source = "https://github.com/yoshuawuyts/openapi-bindgen"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies.components]
+
+[dependencies.interfaces."wasmcloud:secrets"]
+registry = "ghcr.io"
+namespace = "wasmcloud"
+package = "interfaces/wasmcloud/secrets"
+version = "1.0.0"
+
+[dependencies.interfaces."wasi:http"]
+registry = "ghcr.io"
+namespace = "webassembly"
+package = "wasi/http"
+version = "0.2.3"

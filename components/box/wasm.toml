@@ -1,0 +1,23 @@
+[package]
+name = "autostamp:box-api"
+version = "0.2.0+box-api-2.0.0"
+registry = "ghcr.io/autostamp/box-api"
+kind = "component"
+file = "build/box-api.wasm"
+description = "WebAssembly component bindings for the box-api API, generated from an OpenAPI document."
+source = "https://github.com/yoshuawuyts/openapi-bindgen"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies.components]
+
+[dependencies.interfaces."wasi:http"]
+registry = "ghcr.io"
+namespace = "webassembly"
+package = "wasi/http"
+version = "0.2.3"
+
+[dependencies.interfaces."wasmcloud:secrets"]
+registry = "ghcr.io"
+namespace = "wasmcloud"
+package = "interfaces/wasmcloud/secrets"
+version = "1.0.0"

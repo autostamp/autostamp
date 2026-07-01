@@ -1,0 +1,293 @@
+package autostamp:instagram@0.2.0;
+
+interface geographies {
+  /// Get recent media from a custom geo-id.
+  record get-geographies-geo-id-media-recent-params {
+    /// The geography ID.
+    geo-id: string,
+    /// Max number of media to return.
+    count: option<s32>,
+    /// Return media before this `min_id`.
+    min-id: option<string>
+  }
+  get-geographies-geo-id-media-recent: func(params: get-geographies-geo-id-media-recent-params) -> result<string, string>;
+
+}
+
+
+interface locations {
+  /// Search for a location by geographic coordinate.
+  record get-locations-search-params {
+    /// Default is 1000m (distance=1000), max distance is 5000.
+    distance: option<s32>,
+    /// Returns a location mapped off of a Facebook places id. If used, a Foursquare id and `lat`, `lng` are not required.
+    facebook-places-id: option<string>,
+    /// Returns a location mapped off of a foursquare v1 api location id. If used, you are not required to use
+    /// `lat` and `lng`. Note that this method is deprecated; you should use the new foursquare IDs with V2 of their API.
+    foursquare-id: option<string>,
+    /// Latitude of the center search coordinate. If used, `lng` is required.
+    lat: option<f64>,
+    /// Longitude of the center search coordinate. If used, `lat` is required.
+    lng: option<f64>,
+    /// Returns a location mapped off of a foursquare v2 api location id. If used, you are not required to use
+    /// `lat` and `lng`.
+    foursquare-v2-id: option<string>
+  }
+  get-locations-search: func(params: get-locations-search-params) -> result<string, string>;
+
+  /// Get information about a location.
+  record get-locations-location-id-params {
+    /// The location ID.
+    location-id: string
+  }
+  get-locations-location-id: func(params: get-locations-location-id-params) -> result<string, string>;
+
+  /// Get a list of recent media objects from a given location.
+  record get-locations-location-id-media-recent-params {
+    /// The location ID.
+    location-id: string,
+    /// Return media after this UNIX timestamp.
+    min-timestamp: option<s64>,
+    /// Return media before this UNIX timestamp.
+    max-timestamp: option<s64>,
+    /// Return media before this `min_id`.
+    min-id: option<string>,
+    /// Return media after this `max_id`.
+    max-id: option<string>
+  }
+  get-locations-location-id-media-recent: func(params: get-locations-location-id-media-recent-params) -> result<string, string>;
+
+}
+
+interface media {
+  /// Get a list of currently popular media.
+  get-media-popular: func() -> result<string, string>;
+
+  /// Search for media in a given area.
+  record get-media-search-params {
+    /// Latitude of the center search coordinate. If used, `lng` is required.
+    lat: f64,
+    /// Longitude of the center search coordinate. If used, `lat` is required.
+    lng: f64,
+    /// A unix timestamp. All media returned will be taken later than this timestamp.
+    min-timestamp: option<s64>,
+    /// A unix timestamp. All media returned will be taken earlier than this timestamp.
+    max-timestamp: option<s64>,
+    /// Default is 1km (distance=1000), max distance is 5km.
+    distance: option<s32>
+  }
+  get-media-search: func(params: get-media-search-params) -> result<string, string>;
+
+  /// Get information about a media object.
+  record get-media-shortcode-shortcode-params {
+    /// The short code of the media resource.
+    shortcode: string
+  }
+  get-media-shortcode-shortcode: func(params: get-media-shortcode-shortcode-params) -> result<string, string>;
+
+  /// Get information about a media object.
+  record get-media-media-id-params {
+    /// The ID of the media resource.
+    media-id: string
+  }
+  get-media-media-id: func(params: get-media-media-id-params) -> result<string, string>;
+
+}
+
+interface comments {
+  /// Get a list of recent comments on a media object.
+  record get-media-media-id-comments-params {
+    /// The ID of the media resource.
+    media-id: string
+  }
+  get-media-media-id-comments: func(params: get-media-media-id-comments-params) -> result<string, string>;
+
+  /// Create a comment on a media object.
+  record post-media-media-id-comments-params {
+    /// The ID of the media resource.
+    media-id: string,
+    /// Text to post as a comment on the media object as specified in `media-id`.
+    text: string
+  }
+  post-media-media-id-comments: func(params: post-media-media-id-comments-params) -> result<string, string>;
+
+  /// Remove a comment.
+  record delete-media-media-id-comments-comment-id-params {
+    /// The ID of the media resource.
+    media-id: string,
+    /// The ID of the comment entry.
+    comment-id: string
+  }
+  delete-media-media-id-comments-comment-id: func(params: delete-media-media-id-comments-comment-id-params) -> result<string, string>;
+
+}
+
+interface likes {
+  /// Get a list of users who have liked this media.
+  record get-media-media-id-likes-params {
+    /// The ID of the media resource.
+    media-id: string
+  }
+  get-media-media-id-likes: func(params: get-media-media-id-likes-params) -> result<string, string>;
+
+  /// Set a like on this media by the current user.
+  record post-media-media-id-likes-params {
+    /// The ID of the media resource.
+    media-id: string
+  }
+  post-media-media-id-likes: func(params: post-media-media-id-likes-params) -> result<string, string>;
+
+  /// Remove a like on this media by the current user.
+  record delete-media-media-id-likes-params {
+    /// The ID of the media resource.
+    media-id: string
+  }
+  delete-media-media-id-likes: func(params: delete-media-media-id-likes-params) -> result<string, string>;
+
+}
+
+interface tags {
+  /// Search for tags by name.
+  record get-tags-search-params {
+    /// A valid tag name without a leading \#. (eg. snowy, nofilter)
+    q: string
+  }
+  get-tags-search: func(params: get-tags-search-params) -> result<string, string>;
+
+  /// Get information about a tag object.
+  record get-tags-tag-name-params {
+    /// The tag name.
+    tag-name: string
+  }
+  get-tags-tag-name: func(params: get-tags-tag-name-params) -> result<string, string>;
+
+  /// Get a list of recently tagged media.
+  record get-tags-tag-name-media-recent-params {
+    /// The tag name.
+    tag-name: string,
+    /// Count of tagged media to return.
+    count: option<s32>,
+    /// Return media before this `min_tag_id`.
+    min-tag-id: option<string>,
+    /// Return media after this `max_tag_id`.
+    max-tag-id: option<string>
+  }
+  get-tags-tag-name-media-recent: func(params: get-tags-tag-name-media-recent-params) -> result<string, string>;
+
+}
+
+interface users {
+  /// Search for a user by name.
+  record get-users-search-params {
+    /// A query string.
+    q: string,
+    /// Number of users to return.
+    count: option<s32>
+  }
+  get-users-search: func(params: get-users-search-params) -> result<string, string>;
+
+  /// See the authenticated user's feed.
+  record get-users-self-feed-params {
+    /// Count of media to return.
+    count: option<s32>,
+    /// Return media later than this `min_id`.
+    min-id: option<string>,
+    /// Return media earlier than this `max_id`.
+    max-id: option<string>
+  }
+  get-users-self-feed: func(params: get-users-self-feed-params) -> result<string, string>;
+
+  /// See the list of media liked by the authenticated user.
+  record get-users-self-media-liked-params {
+    /// Count of media to return.
+    count: option<s32>,
+    /// Return media liked before this id.
+    max-like-id: option<string>
+  }
+  get-users-self-media-liked: func(params: get-users-self-media-liked-params) -> result<string, string>;
+
+  /// Get basic information about a user.
+  record get-users-user-id-params {
+    /// The ID of a user to get information about, or **self** to retrieve information about authenticated user.
+    user-id: string
+  }
+  get-users-user-id: func(params: get-users-user-id-params) -> result<string, string>;
+
+  /// Get the most recent media published by a user.
+  record get-users-user-id-media-recent-params {
+    /// The ID of a user to get recent media of, or **self** to retrieve media of authenticated user.
+    user-id: string,
+    /// Count of media to return.
+    count: option<s32>,
+    /// Return media before this UNIX timestamp.
+    max-timestamp: option<s64>,
+    /// Return media after this UNIX timestamp.
+    min-timestamp: option<s64>,
+    /// Return media later than this `min_id`.
+    min-id: option<string>,
+    /// Return media earlier than this `max_id`.
+    max-id: option<string>
+  }
+  get-users-user-id-media-recent: func(params: get-users-user-id-media-recent-params) -> result<string, string>;
+
+}
+
+interface relationships {
+  enum post-users-user-id-relationship-action-enum {
+    follow,
+    unfollow,
+    block,
+    unblock,
+    approve,
+    ignore,
+  }
+
+  /// List the users who have requested this user's permission to follow.
+  get-users-self-requested-by: func() -> result<string, string>;
+
+  /// Get the list of users this user is followed by.
+  record get-users-user-id-followed-by-params {
+    /// The ID of a user, or **self** to retrieve information about authenticated user.
+    user-id: string
+  }
+  get-users-user-id-followed-by: func(params: get-users-user-id-followed-by-params) -> result<string, string>;
+
+  /// Get the list of users this user follows.
+  record get-users-user-id-follows-params {
+    /// The ID of a user, or **self** to retrieve information about authenticated user.
+    user-id: string
+  }
+  get-users-user-id-follows: func(params: get-users-user-id-follows-params) -> result<string, string>;
+
+  /// Get information about a relationship to another user.
+  record get-users-user-id-relationship-params {
+    /// The ID of a user to get information about.
+    user-id: string
+  }
+  get-users-user-id-relationship: func(params: get-users-user-id-relationship-params) -> result<string, string>;
+
+  /// Modify the relationship between the current user and the target user.
+  record post-users-user-id-relationship-params {
+    /// The ID of the target user.
+    user-id: string,
+    /// Type of action to apply for relationship with the user.
+    action: post-users-user-id-relationship-action-enum
+  }
+  post-users-user-id-relationship: func(params: post-users-user-id-relationship-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export geographies;
+  export locations;
+  export media;
+  export comments;
+  export likes;
+  export tags;
+  export users;
+  export relationships;
+}

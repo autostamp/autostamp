@@ -1,0 +1,55 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `api_key` | query `api_key` |
+package autostamp:giphy@0.2.0;
+
+interface gifs {
+  /// Get GIFs by ID
+  get-gifs-by-id: func() -> result<string, string>;
+
+  /// Random GIF
+  random-gif: func() -> result<string, string>;
+
+  /// Search GIFs
+  search-gifs: func() -> result<string, string>;
+
+  /// Translate phrase to GIF
+  translate-gif: func() -> result<string, string>;
+
+  /// Trending GIFs
+  trending-gifs: func() -> result<string, string>;
+
+  /// Get GIF by Id
+  get-gif-by-id: func() -> result<string, string>;
+
+}
+
+
+interface stickers {
+  /// Random Sticker
+  random-sticker: func() -> result<string, string>;
+
+  /// Search Stickers
+  search-stickers: func() -> result<string, string>;
+
+  /// Translate phrase to Sticker
+  translate-sticker: func() -> result<string, string>;
+
+  /// Trending Stickers
+  trending-stickers: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export gifs;
+  export stickers;
+}

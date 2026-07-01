@@ -1,0 +1,1092 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `BearerToken` | `Authorization: Bearer <secret>` |
+/// | `OAuth2UserToken` | `Authorization: Bearer <secret>` |
+package autostamp:twitter@0.2.0;
+
+interface compliance {
+  enum list-batch-compliance-jobs-type-op-enum {
+    tweets,
+    users,
+  }
+
+  enum list-batch-compliance-jobs-status-enum {
+    created,
+    in-progress,
+    failed,
+    complete,
+  }
+
+  /// User-provided name for a compliance job.
+  record compliance-job-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// List Compliance Jobs
+  record list-batch-compliance-jobs-params {
+    /// Type of Compliance Job to list.
+    type-op: list-batch-compliance-jobs-type-op-enum,
+    /// Status of Compliance Job to list.
+    status: option<list-batch-compliance-jobs-status-enum>
+  }
+  list-batch-compliance-jobs: func(params: list-batch-compliance-jobs-params) -> result<string, string>;
+
+  /// Create compliance job
+  record create-batch-compliance-job-params {
+    name: option<compliance-job-name>,
+    /// If true, this endpoint will return a pre-signed URL with resumable uploads enabled.
+    resumable: option<bool>,
+    /// Type of compliance job to list.
+    type-op: list-batch-compliance-jobs-type-op-enum
+  }
+  create-batch-compliance-job: func(params: create-batch-compliance-job-params) -> result<string, string>;
+
+  /// Get Compliance Job
+  record get-batch-compliance-job-params {
+    /// The ID of the Compliance Job to retrieve.
+    id: string
+  }
+  get-batch-compliance-job: func(params: get-batch-compliance-job-params) -> result<string, string>;
+
+  /// Tweets Compliance stream
+  record get-tweets-compliance-stream-params {
+    /// The number of minutes of backfill requested.
+    backfill-minutes: option<s32>,
+    /// The partition number.
+    partition: s32,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweet Compliance events will be provided.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweet Compliance events will be provided.
+    end-time: option<string>
+  }
+  get-tweets-compliance-stream: func(params: get-tweets-compliance-stream-params) -> result<string, string>;
+
+  /// Tweets Label stream
+  record get-tweets-label-stream-params {
+    /// The number of minutes of backfill requested.
+    backfill-minutes: option<s32>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweet labels will be provided.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp from which the Tweet labels will be provided.
+    end-time: option<string>
+  }
+  get-tweets-label-stream: func(params: get-tweets-label-stream-params) -> result<string, string>;
+
+  /// Users Compliance stream
+  record get-users-compliance-stream-params {
+    /// The number of minutes of backfill requested.
+    backfill-minutes: option<s32>,
+    /// The partition number.
+    partition: s32,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the User Compliance events will be provided.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp from which the User Compliance events will be provided.
+    end-time: option<string>
+  }
+  get-users-compliance-stream: func(params: get-users-compliance-stream-params) -> result<string, string>;
+
+}
+
+
+interface direct-messages {
+  enum create-dm-conversation-request-conversation-type-enum {
+    group,
+  }
+
+  enum get-dm-conversations-with-participant-id-dm-events-event-types-item-enum {
+    message-create,
+    participants-join,
+    participants-leave,
+  }
+
+  record create-message-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Participants for the DM Conversation.
+  record dm-participants {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A base32 pagination token.
+  record pagination-token32 {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Create a new DM Conversation
+  record dm-conversation-id-create-params {
+    /// The conversation type that is being created.
+    conversation-type: create-dm-conversation-request-conversation-type-enum,
+    message: create-message-request,
+    participant-ids: dm-participants
+  }
+  dm-conversation-id-create: func(params: dm-conversation-id-create-params) -> result<string, string>;
+
+  /// Get DM Events for a DM Conversation
+  record get-dm-conversations-with-participant-id-dm-events-params {
+    /// The ID of the participant user for the One to One DM conversation.
+    participant-id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token32>,
+    /// The set of event_types to include in the results.
+    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>
+  }
+  get-dm-conversations-with-participant-id-dm-events: func(params: get-dm-conversations-with-participant-id-dm-events-params) -> result<string, string>;
+
+  /// Send a new message to a user
+  record dm-conversation-with-user-event-id-create-params {
+    /// The ID of the recipient user that will receive the DM.
+    participant-id: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  dm-conversation-with-user-event-id-create: func(params: dm-conversation-with-user-event-id-create-params) -> result<string, string>;
+
+  /// Send a new message to a DM Conversation
+  record dm-conversation-by-id-event-id-create-params {
+    /// The DM Conversation ID.
+    dm-conversation-id: string,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  dm-conversation-by-id-event-id-create: func(params: dm-conversation-by-id-event-id-create-params) -> result<string, string>;
+
+  /// Get DM Events for a DM Conversation
+  record get-dm-conversations-id-dm-events-params {
+    /// The DM Conversation ID.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token32>,
+    /// The set of event_types to include in the results.
+    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>
+  }
+  get-dm-conversations-id-dm-events: func(params: get-dm-conversations-id-dm-events-params) -> result<string, string>;
+
+  /// Get recent DM Events
+  record get-dm-events-params {
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token32>,
+    /// The set of event_types to include in the results.
+    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>
+  }
+  get-dm-events: func(params: get-dm-events-params) -> result<string, string>;
+
+}
+
+interface lists {
+  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
+  record user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A 'long' pagination token.
+  record pagination-token-long {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The unique identifier of this List.
+  record list-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Create List
+  record list-id-create-params {
+    description: option<string>,
+    name: string,
+    private: option<bool>
+  }
+  list-id-create: func(params: list-id-create-params) -> result<string, string>;
+
+  /// List lookup by List ID.
+  record list-id-get-params {
+    /// The ID of the List.
+    id: string
+  }
+  list-id-get: func(params: list-id-get-params) -> result<string, string>;
+
+  /// Update List.
+  record list-id-update-params {
+    /// The ID of the List to modify.
+    id: string,
+    description: option<string>,
+    name: option<string>,
+    private: option<bool>
+  }
+  list-id-update: func(params: list-id-update-params) -> result<string, string>;
+
+  /// Delete List
+  record list-id-delete-params {
+    /// The ID of the List to delete.
+    id: string
+  }
+  list-id-delete: func(params: list-id-delete-params) -> result<string, string>;
+
+  /// Add a List member
+  record list-add-member-params {
+    /// The ID of the List for which to add a member.
+    id: string,
+    user-id: user-id
+  }
+  list-add-member: func(params: list-add-member-params) -> result<string, string>;
+
+  /// Remove a List member
+  record list-remove-member-params {
+    /// The ID of the List to remove a member.
+    id: string,
+    /// The ID of User that will be removed from the List.
+    user-id: string
+  }
+  list-remove-member: func(params: list-remove-member-params) -> result<string, string>;
+
+  /// Get User's Followed Lists
+  record user-followed-lists-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token-long>
+  }
+  user-followed-lists: func(params: user-followed-lists-params) -> result<string, string>;
+
+  /// Follow a List
+  record list-user-follow-params {
+    /// The ID of the authenticated source User that will follow the List.
+    id: string,
+    list-id: list-id
+  }
+  list-user-follow: func(params: list-user-follow-params) -> result<string, string>;
+
+  /// Unfollow a List
+  record list-user-unfollow-params {
+    /// The ID of the authenticated source User that will unfollow the List.
+    id: string,
+    /// The ID of the List to unfollow.
+    list-id: string
+  }
+  list-user-unfollow: func(params: list-user-unfollow-params) -> result<string, string>;
+
+  /// Get a User's List Memberships
+  record get-user-list-memberships-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token-long>
+  }
+  get-user-list-memberships: func(params: get-user-list-memberships-params) -> result<string, string>;
+
+  /// Get a User's Owned Lists.
+  record list-user-owned-lists-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token-long>
+  }
+  list-user-owned-lists: func(params: list-user-owned-lists-params) -> result<string, string>;
+
+  /// Get a User's Pinned Lists
+  record list-user-pinned-lists-params {
+    /// The ID of the authenticated source User for whom to return results.
+    id: string
+  }
+  list-user-pinned-lists: func(params: list-user-pinned-lists-params) -> result<string, string>;
+
+  /// Pin a List
+  record list-user-pin-params {
+    /// The ID of the authenticated source User that will pin the List.
+    id: string,
+    list-id: list-id
+  }
+  list-user-pin: func(params: list-user-pin-params) -> result<string, string>;
+
+  /// Unpin a List
+  record list-user-unpin-params {
+    /// The ID of the authenticated source User for whom to return results.
+    id: string,
+    /// The ID of the List to unpin.
+    list-id: string
+  }
+  list-user-unpin: func(params: list-user-unpin-params) -> result<string, string>;
+
+}
+
+interface users {
+  /// A 'long' pagination token.
+  record pagination-token-long {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A base36 pagination token.
+  record pagination-token36 {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
+  record user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A base32 pagination token.
+  record pagination-token32 {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Returns User objects that follow a List by the provided List ID
+  record list-get-followers-params {
+    /// The ID of the List.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token-long>
+  }
+  list-get-followers: func(params: list-get-followers-params) -> result<string, string>;
+
+  /// Returns User objects that are members of a List by the provided List ID.
+  record list-get-members-params {
+    /// The ID of the List.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token-long>
+  }
+  list-get-members: func(params: list-get-members-params) -> result<string, string>;
+
+  /// Returns User objects that have liked the provided Tweet ID
+  record tweets-id-liking-users-params {
+    /// A single Tweet ID.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>
+  }
+  tweets-id-liking-users: func(params: tweets-id-liking-users-params) -> result<string, string>;
+
+  /// Returns User objects that have retweeted the provided Tweet ID
+  record tweets-id-retweeting-users-params {
+    /// A single Tweet ID.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>
+  }
+  tweets-id-retweeting-users: func(params: tweets-id-retweeting-users-params) -> result<string, string>;
+
+  /// User lookup by IDs
+  record find-users-by-id-params {
+    /// A list of User IDs, comma-separated. You can specify up to 100 IDs.
+    ids: list<user-id>
+  }
+  find-users-by-id: func(params: find-users-by-id-params) -> result<string, string>;
+
+  /// User lookup by usernames
+  record find-users-by-username-params {
+    /// A list of usernames, comma-separated.
+    usernames: list<string>
+  }
+  find-users-by-username: func(params: find-users-by-username-params) -> result<string, string>;
+
+  /// User lookup by username
+  record find-user-by-username-params {
+    /// A username.
+    username: string
+  }
+  find-user-by-username: func(params: find-user-by-username-params) -> result<string, string>;
+
+  /// User lookup me
+  find-my-user: func() -> result<string, string>;
+
+  /// User lookup by ID
+  record find-user-by-id-params {
+    /// The ID of the User to lookup.
+    id: string
+  }
+  find-user-by-id: func(params: find-user-by-id-params) -> result<string, string>;
+
+  /// Returns User objects that are blocked by provided User ID
+  record users-id-blocking-params {
+    /// The ID of the authenticated source User for whom to return results.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token32>
+  }
+  users-id-blocking: func(params: users-id-blocking-params) -> result<string, string>;
+
+  /// Block User by User ID
+  record users-id-block-params {
+    /// The ID of the authenticated source User that is requesting to block the target User.
+    id: string,
+    target-user-id: user-id
+  }
+  users-id-block: func(params: users-id-block-params) -> result<string, string>;
+
+  /// Followers by User ID
+  record users-id-followers-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token32>
+  }
+  users-id-followers: func(params: users-id-followers-params) -> result<string, string>;
+
+  /// Following by User ID
+  record users-id-following-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token32>
+  }
+  users-id-following: func(params: users-id-following-params) -> result<string, string>;
+
+  /// Follow User
+  record users-id-follow-params {
+    /// The ID of the authenticated source User that is requesting to follow the target User.
+    id: string,
+    target-user-id: user-id
+  }
+  users-id-follow: func(params: users-id-follow-params) -> result<string, string>;
+
+  /// Returns User objects that are muted by the provided User ID
+  record users-id-muting-params {
+    /// The ID of the authenticated source User for whom to return results.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token-long>
+  }
+  users-id-muting: func(params: users-id-muting-params) -> result<string, string>;
+
+  /// Mute User by User ID.
+  record users-id-mute-params {
+    /// The ID of the authenticated source User that is requesting to mute the target User.
+    id: string,
+    target-user-id: user-id
+  }
+  users-id-mute: func(params: users-id-mute-params) -> result<string, string>;
+
+  /// Unblock User by User ID
+  record users-id-unblock-params {
+    /// The ID of the authenticated source User that is requesting to unblock the target User.
+    source-user-id: string,
+    /// The ID of the User that the source User is requesting to unblock.
+    target-user-id: string
+  }
+  users-id-unblock: func(params: users-id-unblock-params) -> result<string, string>;
+
+  /// Unfollow User
+  record users-id-unfollow-params {
+    /// The ID of the authenticated source User that is requesting to unfollow the target User.
+    source-user-id: string,
+    /// The ID of the User that the source User is requesting to unfollow.
+    target-user-id: string
+  }
+  users-id-unfollow: func(params: users-id-unfollow-params) -> result<string, string>;
+
+  /// Unmute User by User ID
+  record users-id-unmute-params {
+    /// The ID of the authenticated source User that is requesting to unmute the target User.
+    source-user-id: string,
+    /// The ID of the User that the source User is requesting to unmute.
+    target-user-id: string
+  }
+  users-id-unmute: func(params: users-id-unmute-params) -> result<string, string>;
+
+}
+
+interface tweets {
+  enum tweet-create-request-poll-reply-settings-enum {
+    following,
+    mentioned-users,
+  }
+
+  enum tweet-counts-full-archive-search-granularity-enum {
+    minute,
+    hour,
+    day,
+  }
+
+  enum tweets-fullarchive-search-sort-order-enum {
+    recency,
+    relevancy,
+  }
+
+  enum find-tweets-that-quote-a-tweet-exclude-item-enum {
+    replies,
+    retweets,
+  }
+
+  /// A base36 pagination token.
+  record pagination-token36 {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
+  record tweet-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Place ID being attached to the Tweet for geo location.
+  record tweet-create-request-geo {
+    place-id: option<string>
+  }
+
+  /// Media information being attached to created Tweet. This is mutually exclusive from Quote Tweet Id, Poll, and Card URI.
+  record tweet-create-request-media {
+    /// A list of Media Ids to be attached to a created Tweet.
+    media-ids: list<media-id>,
+    /// A list of User Ids to be tagged in the media for created Tweet.
+    tagged-user-ids: option<list<user-id>>
+  }
+
+  /// The unique identifier of this Media.
+  record media-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
+  record user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Poll options for a Tweet with a poll. This is mutually exclusive from Media, Quote Tweet Id, and Card URI.
+  record tweet-create-request-poll {
+    /// Duration of the poll in minutes.
+    duration-minutes: s32,
+    options: list<string>,
+    /// Settings to indicate who can reply to the Tweet.
+    reply-settings: option<tweet-create-request-poll-reply-settings-enum>
+  }
+
+  /// Tweet information of the Tweet being replied to.
+  record tweet-create-request-reply {
+    /// A list of User Ids to be excluded from the reply Tweet.
+    exclude-reply-user-ids: option<list<user-id>>,
+    in-reply-to-tweet-id: tweet-id
+  }
+
+  /// The content of the Tweet.
+  record tweet-text {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Unique identifier of this rule.
+  record rule-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// List Tweets timeline by List ID.
+  record lists-id-tweets-params {
+    /// The ID of the List.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>
+  }
+  lists-id-tweets: func(params: lists-id-tweets-params) -> result<string, string>;
+
+  /// Tweet lookup by Tweet IDs
+  record find-tweets-by-id-params {
+    /// A comma separated list of Tweet IDs. Up to 100 are allowed in a single request.
+    ids: list<tweet-id>
+  }
+  find-tweets-by-id: func(params: find-tweets-by-id-params) -> result<string, string>;
+
+  /// Creation of a Tweet
+  record create-tweet-params {
+    /// Card Uri Parameter. This is mutually exclusive from Quote Tweet Id, Poll, Media, and Direct Message Deep Link.
+    card-uri: option<string>,
+    /// Link to take the conversation from the public timeline to a private Direct Message.
+    direct-message-deep-link: option<string>,
+    /// Exclusive Tweet for super followers.
+    for-super-followers-only: option<bool>,
+    /// Place ID being attached to the Tweet for geo location.
+    geo: option<tweet-create-request-geo>,
+    /// Media information being attached to created Tweet. This is mutually exclusive from Quote Tweet Id, Poll, and Card URI.
+    media: option<tweet-create-request-media>,
+    /// Nullcasted (promoted-only) Tweets do not appear in the public timeline and are not served to followers.
+    nullcast: option<bool>,
+    /// Poll options for a Tweet with a poll. This is mutually exclusive from Media, Quote Tweet Id, and Card URI.
+    poll: option<tweet-create-request-poll>,
+    quote-tweet-id: option<tweet-id>,
+    /// Tweet information of the Tweet being replied to.
+    reply: option<tweet-create-request-reply>,
+    /// Settings to indicate who can reply to the Tweet.
+    reply-settings: option<tweet-create-request-poll-reply-settings-enum>,
+    text: option<tweet-text>
+  }
+  create-tweet: func(params: create-tweet-params) -> result<string, string>;
+
+  /// Full archive search counts
+  record tweet-counts-full-archive-search-params {
+    /// One query/rule/filter for matching Tweets. Refer to https://t.co/rulelength to identify the max query length.
+    query: string,
+    /// YYYY-MM-DDTHH:mm:ssZ. The oldest UTC timestamp (from most recent 7 days) from which the Tweets will be provided. Timestamp is in second granularity and is inclusive (i.e. 12:00:01 includes the first second of the minute).
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
+    end-time: option<string>,
+    /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
+    since-id: option<tweet-id>,
+    /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
+    until-id: option<tweet-id>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    next-token: option<pagination-token36>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    pagination-token: option<pagination-token36>,
+    /// The granularity for the search counts results.
+    granularity: option<tweet-counts-full-archive-search-granularity-enum>
+  }
+  tweet-counts-full-archive-search: func(params: tweet-counts-full-archive-search-params) -> result<string, string>;
+
+  /// Recent search counts
+  record tweet-counts-recent-search-params {
+    /// One query/rule/filter for matching Tweets. Refer to https://t.co/rulelength to identify the max query length.
+    query: string,
+    /// YYYY-MM-DDTHH:mm:ssZ. The oldest UTC timestamp (from most recent 7 days) from which the Tweets will be provided. Timestamp is in second granularity and is inclusive (i.e. 12:00:01 includes the first second of the minute).
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
+    end-time: option<string>,
+    /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
+    since-id: option<tweet-id>,
+    /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
+    until-id: option<tweet-id>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    next-token: option<pagination-token36>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    pagination-token: option<pagination-token36>,
+    /// The granularity for the search counts results.
+    granularity: option<tweet-counts-full-archive-search-granularity-enum>
+  }
+  tweet-counts-recent-search: func(params: tweet-counts-recent-search-params) -> result<string, string>;
+
+  /// Firehose stream
+  record get-tweets-firehose-stream-params {
+    /// The number of minutes of backfill requested.
+    backfill-minutes: option<s32>,
+    /// The partition number.
+    partition: s32,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp to which the Tweets will be provided.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided.
+    end-time: option<string>
+  }
+  get-tweets-firehose-stream: func(params: get-tweets-firehose-stream-params) -> result<string, string>;
+
+  /// Sample stream
+  record sample-stream-params {
+    /// The number of minutes of backfill requested.
+    backfill-minutes: option<s32>
+  }
+  sample-stream: func(params: sample-stream-params) -> result<string, string>;
+
+  /// Sample 10% stream
+  record get-tweets-sample10-stream-params {
+    /// The number of minutes of backfill requested.
+    backfill-minutes: option<s32>,
+    /// The partition number.
+    partition: s32,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp to which the Tweets will be provided.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided.
+    end-time: option<string>
+  }
+  get-tweets-sample10-stream: func(params: get-tweets-sample10-stream-params) -> result<string, string>;
+
+  /// Full-archive search
+  record tweets-fullarchive-search-params {
+    /// One query/rule/filter for matching Tweets. Refer to https://t.co/rulelength to identify the max query length.
+    query: string,
+    /// YYYY-MM-DDTHH:mm:ssZ. The oldest UTC timestamp from which the Tweets will be provided. Timestamp is in second granularity and is inclusive (i.e. 12:00:01 includes the first second of the minute).
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
+    end-time: option<string>,
+    /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
+    since-id: option<tweet-id>,
+    /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
+    until-id: option<tweet-id>,
+    /// The maximum number of search results to be returned by a request.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    next-token: option<pagination-token36>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    pagination-token: option<pagination-token36>,
+    /// This order in which to return results.
+    sort-order: option<tweets-fullarchive-search-sort-order-enum>
+  }
+  tweets-fullarchive-search: func(params: tweets-fullarchive-search-params) -> result<string, string>;
+
+  /// Recent search
+  record tweets-recent-search-params {
+    /// One query/rule/filter for matching Tweets. Refer to https://t.co/rulelength to identify the max query length.
+    query: string,
+    /// YYYY-MM-DDTHH:mm:ssZ. The oldest UTC timestamp from which the Tweets will be provided. Timestamp is in second granularity and is inclusive (i.e. 12:00:01 includes the first second of the minute).
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The newest, most recent UTC timestamp to which the Tweets will be provided. Timestamp is in second granularity and is exclusive (i.e. 12:00:01 excludes the first second of the minute).
+    end-time: option<string>,
+    /// Returns results with a Tweet ID greater than (that is, more recent than) the specified ID.
+    since-id: option<tweet-id>,
+    /// Returns results with a Tweet ID less than (that is, older than) the specified ID.
+    until-id: option<tweet-id>,
+    /// The maximum number of search results to be returned by a request.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    next-token: option<pagination-token36>,
+    /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
+    pagination-token: option<pagination-token36>,
+    /// This order in which to return results.
+    sort-order: option<tweets-fullarchive-search-sort-order-enum>
+  }
+  tweets-recent-search: func(params: tweets-recent-search-params) -> result<string, string>;
+
+  /// Filtered stream
+  record search-stream-params {
+    /// The number of minutes of backfill requested.
+    backfill-minutes: option<s32>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided.
+    end-time: option<string>
+  }
+  search-stream: func(params: search-stream-params) -> result<string, string>;
+
+  /// Rules lookup
+  record get-rules-params {
+    /// A comma-separated list of Rule IDs.
+    ids: option<list<rule-id>>,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This value is populated by passing the 'next_token' returned in a request to paginate through results.
+    pagination-token: option<string>
+  }
+  get-rules: func(params: get-rules-params) -> result<string, string>;
+
+  /// Add/Delete rules
+  record add-or-delete-rules-params {
+    /// Dry Run can be used with both the add and delete action, with the expected result given, but without actually taking any action in the system (meaning the end state will always be as it was when the request was submitted). This is particularly useful to validate rule changes.
+    dry-run: option<bool>,
+    /// opaque schema; raw JSON
+    value: string
+  }
+  add-or-delete-rules: func(params: add-or-delete-rules-params) -> result<string, string>;
+
+  /// Tweet lookup by Tweet ID
+  record find-tweet-by-id-params {
+    /// A single Tweet ID.
+    id: string
+  }
+  find-tweet-by-id: func(params: find-tweet-by-id-params) -> result<string, string>;
+
+  /// Tweet delete by Tweet ID
+  record delete-tweet-by-id-params {
+    /// The ID of the Tweet to be deleted.
+    id: string
+  }
+  delete-tweet-by-id: func(params: delete-tweet-by-id-params) -> result<string, string>;
+
+  /// Retrieve Tweets that quote a Tweet.
+  record find-tweets-that-quote-a-tweet-params {
+    /// A single Tweet ID.
+    id: string,
+    /// The maximum number of results to be returned.
+    max-results: option<s32>,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token36>,
+    /// The set of entities to exclude (e.g. 'replies' or 'retweets').
+    exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>
+  }
+  find-tweets-that-quote-a-tweet: func(params: find-tweets-that-quote-a-tweet-params) -> result<string, string>;
+
+  /// Hide replies
+  record hide-reply-by-id-params {
+    /// The ID of the reply that you want to hide or unhide.
+    tweet-id: string,
+    hidden: bool
+  }
+  hide-reply-by-id: func(params: hide-reply-by-id-params) -> result<string, string>;
+
+  /// Returns Tweet objects liked by the provided User ID
+  record users-id-liked-tweets-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>
+  }
+  users-id-liked-tweets: func(params: users-id-liked-tweets-params) -> result<string, string>;
+
+  /// Causes the User (in the path) to like the specified Tweet
+  record users-id-like-params {
+    /// The ID of the authenticated source User that is requesting to like the Tweet.
+    id: string,
+    tweet-id: tweet-id
+  }
+  users-id-like: func(params: users-id-like-params) -> result<string, string>;
+
+  /// Causes the User (in the path) to unlike the specified Tweet
+  record users-id-unlike-params {
+    /// The ID of the authenticated source User that is requesting to unlike the Tweet.
+    id: string,
+    /// The ID of the Tweet that the User is requesting to unlike.
+    tweet-id: string
+  }
+  users-id-unlike: func(params: users-id-unlike-params) -> result<string, string>;
+
+  /// User mention timeline by User ID
+  record users-id-mentions-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The minimum Tweet ID to be included in the result set. This parameter takes precedence over start_time if both are specified.
+    since-id: option<tweet-id>,
+    /// The maximum Tweet ID to be included in the result set. This parameter takes precedence over end_time if both are specified.
+    until-id: option<tweet-id>,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided. The until_id parameter takes precedence if it is also specified.
+    end-time: option<string>
+  }
+  users-id-mentions: func(params: users-id-mentions-params) -> result<string, string>;
+
+  /// Causes the User (in the path) to retweet the specified Tweet.
+  record users-id-retweets-params {
+    /// The ID of the authenticated source User that is requesting to retweet the Tweet.
+    id: string,
+    tweet-id: tweet-id
+  }
+  users-id-retweets: func(params: users-id-retweets-params) -> result<string, string>;
+
+  /// Causes the User (in the path) to unretweet the specified Tweet
+  record users-id-unretweets-params {
+    /// The ID of the authenticated source User that is requesting to retweet the Tweet.
+    id: string,
+    /// The ID of the Tweet that the User is requesting to unretweet.
+    source-tweet-id: string
+  }
+  users-id-unretweets: func(params: users-id-unretweets-params) -> result<string, string>;
+
+  /// User home timeline by User ID
+  record users-id-timeline-params {
+    /// The ID of the authenticated source User to list Reverse Chronological Timeline Tweets of.
+    id: string,
+    /// The minimum Tweet ID to be included in the result set. This parameter takes precedence over start_time if both are specified.
+    since-id: option<tweet-id>,
+    /// The maximum Tweet ID to be included in the result set. This parameter takes precedence over end_time if both are specified.
+    until-id: option<tweet-id>,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>,
+    /// The set of entities to exclude (e.g. 'replies' or 'retweets').
+    exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided. The until_id parameter takes precedence if it is also specified.
+    end-time: option<string>
+  }
+  users-id-timeline: func(params: users-id-timeline-params) -> result<string, string>;
+
+  /// User Tweets timeline by User ID
+  record users-id-tweets-params {
+    /// The ID of the User to lookup.
+    id: string,
+    /// The minimum Tweet ID to be included in the result set. This parameter takes precedence over start_time if both are specified.
+    since-id: option<tweet-id>,
+    /// The maximum Tweet ID to be included in the result set. This parameter takes precedence over end_time if both are specified.
+    until-id: option<tweet-id>,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>,
+    /// The set of entities to exclude (e.g. 'replies' or 'retweets').
+    exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
+    start-time: option<string>,
+    /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided. The until_id parameter takes precedence if it is also specified.
+    end-time: option<string>
+  }
+  users-id-tweets: func(params: users-id-tweets-params) -> result<string, string>;
+
+}
+
+interface general {
+  /// Returns the OpenAPI Specification document.
+  get-open-api-spec: func() -> result<string, string>;
+
+}
+
+interface spaces {
+  enum search-spaces-state-enum {
+    live,
+    scheduled,
+    all,
+  }
+
+  /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
+  record user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A base32 pagination token.
+  record pagination-token32 {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Space lookup up Space IDs
+  record find-spaces-by-ids-params {
+    /// The list of Space IDs to return.
+    ids: list<string>
+  }
+  find-spaces-by-ids: func(params: find-spaces-by-ids-params) -> result<string, string>;
+
+  /// Space lookup by their creators
+  record find-spaces-by-creator-ids-params {
+    /// The IDs of Users to search through.
+    user-ids: list<user-id>
+  }
+  find-spaces-by-creator-ids: func(params: find-spaces-by-creator-ids-params) -> result<string, string>;
+
+  /// Search for Spaces
+  record search-spaces-params {
+    /// The search query.
+    query: string,
+    /// The state of Spaces to search for.
+    state: option<search-spaces-state-enum>,
+    /// The number of results to return.
+    max-results: option<s32>
+  }
+  search-spaces: func(params: search-spaces-params) -> result<string, string>;
+
+  /// Space lookup by Space ID
+  record find-space-by-id-params {
+    /// The ID of the Space to be retrieved.
+    id: string
+  }
+  find-space-by-id: func(params: find-space-by-id-params) -> result<string, string>;
+
+  /// Retrieve the list of Users who purchased a ticket to the given space
+  record space-buyers-params {
+    /// The ID of the Space to be retrieved.
+    id: string,
+    /// This parameter is used to get a specified 'page' of results.
+    pagination-token: option<pagination-token32>,
+    /// The maximum number of results.
+    max-results: option<s32>
+  }
+  space-buyers: func(params: space-buyers-params) -> result<string, string>;
+
+  /// Retrieve Tweets from a Space.
+  record space-tweets-params {
+    /// The ID of the Space to be retrieved.
+    id: string,
+    /// The number of Tweets to fetch from the provided space. If not provided, the value will default to the maximum of 100.
+    max-results: option<s32>
+  }
+  space-tweets: func(params: space-tweets-params) -> result<string, string>;
+
+}
+
+interface bookmarks {
+  /// A base36 pagination token.
+  record pagination-token36 {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Unique identifier of this Tweet. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
+  record tweet-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Bookmarks by User
+  record get-users-id-bookmarks-params {
+    /// The ID of the authenticated source User for whom to return results.
+    id: string,
+    /// The maximum number of results.
+    max-results: option<s32>,
+    /// This parameter is used to get the next 'page' of results.
+    pagination-token: option<pagination-token36>
+  }
+  get-users-id-bookmarks: func(params: get-users-id-bookmarks-params) -> result<string, string>;
+
+  /// Add Tweet to Bookmarks
+  record post-users-id-bookmarks-params {
+    /// The ID of the authenticated source User for whom to add bookmarks.
+    id: string,
+    tweet-id: tweet-id
+  }
+  post-users-id-bookmarks: func(params: post-users-id-bookmarks-params) -> result<string, string>;
+
+  /// Remove a bookmarked Tweet
+  record users-id-bookmarks-delete-params {
+    /// The ID of the authenticated source User whose bookmark is to be removed.
+    id: string,
+    /// The ID of the Tweet that the source User is removing from bookmarks.
+    tweet-id: string
+  }
+  users-id-bookmarks-delete: func(params: users-id-bookmarks-delete-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export compliance;
+  export direct-messages;
+  export lists;
+  export users;
+  export tweets;
+  export general;
+  export spaces;
+  export bookmarks;
+}

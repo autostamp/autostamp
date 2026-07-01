@@ -1,0 +1,34 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `bearerAuth` | `Authorization: Bearer <secret>` |
+package autostamp:vonage@0.2.0;
+
+interface api {
+  /// Get account data by ID
+  account-ctrl-get-account-services-by-account-id: func() -> result<string, string>;
+
+  /// Get account locations data by account ID
+  account-ctrl-get-locations-by-account-id: func() -> result<string, string>;
+
+  /// Get location data by account ID and location ID
+  record account-ctrl-get-location-by-id-params {
+    /// The Vonage Business Cloud location ID
+    location-id: string
+  }
+  account-ctrl-get-location-by-id: func(params: account-ctrl-get-location-by-id-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export api;
+}

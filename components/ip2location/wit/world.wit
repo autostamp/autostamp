@@ -1,0 +1,97 @@
+package autostamp:ip2location@0.2.0;
+
+interface ip2-location-ip-geolocation {
+  enum get-package-op-enum {
+    ws1,
+    ws2,
+    ws3,
+    ws4,
+    ws5,
+    ws6,
+    ws7,
+    ws8,
+    ws9,
+    ws10,
+    ws11,
+    ws12,
+    ws13,
+    ws14,
+    ws15,
+    ws16,
+    ws17,
+    ws18,
+    ws19,
+    ws20,
+    ws21,
+    ws22,
+    ws23,
+    ws24,
+    ws25,
+  }
+
+  enum get-addon-item-enum {
+    continent,
+    country,
+    region,
+    city,
+    geotargeting,
+    country-groupings,
+    time-zone-info,
+  }
+
+  enum get-format-enum {
+    json,
+    xml,
+  }
+
+  enum get-lang-enum {
+    ar,
+    cs,
+    da,
+    de,
+    en,
+    es,
+    et,
+    fi,
+    fr,
+    ga,
+    it,
+    ja,
+    ko,
+    ms,
+    nl,
+    pt,
+    ru,
+    sv,
+    tr,
+    vi,
+    zh-cn,
+    zh-tw,
+  }
+
+  record get-params {
+    /// Web service package of different granularity of return information.
+    package-op: option<get-package-op-enum>,
+    /// Extra information in addition to the above selected package.
+    addon: option<list<get-addon-item-enum>>,
+    /// IP address (IPv4 or IPv6) for reverse IP location lookup purpose. If not present, the server IP address will be used for the location lookup.
+    ip: string,
+    /// Format of the response message.
+    format: option<get-format-enum>,
+    /// Translation information. The translation only applicable for continent, country, region and city name for the addon package.
+    lang: option<get-lang-enum>,
+    /// API Key. Please sign up free trial license key at ip2location.com
+    key: string
+  }
+  get: func(params: get-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export ip2-location-ip-geolocation;
+}

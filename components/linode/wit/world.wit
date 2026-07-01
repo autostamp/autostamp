@@ -1,0 +1,3415 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `personalAccessToken` | `Authorization: Bearer <secret>` |
+package autostamp:linode@0.2.0;
+
+interface account {
+  enum promotion-service-type-enum {
+    all,
+    backup,
+    blockstorage,
+    db-mysql,
+    ip-v4,
+    linode,
+    linode-disk,
+    linode-memory,
+    longview,
+    managed,
+    nodebalancer,
+    objectstorage,
+    transfer-tx,
+  }
+
+  enum account-billing-source-enum {
+    akamai,
+    linode,
+  }
+
+  enum o-auth-client-status-enum {
+    active,
+    disabled,
+    suspended,
+  }
+
+  enum create-payment-method-body-type-op-enum {
+    credit-card,
+  }
+
+  enum account-settings-object-storage-enum {
+    disabled,
+    suspended,
+    active,
+  }
+
+  enum grant-permissions-enum {
+    read-only,
+    read-write,
+  }
+
+  /// Promotions generally
+  /// offer a set amount of credit that can be used toward your Linode
+  /// services, and the promotion expires after a specified date. As well,
+  /// a monthly cap on the promotional offer is set.
+  /// 
+  /// Simply put, a promotion offers a certain amount of credit every
+  /// month, until either the expiration date is passed, or until the total
+  /// promotional credit is used, whichever comes first.
+  record promotion {
+    /// The amount available to spend per month.
+    credit-monthly-cap: option<string>,
+    /// The total amount of credit left for this promotion.
+    credit-remaining: option<string>,
+    /// A detailed description of this promotion.
+    description: option<string>,
+    /// When this promotion's credits expire.
+    expire-dt: option<string>,
+    /// The location of an image for this promotion.
+    image-url: option<string>,
+    /// The service to which this promotion applies.
+    service-type: option<promotion-service-type-enum>,
+    /// Short details of this promotion.
+    summary: option<string>,
+    /// The amount of credit left for this month for this promotion.
+    this-month-credit-remaining: option<string>
+  }
+
+  /// Credit Card information associated with this Account.
+  record account-credit-card {
+    /// The expiration month and year of the credit card.
+    expiry: option<string>,
+    /// The last four digits of the credit card associated with this Account.
+    last-four: option<string>
+  }
+
+  /// An object representing the credit card information you have on file with
+  /// Linode to make Payments against your Account.
+  record credit-card {
+    /// Your credit card number. No spaces or dashes allowed.
+    card-number: string,
+    /// CVV (Card Verification Value) of the credit card, typically found on the back of the card.
+    cvv: string,
+    /// A value from 1-12 representing the expiration month of your credit card.
+    /// 
+    expiry-month: s32,
+    /// A four-digit integer representing the expiration year of
+    /// your credit card.
+    expiry-year: string
+  }
+
+  /// A collection of the entities to include in this transfer request, separated by type.
+  record entity-transfer-properties-entities {
+    /// An array containing the IDs of each of the Linodes included in this transfer.
+    linodes: option<list<s32>>
+  }
+
+  /// Whether this Payment Method is the default method for automatically processing service charges.
+  record payment-method-properties-is-default {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A collection of the services to include in this transfer request, separated by type.
+  record service-transfer-properties-entities {
+    /// An array containing the IDs of each of the Linodes included in this transfer.
+    linodes: option<list<s32>>
+  }
+
+  /// Represents the level of access a restricted User has to a specific resource on the Account.
+  record grant {
+    /// The ID of the entity this grant applies to.
+    id: option<s32>,
+    /// The current label of the entity this grant applies to, for display purposes.
+    label: option<string>,
+    /// The level of access this User has to this entity.  If null, this User has no access.
+    permissions: option<grant-permissions-enum>
+  }
+
+  /// A structure containing the Account-level grants a User has.
+  record grants-response-global {
+    /// The level of access this User has to Account-level actions, like billing information. A restricted User will never be able to manage users.
+    account-access: option<grant-permissions-enum>,
+    /// if true, this User may add Managed Databases.
+    add-databases: option<bool>,
+    /// If true, this User may add Domains.
+    add-domains: option<bool>,
+    /// If true, this User may add Firewalls.
+    add-firewalls: option<bool>,
+    /// If true, this User may add Images.
+    add-images: option<bool>,
+    /// If true, this User may create Linodes.
+    add-linodes: option<bool>,
+    /// If true, this User may create Longview clients and view the current plan.
+    add-longview: option<bool>,
+    /// If true, this User may add NodeBalancers.
+    add-nodebalancers: option<bool>,
+    /// If true, this User may add StackScripts.
+    add-stackscripts: option<bool>,
+    /// If true, this User may add Volumes.
+    add-volumes: option<bool>,
+    /// If true, this User may cancel the entire Account.
+    cancel-account: option<bool>,
+    /// If true, this User may manage the Account's Longview subscription.
+    longview-subscription: option<bool>
+  }
+
+  /// Account View
+  get-account: func() -> result<string, string>;
+
+  /// Account Update
+  record update-account-params {
+    active-promotions: option<list<promotion>>,
+    /// The datetime of when the account was activated.
+    active-since: option<string>,
+    /// First line of this Account's billing address.
+    address-v1: option<string>,
+    /// Second line of this Account's billing address.
+    address-v2: option<string>,
+    /// This Account's balance, in US dollars.
+    balance: option<f64>,
+    /// This Account's current estimated invoice in US dollars. This is not your final invoice balance. Transfer charges are not included in the estimate.
+    balance-uninvoiced: option<f64>,
+    /// The source of service charges for this Account, as determined by its relationship with Akamai.
+    /// Accounts that are associated with Akamai-specific customers return a value of `akamai`.
+    billing-source: option<account-billing-source-enum>,
+    /// A list of capabilities your account supports.
+    capabilities: option<list<string>>,
+    /// The city for this Account's billing address.
+    city: option<string>,
+    /// The company name associated with this Account.
+    company: option<string>,
+    /// The two-letter ISO 3166 country code of this Account's billing address.
+    country: option<string>,
+    /// Credit Card information associated with this Account.
+    credit-card: option<account-credit-card>,
+    /// The email address of the person associated with this Account.
+    email: option<string>,
+    /// An external unique identifier for this account.
+    euuid: option<string>,
+    /// The first name of the person associated with this Account.
+    first-name: option<string>,
+    /// The last name of the person associated with this Account.
+    last-name: option<string>,
+    /// The phone number associated with this Account.
+    phone: option<string>,
+    /// If billing address is in the United States (US) or Canada (CA), only the two-letter ISO 3166 State or Province code are accepted. If entering a US military address, state abbreviations (AA, AE, AP) should be entered. If the address is outside the US or CA, this is the Province associated with the Account's billing address.
+    state: option<string>,
+    /// The tax identification number associated with this Account, for tax calculations in some countries. If you do not live in a country that collects tax, this should be an empty string (`""`).
+    tax-id: option<string>,
+    /// The zip code of this Account's billing address. The following restrictions apply:
+    /// 
+    zip: option<string>
+  }
+  update-account: func(params: update-account-params) -> result<string, string>;
+
+  /// Account Cancel
+  record cancel-account-params {
+    /// Any reason for cancelling the account, and any other comments you might have about your Linode service.
+    comments: option<string>
+  }
+  cancel-account: func(params: cancel-account-params) -> result<string, string>;
+
+  /// Credit Card Add/Edit
+  record create-credit-card-params {
+    /// Your credit card number. No spaces or dashes allowed.
+    card-number: string,
+    /// CVV (Card Verification Value) of the credit card, typically found on the back of the card.
+    cvv: string,
+    /// A value from 1-12 representing the expiration month of your credit card.
+    /// 
+    expiry-month: s32,
+    /// A four-digit integer representing the expiration year of
+    /// your credit card.
+    expiry-year: string
+  }
+  create-credit-card: func(params: create-credit-card-params) -> result<string, string>;
+
+  /// Entity Transfers List
+  get-entity-transfers: func() -> result<string, string>;
+
+  /// Entity Transfer Create
+  record create-entity-transfer-params {
+    entities: entity-transfer-properties-entities
+  }
+  create-entity-transfer: func(params: create-entity-transfer-params) -> result<string, string>;
+
+  /// Entity Transfer View
+  get-entity-transfer: func() -> result<string, string>;
+
+  /// Entity Transfer Cancel
+  delete-entity-transfer: func() -> result<string, string>;
+
+  /// Entity Transfer Accept
+  accept-entity-transfer: func() -> result<string, string>;
+
+  /// Events List
+  get-events: func() -> result<string, string>;
+
+  /// Event View
+  get-event: func() -> result<string, string>;
+
+  /// Event Mark as Read
+  event-read: func() -> result<string, string>;
+
+  /// Event Mark as Seen
+  event-seen: func() -> result<string, string>;
+
+  /// Invoices List
+  get-invoices: func() -> result<string, string>;
+
+  /// Invoice View
+  get-invoice: func() -> result<string, string>;
+
+  /// Invoice Items List
+  get-invoice-items: func() -> result<string, string>;
+
+  /// User Logins List All
+  get-account-logins: func() -> result<string, string>;
+
+  /// Login View
+  get-account-login: func() -> result<string, string>;
+
+  /// Maintenance List
+  get-maintenance: func() -> result<string, string>;
+
+  /// Notifications List
+  get-notifications: func() -> result<string, string>;
+
+  /// OAuth Clients List
+  get-clients: func() -> result<string, string>;
+
+  /// OAuth Client Create
+  record create-client-params {
+    body: option<string>
+  }
+  create-client: func(params: create-client-params) -> result<string, string>;
+
+  /// OAuth Client View
+  get-client: func() -> result<string, string>;
+
+  /// OAuth Client Update
+  record update-client-params {
+    /// The OAuth Client ID.  This is used to identify the client, and is a publicly-known value (it is not a secret).
+    id: option<string>,
+    /// The name of this application.  This will be presented to users when they are asked to grant it access to their Account.
+    label: option<string>,
+    /// If this is a public or private OAuth Client.  Public clients have a slightly different authentication workflow than private clients.  See the <a target="_top" href="https://oauth.net/2/">OAuth spec</a> for more details.
+    public: option<bool>,
+    /// The location a successful log in from <a target="_top" href="https://login.linode.com">https://login.linode.com</a> should be redirected to for this client.  The receiver of this redirect should be ready to accept an OAuth exchange code and finish the OAuth exchange.
+    redirect-uri: option<string>,
+    /// The OAuth Client secret, used in the OAuth exchange.  This is returned as `<REDACTED>` except when an OAuth Client is created or its secret is reset.  This is a secret, and should not be shared or disclosed publicly.
+    secret: option<string>,
+    /// The status of this application.  `active` by default.
+    status: option<o-auth-client-status-enum>,
+    /// The URL where this client's thumbnail may be viewed, or `null` if this client does not have a thumbnail set.
+    thumbnail-url: option<string>
+  }
+  update-client: func(params: update-client-params) -> result<string, string>;
+
+  /// OAuth Client Delete
+  delete-client: func() -> result<string, string>;
+
+  /// OAuth Client Secret Reset
+  reset-client-secret: func() -> result<string, string>;
+
+  /// OAuth Client Thumbnail View
+  get-client-thumbnail: func() -> result<string, string>;
+
+  /// OAuth Client Thumbnail Update
+  set-client-thumbnail: func() -> result<string, string>;
+
+  /// Payment Methods List
+  get-payment-methods: func() -> result<string, string>;
+
+  /// Payment Method Add
+  record create-payment-method-params {
+    data: credit-card,
+    is-default: payment-method-properties-is-default,
+    /// The type of Payment Method.
+    /// 
+    type-op: create-payment-method-body-type-op-enum
+  }
+  create-payment-method: func(params: create-payment-method-params) -> result<string, string>;
+
+  /// Payment Method View
+  get-payment-method: func() -> result<string, string>;
+
+  /// Payment Method Delete
+  delete-payment-method: func() -> result<string, string>;
+
+  /// Payment Method Make Default
+  make-payment-method-default: func() -> result<string, string>;
+
+  /// Payments List
+  get-payments: func() -> result<string, string>;
+
+  /// Payment Make
+  record create-payment-params {
+    /// CVV (Card Verification Value) of the credit card to be used for the Payment. Required if paying by credit card.
+    cvv: option<string>,
+    /// The ID of the Payment Method to apply to the Payment.
+    payment-method-id: option<s32>,
+    /// The amount in US Dollars of the Payment.
+    /// 
+    usd: string
+  }
+  create-payment: func(params: create-payment-params) -> result<string, string>;
+
+  /// PayPal Payment Stage
+  record create-pay-pal-payment-params {
+    /// The URL to have PayPal redirect to when Payment is cancelled.
+    cancel-url: string,
+    /// The URL to have PayPal redirect to when Payment is approved.
+    redirect-url: string,
+    /// The payment amount in USD. Minimum accepted value of $5 USD. Maximum accepted value of $500 USD or credit card payment limit; whichever value is highest. PayPal's maximum transaction limit is $10,000 USD.
+    usd: string
+  }
+  create-pay-pal-payment: func(params: create-pay-pal-payment-params) -> result<string, string>;
+
+  /// Staged/Approved PayPal Payment Execute
+  record execute-pay-pal-payment-params {
+    /// The PayerID returned by PayPal during the transaction authorization process.
+    payer-id: string,
+    /// The PaymentID returned from [POST /account/payments/paypal](/docs/api/account/#paypal-payment-stage) that has been approved with PayPal.
+    payment-id: string
+  }
+  execute-pay-pal-payment: func(params: execute-pay-pal-payment-params) -> result<string, string>;
+
+  /// Payment View
+  get-payment: func() -> result<string, string>;
+
+  /// Promo Credit Add
+  record create-promo-credit-params {
+    /// The Promo Code.
+    promo-code: string
+  }
+  create-promo-credit: func(params: create-promo-credit-params) -> result<string, string>;
+
+  /// Service Transfers List
+  get-service-transfers: func() -> result<string, string>;
+
+  /// Service Transfer Create
+  record create-service-transfer-params {
+    entities: service-transfer-properties-entities
+  }
+  create-service-transfer: func(params: create-service-transfer-params) -> result<string, string>;
+
+  /// Service Transfer View
+  get-service-transfer: func() -> result<string, string>;
+
+  /// Service Transfer Cancel
+  delete-service-transfer: func() -> result<string, string>;
+
+  /// Service Transfer Accept
+  accept-service-transfer: func() -> result<string, string>;
+
+  /// Account Settings View
+  get-account-settings: func() -> result<string, string>;
+
+  /// Account Settings Update
+  record update-account-settings-params {
+    /// Account-wide backups default.  If `true`, all Linodes created will automatically be enrolled in the Backups service.  If `false`, Linodes will not be enrolled by default, but may still be enrolled on creation or later.
+    backups-enabled: option<bool>,
+    /// The Longview Pro tier you are currently subscribed to. The value must be a [Longview Subscription](/docs/api/longview/#longview-subscriptions-list) ID or `null` for Longview Free.
+    longview-subscription: option<string>,
+    /// Our 24/7 incident response service. This robust, multi-homed monitoring system distributes monitoring checks to ensure that your servers remain online and available at all times. Linode Managed can monitor any service or software stack reachable over TCP or HTTP. Once you add a service to Linode Managed, we'll monitor it for connectivity, response, and total request time.
+    managed: option<bool>,
+    /// Enables network helper across all users by default for new Linodes and Linode Configs.
+    network-helper: option<bool>,
+    /// A string describing the status of this account's Object Storage service enrollment.
+    object-storage: option<account-settings-object-storage-enum>
+  }
+  update-account-settings: func(params: update-account-settings-params) -> result<string, string>;
+
+  /// Linode Managed Enable
+  enable-account-managed: func() -> result<string, string>;
+
+  /// Network Utilization View
+  get-transfer: func() -> result<string, string>;
+
+  /// Users List
+  get-users: func() -> result<string, string>;
+
+  /// User Create
+  record create-user-params {
+    body: option<string>
+  }
+  create-user: func(params: create-user-params) -> result<string, string>;
+
+  /// User View
+  get-user: func() -> result<string, string>;
+
+  /// User Update
+  record update-user-params {
+    /// The email address for the User. Linode sends emails to this address for account management communications. May be used for other communications as configured.
+    email: option<string>,
+    /// If true, the User must be granted access to perform actions or access entities on this Account. See User Grants View ([GET /account/users/{username}/grants](/docs/api/account/#users-grants-view)) for details on how to configure grants for a restricted User.
+    restricted: option<bool>,
+    /// A list of SSH Key labels added by this User.
+    /// 
+    ssh-keys: option<list<string>>,
+    /// A boolean value indicating if the User has Two Factor Authentication (TFA) enabled. See the Create Two Factor Secret ([POST /profile/tfa-enable](/docs/api/profile/#two-factor-secret-create)) endpoint to enable TFA.
+    tfa-enabled: option<bool>,
+    /// The User's username. This is used for logging in, and may also be displayed alongside actions the User performs (for example, in Events or public StackScripts).
+    username: option<string>
+  }
+  update-user: func(params: update-user-params) -> result<string, string>;
+
+  /// User Delete
+  delete-user: func() -> result<string, string>;
+
+  /// User's Grants View
+  get-user-grants: func() -> result<string, string>;
+
+  /// User's Grants Update
+  record update-user-grants-params {
+    /// The grants this User has for each Database that is owned by this Account.
+    database: option<list<grant>>,
+    /// The grants this User has for each Domain that is owned by this Account.
+    domain: option<list<grant>>,
+    /// A structure containing the Account-level grants a User has.
+    global: option<grants-response-global>,
+    /// The grants this User has for each Image that is owned by this Account.
+    image: option<list<grant>>,
+    /// The grants this User has for each Linode that is owned by this Account.
+    linode: option<list<grant>>,
+    /// The grants this User has for each Longview Client that is owned by this Account.
+    longview: option<list<grant>>,
+    /// The grants this User has for each NodeBalancer that is owned by this Account.
+    nodebalancer: option<list<grant>>,
+    /// The grants this User has for each StackScript that is owned by this Account.
+    stackscript: option<list<grant>>,
+    /// The grants this User has for each Block Storage Volume that is owned by this Account.
+    volume: option<list<grant>>
+  }
+  update-user-grants: func(params: update-user-grants-params) -> result<string, string>;
+
+}
+
+
+interface databases {
+  enum database-mongo-db-properties-updates-frequency-enum {
+    weekly,
+    monthly,
+  }
+
+  enum database-backup-snapshot-target-enum {
+    primary,
+    secondary,
+  }
+
+  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
+  /// 
+  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
+  /// 
+  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
+  record database-mongo-db-request-properties-allow-list {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A unique, user-defined string referring to the Managed Database.
+  record database-mongo-db-request-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Configuration settings for automated patch update maintenance for the Managed Database.
+  record database-mongo-db-properties-updates {
+    /// The day to perform maintenance. 1=Monday, 2=Tuesday, etc.
+    day-of-week: option<s32>,
+    /// The maximum maintenance window time in hours.
+    duration: option<s32>,
+    /// Whether maintenance occurs on a weekly or monthly basis.
+    frequency: option<database-mongo-db-properties-updates-frequency-enum>,
+    /// The hour to begin maintenance based in UTC time.
+    hour-of-day: option<s32>,
+    /// The week of the month to perform `monthly` frequency updates. Defaults to `null`.
+    /// 
+    week-of-month: option<s32>
+  }
+
+  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
+  /// 
+  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
+  /// 
+  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
+  record database-my-sql-properties-allow-list {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The number of Linode Instance nodes deployed to the Managed Database.
+  /// 
+  /// Choosing 3 nodes creates a high availability cluster consisting of 1 primary node and 2 replica nodes.
+  record database-my-sql-properties-cluster-size {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Whether the Managed Databases is encrypted.
+  record database-my-sql-properties-encrypted {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A unique, user-defined string referring to the Managed Database.
+  record database-my-sql-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The [Region](/docs/api/regions/) ID for the Managed Database.
+  record database-my-sql-properties-region {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The replication method used for the Managed Database.
+  /// 
+  /// Defaults to `none` for a single cluster and `semi_synch` for a high availability cluster.
+  /// 
+  /// Must be `none` for a single node cluster.
+  /// 
+  /// Must be `asynch` or `semi_synch` for a high availability cluster.
+  record database-my-sql-properties-replication-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Whether to require SSL credentials to establish a connection to the Managed Database.
+  /// 
+  /// Use the **Managed MySQL Database Credentials View** ([GET /databases/mysql/instances/{instanceId}/credentials](/docs/api/databases/#managed-mysql-database-credentials-view)) command for access information.
+  record database-my-sql-properties-ssl-connection {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The Linode Instance type used by the Managed Database for its nodes.
+  record database-my-sql-properties-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
+  /// 
+  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
+  /// 
+  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
+  record database-my-sql-request-properties-allow-list {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A unique, user-defined string referring to the Managed Database.
+  record database-my-sql-request-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Configuration settings for automated patch update maintenance for the Managed Database.
+  record database-my-sql-properties-updates {
+    /// The day to perform maintenance. 1=Monday, 2=Tuesday, etc.
+    day-of-week: option<s32>,
+    /// The maximum maintenance window time in hours.
+    duration: option<s32>,
+    /// Whether maintenance occurs on a weekly or monthly basis.
+    frequency: option<database-mongo-db-properties-updates-frequency-enum>,
+    /// The hour to begin maintenance based in UTC time.
+    hour-of-day: option<s32>,
+    /// The week of the month to perform `monthly` frequency updates. Defaults to `null`.
+    /// 
+    week-of-month: option<s32>
+  }
+
+  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
+  /// 
+  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
+  /// 
+  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
+  record database-postgre-sql-properties-allow-list {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The number of Linode Instance nodes deployed to the Managed Database.
+  /// 
+  /// Choosing 3 nodes creates a high availability cluster consisting of 1 primary node and 2 replica nodes.
+  record database-postgre-sql-properties-cluster-size {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Whether the Managed Databases is encrypted.
+  record database-postgre-sql-properties-encrypted {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A unique, user-defined string referring to the Managed Database.
+  record database-postgre-sql-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The [Region](/docs/api/regions/) ID for the Managed Database.
+  record database-postgre-sql-properties-region {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The synchronization level of the replicating server.
+  /// 
+  /// Must be `local` or `off` for the `asynch` replication type.
+  /// 
+  /// Must be `on`, `remote_write`, or `remote_apply` for the `semi_synch` replication type.
+  record database-postgre-sql-properties-replication-commit-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The replication method used for the Managed Database.
+  /// 
+  /// Defaults to `none` for a single cluster and `semi_synch` for a high availability cluster.
+  /// 
+  /// Must be `none` for a single node cluster.
+  /// 
+  /// Must be `asynch` or `semi_synch` for a high availability cluster.
+  record database-postgre-sql-properties-replication-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Whether to require SSL credentials to establish a connection to the Managed Database.
+  /// 
+  /// Use the **Managed PostgreSQL Database Credentials View** ([GET /databases/postgresql/instances/{instanceId}/credentials](/docs/api/databases/#managed-postgresql-database-credentials-view)) command for access information.
+  record database-postgre-sql-properties-ssl-connection {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The Linode Instance type used by the Managed Database for its nodes.
+  record database-postgre-sql-properties-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A list of IP addresses that can access the Managed Database. Each item can be a single IP address or a range in CIDR format.
+  /// 
+  /// By default, this is an empty array (`[]`), which blocks all connections (both public and private) to the Managed Database.
+  /// 
+  /// If `0.0.0.0/0` is a value in this list, then all IP addresses can access the Managed Database.
+  record database-postgre-sql-request-properties-allow-list {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A unique, user-defined string referring to the Managed Database.
+  record database-postgre-sql-request-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Configuration settings for automated patch update maintenance for the Managed Database.
+  record database-postgre-sql-properties-updates {
+    /// The day to perform maintenance. 1=Monday, 2=Tuesday, etc.
+    day-of-week: option<s32>,
+    /// The maximum maintenance window time in hours.
+    duration: option<s32>,
+    /// Whether maintenance occurs on a weekly or monthly basis.
+    frequency: option<database-mongo-db-properties-updates-frequency-enum>,
+    /// The hour to begin maintenance based in UTC time.
+    hour-of-day: option<s32>,
+    /// The week of the month to perform `monthly` frequency updates. Defaults to `null`.
+    /// 
+    week-of-month: option<s32>
+  }
+
+  /// Managed Database Engines List
+  get-databases-engines: func() -> result<string, string>;
+
+  /// Managed Database Engine View
+  get-databases-engine: func() -> result<string, string>;
+
+  /// Managed Databases List All
+  get-databases-instances: func() -> result<string, string>;
+
+  /// Managed MongoDB Databases List
+  get-databases-mongo-db-instances: func() -> result<string, string>;
+
+  /// Managed MongoDB Database View
+  get-databases-mongo-db-instance: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Update
+  record put-databases-mongo-db-instance-params {
+    allow-list: option<database-mongo-db-request-properties-allow-list>,
+    label: option<database-mongo-db-request-properties-label>,
+    updates: option<database-mongo-db-properties-updates>
+  }
+  put-databases-mongo-db-instance: func(params: put-databases-mongo-db-instance-params) -> result<string, string>;
+
+  /// Managed MongoDB Database Delete
+  delete-databases-mongo-db-instance: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Backups List
+  get-databases-mongo-db-instance-backups: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Backup Snapshot Create
+  record post-databases-mongo-db-instance-backup-params {
+    /// The label for the Database snapshot backup.
+    /// 
+    label: string,
+    /// The Database cluster target.
+    /// If the Database is a high availability cluster, choosing `secondary` creates a snapshot backup of a replica node.
+    target: option<database-backup-snapshot-target-enum>
+  }
+  post-databases-mongo-db-instance-backup: func(params: post-databases-mongo-db-instance-backup-params) -> result<string, string>;
+
+  /// Managed MongoDB Database Backup View
+  get-databases-mongo-db-instance-backup: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Backup Delete
+  delete-database-mongo-db-instance-backup: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Backup Restore
+  post-databases-mongo-db-instance-backup-restore: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Credentials View
+  get-databases-mongo-db-instance-credentials: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Credentials Reset
+  post-databases-mongo-db-instance-credentials-reset: func() -> result<string, string>;
+
+  /// Managed MongoDB Database Patch
+  post-databases-mongo-db-instance-patch: func() -> result<string, string>;
+
+  /// Managed MongoDB Database SSL Certificate View
+  get-databases-mongo-db-instance-ssl: func() -> result<string, string>;
+
+  /// Managed MySQL Databases List
+  get-databases-my-sql-instances: func() -> result<string, string>;
+
+  /// Managed MySQL Database Create
+  record post-databases-my-sql-instances-params {
+    allow-list: option<database-my-sql-properties-allow-list>,
+    cluster-size: option<database-my-sql-properties-cluster-size>,
+    encrypted: option<database-my-sql-properties-encrypted>,
+    /// The Managed Database engine in engine/version format.
+    engine: string,
+    label: database-my-sql-properties-label,
+    region: database-my-sql-properties-region,
+    replication-type: option<database-my-sql-properties-replication-type>,
+    ssl-connection: option<database-my-sql-properties-ssl-connection>,
+    type-op: database-my-sql-properties-type
+  }
+  post-databases-my-sql-instances: func(params: post-databases-my-sql-instances-params) -> result<string, string>;
+
+  /// Managed MySQL Database View
+  get-databases-my-sql-instance: func() -> result<string, string>;
+
+  /// Managed MySQL Database Update
+  record put-databases-my-sql-instance-params {
+    allow-list: option<database-my-sql-request-properties-allow-list>,
+    label: option<database-my-sql-request-properties-label>,
+    updates: option<database-my-sql-properties-updates>
+  }
+  put-databases-my-sql-instance: func(params: put-databases-my-sql-instance-params) -> result<string, string>;
+
+  /// Managed MySQL Database Delete
+  delete-databases-my-sql-instance: func() -> result<string, string>;
+
+  /// Managed MySQL Database Backups List
+  get-databases-my-sql-instance-backups: func() -> result<string, string>;
+
+  /// Managed MySQL Database Backup Snapshot Create
+  record post-databases-my-sql-instance-backup-params {
+    /// The label for the Database snapshot backup.
+    /// 
+    label: string,
+    /// The Database cluster target.
+    /// If the Database is a high availability cluster, choosing `secondary` creates a snapshot backup of a replica node.
+    target: option<database-backup-snapshot-target-enum>
+  }
+  post-databases-my-sql-instance-backup: func(params: post-databases-my-sql-instance-backup-params) -> result<string, string>;
+
+  /// Managed MySQL Database Backup View
+  get-databases-my-sql-instance-backup: func() -> result<string, string>;
+
+  /// Managed MySQL Database Backup Delete
+  delete-database-my-sql-instance-backup: func() -> result<string, string>;
+
+  /// Managed MySQL Database Backup Restore
+  post-databases-my-sql-instance-backup-restore: func() -> result<string, string>;
+
+  /// Managed MySQL Database Credentials View
+  get-databases-my-sql-instance-credentials: func() -> result<string, string>;
+
+  /// Managed MySQL Database Credentials Reset
+  post-databases-my-sql-instance-credentials-reset: func() -> result<string, string>;
+
+  /// Managed MySQL Database Patch
+  post-databases-my-sql-instance-patch: func() -> result<string, string>;
+
+  /// Managed MySQL Database SSL Certificate View
+  get-databases-my-sql-instance-ssl: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Databases List
+  get-databases-postgre-sql-instances: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Create
+  record post-databases-postgre-sql-instances-params {
+    allow-list: option<database-postgre-sql-properties-allow-list>,
+    cluster-size: option<database-postgre-sql-properties-cluster-size>,
+    encrypted: option<database-postgre-sql-properties-encrypted>,
+    /// The Managed Database engine in engine/version format.
+    engine: string,
+    label: database-postgre-sql-properties-label,
+    region: database-postgre-sql-properties-region,
+    replication-commit-type: option<database-postgre-sql-properties-replication-commit-type>,
+    replication-type: option<database-postgre-sql-properties-replication-type>,
+    ssl-connection: option<database-postgre-sql-properties-ssl-connection>,
+    type-op: database-postgre-sql-properties-type
+  }
+  post-databases-postgre-sql-instances: func(params: post-databases-postgre-sql-instances-params) -> result<string, string>;
+
+  /// Managed PostgreSQL Database View
+  get-databases-postgre-sql-instance: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Update
+  record put-databases-postgre-sql-instance-params {
+    allow-list: option<database-postgre-sql-request-properties-allow-list>,
+    label: option<database-postgre-sql-request-properties-label>,
+    updates: option<database-postgre-sql-properties-updates>
+  }
+  put-databases-postgre-sql-instance: func(params: put-databases-postgre-sql-instance-params) -> result<string, string>;
+
+  /// Managed PostgreSQL Database Delete
+  delete-databases-postgre-sql-instance: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Backups List
+  get-databases-postgre-sql-instance-backups: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Backup Snapshot Create
+  record post-databases-postgre-sql-instance-backup-params {
+    /// The label for the Database snapshot backup.
+    /// 
+    label: string,
+    /// The Database cluster target.
+    /// If the Database is a high availability cluster, choosing `secondary` creates a snapshot backup of a replica node.
+    target: option<database-backup-snapshot-target-enum>
+  }
+  post-databases-postgre-sql-instance-backup: func(params: post-databases-postgre-sql-instance-backup-params) -> result<string, string>;
+
+  /// Managed PostgreSQL Database Backup View
+  get-databases-postgre-sql-instance-backup: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Backup Delete
+  delete-database-postgre-sql-instance-backup: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Backup Restore
+  post-databases-postgre-sql-instance-backup-restore: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Credentials View
+  get-databases-postgre-sql-instance-credentials: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Credentials Reset
+  post-databases-postgre-sql-instance-credentials-reset: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database Patch
+  post-databases-postgre-sql-instance-patch: func() -> result<string, string>;
+
+  /// Managed PostgreSQL Database SSL Certificate View
+  get-databases-postgre-sql-instance-ssl: func() -> result<string, string>;
+
+  /// Managed Database Types List
+  get-databases-types: func() -> result<string, string>;
+
+  /// Managed Database Type View
+  get-databases-type: func() -> result<string, string>;
+
+}
+
+interface domains {
+  enum domain-status-enum {
+    disabled,
+    active,
+  }
+
+  enum domain-type-op-enum {
+    master,
+    slave,
+  }
+
+  /// The name of this Record. For requests, this property's actual usage and whether it is required depends
+  /// on the type of record this represents:
+  /// 
+  /// `A` and `AAAA`: The hostname or FQDN of the Record.
+  /// 
+  /// `NS`: The subdomain, if any, to use with the Domain of the Record. Wildcard NS records (`*`) are not supported.
+  /// 
+  /// `MX`: The mail subdomain. For example, `sub` for the address `user@sub.example.com` under the `example.com`
+  /// Domain. Must be an empty string (`""`) for a Null MX Record.
+  /// 
+  /// `CNAME`: The hostname. Must be unique. Required.
+  /// 
+  /// `TXT`: The hostname.
+  /// 
+  /// `SRV`: Unused. Use the `service` property to set the service name for this record.
+  /// 
+  /// `CAA`: The subdomain. Omit or enter an empty string (`""`) to apply to the entire Domain.
+  /// 
+  /// `PTR`: See our guide on how to [Configure Your Linode for Reverse DNS
+  /// (rDNS)](/docs/guides/configure-rdns/).
+  record domain-record-properties-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The port this Record points to. Only valid and required for SRV record requests.
+  record domain-record-properties-port {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The priority of the target host for this Record. Lower values are preferred. Only valid for
+  /// MX and SRV record requests. Required for SRV record requests.
+  /// 
+  /// Defaults to `0` for MX record requests. Must be `0` for Null MX records.
+  record domain-record-properties-priority {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The protocol this Record's service communicates with. An underscore (`_`) is prepended automatically to the submitted value for this property. Only valid for SRV record requests.
+  record domain-record-properties-protocol {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The name of the service. An underscore (`_`) is prepended and a period (`.`) is appended automatically to the submitted value for this property. Only valid and required for SRV record requests.
+  record domain-record-properties-service {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The tag portion of a CAA record. Only valid and required for CAA record requests.
+  record domain-record-properties-tag {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The target for this Record. For requests, this property's actual usage and whether it is required depends
+  /// on the type of record this represents:
+  /// 
+  /// `A` and `AAAA`: The IP address. Use `[remote_addr]` to submit the IPv4 address of the request. Required.
+  /// 
+  /// `NS`: The name server. Must be a valid domain. Required.
+  /// 
+  /// `MX`: The mail server. Must be a valid domain unless creating a Null MX Record. To create a
+  /// [Null MX Record](https://datatracker.ietf.org/doc/html/rfc7505), first
+  /// [remove](/docs/api/domains/#domain-record-delete) any additional MX records, create an MX record with empty strings
+  /// (`""`) for the `target` and `name`. If a Domain has a Null MX record, new MX records cannot be created. Required.
+  /// 
+  /// `CNAME`: The alias. Must be a valid domain. Required.
+  /// 
+  /// `TXT`: The value. Required.
+  /// 
+  /// `SRV`: The target domain or subdomain. If a subdomain is entered, it is automatically used with the Domain.
+  /// To configure for a different domain, enter a valid FQDN. For example, the value `www` with a Domain for
+  /// `example.com` results in a target set to `www.example.com`, whereas the value `sample.com` results in a
+  /// target set to `sample.com`. Required.
+  /// 
+  /// `CAA`: The value. For `issue` or `issuewild` tags, the domain of your certificate issuer. For the `iodef`
+  /// tag, a contact or submission URL (domain, http, https, or mailto). Requirements depend on the tag for this record:
+  ///   * `issue`: The domain of your certificate issuer. Must be a valid domain.
+  ///   * `issuewild`: The domain of your wildcard certificate issuer. Must be a valid domain and must not start with an asterisk (`*`).
+  ///   * `iodef`: Must be either (1) a valid domain, (2) a valid domain prepended with `http://` or `https://`, or (3) a valid email address prepended with `mailto:`.
+  /// 
+  /// `PTR`: Required. See our guide on how to [Configure Your Linode for Reverse DNS
+  /// (rDNS)](/docs/guides/configure-rdns/).
+  /// 
+  /// With the exception of A, AAAA, and CAA records, this field accepts a trailing period.
+  record domain-record-properties-target {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// "Time to Live" - the amount of time in seconds that this Domain's records may be cached by resolvers or other domain servers. Valid values are 300, 3600, 7200, 14400, 28800, 57600, 86400, 172800, 345600, 604800, 1209600, and 2419200 - any other value will be rounded to the nearest valid value.
+  record domain-record-properties-ttl-sec {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The relative weight of this Record used in the case of identical priority. Higher values are preferred. Only valid and required for SRV record requests.
+  record domain-record-properties-weight {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Domains List
+  get-domains: func() -> result<string, string>;
+
+  /// Domain Create
+  record create-domain-params {
+    body: string
+  }
+  create-domain: func(params: create-domain-params) -> result<string, string>;
+
+  /// Domain Import
+  record import-domain-params {
+    /// The domain to import.
+    domain: string,
+    /// The remote nameserver that allows zone transfers (AXFR).
+    remote-nameserver: string
+  }
+  import-domain: func(params: import-domain-params) -> result<string, string>;
+
+  /// Domain View
+  get-domain: func() -> result<string, string>;
+
+  /// Domain Update
+  record update-domain-params {
+    /// The list of IPs that may perform a zone transfer for this Domain. The total combined length of all data within this array cannot exceed 1000 characters.
+    /// 
+    axfr-ips: option<list<string>>,
+    /// A description for this Domain. This is for display purposes only.
+    description: option<string>,
+    /// The domain this Domain represents. Domain labels cannot be longer than 63 characters and must conform to [RFC1035](https://tools.ietf.org/html/rfc1035). Domains must be unique on Linode's platform, including across different Linode accounts; there cannot be two Domains representing the same domain.
+    domain: option<string>,
+    /// The amount of time in seconds that may pass before this Domain is no longer
+    /// authoritative.
+    expire-sec: option<s32>,
+    /// The group this Domain belongs to.  This is for display purposes only.
+    group: option<string>,
+    /// This Domain's unique ID
+    id: option<s32>,
+    /// The IP addresses representing the master DNS for this Domain. At least one value is required for `type` slave Domains. The total combined length of all data within this array cannot exceed 1000 characters.
+    master-ips: option<list<string>>,
+    /// The amount of time in seconds before this Domain should be refreshed.
+    /// 
+    refresh-sec: option<s32>,
+    /// The interval, in seconds, at which a failed refresh should be retried.
+    /// 
+    retry-sec: option<s32>,
+    /// Start of Authority email address. This is required for `type` master Domains.
+    soa-email: option<string>,
+    /// Used to control whether this Domain is currently being rendered.
+    status: option<domain-status-enum>,
+    /// An array of tags applied to this object.  Tags are for organizational purposes only.
+    tags: option<list<string>>,
+    /// "Time to Live" - the amount of time in seconds that this Domain's records may be cached by resolvers or other domain servers.
+    /// * Valid values are 0, 300, 3600, 7200, 14400, 28800, 57600, 86400, 172800, 345600, 604800, 1209600, and 2419200.
+    ttl-sec: option<s32>,
+    /// Whether this Domain represents the authoritative source of information for the domain it describes ("master"), or whether it is a read-only copy of a master ("slave").
+    type-op: option<domain-type-op-enum>
+  }
+  update-domain: func(params: update-domain-params) -> result<string, string>;
+
+  /// Domain Delete
+  delete-domain: func() -> result<string, string>;
+
+  /// Domain Clone
+  record clone-domain-params {
+    /// The new domain for the clone. Domain labels cannot be longer than 63 characters and must conform to [RFC1035](https://tools.ietf.org/html/rfc1035). Domains must be unique on Linode's platform, including across different Linode accounts; there cannot be two Domains representing the same domain.
+    domain: string
+  }
+  clone-domain: func(params: clone-domain-params) -> result<string, string>;
+
+  /// Domain Records List
+  get-domain-records: func() -> result<string, string>;
+
+  /// Domain Record Create
+  record create-domain-record-params {
+    body: string
+  }
+  create-domain-record: func(params: create-domain-record-params) -> result<string, string>;
+
+  /// Domain Record View
+  get-domain-record: func() -> result<string, string>;
+
+  /// Domain Record Update
+  record update-domain-record-params {
+    name: option<domain-record-properties-name>,
+    port: option<domain-record-properties-port>,
+    priority: option<domain-record-properties-priority>,
+    protocol: option<domain-record-properties-protocol>,
+    service: option<domain-record-properties-service>,
+    tag: option<domain-record-properties-tag>,
+    target: option<domain-record-properties-target>,
+    ttl-sec: option<domain-record-properties-ttl-sec>,
+    weight: option<domain-record-properties-weight>
+  }
+  update-domain-record: func(params: update-domain-record-params) -> result<string, string>;
+
+  /// Domain Record Delete
+  delete-domain-record: func() -> result<string, string>;
+
+  /// Domain Zone File View
+  get-domain-zone: func() -> result<string, string>;
+
+}
+
+interface images {
+  enum image-status-enum {
+    creating,
+    pending-upload,
+    available,
+  }
+
+  enum image-type-op-enum {
+    manual,
+    automatic,
+  }
+
+  /// Images List
+  get-images: func() -> result<string, string>;
+
+  /// Image Create
+  record create-image-params {
+    /// A detailed description of this Image.
+    description: option<string>,
+    /// The ID of the Linode Disk that this Image will be created from.
+    disk-id: s32,
+    /// A short title of this Image. Defaults to the label of the Disk it is being created from if not provided.
+    label: option<string>
+  }
+  create-image: func(params: create-image-params) -> result<string, string>;
+
+  /// Image Upload
+  record post-images-upload-params {
+    /// Description for the uploaded Image.
+    description: option<string>,
+    /// Label for the uploaded Image.
+    label: string,
+    /// The region to upload to. Once uploaded, the Image can be used in any region.
+    region: string
+  }
+  post-images-upload: func(params: post-images-upload-params) -> result<string, string>;
+
+  /// Image View
+  get-image: func() -> result<string, string>;
+
+  /// Image Update
+  record update-image-params {
+    /// When this Image was created.
+    created: option<string>,
+    /// The name of the User who created this Image, or "linode" for public Images.
+    created-by: option<string>,
+    /// Whether or not this Image is deprecated. Will only be true for deprecated public Images.
+    deprecated: option<bool>,
+    /// A detailed description of this Image.
+    description: option<string>,
+    /// The date of the public Image's planned end of life. `None` for private Images.
+    eol: option<string>,
+    /// Only Images created automatically from a deleted Linode (type=automatic) will expire.
+    expiry: option<string>,
+    /// The unique ID of this Image.
+    id: option<string>,
+    /// True if the Image is a public distribution image. False if Image is private Account-specific Image.
+    is-public: option<bool>,
+    /// A short description of the Image.
+    label: option<string>,
+    /// The minimum size this Image needs to deploy. Size is in MB.
+    size: option<s32>,
+    /// The current status of this Image.
+    /// 
+    status: option<image-status-enum>,
+    /// How the Image was created.
+    /// 
+    type-op: option<image-type-op-enum>,
+    /// When this Image was last updated.
+    updated: option<string>,
+    /// The upstream distribution vendor. `None` for private Images.
+    vendor: option<string>
+  }
+  update-image: func(params: update-image-params) -> result<string, string>;
+
+  /// Image Delete
+  delete-image: func() -> result<string, string>;
+
+}
+
+interface linode-instances {
+  enum linode-backups-schedule-day-enum {
+    scheduling,
+    sunday,
+    monday,
+    tuesday,
+    wednesday,
+    thursday,
+    friday,
+    saturday,
+  }
+
+  enum linode-backups-schedule-window-enum {
+    scheduling,
+    w0,
+    w2,
+    w4,
+    w6,
+    w8,
+    w10,
+    w12,
+    w14,
+    w16,
+    w18,
+    w20,
+    w22,
+  }
+
+  enum linode-hypervisor-enum {
+    kvm,
+  }
+
+  enum linode-status-enum {
+    running,
+    offline,
+    booting,
+    rebooting,
+    shutting-down,
+    provisioning,
+    deleting,
+    migrating,
+    rebuilding,
+    cloning,
+    restoring,
+    stopped,
+  }
+
+  enum linode-config-run-level-enum {
+    default,
+    single,
+    binbash,
+  }
+
+  enum linode-config-virt-mode-enum {
+    paravirt,
+    fullvirt,
+  }
+
+  enum disk-filesystem-enum {
+    raw,
+    swap,
+    ext3,
+    ext4,
+    initrd,
+  }
+
+  enum disk-status-enum {
+    ready,
+    not-ready,
+    deleting,
+  }
+
+  enum add-linode-ip-body-type-op-enum {
+    ipv4,
+  }
+
+  record linode-alerts {
+    /// The percentage of CPU usage required to trigger an alert.
+    /// If the average CPU usage over two hours exceeds this value, we'll send you an alert.
+    cpu: option<s32>,
+    /// The amount of disk IO operation per second required to trigger an alert. If the average disk IO over two hours exceeds this value, we'll send you an alert. If set to `0` (zero), this alert is disabled.
+    io: option<s32>,
+    /// The amount of incoming traffic, in Mbit/s, required to trigger an alert. If the average incoming traffic over two hours exceeds this value, we'll send you an alert. If this is set to `0` (zero), the alert is disabled.
+    network-in: option<s32>,
+    /// The amount of outbound traffic, in Mbit/s, required to trigger an alert. If the average outbound traffic over two hours exceeds this value, we'll send you an alert. If this is set to `0` (zero), the alert is disabled.
+    network-out: option<s32>,
+    /// The percentage of network transfer that may be used before an alert is triggered. When this value is exceeded, we'll alert you. If this is set to `0` (zero), the alert is disabled.
+    transfer-quota: option<s32>
+  }
+
+  /// Information about this Linode's backups status. For information about available backups, see [/linode/instances/{linodeId}/backups](/docs/api/linode-instances/#backups-list).
+  record linode-backups {
+    /// Whether Backups for this Linode are available for restoration.
+    /// 
+    available: option<bool>,
+    /// If this Linode has the Backup service enabled. To enable backups, see [POST /linode/instances/{linodeId}/backups/enable](/docs/api/linode-instances/#backups-enable).
+    enabled: option<bool>,
+    /// The last successful backup date. 'null' if there was no previous backup.
+    last-successful: option<string>,
+    schedule: option<linode-backups-schedule>
+  }
+
+  record linode-backups-schedule {
+    /// The day of the week that your Linode's weekly Backup is taken.
+    /// If not set manually, a day will be chosen for you. Backups
+    day: option<linode-backups-schedule-day-enum>,
+    /// The window in which your backups will be taken, in UTC. A
+    /// backups window is a two-hour span of time in which the backup
+    window: option<linode-backups-schedule-window-enum>
+  }
+
+  /// Information about the resources available to this Linode.
+  record linode-specs {
+    /// The amount of storage space, in MB, this Linode has access to. A typical Linode will divide this space between a primary disk with an `image` deployed to it, and a swap disk, usually 512 MB. This is the default configuration created when deploying a Linode with an `image` through [POST /linode/instances](/docs/api/linode-instances/#linode-create). While this configuration is suitable for 99% of use cases, if you need finer control over your Linode's disks, see the [/linode/instances/{linodeId}/disks](/docs/api/linode-instances/#disks-list) endpoints.
+    disk: option<s32>,
+    /// The number of gpus this Linode has access to.
+    gpus: option<s32>,
+    /// The amount of RAM, in MB, this Linode has access to.
+    /// 
+    memory: option<s32>,
+    /// The amount of network transfer this Linode is allotted each month.
+    transfer: option<s32>,
+    /// The number of vcpus this Linode has access to.
+    vcpus: option<s32>
+  }
+
+  /// A dictionary of device disks to use as a device map in a Linode's configuration profile.
+  /// * An empty device disk dictionary or a dictionary with empty values for device slots is allowed.
+  /// * If no devices are specified, booting from this configuration will hold until a device exists that allows the boot process to start.
+  record devices {
+    sda: option<device>,
+    sdb: option<device>,
+    sdc: option<device>,
+    sdd: option<device>,
+    sde: option<device>,
+    sdf: option<device>,
+    sdg: option<device>,
+    sdh: option<device>
+  }
+
+  /// Device can be either a Disk or Volume identified by `disk_id` or `volume_id`. Only one type per slot allowed. Can be null.
+  /// Devices mapped from _sde_ through _sdh_ are unavailable in `fullvirt` virt_mode.
+  record device {
+    /// The Disk ID, or `null` if a Volume is assigned to this slot.
+    disk-id: option<s32>,
+    /// The Volume ID, or `null` if a Disk is assigned to this slot.
+    volume-id: option<s32>
+  }
+
+  /// Helpers enabled when booting to this Linode Config.
+  record linode-config-helpers {
+    /// Populates the /dev directory early during boot without udev.  Defaults to false.
+    devtmpfs-automount: option<bool>,
+    /// Helps maintain correct inittab/upstart console device.
+    distro: option<bool>,
+    /// Creates a modules dependency file for the Kernel you run.
+    modules-dep: option<bool>,
+    /// Automatically configures static networking.
+    network: option<bool>,
+    /// Disables updatedb cron job to avoid disk thrashing.
+    updatedb-disabled: option<bool>
+  }
+
+  /// An array of Network Interfaces to add to this Linode's Configuration Profile.
+  /// 
+  /// Up to three interface objects can be entered in this array. The position in the array determines the interface to which the settings apply:
+  /// 
+  /// - First/0:  eth0
+  /// - Second/1: eth1
+  /// - Third/2:  eth2
+  /// 
+  /// When updating a Linode's interfaces, *each interface must be redefined*. An empty interfaces array results in a default public interface configuration only.
+  /// 
+  /// If no public interface is configured, public IP addresses are still assigned to the Linode but will not be usable without manual configuration.
+  /// 
+  /// **Note:** Changes to Linode interface configurations can be enabled by rebooting the Linode.
+  /// 
+  /// **Note:** Only Next Generation Network (NGN) data centers support VLANs. Use the Regions ([/regions](/docs/api/regions/)) endpoint to view the capabilities of data center regions.
+  /// If a VLAN is attached to your Linode and you attempt to migrate or clone it to a non-NGN data center,
+  /// the migration or cloning will not initiate. If a Linode cannot be migrated because of an incompatibility,
+  /// you will be prompted to select a different data center or contact support.
+  /// 
+  /// **Note:** See the [VLANs Overview](/docs/products/networking/vlans/#technical-specifications) guide to view additional specifications and limitations.
+  record linode-config-interfaces {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record rescue-devices {
+    sda: option<device>,
+    sdb: option<device>,
+    sdc: option<device>,
+    sdd: option<device>,
+    sde: option<device>,
+    sdf: option<device>,
+    sdg: option<device>
+  }
+
+  /// Linodes List
+  get-linode-instances: func() -> result<string, string>;
+
+  /// Linode Create
+  record create-linode-instance-params {
+    body: string
+  }
+  create-linode-instance: func(params: create-linode-instance-params) -> result<string, string>;
+
+  /// Linode View
+  get-linode-instance: func() -> result<string, string>;
+
+  /// Linode Update
+  record update-linode-instance-params {
+    alerts: option<linode-alerts>,
+    /// Information about this Linode's backups status. For information about available backups, see [/linode/instances/{linodeId}/backups](/docs/api/linode-instances/#backups-list).
+    backups: option<linode-backups>,
+    /// When this Linode was created.
+    created: option<string>,
+    /// A deprecated property denoting a group label for this Linode.
+    group: option<string>,
+    /// The Linode's host machine, as a UUID.
+    host-uuid: option<string>,
+    /// The virtualization software powering this Linode.
+    hypervisor: option<linode-hypervisor-enum>,
+    /// This Linode's ID which must be provided for all operations impacting this Linode.
+    id: option<s32>,
+    image: option<string>,
+    /// This Linode's IPv4 Addresses. Each Linode is assigned a single public IPv4 address
+    /// upon creation, and may get a single private IPv4 address if needed. You may need to
+    ipv4: option<list<string>>,
+    /// This Linode's IPv6 SLAAC address. This address is specific to a Linode, and may not be shared. If the Linode has not been assigned an IPv6 address, the return value will be `null`.
+    ipv6: option<string>,
+    /// The Linode's label is for display purposes only. If no label is provided for a Linode,
+    /// a default will be assigned.
+    label: option<string>,
+    /// This is the [Region](/docs/api/regions/#regions-list) where the Linode was deployed. A Linode's region can only be changed by initiating a [cross data center migration](/docs/api/linode-instances/#dc-migrationpending-host-migration-initiate).
+    region: option<string>,
+    /// Information about the resources available to this Linode.
+    specs: option<linode-specs>,
+    /// A brief description of this Linode's current state. This field may change without direct action from you. For example, when a Linode goes into maintenance mode its status will display "stopped".
+    status: option<linode-status-enum>,
+    /// An array of tags applied to this object.  Tags are for organizational purposes only.
+    tags: option<list<string>>,
+    /// This is the [Linode Type](/docs/api/linode-types/#types-list) that this Linode was deployed with.
+    /// To change a Linode's Type, use [POST /linode/instances/{linodeId}/resize](/docs/api/linode-instances/#linode-resize).
+    type-op: option<string>,
+    /// When this Linode was last updated.
+    updated: option<string>,
+    /// The watchdog, named Lassie, is a Shutdown Watchdog that monitors your Linode and will reboot it if it powers off unexpectedly. It works by issuing a boot job when your Linode powers off without a shutdown job being responsible.
+    /// To prevent a loop, Lassie will give up if there have been more than 5 boot jobs issued within 15 minutes.
+    watchdog-enabled: option<bool>
+  }
+  update-linode-instance: func(params: update-linode-instance-params) -> result<string, string>;
+
+  /// Linode Delete
+  delete-linode-instance: func() -> result<string, string>;
+
+  /// Backups List
+  get-backups: func() -> result<string, string>;
+
+  /// Snapshot Create
+  record create-snapshot-params {
+    /// The label for the new snapshot.
+    label: string
+  }
+  create-snapshot: func(params: create-snapshot-params) -> result<string, string>;
+
+  /// Backups Cancel
+  cancel-backups: func() -> result<string, string>;
+
+  /// Backups Enable
+  enable-backups: func() -> result<string, string>;
+
+  /// Backup View
+  get-backup: func() -> result<string, string>;
+
+  /// Backup Restore
+  record restore-backup-params {
+    /// The ID of the Linode to restore a Backup to.
+    linode-id: s32,
+    /// If True, deletes all Disks and Configs on the target Linode
+    /// before restoring.
+    overwrite: option<bool>
+  }
+  restore-backup: func(params: restore-backup-params) -> result<string, string>;
+
+  /// Linode Boot
+  record boot-linode-instance-params {
+    /// The Linode Config ID to boot into.
+    config-id: option<s32>
+  }
+  boot-linode-instance: func(params: boot-linode-instance-params) -> result<string, string>;
+
+  /// Linode Clone
+  record clone-linode-instance-params {
+    /// If this field is set to `true`, the created Linode will
+    /// automatically be enrolled in the Linode Backup service. This
+    backups-enabled: option<bool>,
+    /// An array of configuration profile IDs.
+    /// * If the `configs` parameter **is not provided**, then **all configuration profiles and their associated disks will be cloned** from the source Linode. Any disks specified by the `disks` parameter will also be cloned.
+    configs: option<list<s32>>,
+    /// An array of disk IDs.
+    /// * If the `disks` parameter **is not provided**, then **no extra disks will be cloned** from the source Linode. All disks associated with the configuration profiles specified by the `configs` parameter will still be cloned.
+    disks: option<list<s32>>,
+    /// A label used to group Linodes for display. Linodes are not required to have a group.
+    group: option<string>,
+    /// The label to assign this Linode when cloning to a new Linode.
+    /// * Can only be provided when cloning to a new Linode.
+    label: option<string>,
+    /// If an existing Linode is the target for the clone, the ID of that Linode. The existing Linode must have enough resources to accept the clone.
+    linode-id: option<s32>,
+    /// If true, the created Linode will have private networking enabled and assigned a private IPv4 address.
+    /// * Can only be provided when cloning to a new Linode.
+    private-ip: option<bool>,
+    /// This is the Region where the Linode will be deployed.
+    /// To view all available Regions you can deploy to see [/regions](/docs/api/regions/#regions-list).
+    region: option<string>,
+    /// A Linode's Type determines what resources are available to
+    /// it, including disk space, memory, and virtual cpus. The
+    type-op: option<string>
+  }
+  clone-linode-instance: func(params: clone-linode-instance-params) -> result<string, string>;
+
+  /// Configuration Profiles List
+  get-linode-configs: func() -> result<string, string>;
+
+  /// Configuration Profile Create
+  record add-linode-config-params {
+    body: string
+  }
+  add-linode-config: func(params: add-linode-config-params) -> result<string, string>;
+
+  /// Configuration Profile View
+  get-linode-config: func() -> result<string, string>;
+
+  /// Configuration Profile Update
+  record update-linode-config-params {
+    /// Optional field for arbitrary User comments on this Config.
+    comments: option<string>,
+    devices: option<devices>,
+    /// Helpers enabled when booting to this Linode Config.
+    helpers: option<linode-config-helpers>,
+    /// The ID of this Config.
+    id: option<s32>,
+    interfaces: option<linode-config-interfaces>,
+    /// A Kernel ID to boot a Linode with. Defaults to "linode/latest-64bit".
+    kernel: option<string>,
+    /// The Config's label is for display purposes only.
+    label: option<string>,
+    /// Defaults to the total RAM of the Linode.
+    memory-limit: option<s32>,
+    /// The root device to boot.
+    /// * If no value or an invalid value is provided, root device will default to `/dev/sda`.
+    root-device: option<string>,
+    /// Defines the state of your Linode after booting. Defaults to `default`.
+    run-level: option<linode-config-run-level-enum>,
+    /// Controls the virtualization mode. Defaults to `paravirt`.
+    /// * `paravirt` is suitable for most cases. Linodes running in paravirt mode
+    virt-mode: option<linode-config-virt-mode-enum>
+  }
+  update-linode-config: func(params: update-linode-config-params) -> result<string, string>;
+
+  /// Configuration Profile Delete
+  delete-linode-config: func() -> result<string, string>;
+
+  /// Disks List
+  get-linode-disks: func() -> result<string, string>;
+
+  /// Disk Create
+  record add-linode-disk-params {
+    body: string
+  }
+  add-linode-disk: func(params: add-linode-disk-params) -> result<string, string>;
+
+  /// Disk View
+  get-linode-disk: func() -> result<string, string>;
+
+  /// Disk Update
+  record update-disk-params {
+    /// When this Disk was created.
+    created: option<string>,
+    /// The Disk filesystem can be one of:
+    /// 
+    filesystem: option<disk-filesystem-enum>,
+    /// This Disk's ID which must be provided for all operations impacting this Disk.
+    id: option<s32>,
+    /// The Disk's label is for display purposes only.
+    label: option<string>,
+    /// The size of the Disk in MB.
+    size: option<s32>,
+    /// A brief description of this Disk's current state. This field may change without direct action from you, as a result of operations performed to the Disk or the Linode containing the Disk.
+    status: option<disk-status-enum>,
+    /// When this Disk was last updated.
+    updated: option<string>
+  }
+  update-disk: func(params: update-disk-params) -> result<string, string>;
+
+  /// Disk Delete
+  delete-disk: func() -> result<string, string>;
+
+  /// Disk Clone
+  clone-linode-disk: func() -> result<string, string>;
+
+  /// Disk Root Password Reset
+  record reset-disk-password-params {
+    /// The new root password for the OS installed on this Disk.
+    /// The password must meet the complexity strength validation requirements for a strong password.
+    password: string
+  }
+  reset-disk-password: func(params: reset-disk-password-params) -> result<string, string>;
+
+  /// Disk Resize
+  record resize-disk-params {
+    /// The desired size, in MB, of the disk.
+    size: s32
+  }
+  resize-disk: func(params: resize-disk-params) -> result<string, string>;
+
+  /// Firewalls List
+  get-linode-firewalls: func() -> result<string, string>;
+
+  /// Networking Information List
+  get-linode-i-ps: func() -> result<string, string>;
+
+  /// IPv4 Address Allocate
+  record add-linode-ip-params {
+    /// Whether to create a public or private IPv4 address.
+    public: bool,
+    /// The type of address you are allocating. Only IPv4 addresses may be allocated through this endpoint.
+    type-op: add-linode-ip-body-type-op-enum
+  }
+  add-linode-ip: func(params: add-linode-ip-params) -> result<string, string>;
+
+  /// IP Address View
+  get-linode-ip: func() -> result<string, string>;
+
+  /// IP Address Update
+  record update-linode-ip-params {
+    /// The reverse DNS assigned to this address. For public IPv4 addresses, this will be set to a default value provided by Linode if not explicitly set.
+    rdns: string
+  }
+  update-linode-ip: func(params: update-linode-ip-params) -> result<string, string>;
+
+  /// IPv4 Address Delete
+  remove-linode-ip: func() -> result<string, string>;
+
+  /// DC Migration/Pending Host Migration Initiate
+  record migrate-linode-instance-params {
+    /// The region to which the Linode will be migrated. Must be a valid region slug. A list of regions can be viewed by using the [GET /regions](/docs/api/regions/#regions-list) endpoint. A cross data center migration will cancel a pending migration that has not yet been initiated.
+    /// A cross data center migration will initiate a `linode_migrate_datacenter_create` event.
+    region: option<string>,
+    /// When initiating a cross DC migration, setting this value to true will also ensure that the Linode is upgraded to the latest generation of hardware that corresponds to your Linode's Type, if any free upgrades are available for it.
+    /// If no free upgrades are available, and this value is set to true, then the endpoint will return a 400 error code and the migration will not be performed.
+    upgrade: option<bool>
+  }
+  migrate-linode-instance: func(params: migrate-linode-instance-params) -> result<string, string>;
+
+  /// Linode Upgrade
+  record mutate-linode-instance-params {
+    /// Automatically resize disks when resizing a Linode. When resizing down to a smaller plan your Linode's data must fit within the smaller disk size.
+    allow-auto-disk-resize: option<bool>
+  }
+  mutate-linode-instance: func(params: mutate-linode-instance-params) -> result<string, string>;
+
+  /// Linode NodeBalancers View
+  get-linode-node-balancers: func() -> result<string, string>;
+
+  /// Linode Root Password Reset
+  record reset-linode-password-params {
+    /// The root user's password on this Linode. Linode passwords must meet a password strength score requirement that is calculated internally by the API. If the strength requirement is not met, you will receive a Password does not meet strength requirement error.
+    root-pass: string
+  }
+  reset-linode-password: func(params: reset-linode-password-params) -> result<string, string>;
+
+  /// Linode Reboot
+  record reboot-linode-instance-params {
+    /// The Linode Config ID to reboot into.  If null or omitted, the last booted config will be used.  If there was no last booted config and this Linode only has one config, it will be used.  If a config cannot be determined, an error will be returned.
+    config-id: option<s32>
+  }
+  reboot-linode-instance: func(params: reboot-linode-instance-params) -> result<string, string>;
+
+  /// Linode Rebuild
+  record rebuild-linode-instance-params {
+    body: string
+  }
+  rebuild-linode-instance: func(params: rebuild-linode-instance-params) -> result<string, string>;
+
+  /// Linode Boot into Rescue Mode
+  record rescue-linode-instance-params {
+    devices: option<rescue-devices>
+  }
+  rescue-linode-instance: func(params: rescue-linode-instance-params) -> result<string, string>;
+
+  /// Linode Resize
+  record resize-linode-instance-params {
+    /// Automatically resize disks when resizing a Linode. When resizing down to a smaller plan your Linode's data must fit within the smaller disk size.
+    allow-auto-disk-resize: option<bool>,
+    /// The ID representing the Linode Type.
+    type-op: string
+  }
+  resize-linode-instance: func(params: resize-linode-instance-params) -> result<string, string>;
+
+  /// Linode Shut Down
+  shutdown-linode-instance: func() -> result<string, string>;
+
+  /// Linode Statistics View
+  get-linode-stats: func() -> result<string, string>;
+
+  /// Statistics View (year/month)
+  get-linode-stats-by-year-month: func() -> result<string, string>;
+
+  /// Network Transfer View
+  get-linode-transfer: func() -> result<string, string>;
+
+  /// Network Transfer View (year/month)
+  get-linode-transfer-by-year-month: func() -> result<string, string>;
+
+  /// Linode's Volumes List
+  get-linode-volumes: func() -> result<string, string>;
+
+  /// Kernels List
+  get-kernels: func() -> result<string, string>;
+
+  /// Kernel View
+  get-kernel: func() -> result<string, string>;
+
+}
+
+interface stack-scripts {
+  /// A custom field defined by the User with a special syntax within a StackScript. Derived from the contents of the script.
+  record user-defined-field {
+    /// The default value.  If not specified, this value will be used.
+    default: option<string>,
+    /// An example value for the field.
+    example: string,
+    /// A human-readable label for the field that will serve as the input prompt for entering the value during deployment.
+    label: string,
+    /// A list of acceptable values for the field in any quantity, combination or order.
+    many-of: option<string>,
+    /// The name of the field.
+    name: string,
+    /// A list of acceptable single values for the field.
+    one-of: option<string>
+  }
+
+  /// StackScripts List
+  get-stack-scripts: func() -> result<string, string>;
+
+  /// StackScript Create
+  record add-stack-script-params {
+    body: string
+  }
+  add-stack-script: func(params: add-stack-script-params) -> result<string, string>;
+
+  /// StackScript View
+  get-stack-script: func() -> result<string, string>;
+
+  /// StackScript Update
+  record update-stack-script-params {
+    /// The date this StackScript was created.
+    created: option<string>,
+    /// Count of currently active, deployed Linodes created from this StackScript.
+    deployments-active: option<s32>,
+    /// The total number of times this StackScript has been deployed.
+    deployments-total: option<s32>,
+    /// A description for the StackScript.
+    description: option<string>,
+    /// The unique ID of this StackScript.
+    id: option<s32>,
+    /// An array of Image IDs. These are the Images that can be deployed with this StackScript.
+    /// 
+    images: option<list<string>>,
+    /// This determines whether other users can use your StackScript. **Once a StackScript is made public, it cannot be made private.**
+    is-public: option<bool>,
+    /// The StackScript's label is for display purposes only.
+    label: option<string>,
+    /// Returns `true` if this StackScript is owned by the account of the user making the request, and the user
+    /// making the request is unrestricted or has access to this StackScript.
+    mine: option<bool>,
+    /// This field allows you to add notes for the set of revisions made to this StackScript.
+    rev-note: option<string>,
+    /// The script to execute when provisioning a new Linode with this StackScript.
+    script: option<string>,
+    /// The date this StackScript was last updated.
+    updated: option<string>,
+    /// This is a list of fields defined with a special syntax inside this StackScript that allow for supplying customized parameters during deployment. See [Declare User-Defined Fields (UDFs)](/docs/products/tools/stackscripts/guides/write-a-custom-script/#declare-user-defined-fields-udfs) for more information.
+    user-defined-fields: option<list<user-defined-field>>,
+    /// The Gravatar ID for the User who created the StackScript.
+    user-gravatar-id: option<string>,
+    /// The User who created the StackScript.
+    username: option<string>
+  }
+  update-stack-script: func(params: update-stack-script-params) -> result<string, string>;
+
+  /// StackScript Delete
+  delete-stack-script: func() -> result<string, string>;
+
+}
+
+interface linode-types {
+  /// Types List
+  get-linode-types: func() -> result<string, string>;
+
+  /// Type View
+  get-linode-type: func() -> result<string, string>;
+
+}
+
+interface linode-kubernetes-engine-lke {
+  /// Defines settings for the Kubernetes Control Plane. Allows for the enabling of High Availability (HA) for Control Plane Components. Enabling High Availability for LKE is an **irreversible** change.
+  record create-lke-cluster-body-control-plane {
+    /// Defines whether High Availability is enabled for the Control Plane Components of the cluster. Defaults to `false`.
+    high-availability: option<bool>
+  }
+
+  /// The desired Kubernetes version for this Kubernetes cluster in the format of &lt;major&gt;.&lt;minor&gt;, and the latest supported patch version will be deployed.
+  record lke-cluster-properties-k8s-version {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This Kubernetes cluster's unique label for display purposes only.
+  /// Labels have the following constraints:
+  /// 
+  ///   * UTF-8 characters will be returned by the API using escape
+  ///     sequences of their Unicode code points. For example, the
+  ///     Japanese character *か* is 3 bytes in UTF-8 (`0xE382AB`). Its
+  ///     Unicode code point is 2 bytes (`0x30AB`). APIv4 supports this
+  ///     character and the API will return it as the escape sequence
+  ///     using six 1 byte characters which represent 2 bytes of Unicode
+  ///     code point (`"\u30ab"`).
+  ///   * 4 byte UTF-8 characters are not supported.
+  ///   * If the label is entirely composed of UTF-8 characters, the API
+  ///     response will return the code points using up to 193 1 byte
+  ///     characters.
+  record lke-cluster-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This Kubernetes cluster's location.
+  record lke-cluster-properties-region {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// An array of tags applied to the Kubernetes cluster. Tags are for organizational purposes only.
+  record lke-cluster-properties-tags {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Defines settings for the Kubernetes Control Plane. Allows for the enabling of High Availability (HA) for Control Plane Components.
+  /// 
+  /// Enabling High Availability for LKE is an **irreversible** change.
+  /// 
+  /// When upgrading pre-existing LKE clusters to use the HA Control Plane, the following changes will additionally occur:
+  /// 
+  /// - All nodes will be deleted and new nodes will be created to replace them.
+  /// 
+  /// - Any local storage (such as `hostPath` volumes) will be erased.
+  /// 
+  /// - The upgrade process may take several minutes to complete, as nodes will be replaced on a rolling basis.
+  record put-lke-cluster-body-control-plane {
+    /// Defines whether High Availability is enabled for the Control Plane Components of the cluster. Defaults to `false`.
+    high-availability: option<bool>
+  }
+
+  /// When enabled, the number of nodes autoscales within the defined minimum and maximum values.
+  /// 
+  /// When making a request, `max` and `min` require each other.
+  record lke-node-pool-request-body-properties-autoscaler {
+    /// Whether autoscaling is enabled for this Node Pool. Defaults to `false`.
+    enabled: option<bool>,
+    /// The maximum number of nodes to autoscale to. Defaults to the Node Pool's `count`. Defaults to the value provided by the `count` field.
+    max: option<s32>,
+    /// The minimum number of nodes to autoscale to. Defaults to the Node Pool's `count`.
+    min: option<s32>
+  }
+
+  /// The number of nodes in the Node Pool.
+  record lke-node-pool-request-body-properties-count {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Kubernetes Clusters List
+  get-lke-clusters: func() -> result<string, string>;
+
+  /// Kubernetes Cluster Create
+  record create-lke-cluster-params {
+    /// Defines settings for the Kubernetes Control Plane. Allows for the enabling of High Availability (HA) for Control Plane Components. Enabling High Availability for LKE is an **irreversible** change.
+    control-plane: option<create-lke-cluster-body-control-plane>,
+    k8s-version: lke-cluster-properties-k8s-version,
+    label: lke-cluster-properties-label,
+    node-pools: string,
+    region: lke-cluster-properties-region,
+    tags: option<lke-cluster-properties-tags>
+  }
+  create-lke-cluster: func(params: create-lke-cluster-params) -> result<string, string>;
+
+  /// Kubernetes Cluster View
+  get-lke-cluster: func() -> result<string, string>;
+
+  /// Kubernetes Cluster Update
+  record put-lke-cluster-params {
+    /// Defines settings for the Kubernetes Control Plane. Allows for the enabling of High Availability (HA) for Control Plane Components.
+    /// 
+    control-plane: option<put-lke-cluster-body-control-plane>,
+    /// The desired Kubernetes version for this Kubernetes cluster in the format of &lt;major&gt;.&lt;minor&gt;. New and recycled Nodes in this cluster will be installed with the latest available patch for the Cluster's Kubernetes version.
+    /// 
+    k8s-version: option<string>,
+    label: option<lke-cluster-properties-label>,
+    /// An array of tags applied to the Kubernetes cluster. Tags are for organizational purposes only. To delete a tag, exclude it from your `tags` array.
+    tags: option<list<string>>
+  }
+  put-lke-cluster: func(params: put-lke-cluster-params) -> result<string, string>;
+
+  /// Kubernetes Cluster Delete
+  delete-lke-cluster: func() -> result<string, string>;
+
+  /// Kubernetes API Endpoints List
+  get-lke-cluster-api-endpoints: func() -> result<string, string>;
+
+  /// Kubernetes Cluster Dashboard URL View
+  get-lke-cluster-dashboard: func() -> result<string, string>;
+
+  /// Kubeconfig View
+  get-lke-cluster-kubeconfig: func() -> result<string, string>;
+
+  /// Kubeconfig Delete
+  delete-lke-cluster-kubeconfig: func() -> result<string, string>;
+
+  /// Node View
+  get-lke-cluster-node: func() -> result<string, string>;
+
+  /// Node Delete
+  delete-lke-cluster-node: func() -> result<string, string>;
+
+  /// Node Recycle
+  post-lke-cluster-node-recycle: func() -> result<string, string>;
+
+  /// Node Pools List
+  get-lke-cluster-pools: func() -> result<string, string>;
+
+  /// Node Pool Create
+  record post-lke-cluster-pools-params {
+    body: string
+  }
+  post-lke-cluster-pools: func(params: post-lke-cluster-pools-params) -> result<string, string>;
+
+  /// Node Pool View
+  get-lke-node-pool: func() -> result<string, string>;
+
+  /// Node Pool Update
+  record put-lke-node-pool-params {
+    autoscaler: option<lke-node-pool-request-body-properties-autoscaler>,
+    count: option<lke-node-pool-request-body-properties-count>
+  }
+  put-lke-node-pool: func(params: put-lke-node-pool-params) -> result<string, string>;
+
+  /// Node Pool Delete
+  delete-lke-node-pool: func() -> result<string, string>;
+
+  /// Node Pool Recycle
+  post-lke-cluster-pool-recycle: func() -> result<string, string>;
+
+  /// Cluster Nodes Recycle
+  post-lke-cluster-recycle: func() -> result<string, string>;
+
+  /// Kubernetes Cluster Regenerate
+  record post-lke-cluster-regenerate-params {
+    /// Whether to delete and regenerate the Kubeconfig file for this Cluster.
+    kubeconfig: option<bool>,
+    /// Whether to delete and regenerate the service access token for this Cluster.
+    servicetoken: option<bool>
+  }
+  post-lke-cluster-regenerate: func(params: post-lke-cluster-regenerate-params) -> result<string, string>;
+
+  /// Service Token Delete
+  post-lkec-service-token-delete: func() -> result<string, string>;
+
+  /// Kubernetes Versions List
+  get-lke-versions: func() -> result<string, string>;
+
+  /// Kubernetes Version View
+  get-lke-version: func() -> result<string, string>;
+
+}
+
+interface longview {
+  enum longview-plan-longview-subscription-enum {
+    longview-v3,
+    longview-v10,
+    longview-v40,
+    longview-v100,
+  }
+
+  /// The apps this Client is monitoring on your Linode. This is configured when you install the Longview Client application, and is present here for information purposes only.
+  record longview-client-apps {
+    /// If True, the Apache Longview Client module is monitoring Apache on your server.
+    apache: option<bool>,
+    /// If True, the MySQL Longview Client modules is monitoring MySQL on your server.
+    mysql: option<bool>,
+    /// If True, the Nginx Longview Client module is monitoring Nginx on your server.
+    nginx: option<bool>
+  }
+
+  /// Longview Clients List
+  get-longview-clients: func() -> result<string, string>;
+
+  /// Longview Client Create
+  record create-longview-client-params {
+    /// The API key for this Client, used when configuring the Longview
+    /// Client application on your Linode.
+    api-key: option<string>,
+    /// The apps this Client is monitoring on your Linode. This is configured when you install the Longview Client application, and is present here for information purposes only.
+    apps: option<longview-client-apps>,
+    /// When this Longview Client was created.
+    created: option<string>,
+    /// This Client's unique ID.
+    id: option<s32>,
+    /// The install code for this Client, used when configuring the Longview
+    /// Client application on your Linode.
+    install-code: option<string>,
+    /// This Client's unique label. This is for display purposes only.
+    label: option<string>,
+    /// When this Longview Client was last updated.
+    updated: option<string>
+  }
+  create-longview-client: func(params: create-longview-client-params) -> result<string, string>;
+
+  /// Longview Client View
+  get-longview-client: func() -> result<string, string>;
+
+  /// Longview Client Update
+  record update-longview-client-params {
+    /// The API key for this Client, used when configuring the Longview
+    /// Client application on your Linode.
+    api-key: option<string>,
+    /// The apps this Client is monitoring on your Linode. This is configured when you install the Longview Client application, and is present here for information purposes only.
+    apps: option<longview-client-apps>,
+    /// When this Longview Client was created.
+    created: option<string>,
+    /// This Client's unique ID.
+    id: option<s32>,
+    /// The install code for this Client, used when configuring the Longview
+    /// Client application on your Linode.
+    install-code: option<string>,
+    /// This Client's unique label. This is for display purposes only.
+    label: option<string>,
+    /// When this Longview Client was last updated.
+    updated: option<string>
+  }
+  update-longview-client: func(params: update-longview-client-params) -> result<string, string>;
+
+  /// Longview Client Delete
+  delete-longview-client: func() -> result<string, string>;
+
+  /// Longview Plan View
+  get-longview-plan: func() -> result<string, string>;
+
+  /// Longview Plan Update
+  record update-longview-plan-params {
+    /// The subscription ID for a particular Longview plan. A value of `null` corresponds to Longview Free.
+    /// 
+    longview-subscription: option<longview-plan-longview-subscription-enum>
+  }
+  update-longview-plan: func(params: update-longview-plan-params) -> result<string, string>;
+
+  /// Longview Subscriptions List
+  get-longview-subscriptions: func() -> result<string, string>;
+
+  /// Longview Subscription View
+  get-longview-subscription: func() -> result<string, string>;
+
+}
+
+interface managed {
+  enum managed-service-service-type-enum {
+    url,
+    tcp,
+  }
+
+  enum managed-service-status-enum {
+    disabled,
+    pending,
+    ok,
+    problem,
+  }
+
+  /// Information about how to reach this Contact by phone.
+  record managed-contact-phone {
+    /// This Contact's primary phone number.
+    primary: option<string>,
+    /// This Contact's secondary phone number.
+    secondary: option<string>
+  }
+
+  /// The SSH settings for this Linode.
+  record managed-linode-settings-ssh {
+    /// If true, Linode special forces may access this Linode over ssh to respond to Issues.
+    access: option<bool>,
+    /// The IP Linode special forces should use to access this Linode
+    /// when responding to an Issue.
+    ip: option<string>,
+    /// The port Linode special forces should use to access this Linode
+    /// over ssh to respond to an Issue.
+    port: option<s32>,
+    /// The specific user, if any, Linode's special forces should use when accessing this
+    /// Linode to respond to an issue.
+    user: option<string>
+  }
+
+  /// Managed Contacts List
+  get-managed-contacts: func() -> result<string, string>;
+
+  /// Managed Contact Create
+  record create-managed-contact-params {
+    /// The address to email this Contact to alert them of issues.
+    email: option<string>,
+    /// A grouping for this Contact. This is for display purposes only.
+    group: option<string>,
+    /// This Contact's unique ID.
+    id: option<s32>,
+    /// The name of this Contact.
+    name: option<string>,
+    /// Information about how to reach this Contact by phone.
+    phone: option<managed-contact-phone>,
+    /// When this Contact was last updated.
+    updated: option<string>
+  }
+  create-managed-contact: func(params: create-managed-contact-params) -> result<string, string>;
+
+  /// Managed Contact View
+  get-managed-contact: func() -> result<string, string>;
+
+  /// Managed Contact Update
+  record update-managed-contact-params {
+    /// The address to email this Contact to alert them of issues.
+    email: option<string>,
+    /// A grouping for this Contact. This is for display purposes only.
+    group: option<string>,
+    /// This Contact's unique ID.
+    id: option<s32>,
+    /// The name of this Contact.
+    name: option<string>,
+    /// Information about how to reach this Contact by phone.
+    phone: option<managed-contact-phone>,
+    /// When this Contact was last updated.
+    updated: option<string>
+  }
+  update-managed-contact: func(params: update-managed-contact-params) -> result<string, string>;
+
+  /// Managed Contact Delete
+  delete-managed-contact: func() -> result<string, string>;
+
+  /// Managed Credentials List
+  get-managed-credentials: func() -> result<string, string>;
+
+  /// Managed Credential Create
+  record create-managed-credential-params {
+    body: option<string>
+  }
+  create-managed-credential: func(params: create-managed-credential-params) -> result<string, string>;
+
+  /// Managed SSH Key View
+  view-managed-ssh-key: func() -> result<string, string>;
+
+  /// Managed Credential View
+  get-managed-credential: func() -> result<string, string>;
+
+  /// Managed Credential Update
+  record update-managed-credential-params {
+    /// This Credential's unique ID.
+    id: option<s32>,
+    /// The unique label for this Credential. This is for display purposes only.
+    label: option<string>,
+    /// The date this Credential was last decrypted by a member of Linode special forces.
+    last-decrypted: option<string>
+  }
+  update-managed-credential: func(params: update-managed-credential-params) -> result<string, string>;
+
+  /// Managed Credential Delete
+  delete-managed-credential: func() -> result<string, string>;
+
+  /// Managed Credential Username and Password Update
+  record update-managed-credential-username-password-params {
+    /// The password to use when accessing the Managed Service.
+    password: string,
+    /// The username to use when accessing the Managed Service.
+    username: option<string>
+  }
+  update-managed-credential-username-password: func(params: update-managed-credential-username-password-params) -> result<string, string>;
+
+  /// Managed Issues List
+  get-managed-issues: func() -> result<string, string>;
+
+  /// Managed Issue View
+  get-managed-issue: func() -> result<string, string>;
+
+  /// Managed Linode Settings List
+  get-managed-linode-settings: func() -> result<string, string>;
+
+  /// Linode's Managed Settings View
+  get-managed-linode-setting: func() -> result<string, string>;
+
+  /// Linode's Managed Settings Update
+  record update-managed-linode-setting-params {
+    /// The group of the Linode these Settings are for. This is for display purposes only.
+    group: option<string>,
+    /// The ID of the Linode these Settings are for.
+    id: option<s32>,
+    /// The label of the Linode these Settings are for.
+    label: option<string>,
+    /// The SSH settings for this Linode.
+    ssh: option<managed-linode-settings-ssh>
+  }
+  update-managed-linode-setting: func(params: update-managed-linode-setting-params) -> result<string, string>;
+
+  /// Managed Services List
+  get-managed-services: func() -> result<string, string>;
+
+  /// Managed Service Create
+  record create-managed-service-params {
+    body: option<string>
+  }
+  create-managed-service: func(params: create-managed-service-params) -> result<string, string>;
+
+  /// Managed Service View
+  get-managed-service: func() -> result<string, string>;
+
+  /// Managed Service Update
+  record update-managed-service-params {
+    /// The URL at which this Service is monitored.
+    /// 
+    address: option<string>,
+    /// What to expect to find in the response body for the Service to be considered up.
+    body: option<string>,
+    /// The group of ManagedContacts who should be notified or consulted with when an Issue is detected.
+    consultation-group: option<string>,
+    /// When this Managed Service was created.
+    created: option<string>,
+    /// An array of ManagedCredential IDs that should be used when attempting to resolve issues with this Service.
+    credentials: option<list<s32>>,
+    /// This Service's unique ID.
+    id: option<s32>,
+    /// The label for this Service. This is for display purposes only.
+    label: option<string>,
+    /// Any information relevant to the Service that Linode special forces should know when attempting to resolve Issues.
+    notes: option<string>,
+    /// The Region in which this Service is located. This is required if address is a private IP, and may not be set otherwise.
+    region: option<string>,
+    /// How this Service is monitored.
+    service-type: option<managed-service-service-type-enum>,
+    /// The current status of this Service.
+    status: option<managed-service-status-enum>,
+    /// How long to wait, in seconds, for a response before considering the Service to be down.
+    timeout: option<s32>,
+    /// When this Managed Service was last updated.
+    updated: option<string>
+  }
+  update-managed-service: func(params: update-managed-service-params) -> result<string, string>;
+
+  /// Managed Service Delete
+  delete-managed-service: func() -> result<string, string>;
+
+  /// Managed Service Disable
+  disable-managed-service: func() -> result<string, string>;
+
+  /// Managed Service Enable
+  enable-managed-service: func() -> result<string, string>;
+
+  /// Managed Stats List
+  get-managed-stats: func() -> result<string, string>;
+
+}
+
+interface networking {
+  enum update-firewall-body-status-enum {
+    enabled,
+    disabled,
+  }
+
+  enum allocate-ip-body-type-op-enum {
+    ipv4,
+  }
+
+  /// Devices to create for this Firewall.
+  /// When a Device is created, the Firewall is assigned to its associated service.
+  /// Currently, Devices can only be created for Linode instances.
+  record create-firewalls-body-devices {
+    /// An array of Linode IDs. A Firewall Device is created for each ID.
+    linodes: option<list<s32>>
+  }
+
+  record create-firewalls-body-rules {
+    inbound: option<string>,
+    outbound: option<string>
+  }
+
+  /// The Firewall's label, for display purposes only.
+  /// 
+  /// Firewall labels have the following constraints:
+  /// 
+  ///   * Must begin and end with an alphanumeric character.
+  ///   * May only consist of alphanumeric characters, dashes (`-`), underscores (`_`) or periods (`.`).
+  ///   * Cannot have two dashes (`--`), underscores (`__`) or periods (`..`) in a row.
+  ///   * Must be between 3 and 32 characters.
+  ///   * Must be unique.
+  record firewall-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// An array of tags applied to this object. Tags are for organizational purposes only.
+  record firewall-properties-tags {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Firewalls List
+  get-firewalls: func() -> result<string, string>;
+
+  /// Firewall Create
+  record create-firewalls-params {
+    /// Devices to create for this Firewall.
+    /// When a Device is created, the Firewall is assigned to its associated service.
+    devices: option<create-firewalls-body-devices>,
+    rules: create-firewalls-body-rules
+  }
+  create-firewalls: func(params: create-firewalls-params) -> result<string, string>;
+
+  /// Firewall View
+  get-firewall: func() -> result<string, string>;
+
+  /// Firewall Update
+  record update-firewall-params {
+    label: option<firewall-properties-label>,
+    /// The status to be applied to this Firewall.
+    ///  
+    status: option<update-firewall-body-status-enum>,
+    tags: option<firewall-properties-tags>
+  }
+  update-firewall: func(params: update-firewall-params) -> result<string, string>;
+
+  /// Firewall Delete
+  delete-firewall: func() -> result<string, string>;
+
+  /// Firewall Devices List
+  get-firewall-devices: func() -> result<string, string>;
+
+  /// Firewall Device Create
+  record create-firewall-device-params {
+    body: option<string>
+  }
+  create-firewall-device: func(params: create-firewall-device-params) -> result<string, string>;
+
+  /// Firewall Device View
+  get-firewall-device: func() -> result<string, string>;
+
+  /// Firewall Device Delete
+  delete-firewall-device: func() -> result<string, string>;
+
+  /// Firewall Rules List
+  get-firewall-rules: func() -> result<string, string>;
+
+  /// Firewall Rules Update
+  record update-firewall-rules-params {
+    inbound: option<string>,
+    outbound: option<string>
+  }
+  update-firewall-rules: func(params: update-firewall-rules-params) -> result<string, string>;
+
+  /// IP Addresses List
+  get-i-ps: func() -> result<string, string>;
+
+  /// IP Address Allocate
+  record allocate-ip-params {
+    /// The ID of a Linode you you have access to that this address will be allocated to.
+    linode-id: s32,
+    /// Whether to create a public or private IPv4 address.
+    public: bool,
+    /// The type of address you are requesting. Only IPv4 addresses may be allocated through this endpoint.
+    type-op: allocate-ip-body-type-op-enum
+  }
+  allocate-ip: func(params: allocate-ip-params) -> result<string, string>;
+
+  /// IP Addresses Assign
+  record assign-i-ps-params {
+    /// The list of assignments to make. You must have read_write access to all IPs being assigned and all Linodes being assigned to in order for the assignments to succeed.
+    assignments: string,
+    /// The ID of the Region in which these assignments are to take place. All IPs and Linodes must exist in this Region.
+    region: string
+  }
+  assign-i-ps: func(params: assign-i-ps-params) -> result<string, string>;
+
+  /// IP Addresses Share
+  record share-i-ps-params {
+    /// A list of secondary Linode IPs to share with the primary Linode.
+    /// * Can include both IPv4 addresses and IPv6 ranges (omit /56 and /64 prefix lengths)
+    ips: list<string>,
+    /// The ID of the primary Linode that the addresses will be shared with.
+    linode-id: s32
+  }
+  share-i-ps: func(params: share-i-ps-params) -> result<string, string>;
+
+  /// IP Address View
+  get-ip: func() -> result<string, string>;
+
+  /// IP Address RDNS Update
+  record update-ip-params {
+    /// The reverse DNS assigned to this address. For public IPv4 addresses, this will be set to a default value provided by Linode if not explicitly set.
+    rdns: string
+  }
+  update-ip: func(params: update-ip-params) -> result<string, string>;
+
+  /// Linodes Assign IPv4s
+  record assign-i-pv4s-params {
+    /// The list of assignments to make. You must have read_write access to all IPs being assigned and all Linodes being assigned to in order for the assignments to succeed.
+    assignments: string,
+    /// The ID of the Region in which these assignments are to take place. All IPs and Linodes must exist in this Region.
+    region: string
+  }
+  assign-i-pv4s: func(params: assign-i-pv4s-params) -> result<string, string>;
+
+  /// IPv4 Sharing Configure
+  record share-i-pv4s-params {
+    /// A list of secondary Linode IPs to share with the primary Linode.
+    /// * Can include both IPv4 addresses and IPv6 ranges (omit /56 and /64 prefix lengths)
+    ips: list<string>,
+    /// The ID of the primary Linode that the addresses will be shared with.
+    linode-id: s32
+  }
+  share-i-pv4s: func(params: share-i-pv4s-params) -> result<string, string>;
+
+  /// IPv6 Pools List
+  get-i-pv6-pools: func() -> result<string, string>;
+
+  /// IPv6 Ranges List
+  get-i-pv6-ranges: func() -> result<string, string>;
+
+  /// IPv6 Range Create
+  record post-i-pv6-range-params {
+    /// The ID of the Linode to assign this range to. The SLAAC address for the provided Linode is used as the range's `route_target`.
+    /// 
+    linode-id: option<s32>,
+    /// The prefix length of the IPv6 range.
+    prefix-length: s32,
+    /// The IPv6 SLAAC address to assign this range to.
+    /// 
+    route-target: option<string>
+  }
+  post-i-pv6-range: func(params: post-i-pv6-range-params) -> result<string, string>;
+
+  /// IPv6 Range View
+  get-i-pv6-range: func() -> result<string, string>;
+
+  /// IPv6 Range Delete
+  delete-i-pv6-range: func() -> result<string, string>;
+
+  /// VLANs List
+  get-vla-ns: func() -> result<string, string>;
+
+}
+
+interface node-balancers {
+  enum node-balancer-config-algorithm-enum {
+    roundrobin,
+    leastconn,
+    source,
+  }
+
+  enum node-balancer-config-check-enum {
+    none,
+    connection,
+    http,
+    http-body,
+  }
+
+  enum node-balancer-config-cipher-suite-enum {
+    recommended,
+    legacy,
+  }
+
+  enum node-balancer-config-protocol-enum {
+    http,
+    https,
+    tcp,
+  }
+
+  enum node-balancer-config-proxy-protocol-enum {
+    none,
+    v1,
+    v2,
+  }
+
+  enum node-balancer-config-stickiness-enum {
+    none,
+    table,
+    http-cookie,
+  }
+
+  enum node-balancer-node-mode-enum {
+    accept,
+    reject,
+    drain,
+    backup,
+  }
+
+  enum node-balancer-node-status-enum {
+    unknown,
+    up,
+    down,
+  }
+
+  /// Throttle connections per second.  Set to 0 (zero) to disable throttling.
+  record node-balancer-properties-client-conn-throttle {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This NodeBalancer's label. These must be unique on your Account.
+  record node-balancer-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Information about the amount of transfer this NodeBalancer has had so far this month.
+  record node-balancer-transfer {
+    /// The total outbound transfer, in MB, used for this NodeBalancer this month.
+    in: option<f64>,
+    /// The total inbound transfer, in MB, used for this NodeBalancer this month.
+    out: option<f64>,
+    /// The total transfer, in MB, used by this NodeBalancer this month.
+    total: option<f64>
+  }
+
+  /// A structure containing information about the health of the backends for this port.  This information is updated periodically as checks are performed against backends.
+  record node-balancer-config-nodes-status {
+    /// The number of backends considered to be "DOWN" and unhealthy.  These are not in rotation, and not serving requests.
+    down: option<s32>,
+    /// The number of backends considered to be "UP" and healthy, and that are serving requests.
+    up: option<s32>
+  }
+
+  /// NodeBalancers List
+  get-node-balancers: func() -> result<string, string>;
+
+  /// NodeBalancer Create
+  record create-node-balancer-params {
+    client-conn-throttle: option<node-balancer-properties-client-conn-throttle>,
+    /// The port Config(s) to create for this NodeBalancer.
+    /// 
+    configs: option<string>,
+    label: option<node-balancer-properties-label>,
+    /// The ID of the Region to create this NodeBalancer in.
+    region: string
+  }
+  create-node-balancer: func(params: create-node-balancer-params) -> result<string, string>;
+
+  /// NodeBalancer View
+  get-node-balancer: func() -> result<string, string>;
+
+  /// NodeBalancer Update
+  record update-node-balancer-params {
+    /// Throttle connections per second.  Set to 0 (zero) to disable throttling.
+    client-conn-throttle: option<s32>,
+    /// When this NodeBalancer was created.
+    created: option<string>,
+    /// This NodeBalancer's hostname, beginning with its IP address and ending with _.ip.linodeusercontent.com_.
+    hostname: option<string>,
+    /// This NodeBalancer's unique ID.
+    id: option<s32>,
+    /// This NodeBalancer's public IPv4 address.
+    ipv4: option<string>,
+    /// This NodeBalancer's public IPv6 address.
+    ipv6: option<string>,
+    /// This NodeBalancer's label. These must be unique on your Account.
+    label: option<string>,
+    /// The Region where this NodeBalancer is located. NodeBalancers only support backends in the same Region.
+    region: option<string>,
+    /// An array of Tags applied to this object.  Tags are for organizational purposes only.
+    tags: option<list<string>>,
+    /// Information about the amount of transfer this NodeBalancer has had so far this month.
+    transfer: option<node-balancer-transfer>,
+    /// When this NodeBalancer was last updated.
+    updated: option<string>
+  }
+  update-node-balancer: func(params: update-node-balancer-params) -> result<string, string>;
+
+  /// NodeBalancer Delete
+  delete-node-balancer: func() -> result<string, string>;
+
+  /// Configs List
+  get-node-balancer-configs: func() -> result<string, string>;
+
+  /// Config Create
+  record create-node-balancer-config-params {
+    /// What algorithm this NodeBalancer should use for routing traffic to backends.
+    algorithm: option<node-balancer-config-algorithm-enum>,
+    /// The type of check to perform against backends to ensure they are serving requests. This is used to determine if backends are up or down.
+    /// * If `none` no check is performed.
+    check: option<node-balancer-config-check-enum>,
+    /// How many times to attempt a check before considering a backend to be down.
+    check-attempts: option<s32>,
+    /// This value must be present in the response body of the check in order for it to pass. If this value is not present in the response body of a check request, the backend is considered to be down.
+    check-body: option<string>,
+    /// How often, in seconds, to check that backends are up and serving requests.
+    /// 
+    check-interval: option<s32>,
+    /// If true, any response from this backend with a `5xx` status code will be enough for it to be considered unhealthy and taken out of rotation.
+    check-passive: option<bool>,
+    /// The URL path to check on each backend. If the backend does not respond to this request it is considered to be down.
+    check-path: option<string>,
+    /// How long, in seconds, to wait for a check attempt before considering it failed.
+    /// 
+    check-timeout: option<s32>,
+    /// What ciphers to use for SSL connections served by this NodeBalancer.
+    /// 
+    cipher-suite: option<node-balancer-config-cipher-suite-enum>,
+    /// This config's unique ID
+    id: option<s32>,
+    /// The ID for the NodeBalancer this config belongs to.
+    nodebalancer-id: option<s32>,
+    /// A structure containing information about the health of the backends for this port.  This information is updated periodically as checks are performed against backends.
+    nodes-status: option<node-balancer-config-nodes-status>,
+    /// The port this Config is for. These values must be unique across configs on a single NodeBalancer (you can't have two configs for port 80, for example).  While some ports imply some protocols, no enforcement is done and you may configure your NodeBalancer however is useful to you. For example, while port 443 is generally used for HTTPS, you do not need SSL configured to have a NodeBalancer listening on port 443.
+    port: option<s32>,
+    /// The protocol this port is configured to serve.
+    /// 
+    protocol: option<node-balancer-config-protocol-enum>,
+    /// ProxyProtocol is a TCP extension that sends initial TCP connection information such as source/destination IPs and ports to backend devices. This information would be lost otherwise. Backend devices must be configured to work with ProxyProtocol if enabled.
+    /// 
+    proxy-protocol: option<node-balancer-config-proxy-protocol-enum>,
+    /// The PEM-formatted public SSL certificate (or the combined PEM-formatted SSL
+    /// certificate and Certificate Authority chain) that should be served on this
+    ssl-cert: option<string>,
+    /// The read-only common name automatically derived from the SSL certificate assigned to this NodeBalancerConfig. Please refer to this field to verify that the appropriate certificate is assigned to your NodeBalancerConfig.
+    ssl-commonname: option<string>,
+    /// The read-only SHA1-encoded fingerprint automatically derived from the SSL certificate assigned to this NodeBalancerConfig. Please refer to this field to verify that the appropriate certificate is assigned to your NodeBalancerConfig.
+    ssl-fingerprint: option<string>,
+    /// The PEM-formatted private key for the SSL certificate set in the `ssl_cert` field.
+    /// 
+    ssl-key: option<string>,
+    /// Controls how session stickiness is handled on this port.
+    /// * If set to `none` connections will always be assigned a backend based on the algorithm configured.
+    stickiness: option<node-balancer-config-stickiness-enum>
+  }
+  create-node-balancer-config: func(params: create-node-balancer-config-params) -> result<string, string>;
+
+  /// Config View
+  get-node-balancer-config: func() -> result<string, string>;
+
+  /// Config Update
+  record update-node-balancer-config-params {
+    /// What algorithm this NodeBalancer should use for routing traffic to backends.
+    algorithm: option<node-balancer-config-algorithm-enum>,
+    /// The type of check to perform against backends to ensure they are serving requests. This is used to determine if backends are up or down.
+    /// * If `none` no check is performed.
+    check: option<node-balancer-config-check-enum>,
+    /// How many times to attempt a check before considering a backend to be down.
+    check-attempts: option<s32>,
+    /// This value must be present in the response body of the check in order for it to pass. If this value is not present in the response body of a check request, the backend is considered to be down.
+    check-body: option<string>,
+    /// How often, in seconds, to check that backends are up and serving requests.
+    /// 
+    check-interval: option<s32>,
+    /// If true, any response from this backend with a `5xx` status code will be enough for it to be considered unhealthy and taken out of rotation.
+    check-passive: option<bool>,
+    /// The URL path to check on each backend. If the backend does not respond to this request it is considered to be down.
+    check-path: option<string>,
+    /// How long, in seconds, to wait for a check attempt before considering it failed.
+    /// 
+    check-timeout: option<s32>,
+    /// What ciphers to use for SSL connections served by this NodeBalancer.
+    /// 
+    cipher-suite: option<node-balancer-config-cipher-suite-enum>,
+    /// This config's unique ID
+    id: option<s32>,
+    /// The ID for the NodeBalancer this config belongs to.
+    nodebalancer-id: option<s32>,
+    /// A structure containing information about the health of the backends for this port.  This information is updated periodically as checks are performed against backends.
+    nodes-status: option<node-balancer-config-nodes-status>,
+    /// The port this Config is for. These values must be unique across configs on a single NodeBalancer (you can't have two configs for port 80, for example).  While some ports imply some protocols, no enforcement is done and you may configure your NodeBalancer however is useful to you. For example, while port 443 is generally used for HTTPS, you do not need SSL configured to have a NodeBalancer listening on port 443.
+    port: option<s32>,
+    /// The protocol this port is configured to serve.
+    /// 
+    protocol: option<node-balancer-config-protocol-enum>,
+    /// ProxyProtocol is a TCP extension that sends initial TCP connection information such as source/destination IPs and ports to backend devices. This information would be lost otherwise. Backend devices must be configured to work with ProxyProtocol if enabled.
+    /// 
+    proxy-protocol: option<node-balancer-config-proxy-protocol-enum>,
+    /// The PEM-formatted public SSL certificate (or the combined PEM-formatted SSL
+    /// certificate and Certificate Authority chain) that should be served on this
+    ssl-cert: option<string>,
+    /// The read-only common name automatically derived from the SSL certificate assigned to this NodeBalancerConfig. Please refer to this field to verify that the appropriate certificate is assigned to your NodeBalancerConfig.
+    ssl-commonname: option<string>,
+    /// The read-only SHA1-encoded fingerprint automatically derived from the SSL certificate assigned to this NodeBalancerConfig. Please refer to this field to verify that the appropriate certificate is assigned to your NodeBalancerConfig.
+    ssl-fingerprint: option<string>,
+    /// The PEM-formatted private key for the SSL certificate set in the `ssl_cert` field.
+    /// 
+    ssl-key: option<string>,
+    /// Controls how session stickiness is handled on this port.
+    /// * If set to `none` connections will always be assigned a backend based on the algorithm configured.
+    stickiness: option<node-balancer-config-stickiness-enum>
+  }
+  update-node-balancer-config: func(params: update-node-balancer-config-params) -> result<string, string>;
+
+  /// Config Delete
+  delete-node-balancer-config: func() -> result<string, string>;
+
+  /// Nodes List
+  get-node-balancer-config-nodes: func() -> result<string, string>;
+
+  /// Node Create
+  record create-node-balancer-node-params {
+    body: string
+  }
+  create-node-balancer-node: func(params: create-node-balancer-node-params) -> result<string, string>;
+
+  /// Node View
+  get-node-balancer-node: func() -> result<string, string>;
+
+  /// Node Update
+  record update-node-balancer-node-params {
+    /// The private IP Address where this backend can be reached. This _must_ be a private IP address.
+    address: option<string>,
+    /// The NodeBalancer Config ID that this Node belongs to.
+    config-id: option<s32>,
+    /// This node's unique ID.
+    id: option<s32>,
+    /// The label for this node.  This is for display purposes only.
+    label: option<string>,
+    /// The mode this NodeBalancer should use when sending traffic to this backend.
+    /// * If set to `accept` this backend is accepting traffic.
+    mode: option<node-balancer-node-mode-enum>,
+    /// The NodeBalancer ID that this Node belongs to.
+    nodebalancer-id: option<s32>,
+    /// The current status of this node, based on the configured checks of its NodeBalancer Config.
+    status: option<node-balancer-node-status-enum>,
+    /// Used when picking a backend to serve a request and is not pinned to a single backend yet.  Nodes with a higher weight will receive more traffic.
+    weight: option<s32>
+  }
+  update-node-balancer-node: func(params: update-node-balancer-node-params) -> result<string, string>;
+
+  /// Node Delete
+  delete-node-balancer-config-node: func() -> result<string, string>;
+
+  /// Config Rebuild
+  record rebuild-node-balancer-config-params {
+    body: string
+  }
+  rebuild-node-balancer-config: func(params: rebuild-node-balancer-config-params) -> result<string, string>;
+
+  /// NodeBalancer Statistics View
+  get-nodebalancers-node-balancer-id-stats: func() -> result<string, string>;
+
+}
+
+interface object-storage {
+  enum create-object-storage-bucket-body-acl-enum {
+    private,
+    public-read,
+    authenticated-read,
+    public-read-write,
+  }
+
+  enum modify-object-storage-bucket-access-body-acl-enum {
+    private,
+    public-read,
+    authenticated-read,
+    public-read-write,
+    custom,
+  }
+
+  enum object-storage-key-bucket-access-item-permissions-enum {
+    read-write,
+    read-only,
+  }
+
+  record object-storage-key-bucket-access-item {
+    /// The unique label of the bucket to which the key will grant limited access.
+    bucket-name: option<string>,
+    /// The Object Storage cluster where a bucket to which the key is granting access is hosted.
+    cluster: option<string>,
+    /// This Limited Access Key's permissions for the selected bucket.
+    permissions: option<object-storage-key-bucket-access-item-permissions-enum>
+  }
+
+  /// Object Storage Buckets List
+  get-object-storage-buckets: func() -> result<string, string>;
+
+  /// Object Storage Bucket Create
+  record create-object-storage-bucket-params {
+    /// The Access Control Level of the bucket using a canned ACL string. For more fine-grained control of ACLs, use the S3 API directly.
+    acl: option<create-object-storage-bucket-body-acl-enum>,
+    /// The ID of the Object Storage Cluster where this bucket should be created.
+    cluster: string,
+    /// If true, the bucket will be created with CORS enabled for all origins. For more fine-grained controls of CORS, use the S3 API directly.
+    cors-enabled: option<bool>,
+    /// The name for this bucket. Must be unique in the cluster you are creating the bucket in, or an error will be returned. Labels will be reserved only for the cluster that active buckets are created and stored in. If you want to reserve this bucket's label in another cluster, you must create a new bucket with the same label in the new cluster.
+    label: string
+  }
+  create-object-storage-bucket: func(params: create-object-storage-bucket-params) -> result<string, string>;
+
+  /// Object Storage Buckets in Cluster List
+  get-object-storage-bucketin-cluster: func() -> result<string, string>;
+
+  /// Object Storage Bucket View
+  get-object-storage-bucket: func() -> result<string, string>;
+
+  /// Object Storage Bucket Remove
+  delete-object-storage-bucket: func() -> result<string, string>;
+
+  /// Object Storage Bucket Access Modify
+  record modify-object-storage-bucket-access-params {
+    /// The Access Control Level of the bucket, as a canned ACL string. For more fine-grained control of ACLs, use the S3 API directly.
+    acl: option<modify-object-storage-bucket-access-body-acl-enum>,
+    /// If true, the bucket will be created with CORS enabled for all origins. For more fine-grained controls of CORS, use the S3 API directly.
+    cors-enabled: option<bool>
+  }
+  modify-object-storage-bucket-access: func(params: modify-object-storage-bucket-access-params) -> result<string, string>;
+
+  /// Object Storage Bucket Access Update
+  record update-object-storage-bucket-access-params {
+    /// The Access Control Level of the bucket, as a canned ACL string. For more fine-grained control of ACLs, use the S3 API directly.
+    acl: option<modify-object-storage-bucket-access-body-acl-enum>,
+    /// If true, the bucket will be created with CORS enabled for all origins. For more fine-grained controls of CORS, use the S3 API directly.
+    cors-enabled: option<bool>
+  }
+  update-object-storage-bucket-access: func(params: update-object-storage-bucket-access-params) -> result<string, string>;
+
+  /// Object Storage Object ACL Config View
+  record view-object-storage-bucket-acl-params {
+    /// The `name` of the object for which to retrieve its Access Control List (ACL). Use the [Object Storage Bucket Contents List](/docs/api/object-storage/#object-storage-bucket-contents-list) endpoint to access all object names in a bucket.
+    name: string
+  }
+  view-object-storage-bucket-acl: func(params: view-object-storage-bucket-acl-params) -> result<string, string>;
+
+  /// Object Storage Object ACL Config Update
+  record update-object-storage-bucket-acl-params {
+    /// The Access Control Level of the bucket, as a canned ACL string. For more fine-grained control of ACLs, use the S3 API directly.
+    acl: modify-object-storage-bucket-access-body-acl-enum,
+    /// The `name` of the object for which to update its Access Control List (ACL). Use the [Object Storage Bucket Contents List](/docs/api/object-storage/#object-storage-bucket-contents-list) endpoint to access all object names in a bucket.
+    name: string
+  }
+  update-object-storage-bucket-acl: func(params: update-object-storage-bucket-acl-params) -> result<string, string>;
+
+  /// Object Storage Bucket Contents List
+  record get-object-storage-bucket-content-params {
+    /// The "marker" for this request, which can be used to paginate through large buckets. Its value should be the value of the `next_marker` property returned with the last page. Listing bucket contents *does not* support arbitrary page access. See the `next_marker` property in the responses section for more details.
+    marker: option<string>,
+    /// The delimiter for object names; if given, object names will be returned up to the first occurrence of this character. This is most commonly used with the `/` character to allow bucket transversal in a manner similar to a filesystem, however any delimiter may be used. Use in conjunction with `prefix` to see object names past the first occurrence of the delimiter.
+    delimiter: option<string>,
+    /// Filters objects returned to only those whose name start with the given prefix. Commonly used in conjunction with `delimiter` to allow transversal of bucket contents in a manner similar to a filesystem.
+    prefix: option<string>
+  }
+  get-object-storage-bucket-content: func(params: get-object-storage-bucket-content-params) -> result<string, string>;
+
+  /// Object Storage Object URL Create
+  record create-object-storage-object-url-params {
+    /// The expected `Content-type` header of the request this signed URL will be valid for.  If provided, the `Content-type` header _must_ be sent with the request when this URL is used, and _must_ be the same as it was when the signed URL was created. Required for all methods *except* "GET" or "DELETE".
+    content-type: option<string>,
+    /// How long this signed URL will be valid for, in seconds.  If omitted, the URL will be valid for 3600 seconds (1 hour).
+    expires-in: option<s32>,
+    /// The HTTP method allowed to be used with the pre-signed URL.
+    method: string,
+    /// The name of the object that will be accessed with the pre-signed URL. This object need not exist, and no error will be returned if it doesn't. This behavior is useful for generating pre-signed URLs to upload new objects to by setting the `method` to "PUT".
+    name: string
+  }
+  create-object-storage-object-url: func(params: create-object-storage-object-url-params) -> result<string, string>;
+
+  /// Object Storage TLS/SSL Cert View
+  get-object-storage-ssl: func() -> result<string, string>;
+
+  /// Object Storage TLS/SSL Cert Upload
+  record create-object-storage-ssl-params {
+    /// Your Base64 encoded and PEM formatted SSL certificate.
+    /// 
+    certificate: string,
+    /// The private key associated with this TLS/SSL certificate.
+    /// 
+    private-key: string
+  }
+  create-object-storage-ssl: func(params: create-object-storage-ssl-params) -> result<string, string>;
+
+  /// Object Storage TLS/SSL Cert Delete
+  delete-object-storage-ssl: func() -> result<string, string>;
+
+  /// Object Storage Cancel
+  cancel-object-storage: func() -> result<string, string>;
+
+  /// Clusters List
+  get-object-storage-clusters: func() -> result<string, string>;
+
+  /// Cluster View
+  get-object-storage-cluster: func() -> result<string, string>;
+
+  /// Object Storage Keys List
+  get-object-storage-keys: func() -> result<string, string>;
+
+  /// Object Storage Key Create
+  record create-object-storage-keys-params {
+    /// This keypair's access key. This is not secret.
+    access-key: option<string>,
+    /// Defines this key as a Limited Access Key. Limited Access Keys restrict this Object Storage key's access to only the bucket(s) declared in this array and define their bucket-level permissions.
+    /// 
+    bucket-access: option<list<object-storage-key-bucket-access-item>>,
+    /// This keypair's unique ID
+    id: option<s32>,
+    /// The label given to this key. For display purposes only.
+    label: option<string>,
+    /// Whether or not this key is a limited access key. Will return `false` if this key grants full access to all buckets on the user's account.
+    limited: option<bool>,
+    /// This keypair's secret key. Only returned on key creation.
+    secret-key: option<string>
+  }
+  create-object-storage-keys: func(params: create-object-storage-keys-params) -> result<string, string>;
+
+  /// Object Storage Key View
+  get-object-storage-key: func() -> result<string, string>;
+
+  /// Object Storage Key Update
+  record update-object-storage-key-params {
+    /// The label for this keypair, for display purposes only.
+    label: option<string>
+  }
+  update-object-storage-key: func(params: update-object-storage-key-params) -> result<string, string>;
+
+  /// Object Storage Key Revoke
+  delete-object-storage-key: func() -> result<string, string>;
+
+  /// Object Storage Transfer View
+  get-object-storage-transfer: func() -> result<string, string>;
+
+}
+
+interface profile {
+  enum profile-authentication-type-enum {
+    password,
+    github,
+  }
+
+  enum profile-lish-auth-method-enum {
+    password-keys,
+    keys-only,
+    disabled,
+  }
+
+  /// Information about your status in our referral program.
+  /// 
+  /// This information becomes accessible after this Profile's Account has established at least $25.00 USD of total payments.
+  record profile-referrals {
+    /// Your referral code.  If others use this when signing up for Linode, you will receive account credit.
+    code: option<string>,
+    /// The number of completed signups with your referral code.
+    completed: option<s32>,
+    /// The amount of account credit in US Dollars issued to you through the referral program.
+    credit: option<s32>,
+    /// The number of pending signups with your referral code.  You will not receive credit for these signups until they are completed.
+    pending: option<s32>,
+    /// The number of users who have signed up with your referral code.
+    total: option<s32>,
+    /// Your referral url, used to direct others to sign up for Linode with your referral code.
+    url: option<string>
+  }
+
+  /// Single security question and response object for POST operation.
+  record security-questions-post-security-questions-item {
+    question-id: option<security-question-properties-id>,
+    response: option<security-question-properties-response>,
+    security-question: option<security-question-properties-question>
+  }
+
+  /// The ID representing the security question.
+  record security-question-properties-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The security question response.
+  record security-question-properties-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The security question.
+  record security-question-properties-question {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A label for the SSH Key.
+  record ssh-key-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This token's label.  This is for display purposes only, but can be used to more easily track what you're using each token for.
+  record personal-access-token-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Profile View
+  get-profile: func() -> result<string, string>;
+
+  /// Profile Update
+  record update-profile-params {
+    /// This account's Cloud Manager authentication type. Authentication types are chosen through
+    /// Cloud Manager and authorized when logging into your account. These authentication types are either
+    authentication-type: option<profile-authentication-type-enum>,
+    /// The list of SSH Keys authorized to use Lish for your User. This value is ignored if `lish_auth_method` is "disabled."
+    authorized-keys: option<list<string>>,
+    /// Your email address.  This address will be used for communication with Linode as necessary.
+    email: option<string>,
+    /// If true, you will receive email notifications about account activity.  If false, you may still receive business-critical communications through email.
+    email-notifications: option<bool>,
+    /// If true, logins for your User will only be allowed from whitelisted IPs. This setting is currently deprecated, and cannot be enabled.
+    /// 
+    ip-whitelist-enabled: option<bool>,
+    /// The authentication methods that are allowed when connecting to [the Linode Shell (Lish)](/docs/guides/lish/).
+    /// * `keys_only` is the most secure if you intend to use Lish.
+    lish-auth-method: option<profile-lish-auth-method-enum>,
+    /// Information about your status in our referral program.
+    /// 
+    referrals: option<profile-referrals>,
+    /// If true, your User has restrictions on what can be accessed on your Account. To get details on what entities/actions you can access/perform, see [/profile/grants](/docs/api/profile/#grants-list).
+    restricted: option<bool>,
+    /// The timezone you prefer to see times in. This is not used by the API directly. It is provided for the benefit of clients such as the Linode Cloud Manager and other clients built on the API. All times returned by the API are in UTC.
+    timezone: option<string>,
+    /// If true, logins from untrusted computers will require Two Factor Authentication.  See [/profile/tfa-enable](/docs/api/profile/#two-factor-secret-create) to enable Two Factor Authentication.
+    two-factor-auth: option<bool>,
+    /// Your unique ID in our system. This value will never change, and can safely be used to identify your User.
+    uid: option<s32>,
+    /// Your username, used for logging in to our system.
+    username: option<string>,
+    /// The phone number verified for this Profile with the **Phone Number Verify** ([POST /profile/phone-number/verify](/docs/api/profile/#phone-number-verify)) command.
+    /// 
+    verified-phone-number: option<string>
+  }
+  update-profile: func(params: update-profile-params) -> result<string, string>;
+
+  /// Authorized Apps List
+  get-profile-apps: func() -> result<string, string>;
+
+  /// Authorized App View
+  get-profile-app: func() -> result<string, string>;
+
+  /// App Access Revoke
+  delete-profile-app: func() -> result<string, string>;
+
+  /// Trusted Devices List
+  get-devices: func() -> result<string, string>;
+
+  /// Trusted Device View
+  get-trusted-device: func() -> result<string, string>;
+
+  /// Trusted Device Revoke
+  revoke-trusted-device: func() -> result<string, string>;
+
+  /// Grants List
+  get-profile-grants: func() -> result<string, string>;
+
+  /// Logins List
+  get-profile-logins: func() -> result<string, string>;
+
+  /// Login View
+  get-profile-login: func() -> result<string, string>;
+
+  /// Phone Number Verification Code Send
+  record post-profile-phone-number-params {
+    /// The two-letter ISO 3166 country code associated with the phone number.
+    iso-code: string,
+    /// A valid phone number.
+    phone-number: string
+  }
+  post-profile-phone-number: func(params: post-profile-phone-number-params) -> result<string, string>;
+
+  /// Phone Number Delete
+  delete-profile-phone-number: func() -> result<string, string>;
+
+  /// Phone Number Verify
+  record post-profile-phone-number-verify-params {
+    /// The one-time code received via SMS message after accessing the **Phone Verification Code Send** ([POST /profile/phone-number](/docs/api/profile/#phone-number-verification-code-send)) command.
+    otp-code: string
+  }
+  post-profile-phone-number-verify: func(params: post-profile-phone-number-verify-params) -> result<string, string>;
+
+  /// User Preferences View
+  get-user-preferences: func() -> result<string, string>;
+
+  /// User Preferences Update
+  record update-user-preferences-params {
+    body: string
+  }
+  update-user-preferences: func(params: update-user-preferences-params) -> result<string, string>;
+
+  /// Security Questions List
+  get-security-questions: func() -> result<string, string>;
+
+  /// Security Questions Answer
+  record post-security-questions-params {
+    security-questions: option<list<security-questions-post-security-questions-item>>
+  }
+  post-security-questions: func(params: post-security-questions-params) -> result<string, string>;
+
+  /// SSH Keys List
+  get-ssh-keys: func() -> result<string, string>;
+
+  /// SSH Key Add
+  record add-ssh-key-params {
+    /// The date this key was added.
+    created: option<string>,
+    /// The unique identifier of an SSH Key object.
+    id: option<s32>,
+    /// A label for the SSH Key.
+    label: option<string>,
+    /// The public SSH Key, which is used to authenticate to the root user of the Linodes you deploy.
+    /// 
+    ssh-key: option<string>
+  }
+  add-ssh-key: func(params: add-ssh-key-params) -> result<string, string>;
+
+  /// SSH Key View
+  get-ssh-key: func() -> result<string, string>;
+
+  /// SSH Key Update
+  record update-ssh-key-params {
+    label: option<ssh-key-properties-label>
+  }
+  update-ssh-key: func(params: update-ssh-key-params) -> result<string, string>;
+
+  /// SSH Key Delete
+  delete-ssh-key: func() -> result<string, string>;
+
+  /// Two Factor Authentication Disable
+  tfa-disable: func() -> result<string, string>;
+
+  /// Two Factor Secret Create
+  tfa-enable: func() -> result<string, string>;
+
+  /// Two Factor Authentication Confirm/Enable
+  record tfa-confirm-params {
+    /// The Two Factor code you generated with your Two Factor secret. These codes are time-based, so be sure it is current.
+    tfa-code: option<string>
+  }
+  tfa-confirm: func(params: tfa-confirm-params) -> result<string, string>;
+
+  /// Personal Access Tokens List
+  get-personal-access-tokens: func() -> result<string, string>;
+
+  /// Personal Access Token Create
+  record create-personal-access-token-params {
+    /// When this token should be valid until.  If omitted, the new token will be valid until it is manually revoked.
+    expiry: option<string>,
+    label: option<personal-access-token-properties-label>,
+    /// The access [scopes](/docs/api#oauth-reference) to grant to the created token. These cannot be changed after creation, and may not exceed the scopes of the acting token.
+    /// 
+    scopes: option<string>
+  }
+  create-personal-access-token: func(params: create-personal-access-token-params) -> result<string, string>;
+
+  /// Personal Access Token View
+  get-personal-access-token: func() -> result<string, string>;
+
+  /// Personal Access Token Update
+  record update-personal-access-token-params {
+    /// The date and time this token was created.
+    created: option<string>,
+    /// When this token will expire.  Personal Access Tokens cannot be renewed, so after this time the token will be completely unusable and a new token will need to be generated.  Tokens may be created with "null" as their expiry and will never expire unless revoked.
+    expiry: option<string>,
+    /// This token's unique ID, which can be used to revoke it.
+    id: option<s32>,
+    /// This token's label.  This is for display purposes only, but can be used to more easily track what you're using each token for.
+    label: option<string>,
+    /// The scopes this token was created with. These define what parts of the Account the token can be used to access. Many command-line tools, such as the <a target="_top" href="https://github.com/linode/linode-cli">Linode CLI</a>, require tokens with access to `*`. Tokens with more restrictive scopes are generally more secure.
+    scopes: option<string>,
+    /// The token used to access the API.  When the token is created, the full token is returned here.  Otherwise, only the first 16 characters are returned.
+    token: option<string>
+  }
+  update-personal-access-token: func(params: update-personal-access-token-params) -> result<string, string>;
+
+  /// Personal Access Token Revoke
+  delete-personal-access-token: func() -> result<string, string>;
+
+}
+
+interface regions {
+  /// Regions List
+  get-regions: func() -> result<string, string>;
+
+  /// Region View
+  get-region: func() -> result<string, string>;
+
+}
+
+interface support {
+  /// Support Tickets List
+  get-tickets: func() -> result<string, string>;
+
+  /// Support Ticket Open
+  record create-ticket-params {
+    /// The ID of the Managed Database this ticket is regarding, if relevant.
+    database-id: option<s32>,
+    /// The full details of the issue or question.
+    description: string,
+    /// The ID of the Domain this ticket is regarding, if relevant.
+    domain-id: option<s32>,
+    /// The ID of the Firewall this ticket is regarding, if relevant.
+    firewall-id: option<s32>,
+    /// The ID of the Linode this ticket is regarding, if relevant.
+    linode-id: option<s32>,
+    /// The ID of the Kubernetes cluster this ticket is regarding, if relevant.
+    lkecluster-id: option<s32>,
+    /// The ID of the Longview client this ticket is regarding, if relevant.
+    longviewclient-id: option<s32>,
+    /// Designates if this ticket is related to a [Managed service](https://www.linode.com/products/managed/). If `true`, the following constraints will apply:
+    /// * No ID attributes (i.e. `linode_id`, `domain_id`, etc.) should be provided with this request.
+    managed-issue: option<bool>,
+    /// The ID of the NodeBalancer this ticket is regarding, if relevant.
+    nodebalancer-id: option<s32>,
+    /// The [Region](/docs/api/regions/) ID for the associated VLAN this ticket is regarding.
+    /// 
+    region: option<string>,
+    /// The summary or title for this SupportTicket.
+    summary: string,
+    /// The label of the VLAN this ticket is regarding, if relevant. To view your VLANs, use the VLANs List ([GET /networking/vlans](/docs/api/networking/#vlans-list)) endpoint.
+    /// 
+    vlan: option<string>,
+    /// The ID of the Volume this ticket is regarding, if relevant.
+    volume-id: option<s32>
+  }
+  create-ticket: func(params: create-ticket-params) -> result<string, string>;
+
+  /// Support Ticket View
+  get-ticket: func() -> result<string, string>;
+
+  /// Support Ticket Attachment Create
+  create-ticket-attachment: func() -> result<string, string>;
+
+  /// Support Ticket Close
+  close-ticket: func() -> result<string, string>;
+
+  /// Replies List
+  get-ticket-replies: func() -> result<string, string>;
+
+  /// Reply Create
+  record create-ticket-reply-params {
+    /// The content of your reply.
+    description: string
+  }
+  create-ticket-reply: func(params: create-ticket-reply-params) -> result<string, string>;
+
+}
+
+interface tags {
+  /// Tags List
+  get-tags: func() -> result<string, string>;
+
+  /// New Tag Create
+  record create-tag-params {
+    /// A list of Domain IDs to apply the new Tag to.  You must be allowed to `read_write` all of the requested Domains, or the Tag will not be created and an error will be returned.
+    domains: option<list<s32>>,
+    /// The new Tag.
+    label: string,
+    /// A list of Linode IDs to apply the new Tag to.  You must be allowed to `read_write` all of the requested Linodes, or the Tag will not be created and an error will be returned.
+    linodes: option<list<s32>>,
+    /// A list of NodeBalancer IDs to apply the new Tag to. You must be allowed to `read_write` all of the requested NodeBalancers, or the Tag will not be created and an error will be returned.
+    nodebalancers: option<list<s32>>,
+    /// A list of Volume IDs to apply the new Tag to.  You must be allowed to `read_write` all of the requested Volumes, or the Tag will not be created and an error will be returned.
+    volumes: option<list<s32>>
+  }
+  create-tag: func(params: create-tag-params) -> result<string, string>;
+
+  /// Tagged Objects List
+  get-tagged-objects: func() -> result<string, string>;
+
+  /// Tag Delete
+  delete-tag: func() -> result<string, string>;
+
+}
+
+interface volumes {
+  /// The Volume's label is for display purposes only.
+  record volume-properties-label {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The Volume's size, in GiB.
+  record volume-properties-size {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Volumes List
+  get-volumes: func() -> result<string, string>;
+
+  /// Volume Create
+  record create-volume-params {
+    /// When creating a Volume attached to a Linode, the ID of the Linode Config to include the new Volume in. This Config must belong to the Linode referenced by `linode_id`. Must _not_ be provided if `linode_id` is not sent. If a `linode_id` is sent without a `config_id`, the volume will be attached:
+    /// 
+    config-id: option<s32>,
+    /// The Volume's label, which is also used in the `filesystem_path` of the resulting volume.
+    label: string,
+    /// The Linode this volume should be attached to upon creation. If not given, the volume will be created without an attachment.
+    linode-id: option<s32>,
+    /// The Region to deploy this Volume in. This is only required if a linode_id is not given.
+    region: option<string>,
+    /// The initial size of this volume, in GB.  Be aware that volumes may only be resized up after creation.
+    size: option<s32>,
+    /// An array of Tags applied to this object.  Tags are for organizational purposes only.
+    tags: option<list<string>>
+  }
+  create-volume: func(params: create-volume-params) -> result<string, string>;
+
+  /// Volume View
+  get-volume: func() -> result<string, string>;
+
+  /// Volume Update
+  record update-volume-params {
+    body: string
+  }
+  update-volume: func(params: update-volume-params) -> result<string, string>;
+
+  /// Volume Delete
+  delete-volume: func() -> result<string, string>;
+
+  /// Volume Attach
+  record attach-volume-params {
+    /// The ID of the Linode Config to include this Volume in. Must belong to the Linode referenced by `linode_id`. If not given, the last booted Config will be chosen.
+    config-id: option<s32>,
+    /// The ID of the Linode to attach the volume to.
+    linode-id: s32,
+    /// Defaults to true, if false is provided, the Volume will not be attached to the Linode Config. In this case more than 8 Volumes may be attached to a Linode if a Linode has 16GB of RAM or more. The number of volumes that can be attached is equal to the number of GB of RAM that the Linode has, up to a maximum of 64. `config_id` should not be passed if this is set to false and linode_id must be passed. The Linode must be running.
+    persist-across-boots: option<bool>
+  }
+  attach-volume: func(params: attach-volume-params) -> result<string, string>;
+
+  /// Volume Clone
+  record clone-volume-params {
+    label: volume-properties-label
+  }
+  clone-volume: func(params: clone-volume-params) -> result<string, string>;
+
+  /// Volume Detach
+  detach-volume: func() -> result<string, string>;
+
+  /// Volume Resize
+  record resize-volume-params {
+    size: volume-properties-size
+  }
+  resize-volume: func(params: resize-volume-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export account;
+  export databases;
+  export domains;
+  export images;
+  export linode-instances;
+  export stack-scripts;
+  export linode-types;
+  export linode-kubernetes-engine-lke;
+  export longview;
+  export managed;
+  export networking;
+  export node-balancers;
+  export object-storage;
+  export profile;
+  export regions;
+  export support;
+  export tags;
+  export volumes;
+}

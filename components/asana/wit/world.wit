@@ -1,0 +1,1402 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `personalAccessToken` | `Authorization: Bearer <secret>` |
+package autostamp:asana@0.2.0;
+
+interface attachments {
+  /// Get attachments from an object
+  record get-attachments-for-object-params {
+    /// Globally unique identifier for object to fetch statuses from. Must be a GID for a `project`, `project_brief`, or `task`.
+    parent: string
+  }
+  get-attachments-for-object: func(params: get-attachments-for-object-params) -> result<string, string>;
+
+  /// Upload an attachment
+  create-attachment-for-object: func() -> result<string, string>;
+
+  /// Get an attachment
+  get-attachment: func() -> result<string, string>;
+
+  /// Delete an attachment
+  delete-attachment: func() -> result<string, string>;
+
+}
+
+
+interface batch-api {
+  enum batch-request-action-method-enum {
+    get,
+    post,
+    put,
+    delete,
+    patch,
+    head,
+  }
+
+  /// A request object for use in a batch request.
+  record batch-request {
+    actions: option<list<batch-request-action>>
+  }
+
+  /// An action object for use in a batch request.
+  record batch-request-action {
+    /// For `GET` requests, this should be a map of query parameters you would have normally passed in the URL. Options and pagination are not accepted here; put them in `options` instead. For `POST`, `PATCH`, and `PUT` methods, this should be the content you would have normally put in the data field of the body.
+    data: option<batch-request-action-data>,
+    /// The HTTP method you wish to emulate for the action.
+    method: batch-request-action-method-enum,
+    /// Pagination (`limit` and `offset`) and output options (`fields` or `expand`) for the action. “Pretty” JSON output is not an available option on individual actions; if you want pretty output, specify that option on the parent request.
+    options: option<batch-request-action-options>,
+    /// The path of the desired endpoint relative to the API’s base URL. Query parameters are not accepted here; put them in `data` instead.
+    relative-path: string
+  }
+
+  /// For `GET` requests, this should be a map of query parameters you would have normally passed in the URL. Options and pagination are not accepted here; put them in `options` instead. For `POST`, `PATCH`, and `PUT` methods, this should be the content you would have normally put in the data field of the body.
+  record batch-request-action-data {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Pagination (`limit` and `offset`) and output options (`fields` or `expand`) for the action. “Pretty” JSON output is not an available option on individual actions; if you want pretty output, specify that option on the parent request.
+  record batch-request-action-options {
+    /// The fields to retrieve in the request.
+    fields: option<list<string>>,
+    /// Pagination limit for the request.
+    limit: option<s32>,
+    /// Pagination offset for the request.
+    offset: option<s32>
+  }
+
+  /// Submit parallel requests
+  record create-batch-request-params {
+    data: option<batch-request>
+  }
+  create-batch-request: func(params: create-batch-request-params) -> result<string, string>;
+
+}
+
+interface custom-fields {
+  record custom-field-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record enum-option-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record enum-option-insert-request {
+    /// An existing enum option within this custom field after which the new enum option should be inserted. Cannot be provided together with before_enum_option.
+    after-enum-option: option<string>,
+    /// An existing enum option within this custom field before which the new enum option should be inserted. Cannot be provided together with after_enum_option.
+    before-enum-option: option<string>,
+    /// The gid of the enum option to relocate.
+    enum-option: string
+  }
+
+  /// Create a custom field
+  record create-custom-field-params {
+    data: option<custom-field-request>
+  }
+  create-custom-field: func(params: create-custom-field-params) -> result<string, string>;
+
+  /// Get a custom field
+  get-custom-field: func() -> result<string, string>;
+
+  /// Update a custom field
+  record update-custom-field-params {
+    data: option<custom-field-request>
+  }
+  update-custom-field: func(params: update-custom-field-params) -> result<string, string>;
+
+  /// Delete a custom field
+  delete-custom-field: func() -> result<string, string>;
+
+  /// Create an enum option
+  record create-enum-option-for-custom-field-params {
+    data: option<enum-option-request>
+  }
+  create-enum-option-for-custom-field: func(params: create-enum-option-for-custom-field-params) -> result<string, string>;
+
+  /// Reorder a custom field's enum
+  record insert-enum-option-for-custom-field-params {
+    data: option<enum-option-insert-request>
+  }
+  insert-enum-option-for-custom-field: func(params: insert-enum-option-for-custom-field-params) -> result<string, string>;
+
+  /// Update an enum option
+  record update-enum-option-params {
+    data: option<enum-option-request>
+  }
+  update-enum-option: func(params: update-enum-option-params) -> result<string, string>;
+
+  /// Get a workspace's custom fields
+  get-custom-fields-for-workspace: func() -> result<string, string>;
+
+}
+
+interface events {
+  /// Get events on a resource
+  get-events: func() -> result<string, string>;
+
+}
+
+interface goal-relationships {
+  record goal-relationship-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record goal-add-supporting-relationship-request {
+    /// The weight that the supporting resource's progress will contribute to the supported goal's progress. This can only be 0 or 1.
+    contribution-weight: option<f64>,
+    /// An id of a subgoal of this parent goal. The new subgoal will be added after the one specified here. `insert_before` and `insert_after` parameters cannot both be specified. Currently only supported when adding a subgoal.
+    insert-after: option<string>,
+    /// An id of a subgoal of this parent goal. The new subgoal will be added before the one specified here. `insert_before` and `insert_after` parameters cannot both be specified. Currently only supported when adding a subgoal.
+    insert-before: option<string>,
+    /// The gid of the supporting resource to add to the parent goal. Must be the gid of a goal, project, or portfolio.
+    supporting-resource: string
+  }
+
+  record goal-remove-supporting-relationship-request {
+    /// The gid of the supporting resource to remove from the parent goal. Must be the gid of a goal, project, or portfolio.
+    supporting-resource: string
+  }
+
+  /// Get goal relationships
+  record get-goal-relationships-params {
+    /// Globally unique identifier for the supported goal in the goal relationship.
+    supported-goal: string,
+    /// If provided, filter to goal relationships with a given resource_subtype.
+    resource-subtype: option<string>
+  }
+  get-goal-relationships: func(params: get-goal-relationships-params) -> result<string, string>;
+
+  /// Get a goal relationship
+  get-goal-relationship: func() -> result<string, string>;
+
+  /// Update a goal relationship
+  record update-goal-relationship-params {
+    data: option<goal-relationship-request>
+  }
+  update-goal-relationship: func(params: update-goal-relationship-params) -> result<string, string>;
+
+  /// Add a supporting goal relationship
+  record add-supporting-relationship-params {
+    data: option<goal-add-supporting-relationship-request>
+  }
+  add-supporting-relationship: func(params: add-supporting-relationship-params) -> result<string, string>;
+
+  /// Removes a supporting goal relationship
+  record remove-supporting-relationship-params {
+    data: option<goal-remove-supporting-relationship-request>
+  }
+  remove-supporting-relationship: func(params: remove-supporting-relationship-params) -> result<string, string>;
+
+}
+
+interface goals {
+  record goal-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record task-add-followers-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    followers: list<string>
+  }
+
+  record goal-metric-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record goal-metric-current-value-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Get goals
+  record get-goals-params {
+    /// Globally unique identifier for supporting portfolio.
+    portfolio: option<string>,
+    /// Globally unique identifier for supporting project.
+    project: option<string>,
+    /// Filter to goals with is_workspace_level set to query value. Must be used with the workspace parameter.
+    is-workspace-level: option<bool>,
+    /// Globally unique identifier for the team.
+    team: option<string>,
+    /// Globally unique identifier for the workspace.
+    workspace: option<string>,
+    /// Globally unique identifiers for the time periods.
+    time-periods: option<list<string>>
+  }
+  get-goals: func(params: get-goals-params) -> result<string, string>;
+
+  /// Create a goal
+  record create-goal-params {
+    data: option<goal-request>
+  }
+  create-goal: func(params: create-goal-params) -> result<string, string>;
+
+  /// Get a goal
+  get-goal: func() -> result<string, string>;
+
+  /// Update a goal
+  record update-goal-params {
+    data: option<goal-request>
+  }
+  update-goal: func(params: update-goal-params) -> result<string, string>;
+
+  /// Delete a goal
+  delete-goal: func() -> result<string, string>;
+
+  /// Add a collaborator to a goal
+  record add-followers-params {
+    data: option<task-add-followers-request>
+  }
+  add-followers: func(params: add-followers-params) -> result<string, string>;
+
+  /// Get parent goals from a goal
+  get-parent-goals-for-goal: func() -> result<string, string>;
+
+  /// Remove a collaborator from a goal
+  record remove-followers-params {
+    data: option<task-add-followers-request>
+  }
+  remove-followers: func(params: remove-followers-params) -> result<string, string>;
+
+  /// Create a goal metric
+  record create-goal-metric-params {
+    data: option<goal-metric-request>
+  }
+  create-goal-metric: func(params: create-goal-metric-params) -> result<string, string>;
+
+  /// Update a goal metric
+  record update-goal-metric-params {
+    data: option<goal-metric-current-value-request>
+  }
+  update-goal-metric: func(params: update-goal-metric-params) -> result<string, string>;
+
+}
+
+interface jobs {
+  /// Get a job by id
+  get-job: func() -> result<string, string>;
+
+}
+
+interface organization-exports {
+  /// An *organization_export* request starts a job to export the complete data of the given Organization.
+  record organization-export-request {
+    /// Globally unique identifier for the workspace or organization.
+    organization: option<string>
+  }
+
+  /// Create an organization export request
+  record create-organization-export-params {
+    data: option<organization-export-request>
+  }
+  create-organization-export: func(params: create-organization-export-params) -> result<string, string>;
+
+  /// Get details on an org export request
+  get-organization-export: func() -> result<string, string>;
+
+}
+
+interface portfolio-memberships {
+  /// Get multiple portfolio memberships
+  get-portfolio-memberships: func() -> result<string, string>;
+
+  /// Get a portfolio membership
+  get-portfolio-membership: func() -> result<string, string>;
+
+  /// Get memberships from a portfolio
+  get-portfolio-memberships-for-portfolio: func() -> result<string, string>;
+
+}
+
+interface portfolios {
+  record portfolio-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record add-custom-field-setting-request {
+    /// The custom field to associate with this container.
+    custom-field: string,
+    /// A gid of a Custom Field Setting on this container, after which the new Custom Field Setting will be added.  `insert_before` and `insert_after` parameters cannot both be specified.
+    insert-after: option<string>,
+    /// A gid of a Custom Field Setting on this container, before which the new Custom Field Setting will be added.  `insert_before` and `insert_after` parameters cannot both be specified.
+    insert-before: option<string>,
+    /// Whether this field should be considered important to this container (for instance, to display in the list view of items in the container).
+    is-important: option<bool>
+  }
+
+  record portfolio-add-item-request {
+    /// An id of an item in this portfolio. The new item will be added after the one specified here. `insert_before` and `insert_after` parameters cannot both be specified.
+    insert-after: option<string>,
+    /// An id of an item in this portfolio. The new item will be added before the one specified here. `insert_before` and `insert_after` parameters cannot both be specified.
+    insert-before: option<string>,
+    /// The item to add to the portfolio.
+    item: string
+  }
+
+  record add-members-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    members: string
+  }
+
+  record remove-custom-field-setting-request {
+    /// The custom field to remove from this portfolio.
+    custom-field: string
+  }
+
+  record portfolio-remove-item-request {
+    /// The item to remove from the portfolio.
+    item: string
+  }
+
+  record remove-members-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    members: string
+  }
+
+  /// Get multiple portfolios
+  record get-portfolios-params {
+    /// The workspace or organization to filter portfolios on.
+    workspace: string,
+    /// The user who owns the portfolio. Currently, API users can only get a list of portfolios that they themselves own.
+    owner: string
+  }
+  get-portfolios: func(params: get-portfolios-params) -> result<string, string>;
+
+  /// Create a portfolio
+  record create-portfolio-params {
+    data: option<portfolio-request>
+  }
+  create-portfolio: func(params: create-portfolio-params) -> result<string, string>;
+
+  /// Get a portfolio
+  get-portfolio: func() -> result<string, string>;
+
+  /// Update a portfolio
+  record update-portfolio-params {
+    data: option<portfolio-request>
+  }
+  update-portfolio: func(params: update-portfolio-params) -> result<string, string>;
+
+  /// Delete a portfolio
+  delete-portfolio: func() -> result<string, string>;
+
+  /// Add a custom field to a portfolio
+  record add-custom-field-setting-for-portfolio-params {
+    data: option<add-custom-field-setting-request>
+  }
+  add-custom-field-setting-for-portfolio: func(params: add-custom-field-setting-for-portfolio-params) -> result<string, string>;
+
+  /// Add a portfolio item
+  record add-item-for-portfolio-params {
+    data: option<portfolio-add-item-request>
+  }
+  add-item-for-portfolio: func(params: add-item-for-portfolio-params) -> result<string, string>;
+
+  /// Add users to a portfolio
+  record add-members-for-portfolio-params {
+    data: option<add-members-request>
+  }
+  add-members-for-portfolio: func(params: add-members-for-portfolio-params) -> result<string, string>;
+
+  /// Get portfolio items
+  get-items-for-portfolio: func() -> result<string, string>;
+
+  /// Remove a custom field from a portfolio
+  record remove-custom-field-setting-for-portfolio-params {
+    data: option<remove-custom-field-setting-request>
+  }
+  remove-custom-field-setting-for-portfolio: func(params: remove-custom-field-setting-for-portfolio-params) -> result<string, string>;
+
+  /// Remove a portfolio item
+  record remove-item-for-portfolio-params {
+    data: option<portfolio-remove-item-request>
+  }
+  remove-item-for-portfolio: func(params: remove-item-for-portfolio-params) -> result<string, string>;
+
+  /// Remove users from a portfolio
+  record remove-members-for-portfolio-params {
+    data: option<remove-members-request>
+  }
+  remove-members-for-portfolio: func(params: remove-members-for-portfolio-params) -> result<string, string>;
+
+}
+
+interface custom-field-settings {
+  /// Get a portfolio's custom fields
+  get-custom-field-settings-for-portfolio: func() -> result<string, string>;
+
+  /// Get a project's custom fields
+  get-custom-field-settings-for-project: func() -> result<string, string>;
+
+}
+
+interface project-briefs {
+  record project-brief-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Get a project brief
+  get-project-brief: func() -> result<string, string>;
+
+  /// Update a project brief
+  record update-project-brief-params {
+    data: option<project-brief-request>
+  }
+  update-project-brief: func(params: update-project-brief-params) -> result<string, string>;
+
+  /// Delete a project brief
+  delete-project-brief: func() -> result<string, string>;
+
+  /// Create a project brief
+  record create-project-brief-params {
+    data: option<project-brief-request>
+  }
+  create-project-brief: func(params: create-project-brief-params) -> result<string, string>;
+
+}
+
+interface project-memberships {
+  /// Get a project membership
+  get-project-membership: func() -> result<string, string>;
+
+  /// Get memberships from a project
+  get-project-memberships-for-project: func() -> result<string, string>;
+
+}
+
+interface project-statuses {
+  record project-status-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Get a project status
+  get-project-status: func() -> result<string, string>;
+
+  /// Delete a project status
+  delete-project-status: func() -> result<string, string>;
+
+  /// Get statuses from a project
+  get-project-statuses-for-project: func() -> result<string, string>;
+
+  /// Create a project status
+  record create-project-status-for-project-params {
+    data: option<project-status-request>
+  }
+  create-project-status-for-project: func(params: create-project-status-for-project-params) -> result<string, string>;
+
+}
+
+interface project-templates {
+  record project-template-instantiate-project-request {
+    /// *Optional*. If set to `true`, the endpoint returns an "Unprocessable Entity" error if you fail to provide a calendar date value for any date variable. If set to `false`, a default date is used for each unfulfilled date variable (e.g., the current date is used as the Start Date of a project).
+    is-strict: option<bool>,
+    /// The name of the new project.
+    name: string,
+    /// Sets the project to public to its team.
+    public: bool,
+    /// Array of mappings of date variables to calendar dates.
+    requested-dates: option<list<date-variable-request>>,
+    /// *Conditional*. Sets the team of the new project. If the project template exists in an _organization_, you must specify a value for `team` and not `workspace`.
+    team: option<string>,
+    /// *Conditional*. Sets the workspace of the new project. If the project template exists in a _workspace_, you must specify a value for `workspace` and not `team`.
+    workspace: option<string>
+  }
+
+  record date-variable-request {
+    /// Globally unique identifier of the date field in the project template. A value of `1` refers to the project start date, while `2` refers to the project due date.
+    gid: option<string>,
+    /// The date with which the date variable should be replaced when instantiating a project. This takes a date with `YYYY-MM-DD` format.
+    value: option<string>
+  }
+
+  /// Get multiple project templates
+  get-project-templates: func() -> result<string, string>;
+
+  /// Get a project template
+  get-project-template: func() -> result<string, string>;
+
+  /// Instantiate a project from a project template
+  record instantiate-project-params {
+    data: option<project-template-instantiate-project-request>
+  }
+  instantiate-project: func(params: instantiate-project-params) -> result<string, string>;
+
+  /// Get a team's project templates
+  get-project-templates-for-team: func() -> result<string, string>;
+
+}
+
+interface projects {
+  enum project-duplicate-request-include-op-enum {
+    members,
+    notes,
+    forms,
+    task-notes,
+    task-assignee,
+    task-subtasks,
+    task-attachments,
+    task-dates,
+    task-dependencies,
+    task-followers,
+    task-tags,
+    task-projects,
+  }
+
+  record project-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record add-custom-field-setting-request {
+    /// The custom field to associate with this container.
+    custom-field: string,
+    /// A gid of a Custom Field Setting on this container, after which the new Custom Field Setting will be added.  `insert_before` and `insert_after` parameters cannot both be specified.
+    insert-after: option<string>,
+    /// A gid of a Custom Field Setting on this container, before which the new Custom Field Setting will be added.  `insert_before` and `insert_after` parameters cannot both be specified.
+    insert-before: option<string>,
+    /// Whether this field should be considered important to this container (for instance, to display in the list view of items in the container).
+    is-important: option<bool>
+  }
+
+  record add-followers-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    followers: string
+  }
+
+  record add-members-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    members: string
+  }
+
+  record project-duplicate-request {
+    /// The elements that will be duplicated to the new project. Tasks are always included.
+    include-op: option<project-duplicate-request-include-op-enum>,
+    /// The name of the new project.
+    name: string,
+    /// A dictionary of options to auto-shift dates. `task_dates` must be included to use this option. Requires either `start_on` or `due_on`, but not both.
+    schedule-dates: option<project-duplicate-request-schedule-dates>,
+    /// Sets the team of the new project. If team is not defined, the new project will be in the same team as the the original project.
+    team: option<string>
+  }
+
+  /// A dictionary of options to auto-shift dates. `task_dates` must be included to use this option. Requires either `start_on` or `due_on`, but not both.
+  record project-duplicate-request-schedule-dates {
+    /// Sets the last due date in the duplicated project to the given date. The rest of the due dates will be offset by the same amount as the due dates in the original project.
+    due-on: option<string>,
+    /// Determines if the auto-shifted dates should skip weekends.
+    should-skip-weekends: bool,
+    /// Sets the first start date in the duplicated project to the given date. The rest of the start dates will be offset by the same amount as the start dates in the original project.
+    start-on: option<string>
+  }
+
+  record remove-custom-field-setting-request {
+    /// The custom field to remove from this portfolio.
+    custom-field: string
+  }
+
+  record remove-followers-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    followers: string
+  }
+
+  record remove-members-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    members: string
+  }
+
+  record project-save-as-template-request {
+    /// The name of the new project template.
+    name: string,
+    /// Sets the project template to public to its team.
+    public: bool,
+    /// Sets the team of the new project template. If the project exists in an organization, specify team and not workspace.
+    team: option<string>,
+    /// Sets the workspace of the new project template. Only specify workspace if the project exists in a workspace.
+    workspace: option<string>
+  }
+
+  /// Get multiple projects
+  record get-projects-params {
+    /// The workspace or organization to filter projects on.
+    workspace: option<string>,
+    /// The team to filter projects on.
+    team: option<string>
+  }
+  get-projects: func(params: get-projects-params) -> result<string, string>;
+
+  /// Create a project
+  record create-project-params {
+    data: option<project-request>
+  }
+  create-project: func(params: create-project-params) -> result<string, string>;
+
+  /// Get a project
+  get-project: func() -> result<string, string>;
+
+  /// Update a project
+  record update-project-params {
+    data: option<project-request>
+  }
+  update-project: func(params: update-project-params) -> result<string, string>;
+
+  /// Delete a project
+  delete-project: func() -> result<string, string>;
+
+  /// Add a custom field to a project
+  record add-custom-field-setting-for-project-params {
+    data: option<add-custom-field-setting-request>
+  }
+  add-custom-field-setting-for-project: func(params: add-custom-field-setting-for-project-params) -> result<string, string>;
+
+  /// Add followers to a project
+  record add-followers-for-project-params {
+    data: option<add-followers-request>
+  }
+  add-followers-for-project: func(params: add-followers-for-project-params) -> result<string, string>;
+
+  /// Add users to a project
+  record add-members-for-project-params {
+    data: option<add-members-request>
+  }
+  add-members-for-project: func(params: add-members-for-project-params) -> result<string, string>;
+
+  /// Duplicate a project
+  record duplicate-project-params {
+    data: option<project-duplicate-request>
+  }
+  duplicate-project: func(params: duplicate-project-params) -> result<string, string>;
+
+  /// Remove a custom field from a project
+  record remove-custom-field-setting-for-project-params {
+    data: option<remove-custom-field-setting-request>
+  }
+  remove-custom-field-setting-for-project: func(params: remove-custom-field-setting-for-project-params) -> result<string, string>;
+
+  /// Remove followers from a project
+  record remove-followers-for-project-params {
+    data: option<remove-followers-request>
+  }
+  remove-followers-for-project: func(params: remove-followers-for-project-params) -> result<string, string>;
+
+  /// Remove users from a project
+  record remove-members-for-project-params {
+    data: option<remove-members-request>
+  }
+  remove-members-for-project: func(params: remove-members-for-project-params) -> result<string, string>;
+
+  /// Create a project template from a project
+  record project-save-as-template-params {
+    data: option<project-save-as-template-request>
+  }
+  project-save-as-template: func(params: project-save-as-template-params) -> result<string, string>;
+
+  /// Get task count of a project
+  get-task-counts-for-project: func() -> result<string, string>;
+
+  /// Get projects a task is in
+  get-projects-for-task: func() -> result<string, string>;
+
+  /// Get a team's projects
+  get-projects-for-team: func() -> result<string, string>;
+
+  /// Create a project in a team
+  record create-project-for-team-params {
+    data: option<project-request>
+  }
+  create-project-for-team: func(params: create-project-for-team-params) -> result<string, string>;
+
+  /// Get all projects in a workspace
+  get-projects-for-workspace: func() -> result<string, string>;
+
+  /// Create a project in a workspace
+  record create-project-for-workspace-params {
+    data: option<project-request>
+  }
+  create-project-for-workspace: func(params: create-project-for-workspace-params) -> result<string, string>;
+
+}
+
+interface sections {
+  record section-request {
+    /// An existing section within this project after which the added section should be inserted. Cannot be provided together with insert_before.
+    insert-after: option<string>,
+    /// An existing section within this project before which the added section should be inserted. Cannot be provided together with insert_after.
+    insert-before: option<string>,
+    /// The text to be displayed as the section name. This cannot be an empty string.
+    name: string
+  }
+
+  record project-section-insert-request {
+    /// Insert the given section immediately after the section specified by this parameter.
+    after-section: option<string>,
+    /// Insert the given section immediately before the section specified by this parameter.
+    before-section: option<string>,
+    /// The project in which to reorder the given section.
+    project: string,
+    /// The section to reorder.
+    section: string
+  }
+
+  record section-task-insert-request {
+    /// An existing task within this section after which the added task should be inserted. Cannot be provided together with insert_before.
+    insert-after: option<string>,
+    /// An existing task within this section before which the added task should be inserted. Cannot be provided together with insert_after.
+    insert-before: option<string>,
+    /// The task to add to this section.
+    task: string
+  }
+
+  /// Get sections in a project
+  get-sections-for-project: func() -> result<string, string>;
+
+  /// Create a section in a project
+  record create-section-for-project-params {
+    data: option<section-request>
+  }
+  create-section-for-project: func(params: create-section-for-project-params) -> result<string, string>;
+
+  /// Move or Insert sections
+  record insert-section-for-project-params {
+    data: option<project-section-insert-request>
+  }
+  insert-section-for-project: func(params: insert-section-for-project-params) -> result<string, string>;
+
+  /// Get a section
+  get-section: func() -> result<string, string>;
+
+  /// Update a section
+  record update-section-params {
+    data: option<section-request>
+  }
+  update-section: func(params: update-section-params) -> result<string, string>;
+
+  /// Delete a section
+  delete-section: func() -> result<string, string>;
+
+  /// Add task to section
+  record add-task-for-section-params {
+    data: option<section-task-insert-request>
+  }
+  add-task-for-section: func(params: add-task-for-section-params) -> result<string, string>;
+
+}
+
+interface tasks {
+  enum task-duplicate-request-include-op-enum {
+    notes,
+    assignee,
+    subtasks,
+    attachments,
+    tags,
+    followers,
+    projects,
+    dates,
+    dependencies,
+    parent,
+  }
+
+  record task-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record modify-dependencies-request {
+    /// An array of task gids that a task depends on.
+    dependencies: option<list<string>>
+  }
+
+  /// A set of dependent tasks.
+  record modify-dependents-request {
+    /// An array of task gids that are dependents of the given task.
+    dependents: option<list<string>>
+  }
+
+  record task-add-followers-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    followers: list<string>
+  }
+
+  record task-add-project-request {
+    /// A task in the project to insert the task after, or `null` to insert at the beginning of the list.
+    insert-after: option<string>,
+    /// A task in the project to insert the task before, or `null` to insert at the end of the list.
+    insert-before: option<string>,
+    /// The project to add the task to.
+    project: string,
+    /// A section in the project to insert the task into. The task will be inserted at the bottom of the section.
+    section: option<string>
+  }
+
+  record task-add-tag-request {
+    /// The tag to add to the task.
+    tag: string
+  }
+
+  record task-duplicate-request {
+    /// The fields that will be duplicated to the new task.
+    include-op: option<task-duplicate-request-include-op-enum>,
+    /// The name of the new task.
+    name: option<string>
+  }
+
+  record task-remove-followers-request {
+    /// An array of strings identifying users. These can either be the string "me", an email, or the gid of a user.
+    followers: list<string>
+  }
+
+  record task-remove-project-request {
+    /// The project to remove the task from.
+    project: string
+  }
+
+  record task-remove-tag-request {
+    /// The tag to remove from the task.
+    tag: string
+  }
+
+  record task-set-parent-request {
+    /// A subtask of the parent to insert the task after, or `null` to insert at the beginning of the list.
+    insert-after: option<string>,
+    /// A subtask of the parent to insert the task before, or `null` to insert at the end of the list.
+    insert-before: option<string>,
+    /// The new parent of the task, or `null` for no parent.
+    parent: string
+  }
+
+  /// Get tasks from a project
+  get-tasks-for-project: func() -> result<string, string>;
+
+  /// Get tasks from a section
+  get-tasks-for-section: func() -> result<string, string>;
+
+  /// Get tasks from a tag
+  get-tasks-for-tag: func() -> result<string, string>;
+
+  /// Get multiple tasks
+  record get-tasks-params {
+    /// The assignee to filter tasks on. If searching for unassigned tasks, assignee.any = null can be specified.
+    /// *Note: If you specify `assignee`, you must also specify the `workspace` to filter on.*
+    assignee: option<string>,
+    /// The project to filter tasks on.
+    project: option<string>,
+    /// The section to filter tasks on.
+    /// *Note: Currently, this is only supported in board views.*
+    section: option<string>,
+    /// The workspace to filter tasks on.
+    /// *Note: If you specify `workspace`, you must also specify the `assignee` to filter on.*
+    workspace: option<string>,
+    /// Only return tasks that are either incomplete or that have been completed since this time.
+    completed-since: option<string>,
+    /// Only return tasks that have been modified since the given time.
+    /// 
+    modified-since: option<string>
+  }
+  get-tasks: func(params: get-tasks-params) -> result<string, string>;
+
+  /// Create a task
+  record create-task-params {
+    data: option<task-request>
+  }
+  create-task: func(params: create-task-params) -> result<string, string>;
+
+  /// Get a task
+  get-task: func() -> result<string, string>;
+
+  /// Update a task
+  record update-task-params {
+    data: option<task-request>
+  }
+  update-task: func(params: update-task-params) -> result<string, string>;
+
+  /// Delete a task
+  delete-task: func() -> result<string, string>;
+
+  /// Set dependencies for a task
+  record add-dependencies-for-task-params {
+    data: option<modify-dependencies-request>
+  }
+  add-dependencies-for-task: func(params: add-dependencies-for-task-params) -> result<string, string>;
+
+  /// Set dependents for a task
+  record add-dependents-for-task-params {
+    data: option<modify-dependents-request>
+  }
+  add-dependents-for-task: func(params: add-dependents-for-task-params) -> result<string, string>;
+
+  /// Add followers to a task
+  record add-followers-for-task-params {
+    data: option<task-add-followers-request>
+  }
+  add-followers-for-task: func(params: add-followers-for-task-params) -> result<string, string>;
+
+  /// Add a project to a task
+  record add-project-for-task-params {
+    data: option<task-add-project-request>
+  }
+  add-project-for-task: func(params: add-project-for-task-params) -> result<string, string>;
+
+  /// Add a tag to a task
+  record add-tag-for-task-params {
+    data: option<task-add-tag-request>
+  }
+  add-tag-for-task: func(params: add-tag-for-task-params) -> result<string, string>;
+
+  /// Get dependencies from a task
+  get-dependencies-for-task: func() -> result<string, string>;
+
+  /// Get dependents from a task
+  get-dependents-for-task: func() -> result<string, string>;
+
+  /// Duplicate a task
+  record duplicate-task-params {
+    data: option<task-duplicate-request>
+  }
+  duplicate-task: func(params: duplicate-task-params) -> result<string, string>;
+
+  /// Unlink dependencies from a task
+  record remove-dependencies-for-task-params {
+    data: option<modify-dependencies-request>
+  }
+  remove-dependencies-for-task: func(params: remove-dependencies-for-task-params) -> result<string, string>;
+
+  /// Unlink dependents from a task
+  record remove-dependents-for-task-params {
+    data: option<modify-dependents-request>
+  }
+  remove-dependents-for-task: func(params: remove-dependents-for-task-params) -> result<string, string>;
+
+  /// Remove followers from a task
+  record remove-follower-for-task-params {
+    data: option<task-remove-followers-request>
+  }
+  remove-follower-for-task: func(params: remove-follower-for-task-params) -> result<string, string>;
+
+  /// Remove a project from a task
+  record remove-project-for-task-params {
+    data: option<task-remove-project-request>
+  }
+  remove-project-for-task: func(params: remove-project-for-task-params) -> result<string, string>;
+
+  /// Remove a tag from a task
+  record remove-tag-for-task-params {
+    data: option<task-remove-tag-request>
+  }
+  remove-tag-for-task: func(params: remove-tag-for-task-params) -> result<string, string>;
+
+  /// Set the parent of a task
+  record set-parent-for-task-params {
+    data: option<task-set-parent-request>
+  }
+  set-parent-for-task: func(params: set-parent-for-task-params) -> result<string, string>;
+
+  /// Get subtasks from a task
+  get-subtasks-for-task: func() -> result<string, string>;
+
+  /// Create a subtask
+  record create-subtask-for-task-params {
+    data: option<task-request>
+  }
+  create-subtask-for-task: func(params: create-subtask-for-task-params) -> result<string, string>;
+
+  /// Get tasks from a user task list
+  get-tasks-for-user-task-list: func() -> result<string, string>;
+
+  /// Search tasks in a workspace
+  search-tasks-for-workspace: func() -> result<string, string>;
+
+}
+
+interface status-updates {
+  record status-update-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Get status updates from an object
+  record get-statuses-for-object-params {
+    /// Globally unique identifier for object to fetch statuses from. Must be a GID for a project, portfolio, or goal.
+    parent: string,
+    /// Only return statuses that have been created since the given time.
+    created-since: option<string>
+  }
+  get-statuses-for-object: func(params: get-statuses-for-object-params) -> result<string, string>;
+
+  /// Create a status update
+  record create-status-for-object-params {
+    data: option<status-update-request>
+  }
+  create-status-for-object: func(params: create-status-for-object-params) -> result<string, string>;
+
+  /// Get a status update
+  get-status: func() -> result<string, string>;
+
+  /// Delete a status update
+  delete-status: func() -> result<string, string>;
+
+}
+
+interface stories {
+  record story-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Get a story
+  get-story: func() -> result<string, string>;
+
+  /// Update a story
+  record update-story-params {
+    data: option<story-request>
+  }
+  update-story: func(params: update-story-params) -> result<string, string>;
+
+  /// Delete a story
+  delete-story: func() -> result<string, string>;
+
+  /// Get stories from a task
+  get-stories-for-task: func() -> result<string, string>;
+
+  /// Create a story on a task
+  record create-story-for-task-params {
+    data: option<story-request>
+  }
+  create-story-for-task: func(params: create-story-for-task-params) -> result<string, string>;
+
+}
+
+interface tags {
+  record tag-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record tag-response {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Get multiple tags
+  record get-tags-params {
+    /// The workspace to filter tags on.
+    workspace: option<string>
+  }
+  get-tags: func(params: get-tags-params) -> result<string, string>;
+
+  /// Create a tag
+  record create-tag-params {
+    data: option<tag-request>
+  }
+  create-tag: func(params: create-tag-params) -> result<string, string>;
+
+  /// Get a tag
+  get-tag: func() -> result<string, string>;
+
+  /// Update a tag
+  update-tag: func() -> result<string, string>;
+
+  /// Delete a tag
+  delete-tag: func() -> result<string, string>;
+
+  /// Get a task's tags
+  get-tags-for-task: func() -> result<string, string>;
+
+  /// Get tags in a workspace
+  get-tags-for-workspace: func() -> result<string, string>;
+
+  /// Create a tag in a workspace
+  record create-tag-for-workspace-params {
+    data: option<tag-response>
+  }
+  create-tag-for-workspace: func(params: create-tag-for-workspace-params) -> result<string, string>;
+
+}
+
+interface team-memberships {
+  /// Get team memberships
+  record get-team-memberships-params {
+    /// Globally unique identifier for the team.
+    team: option<string>,
+    /// A string identifying a user. This can either be the string "me", an email, or the gid of a user. This parameter must be used with the workspace parameter.
+    user: option<string>,
+    /// Globally unique identifier for the workspace. This parameter must be used with the user parameter.
+    workspace: option<string>
+  }
+  get-team-memberships: func(params: get-team-memberships-params) -> result<string, string>;
+
+  /// Get a team membership
+  get-team-membership: func() -> result<string, string>;
+
+  /// Get memberships from a team
+  get-team-memberships-for-team: func() -> result<string, string>;
+
+  /// Get memberships from a user
+  record get-team-memberships-for-user-params {
+    /// Globally unique identifier for the workspace.
+    workspace: string
+  }
+  get-team-memberships-for-user: func(params: get-team-memberships-for-user-params) -> result<string, string>;
+
+}
+
+interface teams {
+  record team-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A user identification object for specification with the addUser/removeUser endpoints.
+  record team-add-user-request {
+    /// A string identifying a user. This can either be the string "me", an email, or the gid of a user.
+    user: option<string>
+  }
+
+  /// A user identification object for specification with the addUser/removeUser endpoints.
+  record team-remove-user-request {
+    /// A string identifying a user. This can either be the string "me", an email, or the gid of a user.
+    user: option<string>
+  }
+
+  /// Create a team
+  record create-team-params {
+    data: option<team-request>
+  }
+  create-team: func(params: create-team-params) -> result<string, string>;
+
+  /// Update a team
+  record update-team-params {
+    data: option<team-request>
+  }
+  update-team: func(params: update-team-params) -> result<string, string>;
+
+  /// Get a team
+  get-team: func() -> result<string, string>;
+
+  /// Add a user to a team
+  record add-user-for-team-params {
+    data: option<team-add-user-request>
+  }
+  add-user-for-team: func(params: add-user-for-team-params) -> result<string, string>;
+
+  /// Remove a user from a team
+  record remove-user-for-team-params {
+    data: option<team-remove-user-request>
+  }
+  remove-user-for-team: func(params: remove-user-for-team-params) -> result<string, string>;
+
+  /// Get teams for a user
+  get-teams-for-user: func() -> result<string, string>;
+
+  /// Get teams in a workspace
+  get-teams-for-workspace: func() -> result<string, string>;
+
+}
+
+interface users {
+  /// Get users in a team
+  get-users-for-team: func() -> result<string, string>;
+
+  /// Get multiple users
+  get-users: func() -> result<string, string>;
+
+  /// Get a user
+  get-user: func() -> result<string, string>;
+
+  /// Get a user's favorites
+  get-favorites-for-user: func() -> result<string, string>;
+
+  /// Get users in a workspace or organization
+  get-users-for-workspace: func() -> result<string, string>;
+
+}
+
+interface time-periods {
+  /// Get time periods
+  record get-time-periods-params {
+    /// ISO 8601 date string
+    start-on: option<string>,
+    /// ISO 8601 date string
+    end-on: option<string>,
+    /// Globally unique identifier for the workspace.
+    workspace: string
+  }
+  get-time-periods: func(params: get-time-periods-params) -> result<string, string>;
+
+  /// Get a time period
+  get-time-period: func() -> result<string, string>;
+
+}
+
+interface user-task-lists {
+  /// Get a user task list
+  get-user-task-list: func() -> result<string, string>;
+
+  /// Get a user's task list
+  get-user-task-list-for-user: func() -> result<string, string>;
+
+}
+
+interface workspace-memberships {
+  /// Get workspace memberships for a user
+  get-workspace-memberships-for-user: func() -> result<string, string>;
+
+  /// Get a workspace membership
+  get-workspace-membership: func() -> result<string, string>;
+
+  /// Get the workspace memberships for a workspace
+  get-workspace-memberships-for-workspace: func() -> result<string, string>;
+
+}
+
+interface webhooks {
+  record webhook-request {
+    /// An array of WebhookFilter objects to specify a whitelist of filters to apply to events from this webhook. If a webhook event passes any of the filters the event will be delivered; otherwise no event will be sent to the receiving server.
+    filters: option<list<string>>,
+    /// A resource ID to subscribe to. Many Asana resources are valid to create webhooks on, but higher-level resources require filters.
+    resource-op: string,
+    /// The URL to receive the HTTP POST. The full URL will be used to deliver events from this webhook (including parameters) which allows encoding of application-specific state when the webhook is created.
+    target: string
+  }
+
+  record webhook-update-request {
+    /// An array of WebhookFilter objects to specify a whitelist of filters to apply to events from this webhook. If a webhook event passes any of the filters the event will be delivered; otherwise no event will be sent to the receiving server.
+    filters: option<list<string>>
+  }
+
+  /// Get multiple webhooks
+  record get-webhooks-params {
+    /// The workspace to query for webhooks in.
+    workspace: string,
+    /// Only return webhooks for the given resource.
+    resource-op: option<string>
+  }
+  get-webhooks: func(params: get-webhooks-params) -> result<string, string>;
+
+  /// Establish a webhook
+  record create-webhook-params {
+    data: option<webhook-request>
+  }
+  create-webhook: func(params: create-webhook-params) -> result<string, string>;
+
+  /// Get a webhook
+  get-webhook: func() -> result<string, string>;
+
+  /// Update a webhook
+  record update-webhook-params {
+    data: option<webhook-update-request>
+  }
+  update-webhook: func(params: update-webhook-params) -> result<string, string>;
+
+  /// Delete a webhook
+  delete-webhook: func() -> result<string, string>;
+
+}
+
+interface workspaces {
+  record workspace-request {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// A user identification object for specification with the addUser/removeUser endpoints.
+  record workspace-add-user-request {
+    /// A string identifying a user. This can either be the string "me", an email, or the gid of a user.
+    user: option<string>
+  }
+
+  /// A user identification object for specification with the addUser/removeUser endpoints.
+  record workspace-remove-user-request {
+    /// A string identifying a user. This can either be the string "me", an email, or the gid of a user.
+    user: option<string>
+  }
+
+  /// Get multiple workspaces
+  get-workspaces: func() -> result<string, string>;
+
+  /// Get a workspace
+  get-workspace: func() -> result<string, string>;
+
+  /// Update a workspace
+  record update-workspace-params {
+    data: option<workspace-request>
+  }
+  update-workspace: func(params: update-workspace-params) -> result<string, string>;
+
+  /// Add a user to a workspace or organization
+  record add-user-for-workspace-params {
+    data: option<workspace-add-user-request>
+  }
+  add-user-for-workspace: func(params: add-user-for-workspace-params) -> result<string, string>;
+
+  /// Remove a user from a workspace or organization
+  record remove-user-for-workspace-params {
+    data: option<workspace-remove-user-request>
+  }
+  remove-user-for-workspace: func(params: remove-user-for-workspace-params) -> result<string, string>;
+
+}
+
+interface audit-log-api {
+  /// Get audit log events
+  get-audit-log-events: func() -> result<string, string>;
+
+}
+
+interface typeahead {
+  /// Get objects via typeahead
+  typeahead-for-workspace: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export attachments;
+  export batch-api;
+  export custom-fields;
+  export events;
+  export goal-relationships;
+  export goals;
+  export jobs;
+  export organization-exports;
+  export portfolio-memberships;
+  export portfolios;
+  export custom-field-settings;
+  export project-briefs;
+  export project-memberships;
+  export project-statuses;
+  export project-templates;
+  export projects;
+  export sections;
+  export tasks;
+  export status-updates;
+  export stories;
+  export tags;
+  export team-memberships;
+  export teams;
+  export users;
+  export time-periods;
+  export user-task-lists;
+  export workspace-memberships;
+  export webhooks;
+  export workspaces;
+  export audit-log-api;
+  export typeahead;
+}

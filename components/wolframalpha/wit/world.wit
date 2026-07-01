@@ -1,0 +1,27 @@
+package autostamp:wolframalpha@0.2.0;
+
+interface api {
+  /// Evaluate Wolfram Language code
+  record get-wolfram-cloud-results-params {
+    /// the input expression
+    input: string
+  }
+  get-wolfram-cloud-results: func(params: get-wolfram-cloud-results-params) -> result<string, string>;
+
+  /// Get Wolfram|Alpha results
+  record get-wolfram-alpha-results-params {
+    /// the input
+    input: string
+  }
+  get-wolfram-alpha-results: func(params: get-wolfram-alpha-results-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export api;
+}

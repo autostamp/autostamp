@@ -1,0 +1,175 @@
+package autostamp:walmart@0.2.0;
+
+interface inventory {
+  enum update-bulk-inventory-feed-type-enum {
+    inventory,
+    mp-inventory,
+  }
+
+  enum update-multi-node-inventory-body-inventories-nodes-item-input-qty-unit-enum {
+    each,
+  }
+
+  record update-multi-node-inventory-body-inventories {
+    nodes: list<update-multi-node-inventory-body-inventories-nodes-item>
+  }
+
+  record update-multi-node-inventory-body-inventories-nodes-item {
+    /// Quantity that has been ordered by the customers but not yet shipped
+    input-qty: update-multi-node-inventory-body-inventories-nodes-item-input-qty,
+    /// ShipNode Id of the ship node for which the inventory is requested
+    ship-node: string
+  }
+
+  /// Quantity that has been ordered by the customers but not yet shipped
+  record update-multi-node-inventory-body-inventories-nodes-item-input-qty {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: update-multi-node-inventory-body-inventories-nodes-item-input-qty-unit-enum
+  }
+
+  /// Quantity that has been ordered by the customers but not yet shipped
+  record update-inventory-for-an-item-body-quantity {
+    /// Inventory Count
+    amount: f64,
+    /// The unit of measurement. Example: 'EACH'
+    unit: update-multi-node-inventory-body-inventories-nodes-item-input-qty-unit-enum
+  }
+
+  /// Bulk Item Inventory Update
+  record update-bulk-inventory-params {
+    /// The feed Type
+    feed-type: update-bulk-inventory-feed-type-enum,
+    /// The shipNode for which the inventory is to be updated. Not required in case of Multi Node Inventory Update Feed (feedType=MP_INVENTORY)
+    ship-node: option<string>,
+    /// The access token retrieved in the Token API call
+    wm-sec-access-token: string,
+    /// A unique ID to track the consumer request by channel. Use the Consumer Channel Type received during onboarding
+    wm-consumer-channel-type: option<string>,
+    /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
+    wm-qos-correlation-id: string,
+    /// Walmart Service Name
+    wm-svc-name: string
+  }
+  update-bulk-inventory: func(params: update-bulk-inventory-params) -> result<string, string>;
+
+  /// WFS Inventory
+  record get-wfs-inventory-params {
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item. This will be used by the seller in the XSD file to refer to each item. Special characters in the sku needing encoding are: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&', "'", '(', ')', '*', '+', ',', ';', '=', ‘ ’ as well as '%' itself if it's a part of sku. Make sure to encode space with %20. Other characters don't need to be encoded.
+    sku: option<string>,
+    /// last inventory modified date - starting range.
+    from-modified-date: option<string>,
+    /// last inventory modified date - starting range.
+    to-modified-date: option<string>,
+    /// Number of Sku to be returned. Cannot be larger than 300.
+    limit: option<string>,
+    /// Offset is the number of records you wish to skip before selecting records.
+    offset: option<string>,
+    /// The access token retrieved in the Token API call
+    wm-sec-access-token: string,
+    /// A unique ID to track the consumer request by channel. Use the Consumer Channel Type received during onboarding
+    wm-consumer-channel-type: option<string>,
+    /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
+    wm-qos-correlation-id: string,
+    /// Walmart Service Name
+    wm-svc-name: string
+  }
+  get-wfs-inventory: func(params: get-wfs-inventory-params) -> result<string, string>;
+
+  /// Multiple Item Inventory for All Ship Nodes
+  record get-multi-node-inventory-for-all-sku-and-all-ship-nodes-params {
+    /// The number of items returned. Cannot be more than 50.
+    limit: option<string>,
+    /// String returned from initial API call to indicate pagination. Specify nextCursor value to retrieve the next 50 items.
+    next-cursor: option<string>,
+    /// The access token retrieved in the Token API call
+    wm-sec-access-token: string,
+    /// A unique ID to track the consumer request by channel. Use the Consumer Channel Type received during onboarding
+    wm-consumer-channel-type: option<string>,
+    /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
+    wm-qos-correlation-id: string,
+    /// Walmart Service Name
+    wm-svc-name: string
+  }
+  get-multi-node-inventory-for-all-sku-and-all-ship-nodes: func(params: get-multi-node-inventory-for-all-sku-and-all-ship-nodes-params) -> result<string, string>;
+
+  /// Single Item Inventory by Ship Node
+  record get-multi-node-inventory-for-sku-and-all-shipnodes-params {
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item. This will be used by the seller in the XSD file to refer to each item. Special characters in the sku needing encoding are: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&', "'", '(', ')', '*', '+', ',', ';', '=', ‘ ’ as well as '%' itself if it's a part of sku. Make sure to encode space with %20. Other characters don't need to be encoded.
+    sku: string,
+    /// ShipNode Id of the ship node for which the inventory is requested
+    ship-node: option<string>,
+    /// The access token retrieved in the Token API call
+    wm-sec-access-token: string,
+    /// A unique ID to track the consumer request by channel. Use the Consumer Channel Type received during onboarding
+    wm-consumer-channel-type: option<string>,
+    /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
+    wm-qos-correlation-id: string,
+    /// Walmart Service Name
+    wm-svc-name: string
+  }
+  get-multi-node-inventory-for-sku-and-all-shipnodes: func(params: get-multi-node-inventory-for-sku-and-all-shipnodes-params) -> result<string, string>;
+
+  /// Update Item Inventory per Ship Node
+  record update-multi-node-inventory-params {
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item. This will be used by the seller in the XSD file to refer to each item. Special characters in the sku needing encoding are: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&', "'", '(', ')', '*', '+', ',', ';', '=', ‘ ’ as well as '%' itself if it's a part of sku. Make sure to encode space with %20. Other characters don't need to be encoded.
+    sku: string,
+    /// The access token retrieved in the Token API call
+    wm-sec-access-token: string,
+    /// A unique ID to track the consumer request by channel. Use the Consumer Channel Type received during onboarding
+    wm-consumer-channel-type: option<string>,
+    /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
+    wm-qos-correlation-id: string,
+    /// Walmart Service Name
+    wm-svc-name: string,
+    inventories: update-multi-node-inventory-body-inventories
+  }
+  update-multi-node-inventory: func(params: update-multi-node-inventory-params) -> result<string, string>;
+
+  /// Inventory
+  record get-inventory-params {
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item. This will be used by the seller in the XSD file to refer to each item. Special characters in the sku needing encoding are: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&', "'", '(', ')', '*', '+', ',', ';', '=', ‘ ’, '{', '}' as well as '%' itself if it's a part of sku. Make sure to encode space with %20. Other characters don't need to be encoded.
+    sku: string,
+    /// The shipNode for which the inventory is requested
+    ship-node: option<string>,
+    /// The access token retrieved in the Token API call
+    wm-sec-access-token: string,
+    /// A unique ID to track the consumer request by channel. Use the Consumer Channel Type received during onboarding
+    wm-consumer-channel-type: option<string>,
+    /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
+    wm-qos-correlation-id: string,
+    /// Walmart Service Name
+    wm-svc-name: string
+  }
+  get-inventory: func(params: get-inventory-params) -> result<string, string>;
+
+  /// Update inventory
+  record update-inventory-for-an-item-params {
+    /// An arbitrary alphanumeric unique ID, specified by the seller, which identifies each item. This will be used by the seller in the XSD file to refer to each item. Special characters in the sku needing encoding are: ':', '/', '?', '#', '[', ']', '@', '!', '$', '&', "'", '(', ')', '*', '+', ',', ';', '=', ‘ ’, '{', '}' as well as '%' itself if it's a part of sku. Make sure to encode space with %20. Other characters don't need to be encoded.
+    sku: string,
+    /// The shipNode for which the inventory is to be updated.
+    ship-node: option<string>,
+    /// The access token retrieved in the Token API call
+    wm-sec-access-token: string,
+    /// A unique ID to track the consumer request by channel. Use the Consumer Channel Type received during onboarding
+    wm-consumer-channel-type: option<string>,
+    /// A unique ID which identifies each API call and used to track and debug issues; use a random generated GUID for this ID
+    wm-qos-correlation-id: string,
+    /// Walmart Service Name
+    wm-svc-name: string,
+    /// Quantity that has been ordered by the customers but not yet shipped
+    quantity: update-inventory-for-an-item-body-quantity
+  }
+  update-inventory-for-an-item: func(params: update-inventory-for-an-item-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export inventory;
+}

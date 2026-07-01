@@ -1,0 +1,131 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `apikey` | query `circle-token` |
+package autostamp:circleci@0.2.0;
+
+interface me {
+  get-me: func() -> result<string, string>;
+
+}
+
+
+interface project {
+  enum post-project-username-project-checkout-key-body-enum {
+    deploy-key,
+    github-user-key,
+  }
+
+  enum post-project-username-project-ssh-key-content-type-enum {
+    application-json,
+  }
+
+  /// Additional environment variables to inject into the build environment. A map of names to values.
+  record build-parameters {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// The number of containers to use to run the build. Default is null and the project default is used.
+  record parallel {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The specific revision to build.
+  /// Default is null and the head of the branch is used. Cannot be used with tag parameter.
+  record revision {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// The tag to build. Default is null. Cannot be used with revision parameter.
+  record tag {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  get-project-username-project: func() -> result<string, string>;
+
+  record post-project-username-project-params {
+    build-parameters: option<build-parameters>,
+    parallel: option<parallel>,
+    revision: option<revision>,
+    tag: option<tag>
+  }
+  post-project-username-project: func(params: post-project-username-project-params) -> result<string, string>;
+
+  delete-project-username-project-build-cache: func() -> result<string, string>;
+
+  get-project-username-project-checkout-key: func() -> result<string, string>;
+
+  post-project-username-project-checkout-key: func() -> result<string, string>;
+
+  get-project-username-project-checkout-key-fingerprint: func() -> result<string, string>;
+
+  delete-project-username-project-checkout-key-fingerprint: func() -> result<string, string>;
+
+  get-project-username-project-envvar: func() -> result<string, string>;
+
+  post-project-username-project-envvar: func() -> result<string, string>;
+
+  get-project-username-project-envvar-name: func() -> result<string, string>;
+
+  delete-project-username-project-envvar-name: func() -> result<string, string>;
+
+  record post-project-username-project-ssh-key-params {
+    content-type: post-project-username-project-ssh-key-content-type-enum,
+    hostname: option<string>,
+    private-key: option<string>
+  }
+  post-project-username-project-ssh-key: func(params: post-project-username-project-ssh-key-params) -> result<string, string>;
+
+  record post-project-username-project-tree-branch-params {
+    build-parameters: option<build-parameters>,
+    parallel: option<parallel>,
+    revision: option<revision>
+  }
+  post-project-username-project-tree-branch: func(params: post-project-username-project-tree-branch-params) -> result<string, string>;
+
+  get-project-username-project-build-num: func() -> result<string, string>;
+
+  get-project-username-project-build-num-artifacts: func() -> result<string, string>;
+
+  post-project-username-project-build-num-cancel: func() -> result<string, string>;
+
+  post-project-username-project-build-num-retry: func() -> result<string, string>;
+
+  get-project-username-project-build-num-tests: func() -> result<string, string>;
+
+}
+
+interface projects {
+  get-projects: func() -> result<string, string>;
+
+}
+
+interface recent-builds {
+  get-recent-builds: func() -> result<string, string>;
+
+}
+
+interface user {
+  post-user-heroku-key: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export me;
+  export project;
+  export projects;
+  export recent-builds;
+  export user;
+}

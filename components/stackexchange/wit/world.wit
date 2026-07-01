@@ -1,0 +1,2924 @@
+package autostamp:stackexchange@0.2.0;
+
+interface access-tokens {
+  record get-access-tokens-access-tokens-params {
+    /// String list (semicolon delimited).
+    access-tokens: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-access-tokens-access-tokens: func(params: get-access-tokens-access-tokens-params) -> result<string, string>;
+
+  record get-access-tokens-access-tokens-invalidate-params {
+    /// String list (semicolon delimited).
+    access-tokens: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-access-tokens-access-tokens-invalidate: func(params: get-access-tokens-access-tokens-invalidate-params) -> result<string, string>;
+
+}
+
+
+interface answers {
+  enum get-answers-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-answers-sort-enum {
+    activity,
+    creation,
+    votes,
+  }
+
+  enum get-answers-ids-comments-sort-enum {
+    creation,
+    votes,
+  }
+
+  record get-answers-params {
+    order: option<get-answers-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-answers: func(params: get-answers-params) -> result<string, string>;
+
+  record get-answers-ids-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-answers-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-answers-ids: func(params: get-answers-ids-params) -> result<string, string>;
+
+  record get-answers-ids-comments-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-answers-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-answers-ids-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-answers-ids-comments: func(params: get-answers-ids-comments-params) -> result<string, string>;
+
+}
+
+interface apps {
+  record get-apps-access-tokens-de-authenticate-params {
+    /// String list (semicolon delimited).
+    access-tokens: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-apps-access-tokens-de-authenticate: func(params: get-apps-access-tokens-de-authenticate-params) -> result<string, string>;
+
+}
+
+interface badges {
+  enum get-badges-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-badges-sort-enum {
+    rank,
+    name,
+    type-op,
+  }
+
+  enum get-badges-name-sort-enum {
+    rank,
+    name,
+  }
+
+  record get-badges-params {
+    inname: option<string>,
+    order: option<get-badges-order-enum>,
+    /// sort = rank => string
+    /// sort = name => string
+    max: option<string>,
+    /// sort = rank => string
+    /// sort = name => string
+    min: option<string>,
+    sort: option<get-badges-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-badges: func(params: get-badges-params) -> result<string, string>;
+
+  record get-badges-name-params {
+    inname: option<string>,
+    order: option<get-badges-order-enum>,
+    /// sort = rank => string
+    /// sort = name => string
+    max: option<string>,
+    /// sort = rank => string
+    /// sort = name => string
+    min: option<string>,
+    sort: option<get-badges-name-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-badges-name: func(params: get-badges-name-params) -> result<string, string>;
+
+  record get-badges-recipients-params {
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-badges-recipients: func(params: get-badges-recipients-params) -> result<string, string>;
+
+  record get-badges-tags-params {
+    inname: option<string>,
+    order: option<get-badges-order-enum>,
+    /// sort = rank => string
+    /// sort = name => string
+    max: option<string>,
+    /// sort = rank => string
+    /// sort = name => string
+    min: option<string>,
+    sort: option<get-badges-name-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-badges-tags: func(params: get-badges-tags-params) -> result<string, string>;
+
+  record get-badges-ids-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-badges-order-enum>,
+    /// sort = rank => string
+    /// sort = name => string
+    max: option<string>,
+    /// sort = rank => string
+    /// sort = name => string
+    min: option<string>,
+    sort: option<get-badges-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-badges-ids: func(params: get-badges-ids-params) -> result<string, string>;
+
+  record get-badges-ids-recipients-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-badges-ids-recipients: func(params: get-badges-ids-recipients-params) -> result<string, string>;
+
+}
+
+interface comments {
+  enum get-comments-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-comments-sort-enum {
+    creation,
+    votes,
+  }
+
+  record get-comments-params {
+    order: option<get-comments-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-comments: func(params: get-comments-params) -> result<string, string>;
+
+  record get-comments-ids-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-comments-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-comments-ids: func(params: get-comments-ids-params) -> result<string, string>;
+
+  record post-comments-id-delete-params {
+    id: string,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    preview: option<bool>
+  }
+  post-comments-id-delete: func(params: post-comments-id-delete-params) -> result<string, string>;
+
+  record post-comments-id-edit-params {
+    id: string,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    body: option<string>,
+    preview: option<bool>
+  }
+  post-comments-id-edit: func(params: post-comments-id-edit-params) -> result<string, string>;
+
+}
+
+interface errors {
+  record get-errors-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-errors: func(params: get-errors-params) -> result<string, string>;
+
+  record get-errors-id-params {
+    id: string
+  }
+  get-errors-id: func(params: get-errors-id-params) -> result<string, string>;
+
+}
+
+interface events {
+  record get-events-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    /// Unix date.
+    since: option<s32>
+  }
+  get-events: func(params: get-events-params) -> result<string, string>;
+
+}
+
+interface filters {
+  record get-filters-create-params {
+    base: option<string>,
+    /// String list (semicolon delimited).
+    exclude: option<string>,
+    /// String list (semicolon delimited).
+    include-op: option<string>,
+    unsafe: option<bool>
+  }
+  get-filters-create: func(params: get-filters-create-params) -> result<string, string>;
+
+  record get-filters-filters-params {
+    /// String list (semicolon delimited).
+    filters: string
+  }
+  get-filters-filters: func(params: get-filters-filters-params) -> result<string, string>;
+
+}
+
+interface inbox {
+  record get-inbox-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-inbox: func(params: get-inbox-params) -> result<string, string>;
+
+  record get-inbox-unread-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Unix date.
+    since: option<s32>
+  }
+  get-inbox-unread: func(params: get-inbox-unread-params) -> result<string, string>;
+
+}
+
+interface info {
+  record get-info-params {
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-info: func(params: get-info-params) -> result<string, string>;
+
+}
+
+interface me {
+  enum get-me-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-me-sort-enum {
+    reputation,
+    creation,
+    name,
+    modified,
+  }
+
+  enum get-me-answers-sort-enum {
+    activity,
+    creation,
+    votes,
+  }
+
+  enum get-me-badges-sort-enum {
+    rank,
+    name,
+    type-op,
+  }
+
+  enum get-me-comments-sort-enum {
+    creation,
+    votes,
+  }
+
+  enum get-me-favorites-sort-enum {
+    activity,
+    creation,
+    votes,
+    added,
+  }
+
+  enum get-me-suggested-edits-sort-enum {
+    creation,
+    approval,
+    rejection,
+  }
+
+  enum get-me-tags-sort-enum {
+    popular,
+    activity,
+    name,
+  }
+
+  enum get-me-tags-tags-top-questions-sort-enum {
+    activity,
+    creation,
+    votes,
+    hot,
+    week,
+    month,
+    relevance,
+  }
+
+  record get-me-params {
+    order: option<get-me-order-enum>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me: func(params: get-me-params) -> result<string, string>;
+
+  record get-me-answers-params {
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-answers: func(params: get-me-answers-params) -> result<string, string>;
+
+  record get-me-associated-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-me-associated: func(params: get-me-associated-params) -> result<string, string>;
+
+  record get-me-badges-params {
+    order: option<get-me-order-enum>,
+    /// sort = rank => string
+    /// sort = name => string
+    max: option<string>,
+    /// sort = rank => string
+    /// sort = name => string
+    min: option<string>,
+    sort: option<get-me-badges-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-badges: func(params: get-me-badges-params) -> result<string, string>;
+
+  record get-me-comments-params {
+    order: option<get-me-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-me-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-comments: func(params: get-me-comments-params) -> result<string, string>;
+
+  record get-me-comments-to-id-params {
+    to-id: string,
+    order: option<get-me-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-me-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-comments-to-id: func(params: get-me-comments-to-id-params) -> result<string, string>;
+
+  record get-me-favorites-params {
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-favorites-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-favorites: func(params: get-me-favorites-params) -> result<string, string>;
+
+  record get-me-inbox-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-inbox: func(params: get-me-inbox-params) -> result<string, string>;
+
+  record get-me-inbox-unread-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    /// Unix date.
+    since: option<s32>
+  }
+  get-me-inbox-unread: func(params: get-me-inbox-unread-params) -> result<string, string>;
+
+  record get-me-mentioned-params {
+    order: option<get-me-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-me-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-mentioned: func(params: get-me-mentioned-params) -> result<string, string>;
+
+  record get-me-merges-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-me-merges: func(params: get-me-merges-params) -> result<string, string>;
+
+  record get-me-notifications-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-notifications: func(params: get-me-notifications-params) -> result<string, string>;
+
+  record get-me-notifications-unread-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-notifications-unread: func(params: get-me-notifications-unread-params) -> result<string, string>;
+
+  record get-me-privileges-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-privileges: func(params: get-me-privileges-params) -> result<string, string>;
+
+  record get-me-questions-params {
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-questions: func(params: get-me-questions-params) -> result<string, string>;
+
+  record get-me-questions-featured-params {
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-questions-featured: func(params: get-me-questions-featured-params) -> result<string, string>;
+
+  record get-me-questions-no-answers-params {
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-questions-no-answers: func(params: get-me-questions-no-answers-params) -> result<string, string>;
+
+  record get-me-questions-unaccepted-params {
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-questions-unaccepted: func(params: get-me-questions-unaccepted-params) -> result<string, string>;
+
+  record get-me-questions-unanswered-params {
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-questions-unanswered: func(params: get-me-questions-unanswered-params) -> result<string, string>;
+
+  record get-me-reputation-params {
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-reputation: func(params: get-me-reputation-params) -> result<string, string>;
+
+  record get-me-reputation-history-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-reputation-history: func(params: get-me-reputation-history-params) -> result<string, string>;
+
+  record get-me-reputation-history-full-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-reputation-history-full: func(params: get-me-reputation-history-full-params) -> result<string, string>;
+
+  record get-me-suggested-edits-params {
+    order: option<get-me-order-enum>,
+    /// sort = creation => date
+    /// sort = approval => date
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = approval => date
+    min: option<string>,
+    sort: option<get-me-suggested-edits-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-suggested-edits: func(params: get-me-suggested-edits-params) -> result<string, string>;
+
+  record get-me-tags-params {
+    order: option<get-me-order-enum>,
+    /// sort = popular => number
+    /// sort = activity => date
+    max: option<string>,
+    /// sort = popular => number
+    /// sort = activity => date
+    min: option<string>,
+    sort: option<get-me-tags-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-tags: func(params: get-me-tags-params) -> result<string, string>;
+
+  record get-me-tags-tags-top-answers-params {
+    /// String list (semicolon delimited).
+    tags: string,
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-tags-tags-top-answers: func(params: get-me-tags-tags-top-answers-params) -> result<string, string>;
+
+  record get-me-tags-tags-top-questions-params {
+    /// String list (semicolon delimited).
+    tags: string,
+    order: option<get-me-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-me-tags-tags-top-questions-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-tags-tags-top-questions: func(params: get-me-tags-tags-top-questions-params) -> result<string, string>;
+
+  record get-me-timeline-params {
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-timeline: func(params: get-me-timeline-params) -> result<string, string>;
+
+  record get-me-top-answer-tags-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-top-answer-tags: func(params: get-me-top-answer-tags-params) -> result<string, string>;
+
+  record get-me-top-question-tags-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-top-question-tags: func(params: get-me-top-question-tags-params) -> result<string, string>;
+
+  record get-me-write-permissions-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-me-write-permissions: func(params: get-me-write-permissions-params) -> result<string, string>;
+
+}
+
+interface notifications {
+  record get-notifications-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-notifications: func(params: get-notifications-params) -> result<string, string>;
+
+  record get-notifications-unread-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-notifications-unread: func(params: get-notifications-unread-params) -> result<string, string>;
+
+}
+
+interface posts {
+  enum get-posts-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-posts-sort-enum {
+    activity,
+    creation,
+    votes,
+  }
+
+  enum get-posts-ids-comments-sort-enum {
+    creation,
+    votes,
+  }
+
+  enum get-posts-ids-suggested-edits-sort-enum {
+    creation,
+    approval,
+    rejection,
+  }
+
+  record get-posts-params {
+    order: option<get-posts-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-posts-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-posts: func(params: get-posts-params) -> result<string, string>;
+
+  record get-posts-ids-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-posts-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-posts-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-posts-ids: func(params: get-posts-ids-params) -> result<string, string>;
+
+  record get-posts-ids-comments-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-posts-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-posts-ids-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-posts-ids-comments: func(params: get-posts-ids-comments-params) -> result<string, string>;
+
+  record get-posts-ids-revisions-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-posts-ids-revisions: func(params: get-posts-ids-revisions-params) -> result<string, string>;
+
+  record get-posts-ids-suggested-edits-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-posts-order-enum>,
+    /// sort = creation => date
+    /// sort = approval => date
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = approval => date
+    min: option<string>,
+    sort: option<get-posts-ids-suggested-edits-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-posts-ids-suggested-edits: func(params: get-posts-ids-suggested-edits-params) -> result<string, string>;
+
+  record post-posts-id-comments-add-params {
+    id: string,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    body: option<string>,
+    preview: option<bool>
+  }
+  post-posts-id-comments-add: func(params: post-posts-id-comments-add-params) -> result<string, string>;
+
+}
+
+interface privileges {
+  record get-privileges-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-privileges: func(params: get-privileges-params) -> result<string, string>;
+
+}
+
+interface questions {
+  enum get-questions-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-questions-sort-enum {
+    activity,
+    creation,
+    votes,
+    hot,
+    week,
+    month,
+    relevance,
+  }
+
+  enum get-questions-featured-sort-enum {
+    activity,
+    creation,
+    votes,
+  }
+
+  enum get-questions-ids-comments-sort-enum {
+    creation,
+    votes,
+  }
+
+  enum get-questions-ids-linked-sort-enum {
+    activity,
+    creation,
+    votes,
+    rank,
+  }
+
+  record get-questions-params {
+    /// String list (semicolon delimited).
+    tagged: option<string>,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions: func(params: get-questions-params) -> result<string, string>;
+
+  record get-questions-featured-params {
+    /// String list (semicolon delimited).
+    tagged: option<string>,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-featured-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-featured: func(params: get-questions-featured-params) -> result<string, string>;
+
+  record get-questions-no-answers-params {
+    /// String list (semicolon delimited).
+    tagged: option<string>,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-featured-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-no-answers: func(params: get-questions-no-answers-params) -> result<string, string>;
+
+  record get-questions-unanswered-params {
+    /// String list (semicolon delimited).
+    tagged: option<string>,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-featured-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-unanswered: func(params: get-questions-unanswered-params) -> result<string, string>;
+
+  record get-questions-ids-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-featured-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-ids: func(params: get-questions-ids-params) -> result<string, string>;
+
+  record get-questions-ids-answers-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-featured-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-ids-answers: func(params: get-questions-ids-answers-params) -> result<string, string>;
+
+  record get-questions-ids-comments-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-questions-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-questions-ids-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-ids-comments: func(params: get-questions-ids-comments-params) -> result<string, string>;
+
+  record get-questions-ids-linked-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-ids-linked-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-ids-linked: func(params: get-questions-ids-linked-params) -> result<string, string>;
+
+  record get-questions-ids-related-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-questions-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-questions-ids-linked-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-ids-related: func(params: get-questions-ids-related-params) -> result<string, string>;
+
+  record get-questions-ids-timeline-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-questions-ids-timeline: func(params: get-questions-ids-timeline-params) -> result<string, string>;
+
+}
+
+interface revisions {
+  record get-revisions-ids-params {
+    /// Guid list (semicolon delimited).
+    ids: string,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-revisions-ids: func(params: get-revisions-ids-params) -> result<string, string>;
+
+}
+
+interface search {
+  enum get-search-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-search-sort-enum {
+    activity,
+    creation,
+    votes,
+    relevance,
+  }
+
+  record get-search-params {
+    /// String list (semicolon delimited).
+    tagged: option<string>,
+    order: option<get-search-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-search-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    intitle: option<string>,
+    /// String list (semicolon delimited).
+    nottagged: option<string>
+  }
+  get-search: func(params: get-search-params) -> result<string, string>;
+
+  record get-search-advanced-params {
+    /// String list (semicolon delimited).
+    tagged: option<string>,
+    order: option<get-search-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-search-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    accepted: option<string>,
+    answers: option<s32>,
+    body: option<string>,
+    closed: option<string>,
+    migrated: option<string>,
+    notice: option<string>,
+    /// String list (semicolon delimited).
+    nottagged: option<string>,
+    q: option<string>,
+    title: option<string>,
+    url: option<string>,
+    user: option<s32>,
+    views: option<s32>,
+    wiki: option<string>
+  }
+  get-search-advanced: func(params: get-search-advanced-params) -> result<string, string>;
+
+}
+
+interface similar {
+  enum get-similar-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-similar-sort-enum {
+    activity,
+    creation,
+    votes,
+    relevance,
+  }
+
+  record get-similar-params {
+    /// String list (semicolon delimited).
+    tagged: option<string>,
+    order: option<get-similar-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-similar-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    /// String list (semicolon delimited).
+    nottagged: option<string>,
+    title: option<string>
+  }
+  get-similar: func(params: get-similar-params) -> result<string, string>;
+
+}
+
+interface sites {
+  record get-sites-params {
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-sites: func(params: get-sites-params) -> result<string, string>;
+
+}
+
+interface suggested-edits {
+  enum get-suggested-edits-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-suggested-edits-sort-enum {
+    creation,
+    approval,
+    rejection,
+  }
+
+  record get-suggested-edits-params {
+    order: option<get-suggested-edits-order-enum>,
+    /// sort = creation => date
+    /// sort = approval => date
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = approval => date
+    min: option<string>,
+    sort: option<get-suggested-edits-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-suggested-edits: func(params: get-suggested-edits-params) -> result<string, string>;
+
+  record get-suggested-edits-ids-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-suggested-edits-order-enum>,
+    /// sort = creation => date
+    /// sort = approval => date
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = approval => date
+    min: option<string>,
+    sort: option<get-suggested-edits-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-suggested-edits-ids: func(params: get-suggested-edits-ids-params) -> result<string, string>;
+
+}
+
+interface tags {
+  enum get-tags-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-tags-sort-enum {
+    popular,
+    activity,
+    name,
+  }
+
+  enum get-tags-synonyms-sort-enum {
+    creation,
+    applied,
+    activity,
+  }
+
+  record get-tags-params {
+    inname: option<string>,
+    order: option<get-tags-order-enum>,
+    /// sort = popular => number
+    /// sort = activity => date
+    max: option<string>,
+    /// sort = popular => number
+    /// sort = activity => date
+    min: option<string>,
+    sort: option<get-tags-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags: func(params: get-tags-params) -> result<string, string>;
+
+  record get-tags-moderator-only-params {
+    inname: option<string>,
+    order: option<get-tags-order-enum>,
+    /// sort = popular => number
+    /// sort = activity => date
+    max: option<string>,
+    /// sort = popular => number
+    /// sort = activity => date
+    min: option<string>,
+    sort: option<get-tags-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-moderator-only: func(params: get-tags-moderator-only-params) -> result<string, string>;
+
+  record get-tags-required-params {
+    inname: option<string>,
+    order: option<get-tags-order-enum>,
+    /// sort = popular => number
+    /// sort = activity => date
+    max: option<string>,
+    /// sort = popular => number
+    /// sort = activity => date
+    min: option<string>,
+    sort: option<get-tags-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-required: func(params: get-tags-required-params) -> result<string, string>;
+
+  record get-tags-synonyms-params {
+    order: option<get-tags-order-enum>,
+    /// sort = creation => date
+    /// sort = applied => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = applied => number
+    min: option<string>,
+    sort: option<get-tags-synonyms-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-synonyms: func(params: get-tags-synonyms-params) -> result<string, string>;
+
+  record get-tags-tags-faq-params {
+    /// String list (semicolon delimited).
+    tags: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-tags-faq: func(params: get-tags-tags-faq-params) -> result<string, string>;
+
+  record get-tags-tags-info-params {
+    /// String list (semicolon delimited).
+    tags: string,
+    order: option<get-tags-order-enum>,
+    /// sort = popular => number
+    /// sort = activity => date
+    max: option<string>,
+    /// sort = popular => number
+    /// sort = activity => date
+    min: option<string>,
+    sort: option<get-tags-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-tags-info: func(params: get-tags-tags-info-params) -> result<string, string>;
+
+  record get-tags-tags-related-params {
+    /// String list (semicolon delimited).
+    tags: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-tags-related: func(params: get-tags-tags-related-params) -> result<string, string>;
+
+  record get-tags-tags-synonyms-params {
+    /// String list (semicolon delimited).
+    tags: string,
+    order: option<get-tags-order-enum>,
+    /// sort = creation => date
+    /// sort = applied => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = applied => number
+    min: option<string>,
+    sort: option<get-tags-synonyms-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-tags-synonyms: func(params: get-tags-tags-synonyms-params) -> result<string, string>;
+
+  record get-tags-tags-wikis-params {
+    /// String list (semicolon delimited).
+    tags: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-tags-wikis: func(params: get-tags-tags-wikis-params) -> result<string, string>;
+
+  record get-tags-tag-top-answerers-period-params {
+    tag: string,
+    period: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-tag-top-answerers-period: func(params: get-tags-tag-top-answerers-period-params) -> result<string, string>;
+
+  record get-tags-tag-top-askers-period-params {
+    tag: string,
+    period: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-tags-tag-top-askers-period: func(params: get-tags-tag-top-askers-period-params) -> result<string, string>;
+
+}
+
+interface users {
+  enum get-users-order-enum {
+    desc,
+    asc,
+  }
+
+  enum get-users-sort-enum {
+    reputation,
+    creation,
+    name,
+    modified,
+  }
+
+  enum get-users-ids-answers-sort-enum {
+    activity,
+    creation,
+    votes,
+  }
+
+  enum get-users-ids-badges-sort-enum {
+    rank,
+    name,
+    type-op,
+    awarded,
+  }
+
+  enum get-users-ids-comments-sort-enum {
+    creation,
+    votes,
+  }
+
+  enum get-users-ids-favorites-sort-enum {
+    activity,
+    creation,
+    votes,
+    added,
+  }
+
+  enum get-users-ids-suggested-edits-sort-enum {
+    creation,
+    approval,
+    rejection,
+  }
+
+  enum get-users-ids-tags-sort-enum {
+    popular,
+    activity,
+    name,
+  }
+
+  record get-users-params {
+    inname: option<string>,
+    order: option<get-users-order-enum>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users: func(params: get-users-params) -> result<string, string>;
+
+  record get-users-moderators-params {
+    order: option<get-users-order-enum>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-moderators: func(params: get-users-moderators-params) -> result<string, string>;
+
+  record get-users-moderators-elected-params {
+    order: option<get-users-order-enum>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-moderators-elected: func(params: get-users-moderators-elected-params) -> result<string, string>;
+
+  record get-users-ids-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = reputation => number
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids: func(params: get-users-ids-params) -> result<string, string>;
+
+  record get-users-ids-answers-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-answers: func(params: get-users-ids-answers-params) -> result<string, string>;
+
+  record get-users-ids-associated-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-users-ids-associated: func(params: get-users-ids-associated-params) -> result<string, string>;
+
+  record get-users-ids-badges-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = rank => string
+    /// sort = name => string
+    max: option<string>,
+    /// sort = rank => string
+    /// sort = name => string
+    min: option<string>,
+    sort: option<get-users-ids-badges-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-badges: func(params: get-users-ids-badges-params) -> result<string, string>;
+
+  record get-users-ids-comments-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-users-ids-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-comments: func(params: get-users-ids-comments-params) -> result<string, string>;
+
+  record get-users-ids-comments-toid-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    toid: string,
+    order: option<get-users-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-users-ids-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-comments-toid: func(params: get-users-ids-comments-toid-params) -> result<string, string>;
+
+  record get-users-ids-favorites-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-favorites-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-favorites: func(params: get-users-ids-favorites-params) -> result<string, string>;
+
+  record get-users-ids-mentioned-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = creation => date
+    /// sort = votes => number
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = votes => number
+    min: option<string>,
+    sort: option<get-users-ids-comments-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-mentioned: func(params: get-users-ids-mentioned-params) -> result<string, string>;
+
+  record get-users-ids-merges-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>
+  }
+  get-users-ids-merges: func(params: get-users-ids-merges-params) -> result<string, string>;
+
+  record get-users-ids-questions-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-questions: func(params: get-users-ids-questions-params) -> result<string, string>;
+
+  record get-users-ids-questions-featured-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-questions-featured: func(params: get-users-ids-questions-featured-params) -> result<string, string>;
+
+  record get-users-ids-questions-no-answers-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-questions-no-answers: func(params: get-users-ids-questions-no-answers-params) -> result<string, string>;
+
+  record get-users-ids-questions-unaccepted-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-questions-unaccepted: func(params: get-users-ids-questions-unaccepted-params) -> result<string, string>;
+
+  record get-users-ids-questions-unanswered-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-questions-unanswered: func(params: get-users-ids-questions-unanswered-params) -> result<string, string>;
+
+  record get-users-ids-reputation-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-reputation: func(params: get-users-ids-reputation-params) -> result<string, string>;
+
+  record get-users-ids-reputation-history-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-reputation-history: func(params: get-users-ids-reputation-history-params) -> result<string, string>;
+
+  record get-users-ids-suggested-edits-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = creation => date
+    /// sort = approval => date
+    max: option<string>,
+    /// sort = creation => date
+    /// sort = approval => date
+    min: option<string>,
+    sort: option<get-users-ids-suggested-edits-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-suggested-edits: func(params: get-users-ids-suggested-edits-params) -> result<string, string>;
+
+  record get-users-ids-tags-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    order: option<get-users-order-enum>,
+    /// sort = popular => number
+    /// sort = activity => date
+    max: option<string>,
+    /// sort = popular => number
+    /// sort = activity => date
+    min: option<string>,
+    sort: option<get-users-ids-tags-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-tags: func(params: get-users-ids-tags-params) -> result<string, string>;
+
+  record get-users-ids-timeline-params {
+    /// Number list (semicolon delimited).
+    ids: string,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-ids-timeline: func(params: get-users-ids-timeline-params) -> result<string, string>;
+
+  record get-users-id-inbox-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-inbox: func(params: get-users-id-inbox-params) -> result<string, string>;
+
+  record get-users-id-inbox-unread-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string,
+    /// Unix date.
+    since: option<s32>
+  }
+  get-users-id-inbox-unread: func(params: get-users-id-inbox-unread-params) -> result<string, string>;
+
+  record get-users-id-notifications-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-notifications: func(params: get-users-id-notifications-params) -> result<string, string>;
+
+  record get-users-id-notifications-unread-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-notifications-unread: func(params: get-users-id-notifications-unread-params) -> result<string, string>;
+
+  record get-users-id-privileges-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-privileges: func(params: get-users-id-privileges-params) -> result<string, string>;
+
+  record get-users-id-reputation-history-full-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-reputation-history-full: func(params: get-users-id-reputation-history-full-params) -> result<string, string>;
+
+  record get-users-id-tags-tags-top-answers-params {
+    id: string,
+    /// String list (semicolon delimited).
+    tags: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-tags-tags-top-answers: func(params: get-users-id-tags-tags-top-answers-params) -> result<string, string>;
+
+  record get-users-id-tags-tags-top-questions-params {
+    id: string,
+    /// String list (semicolon delimited).
+    tags: string,
+    order: option<get-users-order-enum>,
+    /// sort = activity => date
+    /// sort = creation => date
+    max: option<string>,
+    /// sort = activity => date
+    /// sort = creation => date
+    min: option<string>,
+    sort: option<get-users-ids-answers-sort-enum>,
+    /// Unix date.
+    fromdate: option<s32>,
+    /// Unix date.
+    todate: option<s32>,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-tags-tags-top-questions: func(params: get-users-id-tags-tags-top-questions-params) -> result<string, string>;
+
+  record get-users-id-top-answer-tags-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-top-answer-tags: func(params: get-users-id-top-answer-tags-params) -> result<string, string>;
+
+  record get-users-id-top-question-tags-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-top-question-tags: func(params: get-users-id-top-question-tags-params) -> result<string, string>;
+
+  record get-users-id-write-permissions-params {
+    id: string,
+    pagesize: option<s32>,
+    page: option<s32>,
+    /// #Discussion
+    /// 
+    filter: option<string>,
+    /// All API responses are JSON, we do support JSONP with the callback query parameter.
+    callback: option<string>,
+    /// Each of these methods operates on a single site at a time, identified by the site parameter. This parameter can be the full domain name (ie. "stackoverflow.com"), or a short form identified by api_site_parameter on the site object.
+    site: string
+  }
+  get-users-id-write-permissions: func(params: get-users-id-write-permissions-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export access-tokens;
+  export answers;
+  export apps;
+  export badges;
+  export comments;
+  export errors;
+  export events;
+  export filters;
+  export inbox;
+  export info;
+  export me;
+  export notifications;
+  export posts;
+  export privileges;
+  export questions;
+  export revisions;
+  export search;
+  export similar;
+  export sites;
+  export suggested-edits;
+  export tags;
+  export users;
+}

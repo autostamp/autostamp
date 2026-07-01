@@ -1,0 +1,199 @@
+package autostamp:elevenlabs@0.2.0;
+
+interface history {
+  /// Get Generated Items
+  record get-generated-items-v1-history-get-params {
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-generated-items-v1-history-get: func(params: get-generated-items-v1-history-get-params) -> result<string, string>;
+
+  /// Delete History Items
+  record delete-history-items-v1-history-delete-post-params {
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>,
+    /// A list of history items to remove, you can get IDs of history items and other metadata using the GET https://api.elevenlabs.io/v1/history endpoint.
+    history-item-ids: list<string>
+  }
+  delete-history-items-v1-history-delete-post: func(params: delete-history-items-v1-history-delete-post-params) -> result<string, string>;
+
+  /// Download History Items
+  record download-history-items-v1-history-download-post-params {
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>,
+    /// A list of history items to download, you can get IDs of history items and other metadata using the GET https://api.elevenlabs.io/v1/history endpoint.
+    history-item-ids: list<string>
+  }
+  download-history-items-v1-history-download-post: func(params: download-history-items-v1-history-download-post-params) -> result<string, string>;
+
+  /// Delete History Item
+  record delete-history-item-v1-history-history-item-id-delete-params {
+    /// History item ID to be used, you can use GET https://api.elevenlabs.io/v1/history to receive a list of history items and their IDs.
+    history-item-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  delete-history-item-v1-history-history-item-id-delete: func(params: delete-history-item-v1-history-history-item-id-delete-params) -> result<string, string>;
+
+  /// Get Audio From History Item
+  record get-audio-from-history-item-v1-history-history-item-id-audio-get-params {
+    /// History item ID to be used, you can use GET https://api.elevenlabs.io/v1/history to receive a list of history items and their IDs.
+    history-item-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-audio-from-history-item-v1-history-history-item-id-audio-get: func(params: get-audio-from-history-item-v1-history-history-item-id-audio-get-params) -> result<string, string>;
+
+}
+
+
+interface text-to-speech {
+  /// Text To Speech
+  record text-to-speech-v1-text-to-speech-voice-id-post-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>,
+    /// The text that will get converted into speech. Currently only English text is supported.
+    text: string,
+    /// Voice settings overriding stored setttings for the given voice. They are applied only on the given TTS request.
+    voice-settings: option<string>
+  }
+  text-to-speech-v1-text-to-speech-voice-id-post: func(params: text-to-speech-v1-text-to-speech-voice-id-post-params) -> result<string, string>;
+
+  /// Text To Speech
+  record text-to-speech-v1-text-to-speech-voice-id-stream-post-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>,
+    /// The text that will get converted into speech. Currently only English text is supported.
+    text: string,
+    /// Voice settings overriding stored setttings for the given voice. They are applied only on the given TTS request.
+    voice-settings: option<string>
+  }
+  text-to-speech-v1-text-to-speech-voice-id-stream-post: func(params: text-to-speech-v1-text-to-speech-voice-id-stream-post-params) -> result<string, string>;
+
+}
+
+interface user {
+  /// Get User Info
+  record get-user-info-v1-user-get-params {
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-user-info-v1-user-get: func(params: get-user-info-v1-user-get-params) -> result<string, string>;
+
+  /// Get User Subscription Info
+  record get-user-subscription-info-v1-user-subscription-get-params {
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-user-subscription-info-v1-user-subscription-get: func(params: get-user-subscription-info-v1-user-subscription-get-params) -> result<string, string>;
+
+}
+
+interface voices {
+  /// Get Voices
+  record get-voices-v1-voices-get-params {
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-voices-v1-voices-get: func(params: get-voices-v1-voices-get-params) -> result<string, string>;
+
+  /// Add Voice
+  record add-voice-v1-voices-add-post-params {
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  add-voice-v1-voices-add-post: func(params: add-voice-v1-voices-add-post-params) -> result<string, string>;
+
+  /// Get Default Voice Settings.
+  get-default-voice-settings-v1-voices-settings-default-get: func() -> result<string, string>;
+
+  /// Get Voice
+  record get-voice-v1-voices-voice-id-get-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// If set will return settings information corresponding to the voice, requires authorization.
+    with-settings: option<bool>,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-voice-v1-voices-voice-id-get: func(params: get-voice-v1-voices-voice-id-get-params) -> result<string, string>;
+
+  /// Delete Voice
+  record delete-voice-v1-voices-voice-id-delete-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  delete-voice-v1-voices-voice-id-delete: func(params: delete-voice-v1-voices-voice-id-delete-params) -> result<string, string>;
+
+  /// Edit Voice
+  record edit-voice-v1-voices-voice-id-edit-post-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  edit-voice-v1-voices-voice-id-edit-post: func(params: edit-voice-v1-voices-voice-id-edit-post-params) -> result<string, string>;
+
+  /// Get Voice Settings
+  record get-voice-settings-v1-voices-voice-id-settings-get-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-voice-settings-v1-voices-voice-id-settings-get: func(params: get-voice-settings-v1-voices-voice-id-settings-get-params) -> result<string, string>;
+
+  /// Edit Voice Settings
+  record edit-voice-settings-v1-voices-voice-id-settings-edit-post-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>,
+    body: string
+  }
+  edit-voice-settings-v1-voices-voice-id-settings-edit-post: func(params: edit-voice-settings-v1-voices-voice-id-settings-edit-post-params) -> result<string, string>;
+
+}
+
+interface samples {
+  /// Delete Sample
+  record delete-sample-v1-voices-voice-id-samples-sample-id-delete-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Sample ID to be used, you can use GET https://api.elevenlabs.io/v1/voices/{voice_id} to list all the available samples for a voice.
+    sample-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  delete-sample-v1-voices-voice-id-samples-sample-id-delete: func(params: delete-sample-v1-voices-voice-id-samples-sample-id-delete-params) -> result<string, string>;
+
+  /// Get Audio From Sample
+  record get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get-params {
+    /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
+    voice-id: string,
+    /// Sample ID to be used, you can use GET https://api.elevenlabs.io/v1/voices/{voice_id} to list all the available samples for a voice.
+    sample-id: string,
+    /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
+    xi-api-key: option<string>
+  }
+  get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get: func(params: get-audio-from-sample-v1-voices-voice-id-samples-sample-id-audio-get-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export history;
+  export text-to-speech;
+  export user;
+  export voices;
+  export samples;
+}

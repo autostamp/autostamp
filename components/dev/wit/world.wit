@@ -1,0 +1,397 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `api-key` | header `api-key` |
+package autostamp:dev@0.2.0;
+
+interface users {
+  /// Invite a User
+  record post-admin-users-create-params {
+    email: option<string>,
+    name: option<string>
+  }
+  post-admin-users-create: func(params: post-admin-users-create-params) -> result<string, string>;
+
+  /// The authenticated user
+  get-user-me: func() -> result<string, string>;
+
+  /// A User
+  record get-user-params {
+    id: string
+  }
+  get-user: func(params: get-user-params) -> result<string, string>;
+
+  /// Suspend a User
+  record suspend-user-params {
+    /// The ID of the user to suspend.
+    id: string
+  }
+  suspend-user: func(params: suspend-user-params) -> result<string, string>;
+
+  /// Unpublish a User's Articles and Comments
+  record unpublish-user-params {
+    /// The ID of the user to unpublish.
+    id: string
+  }
+  unpublish-user: func(params: unpublish-user-params) -> result<string, string>;
+
+}
+
+
+interface articles {
+  enum get-articles-state-enum {
+    fresh,
+    rising,
+    all,
+  }
+
+  record article-article {
+    body-markdown: option<string>,
+    canonical-url: option<string>,
+    description: option<string>,
+    main-image: option<string>,
+    organization-id: option<s32>,
+    published: option<bool>,
+    series: option<string>,
+    tags: option<string>,
+    title: option<string>
+  }
+
+  /// Published articles
+  record get-articles-params {
+    /// Using this parameter will retrieve articles that contain the requested tag. Articles
+    /// will be ordered by descending popularity.This parameter can be used in conjuction with `top`.
+    tag: option<string>,
+    /// Using this parameter will retrieve articles with any of the comma-separated tags.
+    /// Articles will be ordered by descending popularity.
+    tags: option<string>,
+    /// Using this parameter will retrieve articles that do _not_ contain _any_
+    /// of comma-separated tags. Articles will be ordered by descending popularity.
+    tags-exclude: option<string>,
+    /// Using this parameter will retrieve articles belonging
+    ///             to a User or Organization ordered by descending publication date.
+    username: option<string>,
+    /// Using this parameter will allow the client to check which articles are fresh or rising.
+    ///             If `state=fresh` the server will return fresh articles.
+    state: option<get-articles-state-enum>,
+    /// Using this parameter will allow the client to return the most popular articles
+    /// in the last `N` days.
+    top: option<s32>,
+    /// Adding this will allow the client to return the list of articles
+    /// belonging to the requested collection, ordered by ascending publication date.
+    collection-id: option<s32>
+  }
+  get-articles: func(params: get-articles-params) -> result<string, string>;
+
+  /// Publish article
+  record create-article-params {
+    article: option<article-article>
+  }
+  create-article: func(params: create-article-params) -> result<string, string>;
+
+  /// Published articles sorted by published date
+  get-latest-articles: func() -> result<string, string>;
+
+  /// User's articles
+  get-user-articles: func() -> result<string, string>;
+
+  /// User's all articles
+  get-user-all-articles: func() -> result<string, string>;
+
+  /// User's published articles
+  get-user-published-articles: func() -> result<string, string>;
+
+  /// User's unpublished articles
+  get-user-unpublished-articles: func() -> result<string, string>;
+
+  /// Published article by id
+  record get-article-by-id-params {
+    id: string
+  }
+  get-article-by-id: func(params: get-article-by-id-params) -> result<string, string>;
+
+  /// Update an article by id
+  record update-article-params {
+    /// The ID of the user to unpublish.
+    id: string,
+    article: option<article-article>
+  }
+  update-article: func(params: update-article-params) -> result<string, string>;
+
+  /// Unpublish an article
+  record unpublish-article-params {
+    /// The ID of the article to unpublish.
+    id: string,
+    /// Content for the note that's created along with unpublishing
+    note: option<string>
+  }
+  unpublish-article: func(params: unpublish-article-params) -> result<string, string>;
+
+  /// Published article by path
+  record get-article-by-path-params {
+    username: string,
+    slug: string
+  }
+  get-article-by-path: func(params: get-article-by-path-params) -> result<string, string>;
+
+}
+
+interface comments {
+  /// Comments
+  record get-comments-by-article-id-params {
+    /// Article identifier.
+    a-id: option<string>,
+    /// Podcast Episode identifier.
+    p-id: option<string>
+  }
+  get-comments-by-article-id: func(params: get-comments-by-article-id-params) -> result<string, string>;
+
+  /// Comment by id
+  record get-comment-by-id-params {
+    /// Comment identifier.
+    id: string
+  }
+  get-comment-by-id: func(params: get-comment-by-id-params) -> result<string, string>;
+
+}
+
+interface display-ads {
+  /// display ads
+  get-api-display-ads: func() -> result<string, string>;
+
+  /// display ads
+  record post-api-display-ads-params {
+    body: option<string>
+  }
+  post-api-display-ads: func(params: post-api-display-ads-params) -> result<string, string>;
+
+  /// display ad
+  record get-api-display-ads-id-params {
+    /// The ID of the display ad.
+    id: string
+  }
+  get-api-display-ads-id: func(params: get-api-display-ads-id-params) -> result<string, string>;
+
+  /// display ads
+  record put-api-display-ads-id-params {
+    /// The ID of the display ad.
+    id: string,
+    body: option<string>
+  }
+  put-api-display-ads-id: func(params: put-api-display-ads-id-params) -> result<string, string>;
+
+  /// unpublish
+  record put-api-display-ads-id-unpublish-params {
+    /// The ID of the display ad to unpublish.
+    id: string
+  }
+  put-api-display-ads-id-unpublish: func(params: put-api-display-ads-id-unpublish-params) -> result<string, string>;
+
+}
+
+interface followers {
+  /// Followers
+  record get-followers-params {
+    /// Default is 'created_at'. Specifies the sort order for the created_at param of the follow
+    ///                                 relationship. To sort by newest followers first (descending order) specify
+    sort: option<string>
+  }
+  get-followers: func(params: get-followers-params) -> result<string, string>;
+
+}
+
+interface followed-tags {
+  /// Followed Tags
+  get-followed-tags: func() -> result<string, string>;
+
+}
+
+interface organizations {
+  /// An organization
+  record get-organization-params {
+    username: string
+  }
+  get-organization: func(params: get-organization-params) -> result<string, string>;
+
+  /// Organization's Articles
+  record get-org-articles-params {
+    username: string
+  }
+  get-org-articles: func(params: get-org-articles-params) -> result<string, string>;
+
+  /// Organization's users
+  record get-org-users-params {
+    username: string
+  }
+  get-org-users: func(params: get-org-users-params) -> result<string, string>;
+
+}
+
+interface pages {
+  enum post-api-pages-body-template-enum {
+    contained,
+    full-within-layout,
+    nav-bar-included,
+    json,
+  }
+
+  record page-social-image {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// show details for all pages
+  get-api-pages: func() -> result<string, string>;
+
+  /// pages
+  record post-api-pages-params {
+    /// For JSON pages, the JSON body
+    body-json: option<string>,
+    /// The text (in markdown) of the ad (required)
+    body-markdown: option<string>,
+    /// For internal use, helps similar pages from one another
+    description: option<string>,
+    /// If true, the page is available at '/{slug}' instead of '/page/{slug}', use with caution
+    is-top-level-path: option<bool>,
+    /// Used to link to this page in URLs, must be unique and URL-safe
+    slug: option<string>,
+    /// Controls what kind of layout the page is rendered in
+    template: option<post-api-pages-body-template-enum>,
+    /// Title of the page
+    title: option<string>
+  }
+  post-api-pages: func(params: post-api-pages-params) -> result<string, string>;
+
+  /// show details for a page
+  record get-api-pages-id-params {
+    /// The ID of the page.
+    id: string
+  }
+  get-api-pages-id: func(params: get-api-pages-id-params) -> result<string, string>;
+
+  /// update details for a page
+  record put-api-pages-id-params {
+    /// The ID of the page.
+    id: string,
+    /// For JSON pages, the JSON body
+    body-json: option<string>,
+    /// The text (in markdown) of the ad (required)
+    body-markdown: option<string>,
+    /// For internal use, helps similar pages from one another
+    description: string,
+    /// If true, the page is available at '/{slug}' instead of '/page/{slug}', use with caution
+    is-top-level-path: option<bool>,
+    /// Used to link to this page in URLs, must be unique and URL-safe
+    slug: string,
+    social-image: option<page-social-image>,
+    /// Controls what kind of layout the page is rendered in
+    template: post-api-pages-body-template-enum,
+    /// Title of the page
+    title: string
+  }
+  put-api-pages-id: func(params: put-api-pages-id-params) -> result<string, string>;
+
+  /// remove a page
+  record delete-api-pages-id-params {
+    /// The ID of the page.
+    id: string
+  }
+  delete-api-pages-id: func(params: delete-api-pages-id-params) -> result<string, string>;
+
+}
+
+interface podcast-episodes {
+  /// Podcast Episodes
+  record get-podcast-episodes-params {
+    /// Using this parameter will retrieve episodes belonging to a specific podcast.
+    username: option<string>
+  }
+  get-podcast-episodes: func(params: get-podcast-episodes-params) -> result<string, string>;
+
+}
+
+interface profile-images {
+  /// A Users or organizations profile image
+  record get-profile-image-params {
+    /// The parameter is the username of the user or the username of the organization.
+    username: string
+  }
+  get-profile-image: func(params: get-profile-image-params) -> result<string, string>;
+
+}
+
+interface reactions {
+  enum post-api-reactions-category-enum {
+    like,
+    unicorn,
+    exploding-head,
+    raised-hands,
+    fire,
+  }
+
+  enum post-api-reactions-reactable-type-enum {
+    comment,
+    article,
+    user,
+  }
+
+  /// create reaction
+  record post-api-reactions-params {
+    category: post-api-reactions-category-enum,
+    reactable-id: s32,
+    reactable-type: post-api-reactions-reactable-type-enum
+  }
+  post-api-reactions: func(params: post-api-reactions-params) -> result<string, string>;
+
+  /// toggle reaction
+  record post-api-reactions-toggle-params {
+    category: post-api-reactions-category-enum,
+    reactable-id: s32,
+    reactable-type: post-api-reactions-reactable-type-enum
+  }
+  post-api-reactions-toggle: func(params: post-api-reactions-toggle-params) -> result<string, string>;
+
+}
+
+interface readinglist {
+  /// Readinglist
+  get-readinglist: func() -> result<string, string>;
+
+}
+
+interface tags {
+  /// Tags
+  get-tags: func() -> result<string, string>;
+
+}
+
+interface videos {
+  /// Articles with a video
+  videos: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export users;
+  export articles;
+  export comments;
+  export display-ads;
+  export followers;
+  export followed-tags;
+  export organizations;
+  export pages;
+  export podcast-episodes;
+  export profile-images;
+  export reactions;
+  export readinglist;
+  export tags;
+  export videos;
+}

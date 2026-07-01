@@ -1,0 +1,56 @@
+package autostamp:omdbapi@0.2.0;
+
+interface om-db {
+  enum get-om-db-search-type-op-enum {
+    movie,
+    series,
+    episode,
+  }
+
+  enum get-om-db-search-plot-enum {
+    short,
+    full,
+  }
+
+  enum get-om-db-search-r-enum {
+    json,
+    xml,
+  }
+
+  /// OMDb Search
+  record get-om-db-search-params {
+    /// Movie title to search for. One of t, i or s is required.
+    t: option<string>,
+    /// A valid IMDb ID (e.g. tt1285016). One of t, i or s is required.
+    i: option<string>,
+    /// Movie title to search for. One of t, i or s is required.
+    s: option<string>,
+    /// Year of release.
+    y: option<s32>,
+    /// Type of result to return.
+    type-op: option<get-om-db-search-type-op-enum>,
+    /// Return short or full plot.
+    plot: option<get-om-db-search-plot-enum>,
+    /// Include Rotten Tomatoes ratings.
+    tomatoes: option<bool>,
+    /// The data type to return.
+    r: get-om-db-search-r-enum,
+    /// API version (reserved for future use).
+    v: option<s32>,
+    /// Page number to return.
+    page: option<s32>,
+    /// JSONP callback name.
+    callback: option<string>
+  }
+  get-om-db-search: func(params: get-om-db-search-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export om-db;
+}

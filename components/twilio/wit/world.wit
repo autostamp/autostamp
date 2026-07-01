@@ -1,0 +1,2687 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `accountSid_authToken` | `Authorization: Basic base64(<secret>)` |
+package autostamp:twilio@0.2.0;
+
+interface api20100401-account {
+  record account-enum-status {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-account-params {
+    /// Only return the Account resources with friendly names that exactly match this name.
+    friendly-name: option<string>,
+    /// Only return Account resources with the given status. Can be `closed`, `suspended` or `active`.
+    status: option<account-enum-status>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-account: func(params: list-account-params) -> result<string, string>;
+
+  create-account: func() -> result<string, string>;
+
+  record fetch-account-params {
+    /// The Account Sid that uniquely identifies the account to fetch
+    sid: string
+  }
+  fetch-account: func(params: fetch-account-params) -> result<string, string>;
+
+  record update-account-params {
+    /// The Account Sid that uniquely identifies the account to update
+    sid: string
+  }
+  update-account: func(params: update-account-params) -> result<string, string>;
+
+}
+
+
+interface api20100401-address {
+  record list-address-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that is responsible for the Address resource to read.
+    account-sid: string,
+    /// The `customer_name` of the Address resources to read.
+    customer-name: option<string>,
+    /// The string that identifies the Address resources to read.
+    friendly-name: option<string>,
+    /// The ISO country code of the Address resources to read.
+    iso-country: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-address: func(params: list-address-params) -> result<string, string>;
+
+  record create-address-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will be responsible for the new Address resource.
+    account-sid: string
+  }
+  create-address: func(params: create-address-params) -> result<string, string>;
+
+  record fetch-address-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that is responsible for the Address resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Address resource to fetch.
+    sid: string
+  }
+  fetch-address: func(params: fetch-address-params) -> result<string, string>;
+
+  record update-address-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that is responsible for the Address resource to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Address resource to update.
+    sid: string
+  }
+  update-address: func(params: update-address-params) -> result<string, string>;
+
+  record delete-address-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that is responsible for the Address resource to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Address resource to delete.
+    sid: string
+  }
+  delete-address: func(params: delete-address-params) -> result<string, string>;
+
+}
+
+interface api20100401-dependent-phone-number {
+  record list-dependent-phone-number-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the DependentPhoneNumber resources to read.
+    account-sid: string,
+    /// The SID of the Address resource associated with the phone number.
+    address-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-dependent-phone-number: func(params: list-dependent-phone-number-params) -> result<string, string>;
+
+}
+
+interface api20100401-application {
+  record list-application-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Application resources to read.
+    account-sid: string,
+    /// The string that identifies the Application resources to read.
+    friendly-name: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-application: func(params: list-application-params) -> result<string, string>;
+
+  record create-application-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-application: func(params: create-application-params) -> result<string, string>;
+
+  record fetch-application-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Application resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Application resource to fetch.
+    sid: string
+  }
+  fetch-application: func(params: fetch-application-params) -> result<string, string>;
+
+  record update-application-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Application resources to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Application resource to update.
+    sid: string
+  }
+  update-application: func(params: update-application-params) -> result<string, string>;
+
+  record delete-application-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Application resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Application resource to delete.
+    sid: string
+  }
+  delete-application: func(params: delete-application-params) -> result<string, string>;
+
+}
+
+interface api20100401-authorized-connect-app {
+  record list-authorized-connect-app-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the AuthorizedConnectApp resources to read.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-authorized-connect-app: func(params: list-authorized-connect-app-params) -> result<string, string>;
+
+  record fetch-authorized-connect-app-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the AuthorizedConnectApp resource to fetch.
+    account-sid: string,
+    /// The SID of the Connect App to fetch.
+    connect-app-sid: string
+  }
+  fetch-authorized-connect-app: func(params: fetch-authorized-connect-app-params) -> result<string, string>;
+
+}
+
+interface api20100401-available-phone-number-country {
+  record list-available-phone-number-country-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the available phone number Country resources.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-country: func(params: list-available-phone-number-country-params) -> result<string, string>;
+
+  record fetch-available-phone-number-country-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the available phone number Country resource.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country to fetch available phone number information about.
+    country-code: string
+  }
+  fetch-available-phone-number-country: func(params: fetch-available-phone-number-country-params) -> result<string, string>;
+
+}
+
+interface api20100401-local {
+  record list-available-phone-number-local-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the AvailablePhoneNumber resources.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country from which to read phone numbers.
+    country-code: string,
+    /// The area code of the phone numbers to read. Applies to only phone numbers in the US and Canada.
+    area-code: option<s32>,
+    /// The pattern on which to match phone numbers. Valid characters are `*`, `0-9`, `a-z`, and `A-Z`. The `*` character matches any single digit. For examples, see [Example 2](https://www.twilio.com/docs/phone-numbers/api/availablephonenumberlocal-resource?code-sample=code-find-phone-numbers-by-number-pattern) and [Example 3](https://www.twilio.com/docs/phone-numbers/api/availablephonenumberlocal-resource?code-sample=code-find-phone-numbers-by-character-pattern). If specified, this value must have at least two characters.
+    contains: option<string>,
+    /// Whether the phone numbers can receive text messages. Can be: `true` or `false`.
+    sms-enabled: option<bool>,
+    /// Whether the phone numbers can receive MMS messages. Can be: `true` or `false`.
+    mms-enabled: option<bool>,
+    /// Whether the phone numbers can receive calls. Can be: `true` or `false`.
+    voice-enabled: option<bool>,
+    /// Whether to exclude phone numbers that require an [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-all-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a local [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-local-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a foreign [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-foreign-address-required: option<bool>,
+    /// Whether to read phone numbers that are new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// Given a phone number, find a geographically close number within `distance` miles. Distance defaults to 25 miles. Applies to only phone numbers in the US and Canada.
+    near-number: option<string>,
+    /// Given a latitude/longitude pair `lat,long` find geographically close numbers within `distance` miles. Applies to only phone numbers in the US and Canada.
+    near-lat-long: option<string>,
+    /// The search radius, in miles, for a `near_` query.  Can be up to `500` and the default is `25`. Applies to only phone numbers in the US and Canada.
+    distance: option<s32>,
+    /// Limit results to a particular postal code. Given a phone number, search within the same postal code as that number. Applies to only phone numbers in the US and Canada.
+    in-postal-code: option<string>,
+    /// Limit results to a particular region, state, or province. Given a phone number, search within the same region as that number. Applies to only phone numbers in the US and Canada.
+    in-region: option<string>,
+    /// Limit results to a specific rate center, or given a phone number search within the same rate center as that number. Requires `in_lata` to be set as well. Applies to only phone numbers in the US and Canada.
+    in-rate-center: option<string>,
+    /// Limit results to a specific local access and transport area ([LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area)). Given a phone number, search within the same [LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area) as that number. Applies to only phone numbers in the US and Canada.
+    in-lata: option<string>,
+    /// Limit results to a particular locality or city. Given a phone number, search within the same Locality as that number.
+    in-locality: option<string>,
+    /// Whether the phone numbers can receive faxes. Can be: `true` or `false`.
+    fax-enabled: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-local: func(params: list-available-phone-number-local-params) -> result<string, string>;
+
+  record list-incoming-phone-number-local-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resources to read.
+    account-sid: string,
+    /// Whether to include phone numbers new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// A string that identifies the resources to read.
+    friendly-name: option<string>,
+    /// The phone numbers of the IncomingPhoneNumber resources to read. You can specify partial numbers and use '*' as a wildcard for any digit.
+    phone-number: option<string>,
+    /// Whether to include phone numbers based on their origin. Can be: `twilio` or `hosted`. By default, phone numbers of all origin are included.
+    origin: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-incoming-phone-number-local: func(params: list-incoming-phone-number-local-params) -> result<string, string>;
+
+  record create-incoming-phone-number-local-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-incoming-phone-number-local: func(params: create-incoming-phone-number-local-params) -> result<string, string>;
+
+}
+
+interface api20100401-machine-to-machine {
+  record list-available-phone-number-machine-to-machine-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the AvailablePhoneNumber resources.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country from which to read phone numbers.
+    country-code: string,
+    /// The area code of the phone numbers to read. Applies to only phone numbers in the US and Canada.
+    area-code: option<s32>,
+    /// The pattern on which to match phone numbers. Valid characters are `*`, `0-9`, `a-z`, and `A-Z`. The `*` character matches any single digit. For examples, see [Example 2](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-2) and [Example 3](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-3). If specified, this value must have at least two characters.
+    contains: option<string>,
+    /// Whether the phone numbers can receive text messages. Can be: `true` or `false`.
+    sms-enabled: option<bool>,
+    /// Whether the phone numbers can receive MMS messages. Can be: `true` or `false`.
+    mms-enabled: option<bool>,
+    /// Whether the phone numbers can receive calls. Can be: `true` or `false`.
+    voice-enabled: option<bool>,
+    /// Whether to exclude phone numbers that require an [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-all-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a local [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-local-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a foreign [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-foreign-address-required: option<bool>,
+    /// Whether to read phone numbers that are new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// Given a phone number, find a geographically close number within `distance` miles. Distance defaults to 25 miles. Applies to only phone numbers in the US and Canada.
+    near-number: option<string>,
+    /// Given a latitude/longitude pair `lat,long` find geographically close numbers within `distance` miles. Applies to only phone numbers in the US and Canada.
+    near-lat-long: option<string>,
+    /// The search radius, in miles, for a `near_` query.  Can be up to `500` and the default is `25`. Applies to only phone numbers in the US and Canada.
+    distance: option<s32>,
+    /// Limit results to a particular postal code. Given a phone number, search within the same postal code as that number. Applies to only phone numbers in the US and Canada.
+    in-postal-code: option<string>,
+    /// Limit results to a particular region, state, or province. Given a phone number, search within the same region as that number. Applies to only phone numbers in the US and Canada.
+    in-region: option<string>,
+    /// Limit results to a specific rate center, or given a phone number search within the same rate center as that number. Requires `in_lata` to be set as well. Applies to only phone numbers in the US and Canada.
+    in-rate-center: option<string>,
+    /// Limit results to a specific local access and transport area ([LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area)). Given a phone number, search within the same [LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area) as that number. Applies to only phone numbers in the US and Canada.
+    in-lata: option<string>,
+    /// Limit results to a particular locality or city. Given a phone number, search within the same Locality as that number.
+    in-locality: option<string>,
+    /// Whether the phone numbers can receive faxes. Can be: `true` or `false`.
+    fax-enabled: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-machine-to-machine: func(params: list-available-phone-number-machine-to-machine-params) -> result<string, string>;
+
+}
+
+interface api20100401-mobile {
+  record list-available-phone-number-mobile-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the AvailablePhoneNumber resources.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country from which to read phone numbers.
+    country-code: string,
+    /// The area code of the phone numbers to read. Applies to only phone numbers in the US and Canada.
+    area-code: option<s32>,
+    /// The pattern on which to match phone numbers. Valid characters are `*`, `0-9`, `a-z`, and `A-Z`. The `*` character matches any single digit. For examples, see [Example 2](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-2) and [Example 3](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-3). If specified, this value must have at least two characters.
+    contains: option<string>,
+    /// Whether the phone numbers can receive text messages. Can be: `true` or `false`.
+    sms-enabled: option<bool>,
+    /// Whether the phone numbers can receive MMS messages. Can be: `true` or `false`.
+    mms-enabled: option<bool>,
+    /// Whether the phone numbers can receive calls. Can be: `true` or `false`.
+    voice-enabled: option<bool>,
+    /// Whether to exclude phone numbers that require an [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-all-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a local [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-local-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a foreign [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-foreign-address-required: option<bool>,
+    /// Whether to read phone numbers that are new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// Given a phone number, find a geographically close number within `distance` miles. Distance defaults to 25 miles. Applies to only phone numbers in the US and Canada.
+    near-number: option<string>,
+    /// Given a latitude/longitude pair `lat,long` find geographically close numbers within `distance` miles. Applies to only phone numbers in the US and Canada.
+    near-lat-long: option<string>,
+    /// The search radius, in miles, for a `near_` query.  Can be up to `500` and the default is `25`. Applies to only phone numbers in the US and Canada.
+    distance: option<s32>,
+    /// Limit results to a particular postal code. Given a phone number, search within the same postal code as that number. Applies to only phone numbers in the US and Canada.
+    in-postal-code: option<string>,
+    /// Limit results to a particular region, state, or province. Given a phone number, search within the same region as that number. Applies to only phone numbers in the US and Canada.
+    in-region: option<string>,
+    /// Limit results to a specific rate center, or given a phone number search within the same rate center as that number. Requires `in_lata` to be set as well. Applies to only phone numbers in the US and Canada.
+    in-rate-center: option<string>,
+    /// Limit results to a specific local access and transport area ([LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area)). Given a phone number, search within the same [LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area) as that number. Applies to only phone numbers in the US and Canada.
+    in-lata: option<string>,
+    /// Limit results to a particular locality or city. Given a phone number, search within the same Locality as that number.
+    in-locality: option<string>,
+    /// Whether the phone numbers can receive faxes. Can be: `true` or `false`.
+    fax-enabled: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-mobile: func(params: list-available-phone-number-mobile-params) -> result<string, string>;
+
+  record list-incoming-phone-number-mobile-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resources to read.
+    account-sid: string,
+    /// Whether to include phone numbers new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// A string that identifies the resources to read.
+    friendly-name: option<string>,
+    /// The phone numbers of the IncomingPhoneNumber resources to read. You can specify partial numbers and use '*' as a wildcard for any digit.
+    phone-number: option<string>,
+    /// Whether to include phone numbers based on their origin. Can be: `twilio` or `hosted`. By default, phone numbers of all origin are included.
+    origin: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-incoming-phone-number-mobile: func(params: list-incoming-phone-number-mobile-params) -> result<string, string>;
+
+  record create-incoming-phone-number-mobile-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-incoming-phone-number-mobile: func(params: create-incoming-phone-number-mobile-params) -> result<string, string>;
+
+}
+
+interface api20100401-national {
+  record list-available-phone-number-national-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the AvailablePhoneNumber resources.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country from which to read phone numbers.
+    country-code: string,
+    /// The area code of the phone numbers to read. Applies to only phone numbers in the US and Canada.
+    area-code: option<s32>,
+    /// The pattern on which to match phone numbers. Valid characters are `*`, `0-9`, `a-z`, and `A-Z`. The `*` character matches any single digit. For examples, see [Example 2](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-2) and [Example 3](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-3). If specified, this value must have at least two characters.
+    contains: option<string>,
+    /// Whether the phone numbers can receive text messages. Can be: `true` or `false`.
+    sms-enabled: option<bool>,
+    /// Whether the phone numbers can receive MMS messages. Can be: `true` or `false`.
+    mms-enabled: option<bool>,
+    /// Whether the phone numbers can receive calls. Can be: `true` or `false`.
+    voice-enabled: option<bool>,
+    /// Whether to exclude phone numbers that require an [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-all-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a local [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-local-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a foreign [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-foreign-address-required: option<bool>,
+    /// Whether to read phone numbers that are new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// Given a phone number, find a geographically close number within `distance` miles. Distance defaults to 25 miles. Applies to only phone numbers in the US and Canada.
+    near-number: option<string>,
+    /// Given a latitude/longitude pair `lat,long` find geographically close numbers within `distance` miles. Applies to only phone numbers in the US and Canada.
+    near-lat-long: option<string>,
+    /// The search radius, in miles, for a `near_` query.  Can be up to `500` and the default is `25`. Applies to only phone numbers in the US and Canada.
+    distance: option<s32>,
+    /// Limit results to a particular postal code. Given a phone number, search within the same postal code as that number. Applies to only phone numbers in the US and Canada.
+    in-postal-code: option<string>,
+    /// Limit results to a particular region, state, or province. Given a phone number, search within the same region as that number. Applies to only phone numbers in the US and Canada.
+    in-region: option<string>,
+    /// Limit results to a specific rate center, or given a phone number search within the same rate center as that number. Requires `in_lata` to be set as well. Applies to only phone numbers in the US and Canada.
+    in-rate-center: option<string>,
+    /// Limit results to a specific local access and transport area ([LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area)). Given a phone number, search within the same [LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area) as that number. Applies to only phone numbers in the US and Canada.
+    in-lata: option<string>,
+    /// Limit results to a particular locality or city. Given a phone number, search within the same Locality as that number.
+    in-locality: option<string>,
+    /// Whether the phone numbers can receive faxes. Can be: `true` or `false`.
+    fax-enabled: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-national: func(params: list-available-phone-number-national-params) -> result<string, string>;
+
+}
+
+interface api20100401-shared-cost {
+  record list-available-phone-number-shared-cost-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the AvailablePhoneNumber resources.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country from which to read phone numbers.
+    country-code: string,
+    /// The area code of the phone numbers to read. Applies to only phone numbers in the US and Canada.
+    area-code: option<s32>,
+    /// The pattern on which to match phone numbers. Valid characters are `*`, `0-9`, `a-z`, and `A-Z`. The `*` character matches any single digit. For examples, see [Example 2](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-2) and [Example 3](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-3). If specified, this value must have at least two characters.
+    contains: option<string>,
+    /// Whether the phone numbers can receive text messages. Can be: `true` or `false`.
+    sms-enabled: option<bool>,
+    /// Whether the phone numbers can receive MMS messages. Can be: `true` or `false`.
+    mms-enabled: option<bool>,
+    /// Whether the phone numbers can receive calls. Can be: `true` or `false`.
+    voice-enabled: option<bool>,
+    /// Whether to exclude phone numbers that require an [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-all-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a local [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-local-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a foreign [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-foreign-address-required: option<bool>,
+    /// Whether to read phone numbers that are new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// Given a phone number, find a geographically close number within `distance` miles. Distance defaults to 25 miles. Applies to only phone numbers in the US and Canada.
+    near-number: option<string>,
+    /// Given a latitude/longitude pair `lat,long` find geographically close numbers within `distance` miles. Applies to only phone numbers in the US and Canada.
+    near-lat-long: option<string>,
+    /// The search radius, in miles, for a `near_` query.  Can be up to `500` and the default is `25`. Applies to only phone numbers in the US and Canada.
+    distance: option<s32>,
+    /// Limit results to a particular postal code. Given a phone number, search within the same postal code as that number. Applies to only phone numbers in the US and Canada.
+    in-postal-code: option<string>,
+    /// Limit results to a particular region, state, or province. Given a phone number, search within the same region as that number. Applies to only phone numbers in the US and Canada.
+    in-region: option<string>,
+    /// Limit results to a specific rate center, or given a phone number search within the same rate center as that number. Requires `in_lata` to be set as well. Applies to only phone numbers in the US and Canada.
+    in-rate-center: option<string>,
+    /// Limit results to a specific local access and transport area ([LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area)). Given a phone number, search within the same [LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area) as that number. Applies to only phone numbers in the US and Canada.
+    in-lata: option<string>,
+    /// Limit results to a particular locality or city. Given a phone number, search within the same Locality as that number.
+    in-locality: option<string>,
+    /// Whether the phone numbers can receive faxes. Can be: `true` or `false`.
+    fax-enabled: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-shared-cost: func(params: list-available-phone-number-shared-cost-params) -> result<string, string>;
+
+}
+
+interface api20100401-toll-free {
+  record list-available-phone-number-toll-free-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the AvailablePhoneNumber resources.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country from which to read phone numbers.
+    country-code: string,
+    /// The area code of the phone numbers to read. Applies to only phone numbers in the US and Canada.
+    area-code: option<s32>,
+    /// The pattern on which to match phone numbers. Valid characters are `*`, `0-9`, `a-z`, and `A-Z`. The `*` character matches any single digit. For examples, see [Example 2](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-2) and [Example 3](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-3). If specified, this value must have at least two characters.
+    contains: option<string>,
+    /// Whether the phone numbers can receive text messages. Can be: `true` or `false`.
+    sms-enabled: option<bool>,
+    /// Whether the phone numbers can receive MMS messages. Can be: `true` or `false`.
+    mms-enabled: option<bool>,
+    /// Whether the phone numbers can receive calls. Can be: `true` or `false`.
+    voice-enabled: option<bool>,
+    /// Whether to exclude phone numbers that require an [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-all-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a local [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-local-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a foreign [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-foreign-address-required: option<bool>,
+    /// Whether to read phone numbers that are new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// Given a phone number, find a geographically close number within `distance` miles. Distance defaults to 25 miles. Applies to only phone numbers in the US and Canada.
+    near-number: option<string>,
+    /// Given a latitude/longitude pair `lat,long` find geographically close numbers within `distance` miles. Applies to only phone numbers in the US and Canada.
+    near-lat-long: option<string>,
+    /// The search radius, in miles, for a `near_` query.  Can be up to `500` and the default is `25`. Applies to only phone numbers in the US and Canada.
+    distance: option<s32>,
+    /// Limit results to a particular postal code. Given a phone number, search within the same postal code as that number. Applies to only phone numbers in the US and Canada.
+    in-postal-code: option<string>,
+    /// Limit results to a particular region, state, or province. Given a phone number, search within the same region as that number. Applies to only phone numbers in the US and Canada.
+    in-region: option<string>,
+    /// Limit results to a specific rate center, or given a phone number search within the same rate center as that number. Requires `in_lata` to be set as well. Applies to only phone numbers in the US and Canada.
+    in-rate-center: option<string>,
+    /// Limit results to a specific local access and transport area ([LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area)). Given a phone number, search within the same [LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area) as that number. Applies to only phone numbers in the US and Canada.
+    in-lata: option<string>,
+    /// Limit results to a particular locality or city. Given a phone number, search within the same Locality as that number.
+    in-locality: option<string>,
+    /// Whether the phone numbers can receive faxes. Can be: `true` or `false`.
+    fax-enabled: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-toll-free: func(params: list-available-phone-number-toll-free-params) -> result<string, string>;
+
+  record list-incoming-phone-number-toll-free-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resources to read.
+    account-sid: string,
+    /// Whether to include phone numbers new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// A string that identifies the resources to read.
+    friendly-name: option<string>,
+    /// The phone numbers of the IncomingPhoneNumber resources to read. You can specify partial numbers and use '*' as a wildcard for any digit.
+    phone-number: option<string>,
+    /// Whether to include phone numbers based on their origin. Can be: `twilio` or `hosted`. By default, phone numbers of all origin are included.
+    origin: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-incoming-phone-number-toll-free: func(params: list-incoming-phone-number-toll-free-params) -> result<string, string>;
+
+  record create-incoming-phone-number-toll-free-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-incoming-phone-number-toll-free: func(params: create-incoming-phone-number-toll-free-params) -> result<string, string>;
+
+}
+
+interface api20100401-voip {
+  record list-available-phone-number-voip-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) requesting the AvailablePhoneNumber resources.
+    account-sid: string,
+    /// The [ISO-3166-1](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) country code of the country from which to read phone numbers.
+    country-code: string,
+    /// The area code of the phone numbers to read. Applies to only phone numbers in the US and Canada.
+    area-code: option<s32>,
+    /// The pattern on which to match phone numbers. Valid characters are `*`, `0-9`, `a-z`, and `A-Z`. The `*` character matches any single digit. For examples, see [Example 2](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-2) and [Example 3](https://www.twilio.com/docs/phone-numbers/api/availablephonenumber-resource#local-get-basic-example-3). If specified, this value must have at least two characters.
+    contains: option<string>,
+    /// Whether the phone numbers can receive text messages. Can be: `true` or `false`.
+    sms-enabled: option<bool>,
+    /// Whether the phone numbers can receive MMS messages. Can be: `true` or `false`.
+    mms-enabled: option<bool>,
+    /// Whether the phone numbers can receive calls. Can be: `true` or `false`.
+    voice-enabled: option<bool>,
+    /// Whether to exclude phone numbers that require an [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-all-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a local [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-local-address-required: option<bool>,
+    /// Whether to exclude phone numbers that require a foreign [Address](https://www.twilio.com/docs/usage/api/address). Can be: `true` or `false` and the default is `false`.
+    exclude-foreign-address-required: option<bool>,
+    /// Whether to read phone numbers that are new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// Given a phone number, find a geographically close number within `distance` miles. Distance defaults to 25 miles. Applies to only phone numbers in the US and Canada.
+    near-number: option<string>,
+    /// Given a latitude/longitude pair `lat,long` find geographically close numbers within `distance` miles. Applies to only phone numbers in the US and Canada.
+    near-lat-long: option<string>,
+    /// The search radius, in miles, for a `near_` query.  Can be up to `500` and the default is `25`. Applies to only phone numbers in the US and Canada.
+    distance: option<s32>,
+    /// Limit results to a particular postal code. Given a phone number, search within the same postal code as that number. Applies to only phone numbers in the US and Canada.
+    in-postal-code: option<string>,
+    /// Limit results to a particular region, state, or province. Given a phone number, search within the same region as that number. Applies to only phone numbers in the US and Canada.
+    in-region: option<string>,
+    /// Limit results to a specific rate center, or given a phone number search within the same rate center as that number. Requires `in_lata` to be set as well. Applies to only phone numbers in the US and Canada.
+    in-rate-center: option<string>,
+    /// Limit results to a specific local access and transport area ([LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area)). Given a phone number, search within the same [LATA](https://en.wikipedia.org/wiki/Local_access_and_transport_area) as that number. Applies to only phone numbers in the US and Canada.
+    in-lata: option<string>,
+    /// Limit results to a particular locality or city. Given a phone number, search within the same Locality as that number.
+    in-locality: option<string>,
+    /// Whether the phone numbers can receive faxes. Can be: `true` or `false`.
+    fax-enabled: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-available-phone-number-voip: func(params: list-available-phone-number-voip-params) -> result<string, string>;
+
+}
+
+interface api20100401-balance {
+  record fetch-balance-params {
+    /// The unique SID identifier of the Account.
+    account-sid: string
+  }
+  fetch-balance: func(params: fetch-balance-params) -> result<string, string>;
+
+}
+
+interface api20100401-call {
+  record call-enum-status {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-call-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Call resource(s) to read.
+    account-sid: string,
+    /// Only show calls made to this phone number, SIP address, Client identifier or SIM SID.
+    to: option<string>,
+    /// Only include calls from this phone number, SIP address, Client identifier or SIM SID.
+    from-op: option<string>,
+    /// Only include calls spawned by calls with this SID.
+    parent-call-sid: option<string>,
+    /// The status of the calls to include. Can be: `queued`, `ringing`, `in-progress`, `canceled`, `completed`, `failed`, `busy`, or `no-answer`.
+    status: option<call-enum-status>,
+    /// Only include calls that started on this date. Specify a date as `YYYY-MM-DD` in GMT, for example: `2009-07-06`, to read only calls that started on this date. You can also specify an inequality, such as `StartTime<=YYYY-MM-DD`, to read calls that started on or before midnight of this date, and `StartTime>=YYYY-MM-DD` to read calls that started on or after midnight of this date.
+    start-time: option<string>,
+    /// Only include calls that ended on this date. Specify a date as `YYYY-MM-DD` in GMT, for example: `2009-07-06`, to read only calls that ended on this date. You can also specify an inequality, such as `EndTime<=YYYY-MM-DD`, to read calls that ended on or before midnight of this date, and `EndTime>=YYYY-MM-DD` to read calls that ended on or after midnight of this date.
+    end-time: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-call: func(params: list-call-params) -> result<string, string>;
+
+  record create-call-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-call: func(params: create-call-params) -> result<string, string>;
+
+  record fetch-call-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Call resource(s) to fetch.
+    account-sid: string,
+    /// The SID of the Call resource to fetch.
+    sid: string
+  }
+  fetch-call: func(params: fetch-call-params) -> result<string, string>;
+
+  record update-call-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Call resource(s) to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Call resource to update
+    sid: string
+  }
+  update-call: func(params: update-call-params) -> result<string, string>;
+
+  record delete-call-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Call resource(s) to delete.
+    account-sid: string,
+    /// The Twilio-provided Call SID that uniquely identifies the Call resource to delete
+    sid: string
+  }
+  delete-call: func(params: delete-call-params) -> result<string, string>;
+
+}
+
+interface api20100401-event {
+  record list-call-event-params {
+    /// The unique SID identifier of the Account.
+    account-sid: string,
+    /// The unique SID identifier of the Call.
+    call-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-call-event: func(params: list-call-event-params) -> result<string, string>;
+
+}
+
+interface api20100401-notification {
+  record list-call-notification-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Call Notification resources to read.
+    account-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the Call Notification resources to read.
+    call-sid: string,
+    /// Only read notifications of the specified log level. Can be:  `0` to read only ERROR notifications or `1` to read only WARNING notifications. By default, all notifications are read.
+    log: option<s32>,
+    /// Only show notifications for the specified date, formatted as `YYYY-MM-DD`. You can also specify an inequality, such as `<=YYYY-MM-DD` for messages logged at or before midnight on a date, or `>=YYYY-MM-DD` for messages logged at or after midnight on a date.
+    message-date: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-call-notification: func(params: list-call-notification-params) -> result<string, string>;
+
+  record fetch-call-notification-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Call Notification resource to fetch.
+    account-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the Call Notification resource to fetch.
+    call-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Call Notification resource to fetch.
+    sid: string
+  }
+  fetch-call-notification: func(params: fetch-call-notification-params) -> result<string, string>;
+
+  record list-notification-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Notification resources to read.
+    account-sid: string,
+    /// Only read notifications of the specified log level. Can be:  `0` to read only ERROR notifications or `1` to read only WARNING notifications. By default, all notifications are read.
+    log: option<s32>,
+    /// Only show notifications for the specified date, formatted as `YYYY-MM-DD`. You can also specify an inequality, such as `<=YYYY-MM-DD` for messages logged at or before midnight on a date, or `>=YYYY-MM-DD` for messages logged at or after midnight on a date.
+    message-date: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-notification: func(params: list-notification-params) -> result<string, string>;
+
+  record fetch-notification-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Notification resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Notification resource to fetch.
+    sid: string
+  }
+  fetch-notification: func(params: fetch-notification-params) -> result<string, string>;
+
+}
+
+interface api20100401-payment {
+  record create-payments-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string,
+    /// The SID of the call that will create the resource. Call leg associated with this sid is expected to provide payment information thru DTMF.
+    call-sid: string
+  }
+  create-payments: func(params: create-payments-params) -> result<string, string>;
+
+  record update-payments-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will update the resource.
+    account-sid: string,
+    /// The SID of the call that will update the resource. This should be the same call sid that was used to create payments resource.
+    call-sid: string,
+    /// The SID of Payments session that needs to be updated.
+    sid: string
+  }
+  update-payments: func(params: update-payments-params) -> result<string, string>;
+
+}
+
+interface api20100401-recording {
+  record list-call-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resources to read.
+    account-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the resources to read.
+    call-sid: string,
+    /// The `date_created` value, specified as `YYYY-MM-DD`, of the resources to read. You can also specify inequality: `DateCreated<=YYYY-MM-DD` will return recordings generated at or before midnight on a given date, and `DateCreated>=YYYY-MM-DD` returns recordings generated at or after midnight on a date.
+    date-created: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-call-recording: func(params: list-call-recording-params) -> result<string, string>;
+
+  record create-call-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) to associate the resource with.
+    call-sid: string
+  }
+  create-call-recording: func(params: create-call-recording-params) -> result<string, string>;
+
+  record fetch-call-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resource to fetch.
+    account-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the resource to fetch.
+    call-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording resource to fetch.
+    sid: string
+  }
+  fetch-call-recording: func(params: fetch-call-recording-params) -> result<string, string>;
+
+  record update-call-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resource to update.
+    account-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the resource to update.
+    call-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording resource to update.
+    sid: string
+  }
+  update-call-recording: func(params: update-call-recording-params) -> result<string, string>;
+
+  record delete-call-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resources to delete.
+    account-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the resources to delete.
+    call-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording resource to delete.
+    sid: string
+  }
+  delete-call-recording: func(params: delete-call-recording-params) -> result<string, string>;
+
+  record list-conference-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Conference Recording resources to read.
+    account-sid: string,
+    /// The Conference SID that identifies the conference associated with the recording to read.
+    conference-sid: string,
+    /// The `date_created` value, specified as `YYYY-MM-DD`, of the resources to read. You can also specify inequality: `DateCreated<=YYYY-MM-DD` will return recordings generated at or before midnight on a given date, and `DateCreated>=YYYY-MM-DD` returns recordings generated at or after midnight on a date.
+    date-created: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-conference-recording: func(params: list-conference-recording-params) -> result<string, string>;
+
+  record fetch-conference-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Conference Recording resource to fetch.
+    account-sid: string,
+    /// The Conference SID that identifies the conference associated with the recording to fetch.
+    conference-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Conference Recording resource to fetch.
+    sid: string
+  }
+  fetch-conference-recording: func(params: fetch-conference-recording-params) -> result<string, string>;
+
+  record update-conference-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Conference Recording resource to update.
+    account-sid: string,
+    /// The Conference SID that identifies the conference associated with the recording to update.
+    conference-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Conference Recording resource to update. Use `Twilio.CURRENT` to reference the current active recording.
+    sid: string
+  }
+  update-conference-recording: func(params: update-conference-recording-params) -> result<string, string>;
+
+  record delete-conference-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Conference Recording resources to delete.
+    account-sid: string,
+    /// The Conference SID that identifies the conference associated with the recording to delete.
+    conference-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Conference Recording resource to delete.
+    sid: string
+  }
+  delete-conference-recording: func(params: delete-conference-recording-params) -> result<string, string>;
+
+  record list-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resources to read.
+    account-sid: string,
+    /// Only include recordings that were created on this date. Specify a date as `YYYY-MM-DD` in GMT, for example: `2009-07-06`, to read recordings that were created on this date. You can also specify an inequality, such as `DateCreated<=YYYY-MM-DD`, to read recordings that were created on or before midnight of this date, and `DateCreated>=YYYY-MM-DD` to read recordings that were created on or after midnight of this date.
+    date-created: option<string>,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the resources to read.
+    call-sid: option<string>,
+    /// The Conference SID that identifies the conference associated with the recording to read.
+    conference-sid: option<string>,
+    /// A boolean parameter indicating whether to retrieve soft deleted recordings or not. Recordings metadata are kept after deletion for a retention period of 40 days.
+    include-soft-deleted: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-recording: func(params: list-recording-params) -> result<string, string>;
+
+  record fetch-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording resource to fetch.
+    sid: string,
+    /// A boolean parameter indicating whether to retrieve soft deleted recordings or not. Recordings metadata are kept after deletion for a retention period of 40 days.
+    include-soft-deleted: option<bool>
+  }
+  fetch-recording: func(params: fetch-recording-params) -> result<string, string>;
+
+  record delete-recording-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording resource to delete.
+    sid: string
+  }
+  delete-recording: func(params: delete-recording-params) -> result<string, string>;
+
+}
+
+interface api20100401-siprec {
+  record create-siprec-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created this Siprec resource.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the Siprec resource is associated with.
+    call-sid: string
+  }
+  create-siprec: func(params: create-siprec-params) -> result<string, string>;
+
+  record update-siprec-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created this Siprec resource.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the Siprec resource is associated with.
+    call-sid: string,
+    /// The SID of the Siprec resource, or the `name` used when creating the resource
+    sid: string
+  }
+  update-siprec: func(params: update-siprec-params) -> result<string, string>;
+
+}
+
+interface api20100401-stream {
+  record create-stream-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created this Stream resource.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the Stream resource is associated with.
+    call-sid: string
+  }
+  create-stream: func(params: create-stream-params) -> result<string, string>;
+
+  record update-stream-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created this Stream resource.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the Stream resource is associated with.
+    call-sid: string,
+    /// The SID of the Stream resource, or the `name` used when creating the resource
+    sid: string
+  }
+  update-stream: func(params: update-stream-params) -> result<string, string>;
+
+}
+
+interface api20100401-user-defined-message-subscription {
+  record create-user-defined-message-subscription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that subscribed to the User Defined Messages.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the User Defined Messages subscription is associated with. This refers to the Call SID that is producing the user defined messages.
+    call-sid: string
+  }
+  create-user-defined-message-subscription: func(params: create-user-defined-message-subscription-params) -> result<string, string>;
+
+  record delete-user-defined-message-subscription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that subscribed to the User Defined Messages.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the User Defined Message Subscription is associated with. This refers to the Call SID that is producing the User Defined Messages.
+    call-sid: string,
+    /// The SID that uniquely identifies this User Defined Message Subscription.
+    sid: string
+  }
+  delete-user-defined-message-subscription: func(params: delete-user-defined-message-subscription-params) -> result<string, string>;
+
+}
+
+interface api20100401-user-defined-message {
+  record create-user-defined-message-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created User Defined Message.
+    account-sid: string,
+    /// The SID of the [Call](https://www.twilio.com/docs/voice/api/call-resource) the User Defined Message is associated with.
+    call-sid: string
+  }
+  create-user-defined-message: func(params: create-user-defined-message-params) -> result<string, string>;
+
+}
+
+interface api20100401-conference {
+  record conference-enum-status {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-conference-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Conference resource(s) to read.
+    account-sid: string,
+    /// The `date_created` value, specified as `YYYY-MM-DD`, of the resources to read. To read conferences that started on or before midnight on a date, use `<=YYYY-MM-DD`, and to specify  conferences that started on or after midnight on a date, use `>=YYYY-MM-DD`.
+    date-created: option<string>,
+    /// The `date_updated` value, specified as `YYYY-MM-DD`, of the resources to read. To read conferences that were last updated on or before midnight on a date, use `<=YYYY-MM-DD`, and to specify conferences that were last updated on or after midnight on a given date, use  `>=YYYY-MM-DD`.
+    date-updated: option<string>,
+    /// The string that identifies the Conference resources to read.
+    friendly-name: option<string>,
+    /// The status of the resources to read. Can be: `init`, `in-progress`, or `completed`.
+    status: option<conference-enum-status>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-conference: func(params: list-conference-params) -> result<string, string>;
+
+  record fetch-conference-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Conference resource(s) to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Conference resource to fetch
+    sid: string
+  }
+  fetch-conference: func(params: fetch-conference-params) -> result<string, string>;
+
+  record update-conference-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Conference resource(s) to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Conference resource to update
+    sid: string
+  }
+  update-conference: func(params: update-conference-params) -> result<string, string>;
+
+}
+
+interface api20100401-participant {
+  record list-participant-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Participant resources to read.
+    account-sid: string,
+    /// The SID of the conference with the participants to read.
+    conference-sid: string,
+    /// Whether to return only participants that are muted. Can be: `true` or `false`.
+    muted: option<bool>,
+    /// Whether to return only participants that are on hold. Can be: `true` or `false`.
+    hold: option<bool>,
+    /// Whether to return only participants who are coaching another call. Can be: `true` or `false`.
+    coaching: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-participant: func(params: list-participant-params) -> result<string, string>;
+
+  record create-participant-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string,
+    /// The SID of the participant's conference.
+    conference-sid: string
+  }
+  create-participant: func(params: create-participant-params) -> result<string, string>;
+
+  record fetch-participant-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Participant resource to fetch.
+    account-sid: string,
+    /// The SID of the conference with the participant to fetch.
+    conference-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID or label of the participant to fetch. Non URL safe characters in a label must be percent encoded, for example, a space character is represented as %20.
+    call-sid: string
+  }
+  fetch-participant: func(params: fetch-participant-params) -> result<string, string>;
+
+  record update-participant-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Participant resources to update.
+    account-sid: string,
+    /// The SID of the conference with the participant to update.
+    conference-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID or label of the participant to update. Non URL safe characters in a label must be percent encoded, for example, a space character is represented as %20.
+    call-sid: string
+  }
+  update-participant: func(params: update-participant-params) -> result<string, string>;
+
+  record delete-participant-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Participant resources to delete.
+    account-sid: string,
+    /// The SID of the conference with the participants to delete.
+    conference-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID or label of the participant to delete. Non URL safe characters in a label must be percent encoded, for example, a space character is represented as %20.
+    call-sid: string
+  }
+  delete-participant: func(params: delete-participant-params) -> result<string, string>;
+
+}
+
+interface api20100401-connect-app {
+  record list-connect-app-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the ConnectApp resources to read.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-connect-app: func(params: list-connect-app-params) -> result<string, string>;
+
+  record fetch-connect-app-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the ConnectApp resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the ConnectApp resource to fetch.
+    sid: string
+  }
+  fetch-connect-app: func(params: fetch-connect-app-params) -> result<string, string>;
+
+  record update-connect-app-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the ConnectApp resources to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the ConnectApp resource to update.
+    sid: string
+  }
+  update-connect-app: func(params: update-connect-app-params) -> result<string, string>;
+
+  record delete-connect-app-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the ConnectApp resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the ConnectApp resource to fetch.
+    sid: string
+  }
+  delete-connect-app: func(params: delete-connect-app-params) -> result<string, string>;
+
+}
+
+interface api20100401-incoming-phone-number {
+  record list-incoming-phone-number-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the IncomingPhoneNumber resources to read.
+    account-sid: string,
+    /// Whether to include phone numbers new to the Twilio platform. Can be: `true` or `false` and the default is `true`.
+    beta: option<bool>,
+    /// A string that identifies the IncomingPhoneNumber resources to read.
+    friendly-name: option<string>,
+    /// The phone numbers of the IncomingPhoneNumber resources to read. You can specify partial numbers and use '*' as a wildcard for any digit.
+    phone-number: option<string>,
+    /// Whether to include phone numbers based on their origin. Can be: `twilio` or `hosted`. By default, phone numbers of all origin are included.
+    origin: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-incoming-phone-number: func(params: list-incoming-phone-number-params) -> result<string, string>;
+
+  record create-incoming-phone-number-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-incoming-phone-number: func(params: create-incoming-phone-number-params) -> result<string, string>;
+
+  record fetch-incoming-phone-number-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the IncomingPhoneNumber resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the IncomingPhoneNumber resource to fetch.
+    sid: string
+  }
+  fetch-incoming-phone-number: func(params: fetch-incoming-phone-number-params) -> result<string, string>;
+
+  record update-incoming-phone-number-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the IncomingPhoneNumber resource to update.  For more information, see [Exchanging Numbers Between Subaccounts](https://www.twilio.com/docs/iam/api/subaccounts#exchanging-numbers).
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the IncomingPhoneNumber resource to update.
+    sid: string
+  }
+  update-incoming-phone-number: func(params: update-incoming-phone-number-params) -> result<string, string>;
+
+  record delete-incoming-phone-number-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the IncomingPhoneNumber resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the IncomingPhoneNumber resource to delete.
+    sid: string
+  }
+  delete-incoming-phone-number: func(params: delete-incoming-phone-number-params) -> result<string, string>;
+
+}
+
+interface api20100401-assigned-add-on {
+  record list-incoming-phone-number-assigned-add-on-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resources to read.
+    account-sid: string,
+    /// The SID of the Phone Number to which the Add-on is assigned.
+    resource-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-incoming-phone-number-assigned-add-on: func(params: list-incoming-phone-number-assigned-add-on-params) -> result<string, string>;
+
+  record create-incoming-phone-number-assigned-add-on-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string,
+    /// The SID of the Phone Number to assign the Add-on.
+    resource-sid: string
+  }
+  create-incoming-phone-number-assigned-add-on: func(params: create-incoming-phone-number-assigned-add-on-params) -> result<string, string>;
+
+  record fetch-incoming-phone-number-assigned-add-on-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resource to fetch.
+    account-sid: string,
+    /// The SID of the Phone Number to which the Add-on is assigned.
+    resource-sid: string,
+    /// The Twilio-provided string that uniquely identifies the resource to fetch.
+    sid: string
+  }
+  fetch-incoming-phone-number-assigned-add-on: func(params: fetch-incoming-phone-number-assigned-add-on-params) -> result<string, string>;
+
+  record delete-incoming-phone-number-assigned-add-on-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resources to delete.
+    account-sid: string,
+    /// The SID of the Phone Number to which the Add-on is assigned.
+    resource-sid: string,
+    /// The Twilio-provided string that uniquely identifies the resource to delete.
+    sid: string
+  }
+  delete-incoming-phone-number-assigned-add-on: func(params: delete-incoming-phone-number-assigned-add-on-params) -> result<string, string>;
+
+}
+
+interface api20100401-assigned-add-on-extension {
+  record list-incoming-phone-number-assigned-add-on-extension-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resources to read.
+    account-sid: string,
+    /// The SID of the Phone Number to which the Add-on is assigned.
+    resource-sid: string,
+    /// The SID that uniquely identifies the assigned Add-on installation.
+    assigned-add-on-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-incoming-phone-number-assigned-add-on-extension: func(params: list-incoming-phone-number-assigned-add-on-extension-params) -> result<string, string>;
+
+  record fetch-incoming-phone-number-assigned-add-on-extension-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the resource to fetch.
+    account-sid: string,
+    /// The SID of the Phone Number to which the Add-on is assigned.
+    resource-sid: string,
+    /// The SID that uniquely identifies the assigned Add-on installation.
+    assigned-add-on-sid: string,
+    /// The Twilio-provided string that uniquely identifies the resource to fetch.
+    sid: string
+  }
+  fetch-incoming-phone-number-assigned-add-on-extension: func(params: fetch-incoming-phone-number-assigned-add-on-extension-params) -> result<string, string>;
+
+}
+
+interface api20100401-key {
+  record list-key-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Key resources to read.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-key: func(params: list-key-params) -> result<string, string>;
+
+  record fetch-key-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Key resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Key resource to fetch.
+    sid: string
+  }
+  fetch-key: func(params: fetch-key-params) -> result<string, string>;
+
+  record update-key-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Key resources to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Key resource to update.
+    sid: string
+  }
+  update-key: func(params: update-key-params) -> result<string, string>;
+
+  record delete-key-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Key resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Key resource to delete.
+    sid: string
+  }
+  delete-key: func(params: delete-key-params) -> result<string, string>;
+
+}
+
+interface api20100401-new-key {
+  record create-new-key-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will be responsible for the new Key resource.
+    account-sid: string
+  }
+  create-new-key: func(params: create-new-key-params) -> result<string, string>;
+
+}
+
+interface api20100401-message {
+  record list-message-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) associated with the Message resources.
+    account-sid: string,
+    /// Filter by recipient. For example: Set this `to` parameter to `+15558881111` to retrieve a list of Message resources with `to` properties of `+15558881111`
+    to: option<string>,
+    /// Filter by sender. For example: Set this `from` parameter to `+15552229999` to retrieve a list of Message resources with `from` properties of `+15552229999`
+    from-op: option<string>,
+    /// Filter by Message `sent_date`. Accepts GMT dates in the following formats: `YYYY-MM-DD` (to find Messages with a specific `sent_date`), `<=YYYY-MM-DD` (to find Messages with `sent_date`s on and before a specific date), and `>=YYYY-MM-DD` (to find Messages with `sent_dates` on and after a specific date).
+    date-sent: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-message: func(params: list-message-params) -> result<string, string>;
+
+  record create-message-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) creating the Message resource.
+    account-sid: string
+  }
+  create-message: func(params: create-message-params) -> result<string, string>;
+
+  record fetch-message-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) associated with the Message resource
+    account-sid: string,
+    /// The SID of the Message resource to be fetched
+    sid: string
+  }
+  fetch-message: func(params: fetch-message-params) -> result<string, string>;
+
+  record update-message-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Message resources to update.
+    account-sid: string,
+    /// The SID of the Message resource to be updated
+    sid: string
+  }
+  update-message: func(params: update-message-params) -> result<string, string>;
+
+  record delete-message-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) associated with the Message resource
+    account-sid: string,
+    /// The SID of the Message resource you wish to delete
+    sid: string
+  }
+  delete-message: func(params: delete-message-params) -> result<string, string>;
+
+}
+
+interface api20100401-feedback {
+  record create-message-feedback-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) associated with the Message resource for which to create MessageFeedback.
+    account-sid: string,
+    /// The SID of the Message resource for which to create MessageFeedback.
+    message-sid: string
+  }
+  create-message-feedback: func(params: create-message-feedback-params) -> result<string, string>;
+
+}
+
+interface api20100401-media {
+  record list-media-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that is associated with the Media resources.
+    account-sid: string,
+    /// The SID of the Message resource that is associated with the Media resources.
+    message-sid: string,
+    /// Only include Media resources that were created on this date. Specify a date as `YYYY-MM-DD` in GMT, for example: `2009-07-06`, to read Media that were created on this date. You can also specify an inequality, such as `StartTime<=YYYY-MM-DD`, to read Media that were created on or before midnight of this date, and `StartTime>=YYYY-MM-DD` to read Media that were created on or after midnight of this date.
+    date-created: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-media: func(params: list-media-params) -> result<string, string>;
+
+  record fetch-media-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) associated with the Media resource.
+    account-sid: string,
+    /// The SID of the Message resource that is associated with the Media resource.
+    message-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Media resource to fetch.
+    sid: string
+  }
+  fetch-media: func(params: fetch-media-params) -> result<string, string>;
+
+  record delete-media-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that is associated with the Media resource.
+    account-sid: string,
+    /// The SID of the Message resource that is associated with the Media resource.
+    message-sid: string,
+    /// The unique identifier of the to-be-deleted Media resource.
+    sid: string
+  }
+  delete-media: func(params: delete-media-params) -> result<string, string>;
+
+}
+
+interface api20100401-outgoing-caller-id {
+  record list-outgoing-caller-id-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the OutgoingCallerId resources to read.
+    account-sid: string,
+    /// The phone number of the OutgoingCallerId resources to read.
+    phone-number: option<string>,
+    /// The string that identifies the OutgoingCallerId resources to read.
+    friendly-name: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-outgoing-caller-id: func(params: list-outgoing-caller-id-params) -> result<string, string>;
+
+  record fetch-outgoing-caller-id-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the OutgoingCallerId resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the OutgoingCallerId resource to fetch.
+    sid: string
+  }
+  fetch-outgoing-caller-id: func(params: fetch-outgoing-caller-id-params) -> result<string, string>;
+
+  record update-outgoing-caller-id-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the OutgoingCallerId resources to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the OutgoingCallerId resource to update.
+    sid: string
+  }
+  update-outgoing-caller-id: func(params: update-outgoing-caller-id-params) -> result<string, string>;
+
+  record delete-outgoing-caller-id-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the OutgoingCallerId resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the OutgoingCallerId resource to delete.
+    sid: string
+  }
+  delete-outgoing-caller-id: func(params: delete-outgoing-caller-id-params) -> result<string, string>;
+
+}
+
+interface api20100401-validation-request {
+  record create-validation-request-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for the new caller ID resource.
+    account-sid: string
+  }
+  create-validation-request: func(params: create-validation-request-params) -> result<string, string>;
+
+}
+
+interface api20100401-queue {
+  record list-queue-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Queue resources to read.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-queue: func(params: list-queue-params) -> result<string, string>;
+
+  record create-queue-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-queue: func(params: create-queue-params) -> result<string, string>;
+
+  record fetch-queue-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Queue resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Queue resource to fetch
+    sid: string
+  }
+  fetch-queue: func(params: fetch-queue-params) -> result<string, string>;
+
+  record update-queue-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Queue resource to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Queue resource to update
+    sid: string
+  }
+  update-queue: func(params: update-queue-params) -> result<string, string>;
+
+  record delete-queue-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Queue resource to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Queue resource to delete
+    sid: string
+  }
+  delete-queue: func(params: delete-queue-params) -> result<string, string>;
+
+}
+
+interface api20100401-member {
+  record list-member-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Member resource(s) to read.
+    account-sid: string,
+    /// The SID of the Queue in which to find the members
+    queue-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-member: func(params: list-member-params) -> result<string, string>;
+
+  record fetch-member-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Member resource(s) to fetch.
+    account-sid: string,
+    /// The SID of the Queue in which to find the members to fetch.
+    queue-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the resource(s) to fetch.
+    call-sid: string
+  }
+  fetch-member: func(params: fetch-member-params) -> result<string, string>;
+
+  record update-member-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Member resource(s) to update.
+    account-sid: string,
+    /// The SID of the Queue in which to find the members to update.
+    queue-sid: string,
+    /// The [Call](https://www.twilio.com/docs/voice/api/call-resource) SID of the resource(s) to update.
+    call-sid: string
+  }
+  update-member: func(params: update-member-params) -> result<string, string>;
+
+}
+
+interface api20100401-transcription {
+  record list-recording-transcription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Transcription resources to read.
+    account-sid: string,
+    /// The SID of the [Recording](https://www.twilio.com/docs/voice/api/recording) that created the transcriptions to read.
+    recording-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-recording-transcription: func(params: list-recording-transcription-params) -> result<string, string>;
+
+  record fetch-recording-transcription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Transcription resource to fetch.
+    account-sid: string,
+    /// The SID of the [Recording](https://www.twilio.com/docs/voice/api/recording) that created the transcription to fetch.
+    recording-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Transcription resource to fetch.
+    sid: string
+  }
+  fetch-recording-transcription: func(params: fetch-recording-transcription-params) -> result<string, string>;
+
+  record delete-recording-transcription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Transcription resources to delete.
+    account-sid: string,
+    /// The SID of the [Recording](https://www.twilio.com/docs/voice/api/recording) that created the transcription to delete.
+    recording-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Transcription resource to delete.
+    sid: string
+  }
+  delete-recording-transcription: func(params: delete-recording-transcription-params) -> result<string, string>;
+
+  record list-transcription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Transcription resources to read.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-transcription: func(params: list-transcription-params) -> result<string, string>;
+
+  record fetch-transcription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Transcription resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Transcription resource to fetch.
+    sid: string
+  }
+  fetch-transcription: func(params: fetch-transcription-params) -> result<string, string>;
+
+  record delete-transcription-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Transcription resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Transcription resource to delete.
+    sid: string
+  }
+  delete-transcription: func(params: delete-transcription-params) -> result<string, string>;
+
+}
+
+interface api20100401-add-on-result {
+  record list-recording-add-on-result-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording AddOnResult resources to read.
+    account-sid: string,
+    /// The SID of the recording to which the result to read belongs.
+    reference-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-recording-add-on-result: func(params: list-recording-add-on-result-params) -> result<string, string>;
+
+  record fetch-recording-add-on-result-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording AddOnResult resource to fetch.
+    account-sid: string,
+    /// The SID of the recording to which the result to fetch belongs.
+    reference-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording AddOnResult resource to fetch.
+    sid: string
+  }
+  fetch-recording-add-on-result: func(params: fetch-recording-add-on-result-params) -> result<string, string>;
+
+  record delete-recording-add-on-result-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording AddOnResult resources to delete.
+    account-sid: string,
+    /// The SID of the recording to which the result to delete belongs.
+    reference-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording AddOnResult resource to delete.
+    sid: string
+  }
+  delete-recording-add-on-result: func(params: delete-recording-add-on-result-params) -> result<string, string>;
+
+}
+
+interface api20100401-payload {
+  record list-recording-add-on-result-payload-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording AddOnResult Payload resources to read.
+    account-sid: string,
+    /// The SID of the recording to which the AddOnResult resource that contains the payloads to read belongs.
+    reference-sid: string,
+    /// The SID of the AddOnResult to which the payloads to read belongs.
+    add-on-result-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-recording-add-on-result-payload: func(params: list-recording-add-on-result-payload-params) -> result<string, string>;
+
+  record fetch-recording-add-on-result-payload-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording AddOnResult Payload resource to fetch.
+    account-sid: string,
+    /// The SID of the recording to which the AddOnResult resource that contains the payload to fetch belongs.
+    reference-sid: string,
+    /// The SID of the AddOnResult to which the payload to fetch belongs.
+    add-on-result-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording AddOnResult Payload resource to fetch.
+    sid: string
+  }
+  fetch-recording-add-on-result-payload: func(params: fetch-recording-add-on-result-payload-params) -> result<string, string>;
+
+  record delete-recording-add-on-result-payload-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the Recording AddOnResult Payload resources to delete.
+    account-sid: string,
+    /// The SID of the recording to which the AddOnResult resource that contains the payloads to delete belongs.
+    reference-sid: string,
+    /// The SID of the AddOnResult to which the payloads to delete belongs.
+    add-on-result-sid: string,
+    /// The Twilio-provided string that uniquely identifies the Recording AddOnResult Payload resource to delete.
+    sid: string
+  }
+  delete-recording-add-on-result-payload: func(params: delete-recording-add-on-result-payload-params) -> result<string, string>;
+
+}
+
+interface api20100401-credential-list {
+  record list-sip-credential-list-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-credential-list: func(params: list-sip-credential-list-params) -> result<string, string>;
+
+  record create-sip-credential-list-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string
+  }
+  create-sip-credential-list: func(params: create-sip-credential-list-params) -> result<string, string>;
+
+  record fetch-sip-credential-list-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The credential list Sid that uniquely identifies this resource
+    sid: string
+  }
+  fetch-sip-credential-list: func(params: fetch-sip-credential-list-params) -> result<string, string>;
+
+  record update-sip-credential-list-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The credential list Sid that uniquely identifies this resource
+    sid: string
+  }
+  update-sip-credential-list: func(params: update-sip-credential-list-params) -> result<string, string>;
+
+  record delete-sip-credential-list-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The credential list Sid that uniquely identifies this resource
+    sid: string
+  }
+  delete-sip-credential-list: func(params: delete-sip-credential-list-params) -> result<string, string>;
+
+}
+
+interface api20100401-credential {
+  record list-sip-credential-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The unique id that identifies the credential list that contains the desired credentials.
+    credential-list-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-credential: func(params: list-sip-credential-params) -> result<string, string>;
+
+  record create-sip-credential-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The unique id that identifies the credential list to include the created credential.
+    credential-list-sid: string
+  }
+  create-sip-credential: func(params: create-sip-credential-params) -> result<string, string>;
+
+  record fetch-sip-credential-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The unique id that identifies the credential list that contains the desired credential.
+    credential-list-sid: string,
+    /// The unique id that identifies the resource to fetch.
+    sid: string
+  }
+  fetch-sip-credential: func(params: fetch-sip-credential-params) -> result<string, string>;
+
+  record update-sip-credential-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The unique id that identifies the credential list that includes this credential.
+    credential-list-sid: string,
+    /// The unique id that identifies the resource to update.
+    sid: string
+  }
+  update-sip-credential: func(params: update-sip-credential-params) -> result<string, string>;
+
+  record delete-sip-credential-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// The unique id that identifies the credential list that contains the desired credentials.
+    credential-list-sid: string,
+    /// The unique id that identifies the resource to delete.
+    sid: string
+  }
+  delete-sip-credential: func(params: delete-sip-credential-params) -> result<string, string>;
+
+}
+
+interface api20100401-domain {
+  record list-sip-domain-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the SipDomain resources to read.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-domain: func(params: list-sip-domain-params) -> result<string, string>;
+
+  record create-sip-domain-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-sip-domain: func(params: create-sip-domain-params) -> result<string, string>;
+
+  record fetch-sip-domain-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the SipDomain resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the SipDomain resource to fetch.
+    sid: string
+  }
+  fetch-sip-domain: func(params: fetch-sip-domain-params) -> result<string, string>;
+
+  record update-sip-domain-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the SipDomain resource to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the SipDomain resource to update.
+    sid: string
+  }
+  update-sip-domain: func(params: update-sip-domain-params) -> result<string, string>;
+
+  record delete-sip-domain-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the SipDomain resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the SipDomain resource to delete.
+    sid: string
+  }
+  delete-sip-domain: func(params: delete-sip-domain-params) -> result<string, string>;
+
+}
+
+interface api20100401-auth-calls-credential-list-mapping {
+  record list-sip-auth-calls-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the CredentialListMapping resources to read.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resources to read.
+    domain-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-auth-calls-credential-list-mapping: func(params: list-sip-auth-calls-credential-list-mapping-params) -> result<string, string>;
+
+  record create-sip-auth-calls-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string,
+    /// The SID of the SIP domain that will contain the new resource.
+    domain-sid: string
+  }
+  create-sip-auth-calls-credential-list-mapping: func(params: create-sip-auth-calls-credential-list-mapping-params) -> result<string, string>;
+
+  record fetch-sip-auth-calls-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the CredentialListMapping resource to fetch.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resource to fetch.
+    domain-sid: string,
+    /// The Twilio-provided string that uniquely identifies the CredentialListMapping resource to fetch.
+    sid: string
+  }
+  fetch-sip-auth-calls-credential-list-mapping: func(params: fetch-sip-auth-calls-credential-list-mapping-params) -> result<string, string>;
+
+  record delete-sip-auth-calls-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the CredentialListMapping resources to delete.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resource to delete.
+    domain-sid: string,
+    /// The Twilio-provided string that uniquely identifies the CredentialListMapping resource to delete.
+    sid: string
+  }
+  delete-sip-auth-calls-credential-list-mapping: func(params: delete-sip-auth-calls-credential-list-mapping-params) -> result<string, string>;
+
+}
+
+interface api20100401-auth-calls-ip-access-control-list-mapping {
+  record list-sip-auth-calls-ip-access-control-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the IpAccessControlListMapping resources to read.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resources to read.
+    domain-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-auth-calls-ip-access-control-list-mapping: func(params: list-sip-auth-calls-ip-access-control-list-mapping-params) -> result<string, string>;
+
+  record create-sip-auth-calls-ip-access-control-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string,
+    /// The SID of the SIP domain that will contain the new resource.
+    domain-sid: string
+  }
+  create-sip-auth-calls-ip-access-control-list-mapping: func(params: create-sip-auth-calls-ip-access-control-list-mapping-params) -> result<string, string>;
+
+  record fetch-sip-auth-calls-ip-access-control-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the IpAccessControlListMapping resource to fetch.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resource to fetch.
+    domain-sid: string,
+    /// The Twilio-provided string that uniquely identifies the IpAccessControlListMapping resource to fetch.
+    sid: string
+  }
+  fetch-sip-auth-calls-ip-access-control-list-mapping: func(params: fetch-sip-auth-calls-ip-access-control-list-mapping-params) -> result<string, string>;
+
+  record delete-sip-auth-calls-ip-access-control-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the IpAccessControlListMapping resources to delete.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resources to delete.
+    domain-sid: string,
+    /// The Twilio-provided string that uniquely identifies the IpAccessControlListMapping resource to delete.
+    sid: string
+  }
+  delete-sip-auth-calls-ip-access-control-list-mapping: func(params: delete-sip-auth-calls-ip-access-control-list-mapping-params) -> result<string, string>;
+
+}
+
+interface api20100401-auth-registrations-credential-list-mapping {
+  record list-sip-auth-registrations-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the CredentialListMapping resources to read.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resources to read.
+    domain-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-auth-registrations-credential-list-mapping: func(params: list-sip-auth-registrations-credential-list-mapping-params) -> result<string, string>;
+
+  record create-sip-auth-registrations-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string,
+    /// The SID of the SIP domain that will contain the new resource.
+    domain-sid: string
+  }
+  create-sip-auth-registrations-credential-list-mapping: func(params: create-sip-auth-registrations-credential-list-mapping-params) -> result<string, string>;
+
+  record fetch-sip-auth-registrations-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the CredentialListMapping resource to fetch.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resource to fetch.
+    domain-sid: string,
+    /// The Twilio-provided string that uniquely identifies the CredentialListMapping resource to fetch.
+    sid: string
+  }
+  fetch-sip-auth-registrations-credential-list-mapping: func(params: fetch-sip-auth-registrations-credential-list-mapping-params) -> result<string, string>;
+
+  record delete-sip-auth-registrations-credential-list-mapping-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the CredentialListMapping resources to delete.
+    account-sid: string,
+    /// The SID of the SIP domain that contains the resources to delete.
+    domain-sid: string,
+    /// The Twilio-provided string that uniquely identifies the CredentialListMapping resource to delete.
+    sid: string
+  }
+  delete-sip-auth-registrations-credential-list-mapping: func(params: delete-sip-auth-registrations-credential-list-mapping-params) -> result<string, string>;
+
+}
+
+interface api20100401-credential-list-mapping {
+  record list-sip-credential-list-mapping-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP Domain that includes the resource to read.
+    domain-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-credential-list-mapping: func(params: list-sip-credential-list-mapping-params) -> result<string, string>;
+
+  record create-sip-credential-list-mapping-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP Domain for which the CredentialList resource will be mapped.
+    domain-sid: string
+  }
+  create-sip-credential-list-mapping: func(params: create-sip-credential-list-mapping-params) -> result<string, string>;
+
+  record fetch-sip-credential-list-mapping-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP Domain that includes the resource to fetch.
+    domain-sid: string,
+    /// A 34 character string that uniquely identifies the resource to fetch.
+    sid: string
+  }
+  fetch-sip-credential-list-mapping: func(params: fetch-sip-credential-list-mapping-params) -> result<string, string>;
+
+  record delete-sip-credential-list-mapping-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP Domain that includes the resource to delete.
+    domain-sid: string,
+    /// A 34 character string that uniquely identifies the resource to delete.
+    sid: string
+  }
+  delete-sip-credential-list-mapping: func(params: delete-sip-credential-list-mapping-params) -> result<string, string>;
+
+}
+
+interface api20100401-ip-access-control-list-mapping {
+  record list-sip-ip-access-control-list-mapping-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP domain.
+    domain-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-ip-access-control-list-mapping: func(params: list-sip-ip-access-control-list-mapping-params) -> result<string, string>;
+
+  record create-sip-ip-access-control-list-mapping-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP domain.
+    domain-sid: string
+  }
+  create-sip-ip-access-control-list-mapping: func(params: create-sip-ip-access-control-list-mapping-params) -> result<string, string>;
+
+  record fetch-sip-ip-access-control-list-mapping-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP domain.
+    domain-sid: string,
+    /// A 34 character string that uniquely identifies the resource to fetch.
+    sid: string
+  }
+  fetch-sip-ip-access-control-list-mapping: func(params: fetch-sip-ip-access-control-list-mapping-params) -> result<string, string>;
+
+  record delete-sip-ip-access-control-list-mapping-params {
+    /// The unique id of the Account that is responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the SIP domain.
+    domain-sid: string,
+    /// A 34 character string that uniquely identifies the resource to delete.
+    sid: string
+  }
+  delete-sip-ip-access-control-list-mapping: func(params: delete-sip-ip-access-control-list-mapping-params) -> result<string, string>;
+
+}
+
+interface api20100401-ip-access-control-list {
+  record list-sip-ip-access-control-list-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-ip-access-control-list: func(params: list-sip-ip-access-control-list-params) -> result<string, string>;
+
+  record create-sip-ip-access-control-list-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string
+  }
+  create-sip-ip-access-control-list: func(params: create-sip-ip-access-control-list-params) -> result<string, string>;
+
+  record fetch-sip-ip-access-control-list-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the resource to fetch.
+    sid: string
+  }
+  fetch-sip-ip-access-control-list: func(params: fetch-sip-ip-access-control-list-params) -> result<string, string>;
+
+  record update-sip-ip-access-control-list-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the resource to udpate.
+    sid: string
+  }
+  update-sip-ip-access-control-list: func(params: update-sip-ip-access-control-list-params) -> result<string, string>;
+
+  record delete-sip-ip-access-control-list-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// A 34 character string that uniquely identifies the resource to delete.
+    sid: string
+  }
+  delete-sip-ip-access-control-list: func(params: delete-sip-ip-access-control-list-params) -> result<string, string>;
+
+}
+
+interface api20100401-ip-address {
+  record list-sip-ip-address-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// The IpAccessControlList Sid that identifies the IpAddress resources to read.
+    ip-access-control-list-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-sip-ip-address: func(params: list-sip-ip-address-params) -> result<string, string>;
+
+  record create-sip-ip-address-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// The IpAccessControlList Sid with which to associate the created IpAddress resource.
+    ip-access-control-list-sid: string
+  }
+  create-sip-ip-address: func(params: create-sip-ip-address-params) -> result<string, string>;
+
+  record fetch-sip-ip-address-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// The IpAccessControlList Sid that identifies the IpAddress resources to fetch.
+    ip-access-control-list-sid: string,
+    /// A 34 character string that uniquely identifies the IpAddress resource to fetch.
+    sid: string
+  }
+  fetch-sip-ip-address: func(params: fetch-sip-ip-address-params) -> result<string, string>;
+
+  record update-sip-ip-address-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// The IpAccessControlList Sid that identifies the IpAddress resources to update.
+    ip-access-control-list-sid: string,
+    /// A 34 character string that identifies the IpAddress resource to update.
+    sid: string
+  }
+  update-sip-ip-address: func(params: update-sip-ip-address-params) -> result<string, string>;
+
+  record delete-sip-ip-address-params {
+    /// The unique id of the [Account](https://www.twilio.com/docs/iam/api/account) responsible for this resource.
+    account-sid: string,
+    /// The IpAccessControlList Sid that identifies the IpAddress resources to delete.
+    ip-access-control-list-sid: string,
+    /// A 34 character string that uniquely identifies the resource to delete.
+    sid: string
+  }
+  delete-sip-ip-address: func(params: delete-sip-ip-address-params) -> result<string, string>;
+
+}
+
+interface api20100401-short-code {
+  record list-short-code-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the ShortCode resource(s) to read.
+    account-sid: string,
+    /// The string that identifies the ShortCode resources to read.
+    friendly-name: option<string>,
+    /// Only show the ShortCode resources that match this pattern. You can specify partial numbers and use '*' as a wildcard for any digit.
+    short-code: option<string>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-short-code: func(params: list-short-code-params) -> result<string, string>;
+
+  record fetch-short-code-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the ShortCode resource(s) to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the ShortCode resource to fetch
+    sid: string
+  }
+  fetch-short-code: func(params: fetch-short-code-params) -> result<string, string>;
+
+  record update-short-code-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the ShortCode resource(s) to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the ShortCode resource to update
+    sid: string
+  }
+  update-short-code: func(params: update-short-code-params) -> result<string, string>;
+
+}
+
+interface api20100401-signing-key {
+  record list-signing-key-params {
+    account-sid: string,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-signing-key: func(params: list-signing-key-params) -> result<string, string>;
+
+  record fetch-signing-key-params {
+    account-sid: string,
+    sid: string
+  }
+  fetch-signing-key: func(params: fetch-signing-key-params) -> result<string, string>;
+
+  record update-signing-key-params {
+    account-sid: string,
+    sid: string
+  }
+  update-signing-key: func(params: update-signing-key-params) -> result<string, string>;
+
+  record delete-signing-key-params {
+    account-sid: string,
+    sid: string
+  }
+  delete-signing-key: func(params: delete-signing-key-params) -> result<string, string>;
+
+}
+
+interface api20100401-new-signing-key {
+  record create-new-signing-key-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will be responsible for the new Key resource.
+    account-sid: string
+  }
+  create-new-signing-key: func(params: create-new-signing-key-params) -> result<string, string>;
+
+}
+
+interface api20100401-token {
+  record create-token-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-token: func(params: create-token-params) -> result<string, string>;
+
+}
+
+interface api20100401-record {
+  record usage-record-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record: func(params: list-usage-record-params) -> result<string, string>;
+
+}
+
+interface api20100401-all-time {
+  record usage-record-all-time-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-all-time-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-all-time-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-all-time: func(params: list-usage-record-all-time-params) -> result<string, string>;
+
+}
+
+interface api20100401-daily {
+  record usage-record-daily-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-daily-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-daily-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-daily: func(params: list-usage-record-daily-params) -> result<string, string>;
+
+}
+
+interface api20100401-last-month {
+  record usage-record-last-month-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-last-month-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-last-month-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-last-month: func(params: list-usage-record-last-month-params) -> result<string, string>;
+
+}
+
+interface api20100401-monthly {
+  record usage-record-monthly-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-monthly-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-monthly-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-monthly: func(params: list-usage-record-monthly-params) -> result<string, string>;
+
+}
+
+interface api20100401-this-month {
+  record usage-record-this-month-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-this-month-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-this-month-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-this-month: func(params: list-usage-record-this-month-params) -> result<string, string>;
+
+}
+
+interface api20100401-today {
+  record usage-record-today-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-today-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-today-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-today: func(params: list-usage-record-today-params) -> result<string, string>;
+
+}
+
+interface api20100401-yearly {
+  record usage-record-yearly-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-yearly-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-yearly-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-yearly: func(params: list-usage-record-yearly-params) -> result<string, string>;
+
+}
+
+interface api20100401-yesterday {
+  record usage-record-yesterday-enum-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-record-yesterday-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageRecord resources to read.
+    account-sid: string,
+    /// The [usage category](https://www.twilio.com/docs/usage/api/usage-record#usage-categories) of the UsageRecord resources to read. Only UsageRecord resources in the specified category are retrieved.
+    category: option<usage-record-yesterday-enum-category>,
+    /// Only include usage that has occurred on or after this date. Specify the date in GMT and format as `YYYY-MM-DD`. You can also specify offsets from the current date, such as: `-30days`, which will set the start date to be 30 days before the current date.
+    start-date: option<string>,
+    /// Only include usage that occurred on or before this date. Specify the date in GMT and format as `YYYY-MM-DD`.  You can also specify offsets from the current date, such as: `+30days`, which will set the end date to 30 days from the current date.
+    end-date: option<string>,
+    /// Whether to include usage from the master account and all its subaccounts. Can be: `true` (the default) to include usage from the master account and all subaccounts or `false` to retrieve usage from only the specified account.
+    include-subaccounts: option<bool>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-record-yesterday: func(params: list-usage-record-yesterday-params) -> result<string, string>;
+
+}
+
+interface api20100401-trigger {
+  record usage-trigger-enum-recurring {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record usage-trigger-enum-trigger-field {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record usage-trigger-enum-usage-category {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-usage-trigger-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageTrigger resources to read.
+    account-sid: string,
+    /// The frequency of recurring UsageTriggers to read. Can be: `daily`, `monthly`, or `yearly` to read recurring UsageTriggers. An empty value or a value of `alltime` reads non-recurring UsageTriggers.
+    recurring: option<usage-trigger-enum-recurring>,
+    /// The trigger field of the UsageTriggers to read.  Can be: `count`, `usage`, or `price` as described in the [UsageRecords documentation](https://www.twilio.com/docs/usage/api/usage-record#usage-count-price).
+    trigger-by: option<usage-trigger-enum-trigger-field>,
+    /// The usage category of the UsageTriggers to read. Must be a supported [usage categories](https://www.twilio.com/docs/usage/api/usage-record#usage-categories).
+    usage-category: option<usage-trigger-enum-usage-category>,
+    /// How many resources to return in each list page. The default is 50, and the maximum is 1000.
+    page-size: option<s32>,
+    /// The page index. This value is simply for client state.
+    page: option<s32>,
+    /// The page token. This is provided by the API.
+    page-token: option<string>
+  }
+  list-usage-trigger: func(params: list-usage-trigger-params) -> result<string, string>;
+
+  record create-usage-trigger-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that will create the resource.
+    account-sid: string
+  }
+  create-usage-trigger: func(params: create-usage-trigger-params) -> result<string, string>;
+
+  record fetch-usage-trigger-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageTrigger resource to fetch.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the UsageTrigger resource to fetch.
+    sid: string
+  }
+  fetch-usage-trigger: func(params: fetch-usage-trigger-params) -> result<string, string>;
+
+  record update-usage-trigger-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageTrigger resources to update.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the UsageTrigger resource to update.
+    sid: string
+  }
+  update-usage-trigger: func(params: update-usage-trigger-params) -> result<string, string>;
+
+  record delete-usage-trigger-params {
+    /// The SID of the [Account](https://www.twilio.com/docs/iam/api/account) that created the UsageTrigger resources to delete.
+    account-sid: string,
+    /// The Twilio-provided string that uniquely identifies the UsageTrigger resource to delete.
+    sid: string
+  }
+  delete-usage-trigger: func(params: delete-usage-trigger-params) -> result<string, string>;
+
+}
+
+interface api20100401-health-check {
+  fetch-health-check: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export api20100401-account;
+  export api20100401-address;
+  export api20100401-dependent-phone-number;
+  export api20100401-application;
+  export api20100401-authorized-connect-app;
+  export api20100401-available-phone-number-country;
+  export api20100401-local;
+  export api20100401-machine-to-machine;
+  export api20100401-mobile;
+  export api20100401-national;
+  export api20100401-shared-cost;
+  export api20100401-toll-free;
+  export api20100401-voip;
+  export api20100401-balance;
+  export api20100401-call;
+  export api20100401-event;
+  export api20100401-notification;
+  export api20100401-payment;
+  export api20100401-recording;
+  export api20100401-siprec;
+  export api20100401-stream;
+  export api20100401-user-defined-message-subscription;
+  export api20100401-user-defined-message;
+  export api20100401-conference;
+  export api20100401-participant;
+  export api20100401-connect-app;
+  export api20100401-incoming-phone-number;
+  export api20100401-assigned-add-on;
+  export api20100401-assigned-add-on-extension;
+  export api20100401-key;
+  export api20100401-new-key;
+  export api20100401-message;
+  export api20100401-feedback;
+  export api20100401-media;
+  export api20100401-outgoing-caller-id;
+  export api20100401-validation-request;
+  export api20100401-queue;
+  export api20100401-member;
+  export api20100401-transcription;
+  export api20100401-add-on-result;
+  export api20100401-payload;
+  export api20100401-credential-list;
+  export api20100401-credential;
+  export api20100401-domain;
+  export api20100401-auth-calls-credential-list-mapping;
+  export api20100401-auth-calls-ip-access-control-list-mapping;
+  export api20100401-auth-registrations-credential-list-mapping;
+  export api20100401-credential-list-mapping;
+  export api20100401-ip-access-control-list-mapping;
+  export api20100401-ip-access-control-list;
+  export api20100401-ip-address;
+  export api20100401-short-code;
+  export api20100401-signing-key;
+  export api20100401-new-signing-key;
+  export api20100401-token;
+  export api20100401-record;
+  export api20100401-all-time;
+  export api20100401-daily;
+  export api20100401-last-month;
+  export api20100401-monthly;
+  export api20100401-this-month;
+  export api20100401-today;
+  export api20100401-yearly;
+  export api20100401-yesterday;
+  export api20100401-trigger;
+  export api20100401-health-check;
+}

@@ -1,0 +1,263 @@
+package autostamp:musixmatch@0.2.0;
+
+interface album {
+  record get-album-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch album id
+    album-id: string
+  }
+  get-album-get: func(params: get-album-get-params) -> result<string, string>;
+
+  record get-artist-albums-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch artist id
+    artist-id: string,
+    /// Sort by release date (asc|desc)
+    s-release-date: option<string>,
+    /// Group by Album Name
+    g-album-name: option<string>,
+    /// Define the page size for paginated results.Range is 1 to 100.
+    page-size: option<f64>,
+    /// Define the page number for paginated results
+    page: option<f64>
+  }
+  get-artist-albums-get: func(params: get-artist-albums-get-params) -> result<string, string>;
+
+}
+
+
+interface track {
+  record get-album-tracks-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch album id
+    album-id: string,
+    /// When set, filter only contents with lyrics
+    f-has-lyrics: option<string>,
+    /// Define the page number for paginated results
+    page: option<f64>,
+    /// Define the page size for paginated results.Range is 1 to 100.
+    page-size: option<f64>
+  }
+  get-album-tracks-get: func(params: get-album-tracks-get-params) -> result<string, string>;
+
+  record get-chart-tracks-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// Define the page number for paginated results
+    page: option<f64>,
+    /// Define the page size for paginated results.Range is 1 to 100.
+    page-size: option<f64>,
+    /// A valid ISO 3166 country code
+    country: option<string>,
+    /// When set, filter only contents with lyrics
+    f-has-lyrics: option<string>
+  }
+  get-chart-tracks-get: func(params: get-chart-tracks-get-params) -> result<string, string>;
+
+  record get-matcher-track-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The song artist
+    q-artist: option<string>,
+    /// The song title
+    q-track: option<string>,
+    /// When set, filter only contents with lyrics
+    f-has-lyrics: option<f64>,
+    /// When set, filter only contents with subtitles
+    f-has-subtitle: option<f64>
+  }
+  get-matcher-track-get: func(params: get-matcher-track-get-params) -> result<string, string>;
+
+  record get-track-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch track id
+    track-id: string
+  }
+  get-track-get: func(params: get-track-get-params) -> result<string, string>;
+
+  record get-track-search-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The song title
+    q-track: option<string>,
+    /// The song artist
+    q-artist: option<string>,
+    /// Any word in the lyrics
+    q-lyrics: option<string>,
+    /// When set, filter by this artist id
+    f-artist-id: option<f64>,
+    /// When set, filter by this music category id
+    f-music-genre-id: option<f64>,
+    /// Filter by the lyrics language (en,it,..)
+    f-lyrics-language: option<f64>,
+    /// When set, filter only contents with lyrics
+    f-has-lyrics: option<f64>,
+    /// Sort by our popularity index for artists (asc|desc)
+    s-artist-rating: option<string>,
+    /// Sort by our popularity index for tracks (asc|desc)
+    s-track-rating: option<string>,
+    /// Search only a part of the given query string.Allowed range is (0.1 – 0.9)
+    quorum-factor: option<f64>,
+    /// Define the page size for paginated results.Range is 1 to 100.
+    page-size: option<f64>,
+    /// Define the page number for paginated results
+    page: option<f64>
+  }
+  get-track-search: func(params: get-track-search-params) -> result<string, string>;
+
+}
+
+interface artist {
+  record get-artist-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// 	The musiXmatch artist id
+    artist-id: string
+  }
+  get-artist-get: func(params: get-artist-get-params) -> result<string, string>;
+
+  record get-artist-related-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch artist id
+    artist-id: string,
+    /// Define the page size for paginated results.Range is 1 to 100.
+    page-size: option<f64>,
+    /// Define the page number for paginated results
+    page: option<f64>
+  }
+  get-artist-related-get: func(params: get-artist-related-get-params) -> result<string, string>;
+
+  record get-artist-search-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The song artist
+    q-artist: option<string>,
+    /// When set, filter by this artist id
+    f-artist-id: option<f64>,
+    /// Define the page number for paginated results
+    page: option<f64>,
+    /// Define the page size for paginated results.Range is 1 to 100.
+    page-size: option<f64>
+  }
+  get-artist-search: func(params: get-artist-search-params) -> result<string, string>;
+
+  record get-chart-artists-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// Define the page number for paginated results
+    page: option<f64>,
+    /// Define the page size for paginated results.Range is 1 to 100.
+    page-size: option<f64>,
+    /// A valid ISO 3166 country code
+    country: option<string>
+  }
+  get-chart-artists-get: func(params: get-chart-artists-get-params) -> result<string, string>;
+
+}
+
+interface lyrics {
+  record get-matcher-lyrics-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The song title
+    q-track: option<string>,
+    /// The song artist
+    q-artist: option<string>
+  }
+  get-matcher-lyrics-get: func(params: get-matcher-lyrics-get-params) -> result<string, string>;
+
+  record get-track-lyrics-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch track id
+    track-id: string
+  }
+  get-track-lyrics-get: func(params: get-track-lyrics-get-params) -> result<string, string>;
+
+}
+
+interface subtitle {
+  record get-matcher-subtitle-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The song title
+    q-track: option<string>,
+    /// 	The song artist
+    q-artist: option<string>,
+    /// Filter by subtitle length in seconds
+    f-subtitle-length: option<f64>,
+    /// Max deviation for a subtitle length in seconds
+    f-subtitle-length-max-deviation: option<f64>
+  }
+  get-matcher-subtitle-get: func(params: get-matcher-subtitle-get-params) -> result<string, string>;
+
+  record get-track-subtitle-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch track id
+    track-id: string
+  }
+  get-track-subtitle-get: func(params: get-track-subtitle-get-params) -> result<string, string>;
+
+}
+
+interface snippet {
+  record get-track-snippet-get-params {
+    /// output format: json, jsonp, xml.
+    format: option<string>,
+    /// jsonp callback
+    callback: option<string>,
+    /// The musiXmatch track id
+    track-id: string
+  }
+  get-track-snippet-get: func(params: get-track-snippet-get-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export album;
+  export track;
+  export artist;
+  export lyrics;
+  export subtitle;
+  export snippet;
+}

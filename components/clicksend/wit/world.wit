@@ -1,0 +1,2146 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `basic` | `Authorization: Basic base64(<secret>)` |
+package autostamp:clicksend@0.2.0;
+
+interface account {
+  /// Get account
+  get-account: func() -> result<string, string>;
+
+  /// Create a new account
+  record create-a-new-account-params {
+    /// Your delivery to value.
+    account-name: string,
+    /// Your country.
+    country: string,
+    /// Your password.
+    password: string,
+    /// Your email.
+    user-email: string,
+    /// Your first name.
+    user-first-name: string,
+    /// Your last name.
+    user-last-name: string,
+    /// Your phone number in E.164 format.
+    user-phone: string,
+    /// Your username.
+    username: string
+  }
+  create-a-new-account: func(params: create-a-new-account-params) -> result<string, string>;
+
+  /// Update Account
+  record update-account-params {
+    /// Your delivery to value.
+    account-name: string,
+    /// Your country.
+    country: string,
+    /// Your password.
+    password: string,
+    /// Set the private uploads flag. 0 or 1 only.
+    private-uploads: option<f64>,
+    /// Set the private uploads flag. 0 or 1 only.
+    setting-sms-hide-business-name: option<f64>,
+    /// Set the private uploads flag. 0 or 1 only.
+    setting-sms-hide-your-number: option<f64>,
+    /// Timezone.
+    timezone: string,
+    /// Your email.
+    user-email: string,
+    /// Your first name.
+    user-first-name: string,
+    /// Your last name.
+    user-last-name: string,
+    /// Your phone number in E.164 format.
+    user-phone: string,
+    /// Your username.
+    username: string
+  }
+  update-account: func(params: update-account-params) -> result<string, string>;
+
+  /// Send account activation token
+  record send-account-activation-token-params {
+    country: option<string>,
+    type-op: option<string>,
+    user-phone: option<string>
+  }
+  send-account-activation-token: func(params: send-account-activation-token-params) -> result<string, string>;
+
+  /// Verify new account
+  record verify-new-account-params {
+    /// The ActivationToken to be used to verify an account.
+    activation-token: string
+  }
+  verify-new-account: func(params: verify-new-account-params) -> result<string, string>;
+
+  /// Account Usage
+  record account-usage-params {
+    /// Your account usage year.
+    year: string,
+    /// Your account usage month.
+    month: string,
+    /// The account type. Value can only be either email or subaccount.
+    type-op: string
+  }
+  account-usage: func(params: account-usage-params) -> result<string, string>;
+
+}
+
+
+interface automation-rules {
+  /// List Rules
+  get-automations-email-receipt: func() -> result<string, string>;
+
+  /// Create a New Rule
+  record post-automations-email-receipt-params {
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Enabled.
+    enabled: f64,
+    /// Match Type. 0=All reports.
+    match-type: f64,
+    /// Rule Name.
+    rule-name: string
+  }
+  post-automations-email-receipt: func(params: post-automations-email-receipt-params) -> result<string, string>;
+
+  /// Get a Specific Rule
+  record get-automations-email-receipt-rule-id-params {
+    /// The rule id you want to access.
+    rule-id: string
+  }
+  get-automations-email-receipt-rule-id: func(params: get-automations-email-receipt-rule-id-params) -> result<string, string>;
+
+  /// Update a Rule
+  record put-automations-email-receipt-rule-id-params {
+    /// The email receipt rule id you want to access.
+    rule-id: string,
+    /// Action.
+    action: option<string>,
+    /// Action Address.
+    action-address: option<string>,
+    /// Enabled.
+    enabled: option<f64>,
+    /// Match Type. 0=All reports.
+    match-type: option<f64>,
+    /// Rule Name.
+    rule-name: option<string>
+  }
+  put-automations-email-receipt-rule-id: func(params: put-automations-email-receipt-rule-id-params) -> result<string, string>;
+
+  /// Delete a Rule
+  record delete-automations-email-receipt-rule-id-params {
+    /// The email receipt rule id you want to delete.
+    rule-id: string
+  }
+  delete-automations-email-receipt-rule-id: func(params: delete-automations-email-receipt-rule-id-params) -> result<string, string>;
+
+  /// List rules
+  get-automations-fax-inbound: func() -> result<string, string>;
+
+  /// Create a new rule
+  record post-automations-fax-inbound-params {
+    /// Action
+    action: string,
+    /// Action Address
+    action-address: string,
+    /// Decicated Number
+    dedicated-number: string,
+    /// Enable
+    enabled: f64,
+    /// Rule Name
+    rule-name: string
+  }
+  post-automations-fax-inbound: func(params: post-automations-fax-inbound-params) -> result<string, string>;
+
+  /// Get a specific rule
+  record get-automations-fax-inbound-inbound-rule-id-params {
+    /// Fax inbound rule id
+    inbound-rule-id: string
+  }
+  get-automations-fax-inbound-inbound-rule-id: func(params: get-automations-fax-inbound-inbound-rule-id-params) -> result<string, string>;
+
+  /// Update a rule
+  record put-automations-fax-inbound-inbound-rule-id-params {
+    /// Fax inbound rule id
+    inbound-rule-id: string,
+    /// Action
+    action: string,
+    /// Action Address
+    action-address: string,
+    /// Decicated Number
+    dedicated-number: string,
+    /// Enable
+    enabled: f64,
+    /// Rule Name
+    rule-name: string
+  }
+  put-automations-fax-inbound-inbound-rule-id: func(params: put-automations-fax-inbound-inbound-rule-id-params) -> result<string, string>;
+
+  /// Delete a rule
+  record delete-automations-fax-inbound-inbound-rule-id-params {
+    /// Fax inbound rule id
+    inbound-rule-id: string
+  }
+  delete-automations-fax-inbound-inbound-rule-id: func(params: delete-automations-fax-inbound-inbound-rule-id-params) -> result<string, string>;
+
+  /// List Rules
+  list-rules: func() -> result<string, string>;
+
+  /// Create a New Rule
+  record create-a-new-rule-params {
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Enabled.
+    enabled: f64,
+    /// Match Type. 0=All reports.
+    match-type: f64,
+    /// Rule Name.
+    rule-name: string
+  }
+  create-a-new-rule: func(params: create-a-new-rule-params) -> result<string, string>;
+
+  /// Get a Specific Rule
+  record get-a-specific-rule-params {
+    /// The rule id you want to access.
+    rule-id: string
+  }
+  get-a-specific-rule: func(params: get-a-specific-rule-params) -> result<string, string>;
+
+  /// Update a Rule
+  record update-a-rule-params {
+    /// The email receipt rule id you want to access.
+    rule-id: string,
+    /// Action.
+    action: option<string>,
+    /// Action Address.
+    action-address: option<string>,
+    /// Enabled.
+    enabled: option<f64>,
+    /// Match Type. 0=All reports.
+    match-type: option<f64>,
+    /// Rule Name.
+    rule-name: option<string>
+  }
+  update-a-rule: func(params: update-a-rule-params) -> result<string, string>;
+
+  /// Delete a Rule
+  record delete-a-rule-params {
+    /// The email receipt rule id you want to delete.
+    rule-id: string
+  }
+  delete-a-rule: func(params: delete-a-rule-params) -> result<string, string>;
+
+  /// List rules
+  list-rules-v2: func() -> result<string, string>;
+
+  /// Create a new rule
+  record create-a-new-rule-v2-params {
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Dedicated Number.
+    dedicated-number: f64,
+    /// Enabled.
+    enabled: f64,
+    /// Message Search Term.
+    message-search-term: string,
+    /// Message Search Type: 0=Any message, 1=starts with, 2=contains, 3=does not contain.
+    message-search-type: f64,
+    /// Rule Name.
+    rule-name: string
+  }
+  create-a-new-rule-v2: func(params: create-a-new-rule-v2-params) -> result<string, string>;
+
+  /// Get a specific rule
+  record get-a-specific-rule-v2-params {
+    /// Inbound Rule ID.
+    inbound-rule-id: string
+  }
+  get-a-specific-rule-v2: func(params: get-a-specific-rule-v2-params) -> result<string, string>;
+
+  /// Update a rule
+  record update-a-rule-v2-params {
+    /// Inbound Rule ID.
+    inbound-rule-id: string,
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Dedicated Number
+    dedicated-number: string,
+    /// Enabled.
+    enabled: f64,
+    /// Message Search Term.
+    message-search-term: string,
+    /// Message Search Type: 0=Any message, 1=starts with, 2=contains, 3=does not contain.
+    message-search-type: f64
+  }
+  update-a-rule-v2: func(params: update-a-rule-v2-params) -> result<string, string>;
+
+  /// Delete a rule
+  record delete-a-rule-v2-params {
+    /// Inbound Rule ID.
+    inbound-rule-id: string
+  }
+  delete-a-rule-v2: func(params: delete-a-rule-v2-params) -> result<string, string>;
+
+  /// List rules
+  get-automations-sms-receipts: func() -> result<string, string>;
+
+  /// Create a new rule
+  record post-automations-sms-receipts-params {
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Enabled.
+    enabled: f64,
+    /// Match Type. 0=All reports, 1=Only failed, 2=Only successful.
+    match-type: f64,
+    /// Rule Name.
+    rule-name: string
+  }
+  post-automations-sms-receipts: func(params: post-automations-sms-receipts-params) -> result<string, string>;
+
+  /// Get a specific rule
+  record get-automations-sms-receipts-receipt-rule-id-params {
+    /// Receipt Rule ID.
+    receipt-rule-id: string
+  }
+  get-automations-sms-receipts-receipt-rule-id: func(params: get-automations-sms-receipts-receipt-rule-id-params) -> result<string, string>;
+
+  /// Update a rule
+  record put-automations-sms-receipts-receipt-rule-id-params {
+    /// Receipt Rule ID.
+    receipt-rule-id: string,
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Enabled.
+    enabled: f64,
+    /// Match Type. 0=All reports, 1=Only failed, 2=Only successful.
+    match-type: f64,
+    /// Rule Name.
+    rule-name: string
+  }
+  put-automations-sms-receipts-receipt-rule-id: func(params: put-automations-sms-receipts-receipt-rule-id-params) -> result<string, string>;
+
+  /// Delete a rule
+  record delete-automations-sms-receipts-receipt-rule-id-params {
+    /// Receipt Rule ID.
+    receipt-rule-id: string
+  }
+  delete-automations-sms-receipts-receipt-rule-id: func(params: delete-automations-sms-receipts-receipt-rule-id-params) -> result<string, string>;
+
+  /// List rules
+  get-automations-voice-receipts: func() -> result<string, string>;
+
+  /// Create a new rule
+  record post-automations-voice-receipts-params {
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Enabled.
+    enabled: f64,
+    /// Match Type. 0=All reports, 1=Only failed, 2=Only successful.
+    match-type: f64,
+    /// Rule Name.
+    rule-name: string
+  }
+  post-automations-voice-receipts: func(params: post-automations-voice-receipts-params) -> result<string, string>;
+
+  /// Get a specific rule
+  record get-automations-voice-receipts-receipt-rule-id-params {
+    /// Receipt Rule ID.
+    receipt-rule-id: string
+  }
+  get-automations-voice-receipts-receipt-rule-id: func(params: get-automations-voice-receipts-receipt-rule-id-params) -> result<string, string>;
+
+  /// Update a rule
+  record put-automations-voice-receipts-receipt-rule-id-params {
+    /// Receipt Rule ID.
+    receipt-rule-id: string,
+    /// Action.
+    action: string,
+    /// Action Address.
+    action-address: string,
+    /// Enabled.
+    enabled: f64,
+    /// Match Type. 0=All reports, 1=Only failed, 2=Only successful.
+    match-type: f64,
+    /// Rule Name.
+    rule-name: string
+  }
+  put-automations-voice-receipts-receipt-rule-id: func(params: put-automations-voice-receipts-receipt-rule-id-params) -> result<string, string>;
+
+  /// Delete a rule
+  record delete-automations-voice-receipts-receipt-rule-id-params {
+    /// Receipt Rule ID.
+    receipt-rule-id: string
+  }
+  delete-automations-voice-receipts-receipt-rule-id: func(params: delete-automations-voice-receipts-receipt-rule-id-params) -> result<string, string>;
+
+}
+
+interface contact-suggestions {
+  /// List Contact Suggestions
+  list-contact-suggestions: func() -> result<string, string>;
+
+}
+
+interface countries {
+  /// Get all Countries
+  get-all-countries: func() -> result<string, string>;
+
+}
+
+interface delivery-issues {
+  /// Get Delivery Issues
+  get-delivery-issues: func() -> result<string, string>;
+
+  /// Create Delivery Issue
+  record create-delivery-issue-params {
+    /// The user's comments.
+    client-comments: option<string>,
+    /// The description of the message.
+    description: string,
+    /// The user's email address.
+    email-address: string,
+    /// The message id of the message.
+    message-id: string,
+    /// The type of message, must be one of the following values: `SMS`, `MMS`, `VOICE`, `EMAIL_MARKETING`, `EMAIL_TRANSACTIONAL`, `FAX`, `POST`.
+    type-op: string
+  }
+  create-delivery-issue: func(params: create-delivery-issue-params) -> result<string, string>;
+
+}
+
+interface email-marketing {
+  /// Get All Email Campaigns
+  get-all-email-campaigns: func() -> result<string, string>;
+
+  /// Calculate Price
+  record calculate-price-params {
+    /// The allowed email address id.
+    from-email-address-id: f64,
+    /// The name that will appear on the email.
+    from-name: string,
+    /// The list id you want to access.
+    list-id: f64,
+    /// The name of the sender.
+    name: string,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// The subject of the email campaign.
+    subject: string,
+    /// The template id you want to use.
+    template-id: f64
+  }
+  calculate-price: func(params: calculate-price-params) -> result<string, string>;
+
+  /// Create Email Campaign
+  record create-email-campaign-params {
+    /// The allowed email address id.
+    from-email-address-id: f64,
+    /// The name that will appear on the email.
+    from-name: string,
+    /// The list id you want to access.
+    list-id: f64,
+    /// The name of the sender.
+    name: string,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// The subject of the email campaign.
+    subject: string,
+    /// The template id you want to use.
+    template-id: f64
+  }
+  create-email-campaign: func(params: create-email-campaign-params) -> result<string, string>;
+
+  /// Get Specific Email Campaign History
+  record get-specific-email-campaign-history-params {
+    /// The email campaign id you want to access.
+    campaign-id: string
+  }
+  get-specific-email-campaign-history: func(params: get-specific-email-campaign-history-params) -> result<string, string>;
+
+  /// Get Specific Email Campaign
+  record get-specific-email-campaign-params {
+    /// The email campaign id you want to access.
+    email-campaign-id: string
+  }
+  get-specific-email-campaign: func(params: get-specific-email-campaign-params) -> result<string, string>;
+
+  /// Update Email Campaign
+  record update-email-campaign-params {
+    /// The email campaign id you want to access.
+    email-campaign-id: string,
+    /// The allowed email address id.
+    from-email-address-id: option<f64>,
+    /// The name that will appear on the email.
+    from-name: option<string>,
+    /// The list id you want to access.
+    list-id: option<f64>,
+    /// The name of the sender.
+    name: option<string>,
+    /// Leave blank for immediate delivery. Will replace existing schedule (even if left blank). Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// The subject of the email campaign.
+    subject: option<string>,
+    /// The template id you want to use.
+    template-id: option<f64>
+  }
+  update-email-campaign: func(params: update-email-campaign-params) -> result<string, string>;
+
+  /// Cancel Email Campaign
+  record cancel-email-campaign-params {
+    /// The email campaign id you want to cancel.
+    email-campaign-id: string
+  }
+  cancel-email-campaign: func(params: cancel-email-campaign-params) -> result<string, string>;
+
+  /// Send Verification Token
+  record send-verification-token-params {
+    /// The email addess id you want to access.
+    email-address-id: string
+  }
+  send-verification-token: func(params: send-verification-token-params) -> result<string, string>;
+
+  /// Verify Allowed Email Address
+  record verify-allowed-email-address-params {
+    /// The email address id you want to access.
+    email-address-id: string,
+    /// 6E8B-4FDB-99A7-7ED08DF97BCC (required, string) - Your activation token.
+    activation-token: string
+  }
+  verify-allowed-email-address: func(params: verify-allowed-email-address-params) -> result<string, string>;
+
+  /// Get All Allowed Email Addresses
+  get-all-allowed-email-addresses: func() -> result<string, string>;
+
+  /// Create Allowed Email Address
+  record create-allowed-email-address-params {
+    /// {
+    ///     "email_address" : "test222@user.com"
+    body: option<string>,
+    /// Your email.
+    email-address: string
+  }
+  create-allowed-email-address: func(params: create-allowed-email-address-params) -> result<string, string>;
+
+  /// Get Specific Allowed Email Address
+  record get-specific-allowed-email-address-params {
+    /// The email address you want to access.
+    email-address-id: string
+  }
+  get-specific-allowed-email-address: func(params: get-specific-allowed-email-address-params) -> result<string, string>;
+
+  /// Delete Allowed Email Address
+  record delete-allowed-email-address-params {
+    /// The email address you want to access.
+    email-address-id: string
+  }
+  delete-allowed-email-address: func(params: delete-allowed-email-address-params) -> result<string, string>;
+
+  /// Get All Master Email Templates
+  get-all-master-email-templates: func() -> result<string, string>;
+
+  /// Get All Master Template Categories
+  get-all-master-template-categories: func() -> result<string, string>;
+
+  /// Get Specific Email Template Category
+  record get-specific-email-template-category-params {
+    /// Your category id.
+    category-id: string
+  }
+  get-specific-email-template-category: func(params: get-specific-email-template-category-params) -> result<string, string>;
+
+  /// Get All Templates For Category
+  record get-all-templates-for-category-params {
+    /// Your category id.
+    category-id: string
+  }
+  get-all-templates-for-category: func(params: get-all-templates-for-category-params) -> result<string, string>;
+
+  /// Get Specific Master Template
+  record get-specific-master-template-params {
+    /// Your template id.
+    template-id: string
+  }
+  get-specific-master-template: func(params: get-specific-master-template-params) -> result<string, string>;
+
+  /// Get All Email Templates
+  get-all-email-templates: func() -> result<string, string>;
+
+  /// Create New Email Template from Master Template
+  record create-new-email-template-from-master-template-params {
+    /// The ID of the master template you want to base on.
+    template-id-master: f64,
+    /// The intended name for the new template.
+    template-name: string
+  }
+  create-new-email-template-from-master-template: func(params: create-new-email-template-from-master-template-params) -> result<string, string>;
+
+  /// Upload Image to Specific Template
+  record upload-image-to-specific-template-params {
+    /// Your template id.
+    template-id: string,
+    /// Uploads your selected image file.
+    image: option<string>,
+    /// Uploads the image from the supplied URL.
+    url: option<string>
+  }
+  upload-image-to-specific-template: func(params: upload-image-to-specific-template-params) -> result<string, string>;
+
+  /// Get Specific Email Template
+  record get-specific-email-template-params {
+    /// The email template id.
+    template-id: string
+  }
+  get-specific-email-template: func(params: get-specific-email-template-params) -> result<string, string>;
+
+  /// Update an Email Template
+  record update-an-email-template-params {
+    /// The id of the template to be updated.
+    template-id: string,
+    /// Your template body.
+    body: string,
+    /// The intended name for the new template.
+    template-name: string
+  }
+  update-an-email-template: func(params: update-an-email-template-params) -> result<string, string>;
+
+  /// Delete Email Template
+  record delete-email-template-params {
+    /// Your template id.
+    template-id: string
+  }
+  delete-email-template: func(params: delete-email-template-params) -> result<string, string>;
+
+}
+
+interface transactional-email {
+  /// Email History
+  email-history: func() -> result<string, string>;
+
+  /// Export History
+  record export-history-params {
+    /// Your export filename.
+    filename: string
+  }
+  export-history: func(params: export-history-params) -> result<string, string>;
+
+  /// Email Price
+  record email-price-params {
+    /// The attachments of the email. See sample request for more details.
+    attachments: list<string>,
+    /// The bcc of the email. See sample request for more details.
+    bcc: option<list<string>>,
+    /// The content of the email.
+    body: string,
+    /// The cc of the email. See sample request for more details.
+    cc: option<list<string>>,
+    /// The sender's email address id.
+    from-email-address-id: f64,
+    /// The sender's name.
+    from-name: option<string>,
+    /// The subject of the email.
+    subject: string,
+    /// The recipients of the email. See sample request for more details.
+    to: list<string>
+  }
+  email-price: func(params: email-price-params) -> result<string, string>;
+
+  /// Add a Test Delivery Receipt
+  record post-email-receipts-params {
+    /// Your URL if using the push option or 'poll' if using the pull option.
+    url: string
+  }
+  post-email-receipts: func(params: post-email-receipts-params) -> result<string, string>;
+
+  /// Email Send
+  record email-send-params {
+    /// The attachments of the email.
+    attachments: option<list<string>>,
+    /// The bcc of the email. Follows the same structure as `to`.
+    bcc: option<list<string>>,
+    /// The content of the email.
+    body: string,
+    /// The cc of the email. Follows the same structure as `to`.
+    cc: option<list<string>>,
+    /// The sender's email address ID.
+    from-email-address-id: f64,
+    /// The sender's name.
+    from-name: option<string>,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// The recipients of the email.
+    to: list<string>
+  }
+  email-send: func(params: email-send-params) -> result<string, string>;
+
+}
+
+interface fax {
+  /// Export Fax History
+  record export-fax-history-params {
+    /// Your export filename.
+    filename: string
+  }
+  export-fax-history: func(params: export-fax-history-params) -> result<string, string>;
+
+  /// Get Fax History
+  record get-fax-history-params {
+    /// Customize result by setting from date (timestsamp)
+    date-from: string,
+    /// Customize result by setting to date (timestamp)
+    date-to: string,
+    /// Custom query
+    q: string,
+    /// Order result by
+    order-by: string
+  }
+  get-fax-history: func(params: get-fax-history-params) -> result<string, string>;
+
+  /// Calculate Price
+  record post-fax-price-params {
+    /// Recipient country.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// Your URL to your PDF file.
+    file-url: string,
+    /// Your sender id. Must be a valid fax number.
+    from-op: option<string>,
+    /// An email address where the reply should be emailed to.
+    from-email: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'.
+    list-id: option<f64>,
+    /// Your messages.
+    messages: list<string>,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string
+  }
+  post-fax-price: func(params: post-fax-price-params) -> result<string, string>;
+
+  /// List of Fax Delivery Receipts
+  list-of-fax-delivery-receipts: func() -> result<string, string>;
+
+  /// Add a Test Delivery Receipt
+  record add-a-test-delivery-receipt-params {
+    /// Your URL if using the push option or 'poll' if using the pull option.
+    url: string
+  }
+  add-a-test-delivery-receipt: func(params: add-a-test-delivery-receipt-params) -> result<string, string>;
+
+  /// Mark Fax Delivery Receipts as read
+  record mark-fax-delivery-receipts-as-read-params {
+    /// An optional [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp) - mark all as read before this timestamp. If not given, all receipts will be marked as read.
+    date-before: option<f64>
+  }
+  mark-fax-delivery-receipts-as-read: func(params: mark-fax-delivery-receipts-as-read-params) -> result<string, string>;
+
+  /// Get a Specific Fax Delivery Receipt
+  record get-a-specific-fax-delivery-receipt-params {
+    /// D2AF-479B-8955-6395D561DEF4" (required, number) - Message ID.
+    message-id: string
+  }
+  get-a-specific-fax-delivery-receipt: func(params: get-a-specific-fax-delivery-receipt-params) -> result<string, string>;
+
+  /// Send Fax
+  record send-fax-params {
+    /// Recipient country.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// Your URL to your PDF file.
+    file-url: string,
+    /// Your sender id. Must be a valid fax number.
+    from-op: option<string>,
+    /// An email address where the reply should be emailed to.
+    from-email: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'.
+    list-id: option<f64>,
+    /// Your messages.
+    messages: list<string>,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string
+  }
+  send-fax: func(params: send-fax-params) -> result<string, string>;
+
+}
+
+interface forgot-account {
+  /// Forgot Password
+  record forgot-password-params {
+    /// Your username.
+    username: string
+  }
+  forgot-password: func(params: forgot-password-params) -> result<string, string>;
+
+  /// Verify Forgot Password
+  record verify-forgot-password-params {
+    /// Your email activation token.
+    activation-token: string,
+    /// Your new password.
+    password: string,
+    /// Your subaccount id.
+    subaccount-id: f64
+  }
+  verify-forgot-password: func(params: verify-forgot-password-params) -> result<string, string>;
+
+  /// Forgot Username
+  record forgot-username-params {
+    /// Your country. Used to format phone number. This is required if phone_number is not in international-format.
+    country: option<string>,
+    /// Your email. This is required if phone_number is not present.
+    email: option<string>,
+    /// Your phone number. This is required if email is not present.
+    phone-number: option<f64>
+  }
+  forgot-username: func(params: forgot-username-params) -> result<string, string>;
+
+}
+
+interface contact-lists {
+  /// Get all Contact Lists
+  get-all-contact-lists: func() -> result<string, string>;
+
+  /// Create a new contact list
+  record create-a-new-contact-list-params {
+    /// Your contact list name.
+    list-name: string
+  }
+  create-a-new-contact-list: func(params: create-a-new-contact-list-params) -> result<string, string>;
+
+  /// Get a specific contact list
+  record get-a-specific-contact-list-params {
+    /// Your contact list id you want to access.
+    list-id: string
+  }
+  get-a-specific-contact-list: func(params: get-a-specific-contact-list-params) -> result<string, string>;
+
+  /// Update a specific contact list
+  record update-a-specific-contact-list-params {
+    /// Your contact list id you want to access.
+    list-id: string,
+    /// Your new contact list name.
+    list-name: option<string>
+  }
+  update-a-specific-contact-list: func(params: update-a-specific-contact-list-params) -> result<string, string>;
+
+  /// Delete a specific contact list
+  record delete-a-specific-contact-list-params {
+    /// Your contact list id you want to access.
+    list-id: string
+  }
+  delete-a-specific-contact-list: func(params: delete-a-specific-contact-list-params) -> result<string, string>;
+
+  /// Export Contacts List
+  record export-contacts-list-params {
+    /// Your export filename.
+    filename: string,
+    /// Automatically added
+    list-id: string
+  }
+  export-contacts-list: func(params: export-contacts-list-params) -> result<string, string>;
+
+  /// Import Contacts to List
+  record import-contacts-to-list-params {
+    /// Your contact list id you want to access.
+    list-id: string,
+    /// Your field order for your contact import file.
+    field-order: list<string>,
+    /// Path to your CSV import file.
+    file-url: string
+  }
+  import-contacts-to-list: func(params: import-contacts-to-list-params) -> result<string, string>;
+
+  /// Show CSV Import File Preview
+  record show-csv-import-file-preview-params {
+    /// Your contact list id.
+    list-id: string,
+    /// Path to your CSV import file.
+    file-url: string
+  }
+  show-csv-import-file-preview: func(params: show-csv-import-file-preview-params) -> result<string, string>;
+
+  /// Get List of Acceptable Import Fields
+  record get-list-of-acceptable-import-fields-params {
+    /// Automatically added
+    list-id: string
+  }
+  get-list-of-acceptable-import-fields: func(params: get-list-of-acceptable-import-fields-params) -> result<string, string>;
+
+  /// Remove Duplicate Contacts
+  record remove-duplicate-contacts-params {
+    /// Your contact list id.
+    list-id: string,
+    /// List of Contact's fields to be used for checking.
+    fields: list<string>
+  }
+  remove-duplicate-contacts: func(params: remove-duplicate-contacts-params) -> result<string, string>;
+
+}
+
+interface contacts {
+  /// Transfer a Contact
+  record transfer-a-contact-params {
+    /// From list id.
+    from-list-id: string,
+    /// Contact ID.
+    contact-id: string,
+    /// To list id.
+    to-list-id: string
+  }
+  transfer-a-contact: func(params: transfer-a-contact-params) -> result<string, string>;
+
+  /// Get all Contacts in a List
+  record get-all-contacts-in-a-list-params {
+    /// Your contact list id where your contacts belong.
+    list-id: string
+  }
+  get-all-contacts-in-a-list: func(params: get-all-contacts-in-a-list-params) -> result<string, string>;
+
+  /// Create a new contact
+  record create-a-new-contact-params {
+    /// Your contact list id where your contact be associated.
+    list-id: string,
+    /// Contact city.
+    address-city: option<string>,
+    /// Contact two-letter country code defined in ISO 3166.
+    address-country: option<string>,
+    /// Contact address line 1.
+    address-line-v1: option<string>,
+    /// Contact address line 2.
+    address-line-v2: option<string>,
+    /// Contact postal code.
+    address-postal-code: option<string>,
+    /// Contact state.
+    address-state: option<string>,
+    /// Contact custom 1 text.
+    custom-v1: option<string>,
+    /// Contact custom 2 text.
+    custom-v2: option<string>,
+    /// Contact custom 3 text.
+    custom-v3: option<string>,
+    /// Contact custom 4 text.
+    custom-v4: option<string>,
+    /// Contact email.
+    email: option<string>,
+    /// Contact fax number.
+    fax-number: option<string>,
+    /// Contact firstname.
+    first-name: option<string>,
+    /// Contact lastname.
+    last-name: option<string>,
+    /// Your organization name.
+    organization-name: option<string>,
+    /// Contact phone number in E.164 format.
+    phone-number: string
+  }
+  create-a-new-contact: func(params: create-a-new-contact-params) -> result<string, string>;
+
+  /// Get a specific contact
+  record get-a-specific-contact-params {
+    /// Your contact list id you want to access.
+    list-id: string,
+    /// Your contact id you want to access.
+    contact-id: string
+  }
+  get-a-specific-contact: func(params: get-a-specific-contact-params) -> result<string, string>;
+
+  /// Update a specific contact
+  record update-a-specific-contact-params {
+    /// Contact list id you want to access.
+    list-id: string,
+    /// Contact id you want to access.
+    contact-id: string,
+    /// Contact city.
+    address-city: option<string>,
+    /// Contact two-letter country code defined in ISO 3166.
+    address-country: option<string>,
+    /// Contact address line 1.
+    address-line-v1: option<string>,
+    /// Contact address line 2.
+    address-line-v2: option<string>,
+    /// Contact postal code.
+    address-postal-code: option<string>,
+    /// Contact state.
+    address-state: option<string>,
+    /// Contact custom 1 text.
+    custom-v1: option<string>,
+    /// Contact custom 2 text.
+    custom-v2: option<string>,
+    /// Contact custom 3 text.
+    custom-v3: option<string>,
+    /// Contact custom 4 text.
+    custom-v4: option<string>,
+    /// Contact email.
+    email: option<string>,
+    /// Contact fax number.
+    fax-number: option<string>,
+    /// Contact firstname.
+    first-name: option<string>,
+    /// Contact lastname.
+    last-name: option<string>,
+    /// Contact organization name.
+    organization-name: option<string>,
+    /// Contact phone number in E.164 format.
+    phone-number: option<string>
+  }
+  update-a-specific-contact: func(params: update-a-specific-contact-params) -> result<string, string>;
+
+  /// Delete a specific contact
+  record delete-a-specific-contact-params {
+    /// Your contact list id you want to access.
+    list-id: string,
+    /// Your contact id you want to access.
+    contact-id: string
+  }
+  delete-a-specific-contact: func(params: delete-a-specific-contact-params) -> result<string, string>;
+
+  /// Remove Opted Out Contacts
+  record remove-opted-out-contacts-params {
+    /// Your contact list id.
+    list-id: string,
+    /// Your opt out list id.
+    opt-out-list-id: string
+  }
+  remove-opted-out-contacts: func(params: remove-opted-out-contacts-params) -> result<string, string>;
+
+}
+
+interface mms {
+  /// Cancel All MMS
+  cancel-all-mms: func() -> result<string, string>;
+
+  /// Export MMS History
+  record export-mms-history-params {
+    /// Your export filename.
+    filename: string
+  }
+  export-mms-history: func(params: export-mms-history-params) -> result<string, string>;
+
+  /// Get MMS History
+  record get-mms-history-params {
+    /// A custom query.
+    q: string,
+    /// Sort records by.
+    order-by: string,
+    /// [Unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp) (from) used to show records by date.
+    date-from: string,
+    /// [Unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp) (to) used to show records by date.
+    date-to: string
+  }
+  get-mms-history: func(params: get-mms-history-params) -> result<string, string>;
+
+  /// Get Price
+  record get-price-params {
+    /// Your message.
+    body: string,
+    /// Recipient country.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>,
+    /// An email address where the reply should be emailed to. If omitted, the reply will be emailed back to the user who sent the outgoing SMS.
+    from-email: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'.
+    list-id: option<f64>,
+    /// Media file you want to send.
+    media-file: string,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Subject line. Maximum 20 characters.
+    subject: string,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string
+  }
+  get-price: func(params: get-price-params) -> result<string, string>;
+
+  /// Get all Delivery Receipts
+  get-all-delivery-receipts: func() -> result<string, string>;
+
+  /// Mark Receipts As Read
+  mark-receipts-as-read: func() -> result<string, string>;
+
+  /// Get Delivery Receipt
+  record get-delivery-receipt-params {
+    /// Message ID.
+    message-id: string
+  }
+  get-delivery-receipt: func(params: get-delivery-receipt-params) -> result<string, string>;
+
+  /// Send MMS
+  record send-mms-params {
+    /// Your message.
+    body: string,
+    /// Recipient country.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// The number to send from. Either leave blank or use a ClickSend number only.
+    from-op: option<string>,
+    /// An email address where the reply should be emailed to. If omitted, the reply will be emailed back to the user who sent the outgoing SMS.
+    from-email: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'.
+    list-id: option<f64>,
+    /// Media file you want to send.
+    media-file: string,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Subject line. Maximum 20 characters.
+    subject: string,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string
+  }
+  send-mms: func(params: send-mms-params) -> result<string, string>;
+
+  /// Cancel MMS
+  record cancel-mms-params {
+    /// Message ID.
+    message-id: string
+  }
+  cancel-mms: func(params: cancel-mms-params) -> result<string, string>;
+
+}
+
+interface numbers {
+  /// Get all Dedicated Numbers
+  get-all-dedicated-numbers: func() -> result<string, string>;
+
+  /// Buy dedicated number
+  record buy-dedicated-number-params {
+    /// Your phone number in E.164 format.
+    dedicated-number: string
+  }
+  buy-dedicated-number: func(params: buy-dedicated-number-params) -> result<string, string>;
+
+  /// Search Dedicated Numbers by Country
+  record search-dedicated-numbers-by-country-params {
+    /// Your preferred country.
+    country: string,
+    /// Your search pattern or query.
+    search: string,
+    /// Your strategy for searching, 0 = starts with, 1 = anywhere, 2 = ends with.
+    search-type: string
+  }
+  search-dedicated-numbers-by-country: func(params: search-dedicated-numbers-by-country-params) -> result<string, string>;
+
+}
+
+interface post-direct-mail {
+  /// List Direct Mail Campaigns
+  list-direct-mail-campaigns: func() -> result<string, string>;
+
+  /// Calculate Direct Mail Campaign Price
+  record calculate-direct-mail-campaign-price-params {
+    /// List of location where you want to send your campaign, and the quantity per location.
+    areas: option<list<string>>,
+    /// Campaign file urls. You can submit max 2 file urls.
+    file-urls: list<string>,
+    /// Campaign name.
+    name: string,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Campaign file size. It can be A5 or DL.
+    size: string,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>
+  }
+  calculate-direct-mail-campaign-price: func(params: calculate-direct-mail-campaign-price-params) -> result<string, string>;
+
+  /// Create New Campaign
+  record create-new-campaign-params {
+    /// List of location where you want to send your campaign, and the quantity per location.
+    areas: option<list<string>>,
+    /// Campaign file urls. You can submit max 2 file urls.
+    file-urls: list<string>,
+    /// Campaign name.
+    name: string,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Campaign file size. It can be A5 or DL.
+    size: string,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>
+  }
+  create-new-campaign: func(params: create-new-campaign-params) -> result<string, string>;
+
+  /// Search Locations
+  record search-locations-params {
+    /// Country code.
+    country: string,
+    /// A postal code or place name.
+    query: string
+  }
+  search-locations: func(params: search-locations-params) -> result<string, string>;
+
+}
+
+interface post-address-detection {
+  /// Detect Address
+  record detect-address-params {
+    body: option<string>
+  }
+  detect-address: func(params: detect-address-params) -> result<string, string>;
+
+}
+
+interface post-letter {
+  /// Get Post Letter History
+  get-post-letter-history: func() -> result<string, string>;
+
+  /// Export Post Letter History
+  record export-post-letter-history-params {
+    /// Your export filename.
+    filename: string
+  }
+  export-post-letter-history: func(params: export-post-letter-history-params) -> result<string, string>;
+
+  /// Calculate Price
+  record post-post-letters-price-params {
+    /// Is it in colored?
+    colour: option<f64>,
+    /// Is it in duplex?
+    duplex: option<f64>,
+    /// Your URL to your PDF file.
+    file-url: string,
+    /// Is it priority? 0 = Not Priority, 1 = Priority.
+    priority-post: option<f64>,
+    /// Your recipients.
+    recipients: option<list<string>>,
+    /// Whether you used our template or not ([More Info](http://help.clicksend.com/13996-Post/post-letter-template)).
+    template-used: option<f64>
+  }
+  post-post-letters-price: func(params: post-post-letters-price-params) -> result<string, string>;
+
+  /// Send Post Letter
+  record send-post-letter-params {
+    /// Is it in colour? 0 = Black and White, 1 = Colour.
+    colour: option<f64>,
+    /// Is it in duplex? 0 = Simplex, 1 = Duplex.
+    duplex: option<f64>,
+    /// Your URL to your PDF file.
+    file-url: string,
+    /// Is it priority? 0 = Not Priority, 1 = Priority.
+    priority-post: option<f64>,
+    /// Your recipients.
+    recipients: option<list<string>>,
+    /// Whether you used our template or not ([More Info](http://help.clicksend.com/13996-Post/post-letter-template)).
+    template-used: option<f64>
+  }
+  send-post-letter: func(params: send-post-letter-params) -> result<string, string>;
+
+  /// Get List of Post Return Addresses
+  get-list-of-post-return-addresses: func() -> result<string, string>;
+
+  /// Create a Post Return Address
+  record create-a-post-return-address-params {
+    /// Your address city.
+    address-city: string,
+    /// Two-letter country code defined in ISO 3166.
+    address-country: string,
+    /// Your address line 1.
+    address-line-v1: string,
+    /// Your address line 2.
+    address-line-v2: option<string>,
+    /// Your address name.
+    address-name: string,
+    /// Your address postal code.
+    address-postal-code: f64,
+    /// Your address state.
+    address-state: string
+  }
+  create-a-post-return-address: func(params: create-a-post-return-address-params) -> result<string, string>;
+
+  /// Get Post Return Address
+  record get-post-return-address-params {
+    /// Your return address id.
+    return-address-id: string
+  }
+  get-post-return-address: func(params: get-post-return-address-params) -> result<string, string>;
+
+  /// Update Post Return Address
+  record update-post-return-address-params {
+    /// Your return address id.
+    return-address-id: string,
+    /// Your address city.
+    address-city: string,
+    /// Two-letter country code defined in ISO 3166.
+    address-country: string,
+    /// Your address line 1.
+    address-line-v1: string,
+    /// Your address line 2.
+    address-line-v2: option<string>,
+    /// Your address name.
+    address-name: string,
+    /// Your address postal code.
+    address-postal-code: f64,
+    /// Your address state.
+    address-state: string
+  }
+  update-post-return-address: func(params: update-post-return-address-params) -> result<string, string>;
+
+  /// Delete Post Return Address
+  record delete-post-return-address-params {
+    /// Your return address id.
+    return-address-id: string
+  }
+  delete-post-return-address: func(params: delete-post-return-address-params) -> result<string, string>;
+
+}
+
+interface postcards {
+  /// Export Postcard History
+  record export-postcard-history-params {
+    /// Filename for the export file.
+    filename: string
+  }
+  export-postcard-history: func(params: export-postcard-history-params) -> result<string, string>;
+
+  /// Get Postcard History
+  get-postcard-history: func() -> result<string, string>;
+
+  /// Calculate Pricing
+  record calculate-pricing-params {
+    /// Postcard file urls. You can submit max 2 file urls.
+    file-urls: list<string>,
+    /// Your recipients.
+    recipients: list<string>
+  }
+  calculate-pricing: func(params: calculate-pricing-params) -> result<string, string>;
+
+  /// Send Postcard
+  record send-postcard-params {
+    /// Postcard file urls. You can submit max 2 file urls.
+    file-urls: list<string>,
+    /// Your recipients.
+    recipients: list<string>
+  }
+  send-postcard: func(params: send-postcard-params) -> result<string, string>;
+
+}
+
+interface pricing {
+  /// Get Country Pricing
+  record get-country-pricing-params {
+    /// Two-letter representation of the country.
+    country: string,
+    /// Three-letter representation of the currency.
+    currency: string
+  }
+  get-country-pricing: func(params: get-country-pricing-params) -> result<string, string>;
+
+}
+
+interface account-recharge {
+  /// Get Credit Card info
+  get-credit-card-info: func() -> result<string, string>;
+
+  /// Update Credit Card info
+  record update-credit-card-info-params {
+    /// Your bank's name that issued the credit card.
+    bank-name: string,
+    /// Your CVC digits.
+    cvc: f64,
+    /// Your credit card expiry month.
+    expiry-month: f64,
+    /// Your credit card expiry year.
+    expiry-year: option<f64>,
+    /// Your name.
+    name: string,
+    /// Your credit card no.
+    number: option<f64>
+  }
+  update-credit-card-info: func(params: update-credit-card-info-params) -> result<string, string>;
+
+  /// List of Packages
+  record list-of-packages-params {
+    /// Your country.
+    country: string
+  }
+  list-of-packages: func(params: list-of-packages-params) -> result<string, string>;
+
+  /// Purchase a Package
+  record purchase-a-package-params {
+    /// Your package id.
+    package-id: string
+  }
+  purchase-a-package: func(params: purchase-a-package-params) -> result<string, string>;
+
+  /// Get Transactions
+  get-transactions: func() -> result<string, string>;
+
+  /// Get a specific transaction
+  record get-a-specific-transaction-params {
+    /// 1c65-47fa-aea2-3ded9ed57557 (number, required) - Your transction id.
+    transaction-id: string
+  }
+  get-a-specific-transaction: func(params: get-a-specific-transaction-params) -> result<string, string>;
+
+}
+
+interface referral-accounts {
+  /// Get List of Referral Accounts
+  get-list-of-referral-accounts: func() -> result<string, string>;
+
+}
+
+interface reseller {
+  /// Get Reseller Setting
+  get-reseller-setting: func() -> result<string, string>;
+
+  /// Update Reseller Setting
+  record update-reseller-setting-params {
+    /// Allow public signups.
+    allow-public-signups: f64,
+    /// Colour navigation.
+    colour-navigation: string,
+    /// Company name.
+    company-name: string,
+    /// Default margin.
+    default-margin: f64,
+    /// Default margin numbers.
+    default-margin-numbers: f64,
+    /// Logo URL (dark)
+    logo-url-dark: string,
+    /// Logo URL (light)
+    logo-url-light: string,
+    /// Subdomain.
+    subdomain: string,
+    /// Trial balance.
+    trial-balance: f64
+  }
+  update-reseller-setting: func(params: update-reseller-setting-params) -> result<string, string>;
+
+  /// Reseller By Subdomain
+  record reseller-by-subdomain-params {
+    /// Subdomain
+    subdomain: string
+  }
+  reseller-by-subdomain: func(params: reseller-by-subdomain-params) -> result<string, string>;
+
+}
+
+interface reseller-accounts {
+  /// List of Reseller Accounts
+  list-of-reseller-accounts: func() -> result<string, string>;
+
+  /// Create Reseller Account
+  record create-reseller-account-params {
+    /// Your delivery to value.
+    account-name: string,
+    /// Client country.
+    country: string,
+    /// Your password.
+    password: string,
+    /// Your email.
+    user-email: string,
+    /// Your first name.
+    user-first-name: string,
+    /// Your last name.
+    user-last-name: string,
+    /// Your phone number in E.164 format.
+    user-phone: string,
+    /// Your username.
+    username: string
+  }
+  create-reseller-account: func(params: create-reseller-account-params) -> result<string, string>;
+
+  /// Create Reseller Account - Public
+  record create-reseller-account-public-params {
+    /// Your delivery to value.
+    account-name: string,
+    /// Client country.
+    country: string,
+    /// Your password.
+    password: string,
+    /// Reseller User ID.
+    reseller-user-id: f64,
+    /// Your email.
+    user-email: string,
+    /// Your first name.
+    user-first-name: string,
+    /// Your last name.
+    user-last-name: string,
+    /// Your phone number in E.164 format.
+    user-phone: string,
+    /// Your username.
+    username: string
+  }
+  create-reseller-account-public: func(params: create-reseller-account-public-params) -> result<string, string>;
+
+  /// Get Reseller Account
+  record get-reseller-account-params {
+    /// The client user id.
+    client-user-id: string
+  }
+  get-reseller-account: func(params: get-reseller-account-params) -> result<string, string>;
+
+  /// Update Reseller Account
+  record update-reseller-account-params {
+    /// Your client user id.
+    client-user-id: string,
+    /// Your delivery to value.
+    account-name: string,
+    /// Client country.
+    country: string,
+    /// Your password.
+    password: string,
+    /// Your email.
+    user-email: string,
+    /// Your first name.
+    user-first-name: string,
+    /// Your last name.
+    user-last-name: string,
+    /// Your phone number in E.164 format.
+    user-phone: string,
+    /// Your username.
+    username: string
+  }
+  update-reseller-account: func(params: update-reseller-account-params) -> result<string, string>;
+
+  /// Transfer Credit
+  record transfer-credit-params {
+    /// Your amount.
+    balance: f64,
+    /// Your client user id.
+    client-user-id: string,
+    /// Your currency.
+    currency: string
+  }
+  transfer-credit: func(params: transfer-credit-params) -> result<string, string>;
+
+}
+
+interface sdk {
+  /// SDK Download
+  record sdk-download-params {
+    /// Supported types.
+    type-op: string
+  }
+  sdk-download: func(params: sdk-download-params) -> result<string, string>;
+
+}
+
+interface search {
+  /// Search Contacts-Lists
+  record search-contacts-lists-params {
+    /// Your keyword or query.
+    q: string
+  }
+  search-contacts-lists: func(params: search-contacts-lists-params) -> result<string, string>;
+
+}
+
+interface sms-campaigns {
+  /// Get list of SMS Campaigns
+  get-list-of-sms-campaigns: func() -> result<string, string>;
+
+  /// Calculate Price for SMS Campaign
+  record calculate-price-for-sms-campaign-params {
+    /// Your campaign message.
+    body: string,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>,
+    /// Your list id.
+    list-id: f64,
+    /// Your campaign name.
+    name: string
+  }
+  calculate-price-for-sms-campaign: func(params: calculate-price-for-sms-campaign-params) -> result<string, string>;
+
+  /// Use Short URL
+  record use-short-url-params {
+    /// Your campaign message.
+    body: string,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>,
+    /// Your list id.
+    list-id: f64,
+    /// Your campaign name.
+    name: string,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// The URL you want to shorten (only required when using this feature). This must be only `http` or `https`.
+    url-to-shorten: string
+  }
+  use-short-url: func(params: use-short-url-params) -> result<string, string>;
+
+  /// Link Tracking Export
+  record link-tracking-export-params {
+    /// Your campaign id.
+    campaign-id: string,
+    /// Your export filename.
+    filename: string
+  }
+  link-tracking-export: func(params: link-tracking-export-params) -> result<string, string>;
+
+  /// Link Statistics
+  record link-statistics-params {
+    /// Your campaign id.
+    campaign-id: string
+  }
+  link-statistics: func(params: link-statistics-params) -> result<string, string>;
+
+  /// Link Tracking
+  record link-tracking-params {
+    /// Your campaign id.
+    campaign-id: string
+  }
+  link-tracking: func(params: link-tracking-params) -> result<string, string>;
+
+  /// Get SMS Campaign
+  record get-sms-campaign-params {
+    /// Your SMS campaign id.
+    sms-campaign-id: string
+  }
+  get-sms-campaign: func(params: get-sms-campaign-params) -> result<string, string>;
+
+  /// Update an SMS Campaign
+  record update-an-sms-campaign-params {
+    /// Your SMS Campaign id.
+    sms-campaign-id: string,
+    /// Your campaign message.
+    body: string,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>,
+    /// Your list id.
+    list-id: f64,
+    /// Your campaign name.
+    name: string,
+    /// Leave blank for immediate delivery. Will replace existing schedule (even if left blank). Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>
+  }
+  update-an-sms-campaign: func(params: update-an-sms-campaign-params) -> result<string, string>;
+
+  /// Cancel an SMS Campaign
+  record cancel-an-sms-campaign-params {
+    /// Your SMS Campaign id.
+    sms-campaign-id: string
+  }
+  cancel-an-sms-campaign: func(params: cancel-an-sms-campaign-params) -> result<string, string>;
+
+}
+
+interface sms {
+  /// Cancel all Scheduled Messages
+  cancel-all-scheduled-messages: func() -> result<string, string>;
+
+  /// Export SMS History
+  record export-sms-history-params {
+    /// Your export filename.
+    filename: string
+  }
+  export-sms-history: func(params: export-sms-history-params) -> result<string, string>;
+
+  /// Get all History
+  record get-all-history-params {
+    /// Timestamp (from) used to show records by date.
+    date-from: string,
+    /// Timestamp (to) used to show recrods by date.
+    date-to: string
+  }
+  get-all-history: func(params: get-all-history-params) -> result<string, string>;
+
+  /// Get all Inbound SMS - Pull
+  get-all-inbound-sms-pull: func() -> result<string, string>;
+
+  /// Add a Test Inbound SMS
+  record add-a-test-inbound-sms-params {
+    /// Your URL if using the push option or 'poll' if using the pull option.
+    url: string
+  }
+  add-a-test-inbound-sms: func(params: add-a-test-inbound-sms-params) -> result<string, string>;
+
+  /// Mark all Inbound SMS as read
+  record mark-all-inbound-sms-as-read-params {
+    /// An optional timestamp - mark all as read before this timestamp. If not given, all messages will be marked as read.
+    date-before: f64
+  }
+  mark-all-inbound-sms-as-read: func(params: mark-all-inbound-sms-as-read-params) -> result<string, string>;
+
+  /// Mark a specific Inbound SMS as read
+  record mark-a-specific-inbound-sms-as-read-params {
+    /// Message ID. Must be a valid GUID.
+    message-id: string
+  }
+  mark-a-specific-inbound-sms-as-read: func(params: mark-a-specific-inbound-sms-as-read-params) -> result<string, string>;
+
+  /// Get Specific Inbound - Pull
+  record get-specific-inbound-pull-params {
+    /// Message ID of the original outbound message, to which the inbound message is a reply. Must be a valid GUID.
+    outbound-message-id: string
+  }
+  get-specific-inbound-pull: func(params: get-specific-inbound-pull-params) -> result<string, string>;
+
+  /// Calculate Price
+  record post-sms-price-params {
+    /// Your message.
+    body: string,
+    /// Recipient country.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'.
+    list-id: option<f64>,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string
+  }
+  post-sms-price: func(params: post-sms-price-params) -> result<string, string>;
+
+  /// Get all Delivery Receipts
+  get-sms-receipts: func() -> result<string, string>;
+
+  /// Add a Test Delivery Receipt
+  record post-sms-receipts-params {
+    /// Your URL if using the push option or 'poll' if using the pull option.
+    url: string
+  }
+  post-sms-receipts: func(params: post-sms-receipts-params) -> result<string, string>;
+
+  /// Mark Delivery Receipts as read
+  record mark-delivery-receipts-as-read-params {
+    /// An optional timestamp - mark all as read before this timestamp. If not given, all receipts will be marked as read.
+    date-before: option<f64>
+  }
+  mark-delivery-receipts-as-read: func(params: mark-delivery-receipts-as-read-params) -> result<string, string>;
+
+  /// Get a Specific Delivery Receipt
+  record get-a-specific-delivery-receipt-params {
+    /// Your message id.
+    message-id: string
+  }
+  get-a-specific-delivery-receipt: func(params: get-a-specific-delivery-receipt-params) -> result<string, string>;
+
+  /// Send an SMS
+  record send-an-sms-params {
+    /// Your message.
+    body: string,
+    /// Recipient country.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>,
+    /// An email address where the reply should be emailed to. If omitted, the reply will be emailed back to the user who sent the outgoing SMS.
+    from-email: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'.
+    list-id: option<f64>,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string
+  }
+  send-an-sms: func(params: send-an-sms-params) -> result<string, string>;
+
+  /// Cancel a Scheduled Message
+  record cancel-a-scheduled-message-params {
+    /// B7CE432193CD-0753597B7293 (string, required) - The message ID you want to cancel.
+    message-id: string
+  }
+  cancel-a-scheduled-message: func(params: cancel-a-scheduled-message-params) -> result<string, string>;
+
+}
+
+interface email-to-sms-allowed-address {
+  /// List of Email-to-SMS Allowed Address
+  list-of-email-to-sms-allowed-address: func() -> result<string, string>;
+
+  /// Create Email to SMS Allowed Address
+  record create-email-to-sms-allowed-address-params {
+    /// Your email address.
+    email-address: string,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>
+  }
+  create-email-to-sms-allowed-address: func(params: create-email-to-sms-allowed-address-params) -> result<string, string>;
+
+  /// Get specific Email-to-SMS Allowed Address
+  record get-specific-email-to-sms-allowed-address-params {
+    /// Your email address id.
+    email-address-id: string
+  }
+  get-specific-email-to-sms-allowed-address: func(params: get-specific-email-to-sms-allowed-address-params) -> result<string, string>;
+
+  /// Update Email-to-SMS Allowed Address
+  record update-email-to-sms-allowed-address-params {
+    /// Your email address id.
+    email-address-id: string,
+    /// Your email address.
+    email-address: string,
+    /// Your sender id - [more info](http://help.clicksend.com/SMS/what-is-a-sender-id-or-sender-number).
+    from-op: option<string>
+  }
+  update-email-to-sms-allowed-address: func(params: update-email-to-sms-allowed-address-params) -> result<string, string>;
+
+  /// Delete Email-to-SMS Allowed Address
+  record delete-email-to-sms-allowed-address-params {
+    /// Your email address id.
+    email-address-id: string
+  }
+  delete-email-to-sms-allowed-address: func(params: delete-email-to-sms-allowed-address-params) -> result<string, string>;
+
+}
+
+interface email-to-sms-stripped-strings {
+  /// List Stripped Strings
+  list-stripped-strings: func() -> result<string, string>;
+
+  /// Create Stripped String
+  record create-stripped-string-params {
+    /// The string that you want to strip from the body of email.
+    strip-string: string
+  }
+  create-stripped-string: func(params: create-stripped-string-params) -> result<string, string>;
+
+  /// Find Specific Stripped String
+  record find-specific-stripped-string-params {
+    /// The rule id you want to access.
+    rule-id: string
+  }
+  find-specific-stripped-string: func(params: find-specific-stripped-string-params) -> result<string, string>;
+
+  /// Update Stripped String
+  record update-stripped-string-params {
+    /// The rule id you want to access.
+    rule-id: string,
+    /// The string that you want to strip from the body of email.
+    strip-string: option<string>
+  }
+  update-stripped-string: func(params: update-stripped-string-params) -> result<string, string>;
+
+  /// Delete Stripped String
+  record delete-stripped-string-params {
+    /// The rule id you want to access.
+    rule-id: string
+  }
+  delete-stripped-string: func(params: delete-stripped-string-params) -> result<string, string>;
+
+}
+
+interface sms-templates {
+  /// List of Templates
+  list-of-templates: func() -> result<string, string>;
+
+  /// Create a Template
+  record create-a-template-params {
+    /// Your template body.
+    body: string,
+    /// Your template name.
+    template-name: string
+  }
+  create-a-template: func(params: create-a-template-params) -> result<string, string>;
+
+  /// Update a Template
+  record update-a-template-params {
+    /// Your template id.
+    template-id: string,
+    /// Your template body.
+    body: string,
+    /// Your template name.
+    template-name: string
+  }
+  update-a-template: func(params: update-a-template-params) -> result<string, string>;
+
+  /// Delete a Template
+  record delete-a-template-params {
+    /// Your template id.
+    template-id: string
+  }
+  delete-a-template: func(params: delete-a-template-params) -> result<string, string>;
+
+}
+
+interface statistics {
+  /// Get SMS Statistics
+  get-sms-statistics: func() -> result<string, string>;
+
+  /// Get Voice Statistics
+  get-voice-statistics: func() -> result<string, string>;
+
+}
+
+interface subaccounts {
+  /// Get all Subaccounts
+  get-all-subaccounts: func() -> result<string, string>;
+
+  /// Create a new subaccount
+  record create-a-new-subaccount-params {
+    /// Your access billing flag value, must be 1 or 0.
+    access-billing: option<f64>,
+    /// Your access contacts flag value, must be 1 or 0.
+    access-contacts: option<f64>,
+    /// Your access reporting flag value, must be 1 or 0.
+    access-reporting: option<f64>,
+    /// Your access settings flag value, must be 1 or 0.
+    access-settings: option<f64>,
+    /// Your access users flag value, must be 1 or 0.
+    access-users: option<f64>,
+    /// Your new api username.
+    api-username: string,
+    /// Your new email.
+    email: string,
+    /// Your firstname.
+    first-name: string,
+    /// Your lastname.
+    last-name: string,
+    /// Your new password.
+    password: string,
+    /// Your phone number in E.164 format.
+    phone-number: string,
+    /// Your share campaigns flag value, must be 1 or 0.
+    share-campaigns: option<f64>
+  }
+  create-a-new-subaccount: func(params: create-a-new-subaccount-params) -> result<string, string>;
+
+  /// Get a specific subaccount
+  record get-a-specific-subaccount-params {
+    /// The subaccount ID you want to access.
+    subaccount-id: string
+  }
+  get-a-specific-subaccount: func(params: get-a-specific-subaccount-params) -> result<string, string>;
+
+  /// Update a specific subaccount
+  record update-a-specific-subaccount-params {
+    /// The subaccount ID you want to access.
+    subaccount-id: string,
+    /// Your access billing flag value, must be 1 or 0.
+    access-billing: option<f64>,
+    /// Your access contacts flag value, must be 1 or 0.
+    access-contacts: option<f64>,
+    /// Your access reporting flag value, must be 1 or 0.
+    access-reporting: option<f64>,
+    /// Your access settings flag value, must be 1 or 0.
+    access-settings: option<f64>,
+    /// Your access users flag value, must be 1 or 0.
+    access-users: option<f64>,
+    /// Your new email.
+    email: option<string>,
+    /// Your firstname.
+    first-name: option<string>,
+    /// Your lastname.
+    last-name: option<string>,
+    /// Your new password.
+    password: option<string>,
+    /// Your phone number in E.164 format.
+    phone-number: option<string>,
+    /// Your share campaigns flag value, must be 1 or 0.
+    share-campaigns: option<f64>
+  }
+  update-a-specific-subaccount: func(params: update-a-specific-subaccount-params) -> result<string, string>;
+
+  /// Delete a specific subaccount
+  record delete-a-specific-subaccount-params {
+    /// The subaccount ID you want to access.
+    subaccount-id: string
+  }
+  delete-a-specific-subaccount: func(params: delete-a-specific-subaccount-params) -> result<string, string>;
+
+  /// Regenerate API Key
+  record regenerate-api-key-params {
+    /// The ID of the subaccount to be accessed.
+    subaccount-id: string
+  }
+  regenerate-api-key: func(params: regenerate-api-key-params) -> result<string, string>;
+
+}
+
+interface timezones {
+  /// Get Timezones
+  get-timezones: func() -> result<string, string>;
+
+}
+
+interface uploads {
+  /// Upload a file
+  record upload-a-file-params {
+    body: option<string>
+  }
+  upload-a-file: func(params: upload-a-file-params) -> result<string, string>;
+
+}
+
+interface voice {
+  /// Cancel all Voice Calls
+  cancel-all-voice-calls: func() -> result<string, string>;
+
+  /// Export Voice History
+  record export-voice-history-params {
+    /// Your export filename.
+    filename: string
+  }
+  export-voice-history: func(params: export-voice-history-params) -> result<string, string>;
+
+  /// Get Voice History
+  record get-voice-history-params {
+    /// Timestamp (from) used to show records by date.
+    date-from: string,
+    /// Timestamp (to) used to show recrods by date.
+    date-to: string
+  }
+  get-voice-history: func(params: get-voice-history-params) -> result<string, string>;
+
+  /// Voice Languages
+  voice-languages: func() -> result<string, string>;
+
+  /// Calculate Price
+  record post-voice-price-params {
+    /// Your message.
+    body: string,
+    /// The country of the recipient.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// au (string, required) - See section on available languages.
+    lang: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'.
+    list-id: option<f64>,
+    /// Whether you want to receive a keypress from the call recipient (1 for on, 0 [default] for off)
+    require-input: option<f64>,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string,
+    /// Either 'female' or 'male'.
+    voice: string
+  }
+  post-voice-price: func(params: post-voice-price-params) -> result<string, string>;
+
+  /// Get Voice receipts
+  get-voice-receipts: func() -> result<string, string>;
+
+  /// Add a Test Delivery Receipt
+  record post-voice-receipts-params {
+    /// Your URL if using the push option or 'poll' if using the pull option.
+    url: string
+  }
+  post-voice-receipts: func(params: post-voice-receipts-params) -> result<string, string>;
+
+  /// Marked Voice Receipts as Read
+  record marked-voice-receipts-as-read-params {
+    /// An optional [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp) - mark all as read before this timestamp. If not given, all receipts will be marked as read.
+    date-before: string
+  }
+  marked-voice-receipts-as-read: func(params: marked-voice-receipts-as-read-params) -> result<string, string>;
+
+  /// Get Specific Voice Receipt
+  record get-specific-voice-receipt-params {
+    /// 3055-45F1-9B79-F2C43509FD16 (string, required) - The voice receipt message id.
+    message-id: string
+  }
+  get-specific-voice-receipt: func(params: get-specific-voice-receipt-params) -> result<string, string>;
+
+  /// Send a Voice Call
+  record send-a-voice-call-params {
+    /// Your message.
+    body: string,
+    /// The country of the recipient.
+    country: option<string>,
+    /// Your reference. Will be passed back with all replies and delivery reports.
+    custom-string: option<string>,
+    /// au (string, required) - See section on available languages.
+    lang: option<string>,
+    /// Your list ID if sending to a whole list. Can be used instead of 'to'. Will override 'to' if both are used.
+    list-id: option<f64>,
+    /// Whether to attempt to detect an answering machine or voicemail service and leave a message (1 for on, 0 [default] for off)
+    machine-detection: option<f64>,
+    /// Whether you want to receive a keypress from the call recipient (1 for on, 0 [default] for off)
+    require-input: option<f64>,
+    /// Leave blank for immediate delivery. Your schedule time as a [unix timestamp](http://help.clicksend.com/what-is-a-unix-timestamp).
+    schedule: option<f64>,
+    /// Your method of sending e.g. 'wordpress', 'php', 'c#'.
+    source: option<string>,
+    /// Recipient number in E.164 format or local format ([more info](https://help.clicksend.com/SMS/what-format-does-the-recipient-phone-number-need-to-be-in)).
+    to: string,
+    /// Either 'female' or 'male'.
+    voice: string
+  }
+  send-a-voice-call: func(params: send-a-voice-call-params) -> result<string, string>;
+
+  /// Cancel a Specific Voice Call
+  record cancel-a-specific-voice-call-params {
+    /// Your voice message id.
+    message-id: string
+  }
+  cancel-a-specific-voice-call: func(params: cancel-a-specific-voice-call-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export account;
+  export automation-rules;
+  export contact-suggestions;
+  export countries;
+  export delivery-issues;
+  export email-marketing;
+  export transactional-email;
+  export fax;
+  export forgot-account;
+  export contact-lists;
+  export contacts;
+  export mms;
+  export numbers;
+  export post-direct-mail;
+  export post-address-detection;
+  export post-letter;
+  export postcards;
+  export pricing;
+  export account-recharge;
+  export referral-accounts;
+  export reseller;
+  export reseller-accounts;
+  export sdk;
+  export search;
+  export sms-campaigns;
+  export sms;
+  export email-to-sms-allowed-address;
+  export email-to-sms-stripped-strings;
+  export sms-templates;
+  export statistics;
+  export subaccounts;
+  export timezones;
+  export uploads;
+  export voice;
+}

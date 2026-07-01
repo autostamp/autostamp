@@ -1,0 +1,23 @@
+[package]
+name = "autostamp:shutterstock"
+version = "0.2.0+shutterstock-1.1.32"
+registry = "ghcr.io/autostamp/shutterstock"
+kind = "component"
+file = "build/shutterstock.wasm"
+description = "WebAssembly component bindings for the shutterstock API, generated from an OpenAPI document."
+source = "https://github.com/yoshuawuyts/openapi-bindgen"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies.components]
+
+[dependencies.interfaces."wasmcloud:secrets"]
+registry = "ghcr.io"
+namespace = "wasmcloud"
+package = "interfaces/wasmcloud/secrets"
+version = "1.0.0"
+
+[dependencies.interfaces."wasi:http"]
+registry = "ghcr.io"
+namespace = "webassembly"
+package = "wasi/http"
+version = "0.2.3"

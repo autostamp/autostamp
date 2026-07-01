@@ -1,0 +1,336 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `basicAuth` | `Authorization: Basic base64(<secret>)` |
+package autostamp:bulksms@0.2.0;
+
+interface blocked-numbers {
+  /// A phone number in E.164 format
+  record phone-number {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// List blocked numbers
+  record get-blocked-numbers-params {
+    /// Records with an `id` that is greater or equal to min-id will be returned. The default value is `0`.  You can add 1 to an id that you previously retrieved, to return subsequent records.
+    min-id: option<s32>,
+    /// The maximum number of records to return. The default value is `10000`. The value cannot be greater than 10000.
+    limit: option<s32>
+  }
+  get-blocked-numbers: func(params: get-blocked-numbers-params) -> result<string, string>;
+
+  /// Create a blocked number
+  record post-blocked-numbers-params {
+    body: list<phone-number>
+  }
+  post-blocked-numbers: func(params: post-blocked-numbers-params) -> result<string, string>;
+
+}
+
+
+interface credits {
+  /// Transfer credits to another account
+  record post-credit-transfer-params {
+    /// An optional note that will be shown on the credit history of your account.
+    /// The maximum length of the comment is 100.
+    comment-on-from: option<string>,
+    /// An optional note that will be shown on the credit history of the recipient's account.
+    /// The maximum length of the comment is 100.
+    comment-on-to: option<string>,
+    /// The amount of credits to transfer.
+    credits: f64,
+    /// The numeric user ID of the account that will receive the credits.
+    /// The ID must match the username.
+    to-user-id: f64,
+    /// The username of the account that will receive the credits.
+    to-username: string
+  }
+  post-credit-transfer: func(params: post-credit-transfer-params) -> result<string, string>;
+
+}
+
+interface message {
+  enum get-messages-sort-order-enum {
+    ascending,
+  }
+
+  enum submission-entry-delivery-reports-enum {
+    all,
+    errors,
+    none,
+  }
+
+  enum submission-entry-encoding-enum {
+    text,
+    unicode,
+    binary,
+  }
+
+  enum submission-entry-from-op-type-op-enum {
+    international,
+    alphanumeric,
+    shortcode,
+    repliable,
+  }
+
+  enum submission-entry-message-class-enum {
+    flash-sms,
+    me-specific,
+    sim-specific,
+    te-specific,
+  }
+
+  enum submission-entry-protocol-id-enum {
+    implicit,
+    short-message-type-v0,
+    replace-message-v1,
+    replace-message-v2,
+    replace-message-v3,
+    replace-message-v4,
+    replace-message-v5,
+    replace-message-v6,
+    replace-message-v7,
+    return-call,
+    me-download,
+    me-depersonalize,
+    sim-download,
+  }
+
+  enum submission-entry-routing-group-enum {
+    economy,
+    standard,
+    premium,
+  }
+
+  enum submission-entry-to-item-type-op-enum {
+    international,
+    group,
+  }
+
+  /// An object that you use when posting messages.
+  record submission-entry {
+    /// The message content as described in the `encoding`. If the `encoding` is BINARY, the body must contain only hexadecimal digits where one byte is represented as two digits. For example, if you want to send two bytes '0x05' and '0x1F', the message body must contain the text '051F'.
+    /// 
+    body: string,
+    /// The type of delivery reports to request from the delivering network.
+    /// The default value  is `ALL`. Please note that not all networks support delivery reports.
+    delivery-reports: option<submission-entry-delivery-reports-enum>,
+    /// Describes the content of the message body.
+    /// 
+    encoding: option<submission-entry-encoding-enum>,
+    /// Identifies the sender.
+    /// 
+    from-op: option<submission-entry-from-op>,
+    /// The maximum number of message parts that can be used for a [concatenated message](https://en.wikipedia.org/wiki/Concatenated_SMS).
+    /// The default is `3`.
+    long-message-max-parts: option<s32>,
+    /// The class of the message, as specified by §4 of the GSM 03.38 specification.
+    /// 
+    message-class: option<submission-entry-message-class-enum>,
+    /// The TP-PID value from GSM 03.40[.750] §9.2.3.9.
+    /// 
+    protocol-id: option<submission-entry-protocol-id-enum>,
+    /// Allows you to choose routing. The default is STANDARD.
+    routing-group: option<submission-entry-routing-group-enum>,
+    /// Identifies the recipients
+    /// 
+    to: list<submission-entry-to-item>,
+    /// Correlate the messages created from this submission to your data.
+    /// 
+    user-supplied-id: option<string>
+  }
+
+  /// Identifies the sender.
+  /// 
+  /// Instead of a structured object, you can supply a string value here. 
+  /// If you do this, the `type` of the sender is derived to be either INTERNATIONAL or ALPHANUMERIC.  If the value does not begin with a `+` and it contains at least one character that is not a digit, the type is detected as ALPHANUMERIC. Otherwise, the type is detected as INTERNATIONAL.
+  record submission-entry-from-op {
+    /// The address of the sender id.
+    /// 
+    address: option<string>,
+    /// The type of the sender id.
+    /// 
+    type-op: submission-entry-from-op-type-op-enum
+  }
+
+  record submission-entry-to-item {
+    /// The phone number of the recipient.  It must be supplied if the `type` is INTERNATIONAL
+    address: option<string>,
+    /// Custom fields that can be used in the message body. A value can be given if the `type` is INTERNATIONAL
+    /// 
+    fields: option<list<string>>,
+    /// The id of a group in your phonebook.  A value can be given if the `type` is GROUP.
+    id: option<string>,
+    /// The name of a group in your phonebook. A value can be given if the `type` is GROUP.
+    name: option<string>,
+    /// Type of the recipient. The default value is INTERNATIONAL.
+    type-op: option<submission-entry-to-item-type-op-enum>
+  }
+
+  /// Retrieve Messages
+  record get-messages-params {
+    /// The maximum number of messages that are returned.  The default is 1000.
+    /// The value of `limit` is not a guarantee that a specific number of messages will be in the response, even if there are more messages available.  Consider the case where you have 150 messages and you specify `limit=50`.  It is possible that only 49 messages will be returned.  The  way to make sure that there are no more messages is to submit a new call using the `id` filter field with the `<` operator (described below).
+    limit: option<f64>,
+    /// See the message filtering for more information.
+    filter: option<string>,
+    /// The default value is DESCENDING
+    /// 
+    sort-order: option<get-messages-sort-order-enum>
+  }
+  get-messages: func(params: get-messages-params) -> result<string, string>;
+
+  /// Send Messages
+  record post-messages-params {
+    /// Safeguards against the possibility of sending the same messages more than once.
+    /// 
+    deduplication-id: option<s32>,
+    /// Specifies how to deal with message text that contains characters not present in the GSM 03.38 character set.
+    /// 
+    auto-unicode: option<bool>,
+    /// Allows you to send a message in the future.
+    /// 
+    schedule-date: option<string>,
+    /// A note that is stored together with a scheduled submission, which could be used to more easily identify the scheduled submission at a later date.
+    /// 
+    schedule-description: option<string>,
+    body: list<submission-entry>
+  }
+  post-messages: func(params: post-messages-params) -> result<string, string>;
+
+  /// Send message by simple GET or POST
+  record get-messages-send-params {
+    /// The phone number of the recipient.
+    to: string,
+    /// The text you want to send.
+    body: string,
+    /// Refer to the `deduplication-id` parameter.
+    deduplication-id: option<s32>
+  }
+  get-messages-send: func(params: get-messages-send-params) -> result<string, string>;
+
+  /// Show Message
+  record get-messages-id-params {
+    /// The `id` of the message you want to retrieve
+    id: string
+  }
+  get-messages-id: func(params: get-messages-id-params) -> result<string, string>;
+
+  /// List Related Messages
+  record get-messages-id-related-received-messages-params {
+    /// The `id` of the sent message
+    id: string
+  }
+  get-messages-id-related-received-messages: func(params: get-messages-id-related-received-messages-params) -> result<string, string>;
+
+}
+
+interface profile {
+  /// Get profile
+  get-profile: func() -> result<string, string>;
+
+}
+
+interface attachments {
+  /// Upload an attachment via a signed URL
+  record post-rmm-pre-sign-attachment-params {
+    /// The extension of the file.  Usually related to the media type.
+    file-extension: option<string>,
+    /// The media type of the file you would like to upload.  If you are not sure what value to use here, check out the standard [list of media types](https://www.iana.org/assignments/media-types/media-types.xhtml).
+    media-type: option<string>
+  }
+  post-rmm-pre-sign-attachment: func(params: post-rmm-pre-sign-attachment-params) -> result<string, string>;
+
+}
+
+interface webhooks {
+  enum webhook-entry-invoke-option-enum {
+    one,
+    many,
+  }
+
+  enum webhook-entry-trigger-scope-enum {
+    sent,
+    received,
+  }
+
+  /// List webhooks
+  get-webhooks: func() -> result<string, string>;
+
+  /// Create a webhook
+  record post-webhooks-params {
+    /// Indicates whether you want the webhook activated.
+    /// 
+    active: option<bool>,
+    /// The email address to which emails will be sent if there are problem with invoking the webhook.
+    /// 
+    contact-email-address: option<string>,
+    /// Specifies how to invoke your webhook.
+    /// 
+    invoke-option: option<webhook-entry-invoke-option-enum>,
+    /// A text identifier for the webhook.
+    /// More than one webhook cannot have the same name.
+    name: string,
+    /// Indicates whether you want to show this webhook on the Web App.
+    /// 
+    on-web-app: option<bool>,
+    /// Specifies when the webhook will be triggered.  
+    /// 
+    trigger-scope: webhook-entry-trigger-scope-enum,
+    /// The location of the webhook.
+    /// 
+    url: string
+  }
+  post-webhooks: func(params: post-webhooks-params) -> result<string, string>;
+
+  /// Read a webhook
+  get-webhooks-id: func() -> result<string, string>;
+
+  /// Update a webhook
+  record post-webhooks-id-params {
+    /// Indicates whether you want the webhook activated.
+    /// 
+    active: option<bool>,
+    /// The email address to which emails will be sent if there are problem with invoking the webhook.
+    /// 
+    contact-email-address: option<string>,
+    /// Specifies how to invoke your webhook.
+    /// 
+    invoke-option: option<webhook-entry-invoke-option-enum>,
+    /// A text identifier for the webhook.
+    /// More than one webhook cannot have the same name.
+    name: string,
+    /// Indicates whether you want to show this webhook on the Web App.
+    /// 
+    on-web-app: option<bool>,
+    /// Specifies when the webhook will be triggered.  
+    /// 
+    trigger-scope: webhook-entry-trigger-scope-enum,
+    /// The location of the webhook.
+    /// 
+    url: string
+  }
+  post-webhooks-id: func(params: post-webhooks-id-params) -> result<string, string>;
+
+  /// Delete a webhook
+  delete-webhooks-id: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export blocked-numbers;
+  export credits;
+  export message;
+  export profile;
+  export attachments;
+  export webhooks;
+}

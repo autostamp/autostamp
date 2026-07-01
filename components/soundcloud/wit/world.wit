@@ -1,0 +1,306 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `AuthHeader` | header `Authorization` |
+/// | `ClientId` | query `client_id` |
+package autostamp:soundcloud@0.2.0;
+
+interface oauth {
+  /// The OAuth2 authorization endpoint. Your app redirects a user to this endpoint, allowing them to delegate access to their account.
+  get-connect: func() -> result<string, string>;
+
+  /// This endpoint accepts POST requests and is used to provision access tokens once a user has authorized your application.
+  post-oauth2-token: func() -> result<string, string>;
+
+}
+
+
+interface likes {
+  /// Likes a playlist.
+  post-likes-playlists-playlist-id: func() -> result<string, string>;
+
+  /// Unlikes a playlist.
+  delete-likes-playlists-playlist-id: func() -> result<string, string>;
+
+  /// Likes a track.
+  post-likes-tracks-track-id: func() -> result<string, string>;
+
+  /// Unlikes a track.
+  delete-likes-tracks-track-id: func() -> result<string, string>;
+
+}
+
+interface me {
+  /// Returns the authenticated user’s information.
+  get-me: func() -> result<string, string>;
+
+  /// Returns the authenticated user's activities.
+  get-me-activities: func() -> result<string, string>;
+
+  /// Recent the authenticated user's activities.
+  get-me-activities-all-own: func() -> result<string, string>;
+
+  /// Returns the authenticated user's recent track related activities.
+  get-me-activities-tracks: func() -> result<string, string>;
+
+  /// Returns a list of the authenticated user's connected social accounts.
+  get-me-connections: func() -> result<string, string>;
+
+  /// Returns the authenticated user's connected social account.
+  get-me-connections-connection-id: func() -> result<string, string>;
+
+  /// Returns user’s favorites ids. (use /me/likes/tracks instead to fetch the authenticated user's likes)
+  get-me-favorites-ids: func() -> result<string, string>;
+
+  /// Returns a list of users who are following the authenticated user.
+  get-me-followers: func() -> result<string, string>;
+
+  /// Returns a user who is following the authenticated user. (use /users/{user_id} instead, to fetch the user details)
+  get-me-followers-follower-id: func() -> result<string, string>;
+
+  /// Returns a list of users who are followed by the authenticated user.
+  get-me-followings: func() -> result<string, string>;
+
+  /// Returns a list of recent tracks from users followed by the authenticated user.
+  get-me-followings-tracks: func() -> result<string, string>;
+
+  /// Returns a user who is followed by the authenticated user. (use /users/{user_id} instead, to fetch the user details)
+  get-me-followings-user-id: func() -> result<string, string>;
+
+  /// Follows a user.
+  put-me-followings-user-id: func() -> result<string, string>;
+
+  /// Deletes a user who is followed by the authenticated user.
+  delete-me-followings-user-id: func() -> result<string, string>;
+
+  /// Returns a list of favorited or liked tracks of the authenticated user.
+  get-me-likes-tracks: func() -> result<string, string>;
+
+  /// Returns user’s playlists (sets).
+  get-me-playlists: func() -> result<string, string>;
+
+  /// Returns playlist. (use /playlists/{playlist_id} instead, to fetch the playlist details)
+  get-me-playlists-playlist-id: func() -> result<string, string>;
+
+  /// Returns a list of user's tracks.
+  get-me-tracks: func() -> result<string, string>;
+
+  /// Returns a specified track. (use /tracks/{track_id} instead, to fetch the track details)
+  get-me-tracks-track-id: func() -> result<string, string>;
+
+}
+
+interface search {
+  /// Performs a playlist search based on a query
+  get-playlists: func() -> result<string, string>;
+
+  /// Performs a track search based on a query
+  get-tracks: func() -> result<string, string>;
+
+  /// Performs a user search based on a query
+  get-users: func() -> result<string, string>;
+
+}
+
+interface playlists {
+  enum create-update-playlist-request-playlist-sharing-enum {
+    public,
+    private,
+  }
+
+  record create-update-playlist-request-playlist {
+    /// Description of the playlist
+    description: option<string>,
+    /// public or private
+    sharing: option<create-update-playlist-request-playlist-sharing-enum>,
+    /// Title of the playlist
+    title: option<string>,
+    /// List of tracks to add to playlist
+    tracks: option<list<create-update-playlist-request-playlist-tracks-item>>
+  }
+
+  record create-update-playlist-request-playlist-tracks-item {
+    /// SoundCloud track id
+    id: string
+  }
+
+  /// Creates a playlist.
+  record post-playlists-params {
+    playlist: option<create-update-playlist-request-playlist>
+  }
+  post-playlists: func(params: post-playlists-params) -> result<string, string>;
+
+  /// Returns a playlist.
+  get-playlists-playlist-id: func() -> result<string, string>;
+
+  /// Updates a playlist.
+  record put-playlists-playlist-id-params {
+    playlist: option<create-update-playlist-request-playlist>
+  }
+  put-playlists-playlist-id: func(params: put-playlists-playlist-id-params) -> result<string, string>;
+
+  /// Deletes a playlist.
+  delete-playlists-playlist-id: func() -> result<string, string>;
+
+  /// Returns a collection of playlist's reposters.
+  get-playlists-playlist-id-reposters: func() -> result<string, string>;
+
+  /// Returns tracks under a playlist.
+  get-playlists-playlist-id-tracks: func() -> result<string, string>;
+
+}
+
+interface reposts {
+  /// Reposts a playlist as the authenticated user
+  post-reposts-playlists-playlist-id: func() -> result<string, string>;
+
+  /// Removes a repost on a playlist as the authenticated user
+  delete-reposts-playlists-playlist-id: func() -> result<string, string>;
+
+  /// Reposts a track as the authenticated user
+  post-reposts-tracks-track-id: func() -> result<string, string>;
+
+  /// Removes a repost on a track as the authenticated user
+  delete-reposts-tracks-track-id: func() -> result<string, string>;
+
+}
+
+interface miscellaneous {
+  /// Resolves soundcloud.com URLs to Resource URLs to use with the API.
+  get-resolve: func() -> result<string, string>;
+
+}
+
+interface tracks {
+  enum track-metadata-request-track-embeddable-by-enum {
+    all,
+    me,
+    none,
+  }
+
+  enum track-metadata-request-track-license-enum {
+    no-rights-reserved,
+    all-rights-reserved,
+    cc-by,
+    cc-by-nc,
+    cc-by-nd,
+    cc-by-sa,
+    cc-by-nc-nd,
+    cc-by-nc-sa,
+  }
+
+  enum track-metadata-request-track-sharing-enum {
+    public,
+    private,
+  }
+
+  record track-metadata-request-track {
+    commentable: option<bool>,
+    description: option<string>,
+    downloadable: option<bool>,
+    /// who can embed this track "all", "me", or "none"
+    embeddable-by: option<track-metadata-request-track-embeddable-by-enum>,
+    genre: option<string>,
+    isrc: option<string>,
+    label-name: option<string>,
+    /// Possible values: no-rights-reserved, all-rights-reserved, cc-by, cc-by-nc, cc-by-nd, cc-by-sa, cc-by-nc-nd, cc-by-nc-sa
+    license: option<track-metadata-request-track-license-enum>,
+    permalink: option<string>,
+    purchase-url: option<string>,
+    release: option<string>,
+    /// string, formatted as yyyy-mm-dd, representing release date
+    release-date: option<string>,
+    sharing: option<track-metadata-request-track-sharing-enum>,
+    streamable: option<bool>,
+    /// The tag_list property contains a list of tags separated by spaces. Multiword tags are quoted in double quotes. We also support machine tags that follow the pattern NAMESPACE:KEY=VALUE. For example: geo:lat=43.555 camel:size=medium “machine:tag=with space” Machine tags are not revealed to the user on the track pages.
+    tag-list: option<string>,
+    title: option<string>
+  }
+
+  /// Uploads a new track.
+  post-tracks: func() -> result<string, string>;
+
+  /// Returns a track.
+  get-tracks-track-id: func() -> result<string, string>;
+
+  /// Updates a track's information.
+  record put-tracks-track-id-params {
+    track: option<track-metadata-request-track>
+  }
+  put-tracks-track-id: func(params: put-tracks-track-id-params) -> result<string, string>;
+
+  /// Deletes a track.
+  delete-tracks-track-id: func() -> result<string, string>;
+
+  /// Returns the comments posted on the track(track_id).
+  get-tracks-track-id-comments: func() -> result<string, string>;
+
+  /// Returns the newly created comment on success
+  post-tracks-track-id-comments: func() -> result<string, string>;
+
+  /// Returns a list of users who have favorited or liked the track.
+  get-tracks-track-id-favoriters: func() -> result<string, string>;
+
+  /// Returns all related tracks of track on SoundCloud.
+  get-tracks-track-id-related: func() -> result<string, string>;
+
+  /// Returns a collection of track's reposters.
+  get-tracks-track-id-reposters: func() -> result<string, string>;
+
+  /// Returns a track's streamable URLs
+  get-tracks-track-id-streams: func() -> result<string, string>;
+
+}
+
+interface users {
+  /// Returns a user.
+  get-users-user-id: func() -> result<string, string>;
+
+  /// Returns a list of user's comments.
+  get-users-user-id-comments: func() -> result<string, string>;
+
+  /// Returns a list of user's favorited or liked tracks. (use /users/:userId/likes/tracks instead, to fetch a user's likes)
+  get-users-user-id-favorites: func() -> result<string, string>;
+
+  /// Returns a list of user’s followers.
+  get-users-user-id-followers: func() -> result<string, string>;
+
+  /// Returns a list of user’s followings.
+  get-users-user-id-followings: func() -> result<string, string>;
+
+  /// Returns a user's following. (use /users/{user_id} instead, to fetch the user details)
+  get-users-user-id-followings-following-id: func() -> result<string, string>;
+
+  /// Returns a list of user's liked tracks.
+  get-users-user-id-likes-tracks: func() -> result<string, string>;
+
+  /// Returns a list of user's playlists.
+  get-users-user-id-playlists: func() -> result<string, string>;
+
+  /// Returns a list of user's tracks.
+  get-users-user-id-tracks: func() -> result<string, string>;
+
+  /// Returns list of user's links added to their profile (website, facebook, instagram).
+  get-users-user-id-web-profiles: func() -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export oauth;
+  export likes;
+  export me;
+  export search;
+  export playlists;
+  export reposts;
+  export miscellaneous;
+  export tracks;
+  export users;
+}

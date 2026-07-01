@@ -1,0 +1,25 @@
+package autostamp:openfigi@0.2.0;
+
+interface mapping {
+  record post-mapping-params {
+    /// opaque schema; raw JSON
+    value: string
+  }
+  post-mapping: func(params: post-mapping-params) -> result<string, string>;
+
+  record get-mapping-values-key-params {
+    /// Key of MappingJob for which to get possible values.
+    key: string
+  }
+  get-mapping-values-key: func(params: get-mapping-values-key-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export mapping;
+}

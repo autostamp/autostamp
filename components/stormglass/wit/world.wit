@@ -1,0 +1,22 @@
+package autostamp:stormglass@0.2.0;
+
+interface forecast {
+  /// Get hourly forecasts by coordinates
+  record get-forecast-params {
+    /// The latitude for a location. Valid input is a number between -90 and 90.
+    lat: f64,
+    /// The longitude for a location. Valid input is a number between -180 and 180.
+    lng: f64
+  }
+  get-forecast: func(params: get-forecast-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export forecast;
+}

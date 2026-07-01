@@ -1,0 +1,4452 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `oauth2` | `Authorization: Bearer <secret>` |
+package autostamp:vimeo@0.2.0;
+
+interface api-information {
+  /// Get an API specification
+  record get-endpoints-params {
+    /// Return an OpenAPI specification.
+    openapi: option<bool>
+  }
+  get-endpoints: func(params: get-endpoints-params) -> result<string, string>;
+
+}
+
+
+interface categories-essentials {
+  enum get-categories-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-categories-sort-enum {
+    last-video-featured-time,
+    name,
+  }
+
+  /// Get all categories
+  record get-categories-params {
+    /// The sort direction of the results.
+    direction: option<get-categories-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-categories-sort-enum>
+  }
+  get-categories: func(params: get-categories-params) -> result<string, string>;
+
+  /// Get a specific category
+  record get-category-params {
+    /// The name of the category.
+    category: string
+  }
+  get-category: func(params: get-category-params) -> result<string, string>;
+
+}
+
+interface categories-channels {
+  enum get-category-channels-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-category-channels-sort-enum {
+    alphabetical,
+    date,
+    followers,
+    videos,
+  }
+
+  /// Get all the channels in a category
+  record get-category-channels-params {
+    /// The name of the category.
+    category: string,
+    /// The sort direction of the results.
+    direction: option<get-category-channels-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-category-channels-sort-enum>
+  }
+  get-category-channels: func(params: get-category-channels-params) -> result<string, string>;
+
+}
+
+interface categories-groups {
+  enum get-category-groups-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-category-groups-sort-enum {
+    alphabetical,
+    date,
+    members,
+    videos,
+  }
+
+  /// Get all the groups in a category
+  record get-category-groups-params {
+    /// The name of the category.
+    category: string,
+    /// The sort direction of the results.
+    direction: option<get-category-groups-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-category-groups-sort-enum>
+  }
+  get-category-groups: func(params: get-category-groups-params) -> result<string, string>;
+
+}
+
+interface categories-videos {
+  enum get-category-videos-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-category-videos-filter-enum {
+    conditional-featured,
+    embeddable,
+  }
+
+  enum get-category-videos-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    duration,
+    featured,
+    likes,
+    plays,
+    relevant,
+  }
+
+  /// Get all the videos in a category
+  record get-category-videos-params {
+    /// The name of the category.
+    category: string,
+    /// The sort direction of the results.
+    direction: option<get-category-videos-direction-enum>,
+    /// The attribute by which to filter the results.
+    /// 
+    filter: option<get-category-videos-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-category-videos-sort-enum>
+  }
+  get-category-videos: func(params: get-category-videos-params) -> result<string, string>;
+
+  /// Check for a video in a category
+  record check-category-for-video-params {
+    /// The name of the category.
+    category: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  check-category-for-video: func(params: check-category-for-video-params) -> result<string, string>;
+
+  /// Get all the categories to which a video belongs
+  record get-video-categories-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  get-video-categories: func(params: get-video-categories-params) -> result<string, string>;
+
+  /// Suggest categories for a video
+  record suggest-video-category-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  suggest-video-category: func(params: suggest-video-category-params) -> result<string, string>;
+
+}
+
+interface channels-essentials {
+  enum get-channels-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-channels-filter-enum {
+    featured,
+  }
+
+  enum get-channels-sort-enum {
+    alphabetical,
+    date,
+    followers,
+    relevant,
+    videos,
+  }
+
+  enum get-channel-subscriptions-alt1-filter-enum {
+    moderated,
+  }
+
+  enum get-channel-subscriptions-alt1-sort-enum {
+    alphabetical,
+    date,
+    followers,
+    videos,
+  }
+
+  /// Get all channels
+  record get-channels-params {
+    /// The sort direction of the results.
+    direction: option<get-channels-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-channels-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    /// 
+    sort: option<get-channels-sort-enum>
+  }
+  get-channels: func(params: get-channels-params) -> result<string, string>;
+
+  /// Create a channel
+  create-channel: func() -> result<string, string>;
+
+  /// Get a specific channel
+  record get-channel-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  get-channel: func(params: get-channel-params) -> result<string, string>;
+
+  /// Edit a channel
+  record edit-channel-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  edit-channel: func(params: edit-channel-params) -> result<string, string>;
+
+  /// Delete a channel
+  record delete-channel-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  delete-channel: func(params: delete-channel-params) -> result<string, string>;
+
+  /// Get all the channels to which a user subscribes
+  record get-channel-subscriptions-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-channels-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-channel-subscriptions-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-channel-subscriptions-alt1-sort-enum>
+  }
+  get-channel-subscriptions-alt1: func(params: get-channel-subscriptions-alt1-params) -> result<string, string>;
+
+  /// Get all the channels to which a user subscribes
+  record get-channel-subscriptions-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-channels-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-channel-subscriptions-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-channel-subscriptions-alt1-sort-enum>
+  }
+  get-channel-subscriptions: func(params: get-channel-subscriptions-params) -> result<string, string>;
+
+}
+
+interface channels-categories {
+  /// Get all the categories in a channel
+  record get-channel-categories-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  get-channel-categories: func(params: get-channel-categories-params) -> result<string, string>;
+
+  /// Add a list of categories to a channel
+  record add-channel-categories-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The array of category URIs to add.
+    channels: list<string>
+  }
+  add-channel-categories: func(params: add-channel-categories-params) -> result<string, string>;
+
+  /// Categorize a channel
+  record categorize-channel-params {
+    /// The name of the category.
+    category: string,
+    /// The ID of the channel.
+    channel-id: string
+  }
+  categorize-channel: func(params: categorize-channel-params) -> result<string, string>;
+
+  /// Remove a category from a channel
+  record delete-channel-category-params {
+    /// The name of the category.
+    category: string,
+    /// The ID of the channel.
+    channel-id: string
+  }
+  delete-channel-category: func(params: delete-channel-category-params) -> result<string, string>;
+
+}
+
+interface channels-moderators {
+  enum get-channel-moderators-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-channel-moderators-sort-enum {
+    alphabetical,
+    date,
+  }
+
+  /// Get all the moderators in a channel
+  record get-channel-moderators-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The sort direction of the results.
+    direction: option<get-channel-moderators-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-channel-moderators-sort-enum>
+  }
+  get-channel-moderators: func(params: get-channel-moderators-params) -> result<string, string>;
+
+  /// Add a list of channel moderators
+  record add-channel-moderators-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The URI of a user to add as a moderator.
+    user-uri: string
+  }
+  add-channel-moderators: func(params: add-channel-moderators-params) -> result<string, string>;
+
+  /// Replace the moderators of a channel
+  record replace-channel-moderators-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The URI of the user to add as a moderator.
+    user-uri: string
+  }
+  replace-channel-moderators: func(params: replace-channel-moderators-params) -> result<string, string>;
+
+  /// Remove a list of channel moderators
+  record remove-channel-moderators-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  remove-channel-moderators: func(params: remove-channel-moderators-params) -> result<string, string>;
+
+  /// Get a specific channel moderator
+  record get-channel-moderator-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-channel-moderator: func(params: get-channel-moderator-params) -> result<string, string>;
+
+  /// Add a specific channel moderator
+  record add-channel-moderator-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  add-channel-moderator: func(params: add-channel-moderator-params) -> result<string, string>;
+
+  /// Remove a specific channel moderator
+  record remove-channel-moderator-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  remove-channel-moderator: func(params: remove-channel-moderator-params) -> result<string, string>;
+
+}
+
+interface channels-private-channel-members {
+  enum get-channel-privacy-users-direction-enum {
+    asc,
+    desc,
+  }
+
+  /// Get all the users who can view a private channel
+  record get-channel-privacy-users-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The sort direction of the results.
+    direction: option<get-channel-privacy-users-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-channel-privacy-users: func(params: get-channel-privacy-users-params) -> result<string, string>;
+
+  /// Permit a list of users to view a private channel
+  record set-channel-privacy-users-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  set-channel-privacy-users: func(params: set-channel-privacy-users-params) -> result<string, string>;
+
+  /// Permit a specific user to view a private channel
+  record set-channel-privacy-user-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  set-channel-privacy-user: func(params: set-channel-privacy-user-params) -> result<string, string>;
+
+  /// Restrict a user from viewing a private channel
+  record delete-channel-privacy-user-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  delete-channel-privacy-user: func(params: delete-channel-privacy-user-params) -> result<string, string>;
+
+}
+
+interface channels-tags {
+  /// Get all the tags that have been added to a channel
+  record get-channel-tags-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  get-channel-tags: func(params: get-channel-tags-params) -> result<string, string>;
+
+  /// Add a list of tags to a channel
+  record add-tags-to-channel-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  add-tags-to-channel: func(params: add-tags-to-channel-params) -> result<string, string>;
+
+  /// Check if a tag has been added to a channel
+  record check-if-channel-has-tag-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The word to use as the tag.
+    word: string
+  }
+  check-if-channel-has-tag: func(params: check-if-channel-has-tag-params) -> result<string, string>;
+
+  /// Add a specific tag to a channel
+  record add-channel-tag-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The word to use as the tag.
+    word: string
+  }
+  add-channel-tag: func(params: add-channel-tag-params) -> result<string, string>;
+
+  /// Remove a tag from a channel
+  record delete-tag-from-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The word to use as the tag.
+    word: string
+  }
+  delete-tag-from-channel: func(params: delete-tag-from-channel-params) -> result<string, string>;
+
+}
+
+interface channels-subscriptions-and-subscribers {
+  enum get-channel-subscribers-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-channel-subscribers-filter-enum {
+    moderators,
+  }
+
+  enum get-channel-subscribers-sort-enum {
+    alphabetical,
+    date,
+  }
+
+  /// Get all the followers of a channel
+  record get-channel-subscribers-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The sort direction of the results.
+    direction: option<get-channel-subscribers-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: get-channel-subscribers-filter-enum,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-channel-subscribers-sort-enum>
+  }
+  get-channel-subscribers: func(params: get-channel-subscribers-params) -> result<string, string>;
+
+  /// Check if a user follows a channel
+  record check-if-user-subscribed-to-channel-alt1-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  check-if-user-subscribed-to-channel-alt1: func(params: check-if-user-subscribed-to-channel-alt1-params) -> result<string, string>;
+
+  /// Subscribe a user to a specific channel
+  record subscribe-to-channel-alt1-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  subscribe-to-channel-alt1: func(params: subscribe-to-channel-alt1-params) -> result<string, string>;
+
+  /// Unsubscribe a user from a specific channel
+  record unsubscribe-from-channel-alt1-params {
+    /// The ID of the channel.
+    channel-id: string
+  }
+  unsubscribe-from-channel-alt1: func(params: unsubscribe-from-channel-alt1-params) -> result<string, string>;
+
+  /// Check if a user follows a channel
+  record check-if-user-subscribed-to-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  check-if-user-subscribed-to-channel: func(params: check-if-user-subscribed-to-channel-params) -> result<string, string>;
+
+  /// Subscribe a user to a specific channel
+  record subscribe-to-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  subscribe-to-channel: func(params: subscribe-to-channel-params) -> result<string, string>;
+
+  /// Unsubscribe a user from a specific channel
+  record unsubscribe-from-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  unsubscribe-from-channel: func(params: unsubscribe-from-channel-params) -> result<string, string>;
+
+}
+
+interface channels-videos {
+  enum get-channel-videos-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-channel-videos-filter-enum {
+    embeddable,
+  }
+
+  enum get-channel-videos-sort-enum {
+    added,
+    alphabetical,
+    comments,
+    date,
+    default,
+    duration,
+    likes,
+    manual,
+    modified-time,
+    plays,
+  }
+
+  /// Get all the videos in a channel
+  record get-channel-videos-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The page that contains the video URI.
+    containing-uri: option<string>,
+    /// The sort direction of the results.
+    direction: option<get-channel-videos-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-channel-videos-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-channel-videos-sort-enum>
+  }
+  get-channel-videos: func(params: get-channel-videos-params) -> result<string, string>;
+
+  /// Add a list of videos to a channel
+  record add-videos-to-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The URI of a video to add.
+    video-uri: string
+  }
+  add-videos-to-channel: func(params: add-videos-to-channel-params) -> result<string, string>;
+
+  /// Remove a list of videos from a channel
+  record remove-videos-from-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The URI of a video to remove.
+    video-uri: string
+  }
+  remove-videos-from-channel: func(params: remove-videos-from-channel-params) -> result<string, string>;
+
+  /// Get a specific video in a channel
+  record get-channel-video-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-channel-video: func(params: get-channel-video-params) -> result<string, string>;
+
+  /// Add a specific video to a channel
+  record add-video-to-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-channel: func(params: add-video-to-channel-params) -> result<string, string>;
+
+  /// Remove a specific video from a channel
+  record delete-video-from-channel-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-from-channel: func(params: delete-video-from-channel-params) -> result<string, string>;
+
+  /// Get all the channels to which a user can add or remove a specific video
+  record get-available-video-channels-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  get-available-video-channels: func(params: get-available-video-channels-params) -> result<string, string>;
+
+}
+
+interface videos-comments {
+  enum get-comments-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  /// Get all the comments on a video
+  record get-comments-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The sort direction of the results.
+    direction: option<get-comments-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-comments-alt1: func(params: get-comments-alt1-params) -> result<string, string>;
+
+  /// Add a comment to a video
+  record create-comment-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  create-comment-alt1: func(params: create-comment-alt1-params) -> result<string, string>;
+
+  /// Get all the comments on a video
+  record get-comments-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The sort direction of the results.
+    direction: option<get-comments-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-comments: func(params: get-comments-params) -> result<string, string>;
+
+  /// Add a comment to a video
+  record create-comment-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  create-comment: func(params: create-comment-params) -> result<string, string>;
+
+  /// Get a specific video comment
+  record get-comment-params {
+    /// The ID of the comment.
+    comment-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-comment: func(params: get-comment-params) -> result<string, string>;
+
+  /// Edit a video comment
+  record edit-comment-params {
+    /// The ID of the comment.
+    comment-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  edit-comment: func(params: edit-comment-params) -> result<string, string>;
+
+  /// Delete a video comment
+  record delete-comment-params {
+    /// The ID of the comment.
+    comment-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-comment: func(params: delete-comment-params) -> result<string, string>;
+
+  /// Get all the replies to a video comment
+  record get-comment-replies-params {
+    /// The ID of the comment.
+    comment-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-comment-replies: func(params: get-comment-replies-params) -> result<string, string>;
+
+  /// Add a reply to a video comment
+  record create-comment-reply-params {
+    /// The ID of the comment.
+    comment-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  create-comment-reply: func(params: create-comment-reply-params) -> result<string, string>;
+
+}
+
+interface videos-credits {
+  enum get-video-credits-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-video-credits-alt1-sort-enum {
+    alphabetical,
+    date,
+  }
+
+  /// Get all the credited users in a video
+  record get-video-credits-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The sort direction of the results.
+    direction: option<get-video-credits-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-video-credits-alt1-sort-enum>
+  }
+  get-video-credits-alt1: func(params: get-video-credits-alt1-params) -> result<string, string>;
+
+  /// Credit a user in a video
+  record add-video-credit-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-credit-alt1: func(params: add-video-credit-alt1-params) -> result<string, string>;
+
+  /// Get all the credited users in a video
+  record get-video-credits-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The sort direction of the results.
+    direction: option<get-video-credits-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-video-credits-alt1-sort-enum>
+  }
+  get-video-credits: func(params: get-video-credits-params) -> result<string, string>;
+
+  /// Credit a user in a video
+  record add-video-credit-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-credit: func(params: add-video-credit-params) -> result<string, string>;
+
+  /// Get a specific credited user in a video
+  record get-video-credit-params {
+    /// The ID of the credit.
+    credit-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-video-credit: func(params: get-video-credit-params) -> result<string, string>;
+
+  /// Edit a credit for a user in a video
+  record edit-video-credit-params {
+    /// The ID of the credit.
+    credit-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  edit-video-credit: func(params: edit-video-credit-params) -> result<string, string>;
+
+  /// Delete a credit for a user in a video
+  record delete-video-credit-params {
+    /// The ID of the credit.
+    credit-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-credit: func(params: delete-video-credit-params) -> result<string, string>;
+
+}
+
+interface likes-essentials {
+  enum get-video-likes-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-video-likes-alt1-sort-enum {
+    alphabetical,
+    date,
+  }
+
+  enum get-likes-alt1-filter-enum {
+    embeddable,
+  }
+
+  enum get-likes-alt1-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    duration,
+    likes,
+    plays,
+  }
+
+  enum get-vod-likes-filter-enum {
+    extra,
+    main,
+    trailer,
+  }
+
+  /// Get all the users who have liked a video
+  record get-video-likes-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The sort direction of the results.
+    direction: option<get-video-likes-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-video-likes-alt1-sort-enum>
+  }
+  get-video-likes-alt1: func(params: get-video-likes-alt1-params) -> result<string, string>;
+
+  /// Get all the videos that a user has liked
+  record get-likes-alt1-params {
+    /// The attribute by which to filter the results.
+    filter: option<get-likes-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-likes-alt1-sort-enum>
+  }
+  get-likes-alt1: func(params: get-likes-alt1-params) -> result<string, string>;
+
+  /// Check if a user has liked a video
+  record check-if-user-liked-video-alt1-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  check-if-user-liked-video-alt1: func(params: check-if-user-liked-video-alt1-params) -> result<string, string>;
+
+  /// Cause a user to like a video
+  record like-video-alt1-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  like-video-alt1: func(params: like-video-alt1-params) -> result<string, string>;
+
+  /// Cause a user to unlike a video
+  record unlike-video-alt1-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  unlike-video-alt1: func(params: unlike-video-alt1-params) -> result<string, string>;
+
+  /// Get all the users who have liked a video on an On Demand page
+  record get-vod-likes-params {
+    /// The ID of the On Demand page.
+    ondemand-id: string,
+    /// The sort direction of the results.
+    direction: option<get-video-likes-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-vod-likes-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-video-likes-alt1-sort-enum>
+  }
+  get-vod-likes: func(params: get-vod-likes-params) -> result<string, string>;
+
+  /// Get all the videos that a user has liked
+  record get-likes-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The attribute by which to filter the results.
+    filter: option<get-likes-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-likes-alt1-sort-enum>
+  }
+  get-likes: func(params: get-likes-params) -> result<string, string>;
+
+  /// Check if a user has liked a video
+  record check-if-user-liked-video-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  check-if-user-liked-video: func(params: check-if-user-liked-video-params) -> result<string, string>;
+
+  /// Cause a user to like a video
+  record like-video-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  like-video: func(params: like-video-params) -> result<string, string>;
+
+  /// Cause a user to unlike a video
+  record unlike-video-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  unlike-video: func(params: unlike-video-params) -> result<string, string>;
+
+  /// Get all the users who have liked a video
+  record get-video-likes-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The sort direction of the results.
+    direction: option<get-video-likes-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-video-likes-alt1-sort-enum>
+  }
+  get-video-likes: func(params: get-video-likes-params) -> result<string, string>;
+
+}
+
+interface videos-thumbnails {
+  /// Get all the thumbnails of a video
+  record get-video-thumbnails-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-video-thumbnails-alt1: func(params: get-video-thumbnails-alt1-params) -> result<string, string>;
+
+  /// Add a video thumbnail
+  record create-video-thumbnail-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  create-video-thumbnail-alt1: func(params: create-video-thumbnail-alt1-params) -> result<string, string>;
+
+  /// Get all the thumbnails of a video
+  record get-video-thumbnails-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-video-thumbnails: func(params: get-video-thumbnails-params) -> result<string, string>;
+
+  /// Add a video thumbnail
+  record create-video-thumbnail-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  create-video-thumbnail: func(params: create-video-thumbnail-params) -> result<string, string>;
+
+  /// Get a video thumbnail
+  record get-video-thumbnail-params {
+    /// The ID of the picture.
+    picture-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-video-thumbnail: func(params: get-video-thumbnail-params) -> result<string, string>;
+
+  /// Edit a video thumbnail
+  record edit-video-thumbnail-params {
+    /// The ID of the picture.
+    picture-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  edit-video-thumbnail: func(params: edit-video-thumbnail-params) -> result<string, string>;
+
+  /// Delete a video thumbnail
+  record delete-video-thumbnail-params {
+    /// The ID of the picture.
+    picture-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-thumbnail: func(params: delete-video-thumbnail-params) -> result<string, string>;
+
+}
+
+interface videos-viewing-privacy {
+  /// Get all the users who can view a user's private videos by default
+  record get-video-privacy-users-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-video-privacy-users-alt1: func(params: get-video-privacy-users-alt1-params) -> result<string, string>;
+
+  /// Permit a list of users to view a private video
+  record add-video-privacy-users-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-privacy-users-alt1: func(params: add-video-privacy-users-alt1-params) -> result<string, string>;
+
+  /// Get all the users who can view a user's private videos by default
+  record get-video-privacy-users-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-video-privacy-users: func(params: get-video-privacy-users-params) -> result<string, string>;
+
+  /// Permit a list of users to view a private video
+  record add-video-privacy-users-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-privacy-users: func(params: add-video-privacy-users-params) -> result<string, string>;
+
+  /// Permit a specific user to view a private video
+  record add-video-privacy-user-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-privacy-user: func(params: add-video-privacy-user-params) -> result<string, string>;
+
+  /// Restrict a user from viewing a private video
+  record delete-video-privacy-user-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-privacy-user: func(params: delete-video-privacy-user-params) -> result<string, string>;
+
+}
+
+interface videos-text-tracks {
+  /// Get all the text tracks of a video
+  record get-text-tracks-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-text-tracks-alt1: func(params: get-text-tracks-alt1-params) -> result<string, string>;
+
+  /// Add a text track to a video
+  record create-text-track-alt1-params {
+    /// The ID of the channel.
+    channel-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  create-text-track-alt1: func(params: create-text-track-alt1-params) -> result<string, string>;
+
+  /// Get all the text tracks of a video
+  record get-text-tracks-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  get-text-tracks: func(params: get-text-tracks-params) -> result<string, string>;
+
+  /// Add a text track to a video
+  record create-text-track-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  create-text-track: func(params: create-text-track-params) -> result<string, string>;
+
+  /// Get a specific text track
+  record get-text-track-params {
+    /// The ID of the text track.
+    texttrack-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-text-track: func(params: get-text-track-params) -> result<string, string>;
+
+  /// Edit a text track
+  record edit-text-track-params {
+    /// The ID of the text track.
+    texttrack-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  edit-text-track: func(params: edit-text-track-params) -> result<string, string>;
+
+  /// Delete a text track
+  record delete-text-track-params {
+    /// The ID of the text track.
+    texttrack-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-text-track: func(params: delete-text-track-params) -> result<string, string>;
+
+}
+
+interface videos-content-ratings {
+  /// Get all content ratings
+  get-content-ratings: func() -> result<string, string>;
+
+}
+
+interface videos-creative-commons {
+  /// Get all Creative Commons licenses
+  get-cc-licenses: func() -> result<string, string>;
+
+}
+
+interface groups-essentials {
+  enum get-groups-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-groups-filter-enum {
+    featured,
+  }
+
+  enum get-groups-sort-enum {
+    alphabetical,
+    date,
+    followers,
+    relevant,
+    videos,
+  }
+
+  /// Get all groups
+  record get-groups-params {
+    /// The sort direction of the results.
+    direction: option<get-groups-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-groups-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    /// 
+    sort: option<get-groups-sort-enum>
+  }
+  get-groups: func(params: get-groups-params) -> result<string, string>;
+
+  /// Create a group
+  create-group: func() -> result<string, string>;
+
+  /// Get a specific group
+  record get-group-params {
+    /// The ID of the group.
+    group-id: string
+  }
+  get-group: func(params: get-group-params) -> result<string, string>;
+
+  /// Delete a group
+  record delete-group-params {
+    /// The ID of the group.
+    group-id: string
+  }
+  delete-group: func(params: delete-group-params) -> result<string, string>;
+
+}
+
+interface groups-users {
+  enum get-group-members-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-group-members-filter-enum {
+    moderators,
+  }
+
+  enum get-group-members-sort-enum {
+    alphabetical,
+    date,
+  }
+
+  enum get-user-groups-alt1-filter-enum {
+    moderated,
+  }
+
+  enum get-user-groups-alt1-sort-enum {
+    alphabetical,
+    date,
+    members,
+    videos,
+  }
+
+  /// Get all the members of a group
+  record get-group-members-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The sort direction of the results.
+    direction: option<get-group-members-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-group-members-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-group-members-sort-enum>
+  }
+  get-group-members: func(params: get-group-members-params) -> result<string, string>;
+
+  /// Get all the groups that a user has joined
+  record get-user-groups-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-group-members-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-user-groups-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-user-groups-alt1-sort-enum>
+  }
+  get-user-groups-alt1: func(params: get-user-groups-alt1-params) -> result<string, string>;
+
+  /// Check if a user has joined a group
+  record check-if-user-joined-group-alt1-params {
+    /// The ID of the group.
+    group-id: string
+  }
+  check-if-user-joined-group-alt1: func(params: check-if-user-joined-group-alt1-params) -> result<string, string>;
+
+  /// Get all the groups that a user has joined
+  record get-user-groups-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-group-members-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-user-groups-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-user-groups-alt1-sort-enum>
+  }
+  get-user-groups: func(params: get-user-groups-params) -> result<string, string>;
+
+  /// Check if a user has joined a group
+  record check-if-user-joined-group-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  check-if-user-joined-group: func(params: check-if-user-joined-group-params) -> result<string, string>;
+
+}
+
+interface groups-videos {
+  enum get-group-videos-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-group-videos-filter-enum {
+    embeddable,
+  }
+
+  enum get-group-videos-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    duration,
+    likes,
+    plays,
+  }
+
+  /// Get all the videos in a group
+  record get-group-videos-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The sort direction of the results.
+    direction: option<get-group-videos-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-group-videos-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-group-videos-sort-enum>
+  }
+  get-group-videos: func(params: get-group-videos-params) -> result<string, string>;
+
+  /// Get a specific video in a group
+  record get-group-video-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-group-video: func(params: get-group-video-params) -> result<string, string>;
+
+  /// Add a video to a group
+  record add-video-to-group-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-group: func(params: add-video-to-group-params) -> result<string, string>;
+
+  /// Remove a video from a group
+  record delete-video-from-group-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-from-group: func(params: delete-video-from-group-params) -> result<string, string>;
+
+}
+
+interface videos-languages {
+  enum get-languages-filter-enum {
+    texttracks,
+  }
+
+  /// Get all languages
+  record get-languages-params {
+    /// The attribute by which to filter the results.
+    /// 
+    filter: option<get-languages-filter-enum>
+  }
+  get-languages: func(params: get-languages-params) -> result<string, string>;
+
+}
+
+interface users-essentials {
+  /// Get a user
+  get-user-alt1: func() -> result<string, string>;
+
+  /// Edit a user
+  edit-user-alt1: func() -> result<string, string>;
+
+  /// Get a user
+  record get-user-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  get-user: func(params: get-user-params) -> result<string, string>;
+
+  /// Edit a user
+  record edit-user-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  edit-user: func(params: edit-user-params) -> result<string, string>;
+
+}
+
+interface albums-essentials {
+  enum get-albums-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-albums-alt1-sort-enum {
+    alphabetical,
+    date,
+    duration,
+    videos,
+  }
+
+  /// Get all the albums that belong to a user
+  record get-albums-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-albums-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-albums-alt1-sort-enum>
+  }
+  get-albums-alt1: func(params: get-albums-alt1-params) -> result<string, string>;
+
+  /// Create an album
+  create-album-alt1: func() -> result<string, string>;
+
+  /// Get a specific album
+  record get-album-alt1-params {
+    /// The ID of the album.
+    album-id: string
+  }
+  get-album-alt1: func(params: get-album-alt1-params) -> result<string, string>;
+
+  /// Edit an album
+  record edit-album-alt1-params {
+    /// The ID of the album.
+    album-id: string
+  }
+  edit-album-alt1: func(params: edit-album-alt1-params) -> result<string, string>;
+
+  /// Delete an album
+  record delete-album-alt1-params {
+    /// The ID of the album.
+    album-id: string
+  }
+  delete-album-alt1: func(params: delete-album-alt1-params) -> result<string, string>;
+
+  /// Get all the albums that belong to a user
+  record get-albums-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-albums-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-albums-alt1-sort-enum>
+  }
+  get-albums: func(params: get-albums-params) -> result<string, string>;
+
+  /// Create an album
+  record create-album-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  create-album: func(params: create-album-params) -> result<string, string>;
+
+  /// Get a specific album
+  record get-album-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-album: func(params: get-album-params) -> result<string, string>;
+
+  /// Edit an album
+  record edit-album-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  edit-album: func(params: edit-album-params) -> result<string, string>;
+
+  /// Delete an album
+  record delete-album-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  delete-album: func(params: delete-album-params) -> result<string, string>;
+
+}
+
+interface albums-album-videos {
+  enum get-album-videos-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-album-videos-alt1-filter-enum {
+    embeddable,
+  }
+
+  enum get-album-videos-alt1-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    default,
+    duration,
+    likes,
+    manual,
+    modified-time,
+    plays,
+  }
+
+  /// Get all the videos in an album
+  record get-album-videos-alt1-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The page containing the video URI.
+    containing-uri: option<string>,
+    /// The sort direction of the results.
+    direction: option<get-album-videos-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-album-videos-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The password of the album.
+    password: option<string>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-album-videos-alt1-sort-enum>,
+    /// Whether to include private videos in the search. Please note that a separate search service provides this functionality. The service performs a partial text search on the video's name.
+    weak-search: option<bool>
+  }
+  get-album-videos-alt1: func(params: get-album-videos-alt1-params) -> result<string, string>;
+
+  /// Replace all the videos in an album
+  record replace-videos-in-album-alt1-params {
+    /// The ID of the album.
+    album-id: string,
+    /// A comma-separated list of video URIs.
+    videos: string
+  }
+  replace-videos-in-album-alt1: func(params: replace-videos-in-album-alt1-params) -> result<string, string>;
+
+  /// Get a specific video in an album
+  record get-album-video-alt1-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The password of the album.
+    password: option<string>
+  }
+  get-album-video-alt1: func(params: get-album-video-alt1-params) -> result<string, string>;
+
+  /// Add a specific video to an album
+  record add-video-to-album-alt1-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-album-alt1: func(params: add-video-to-album-alt1-params) -> result<string, string>;
+
+  /// Remove a video from an album
+  record remove-video-from-album-alt1-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  remove-video-from-album-alt1: func(params: remove-video-from-album-alt1-params) -> result<string, string>;
+
+  /// Set a video as the album thumbnail
+  record set-video-as-album-thumbnail-alt1-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The video frame time in seconds to use as the album thumbnail.
+    time-code: option<f64>
+  }
+  set-video-as-album-thumbnail-alt1: func(params: set-video-as-album-thumbnail-alt1-params) -> result<string, string>;
+
+  /// Get all the videos in an album
+  record get-album-videos-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The page containing the video URI.
+    containing-uri: option<string>,
+    /// The sort direction of the results.
+    direction: option<get-album-videos-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-album-videos-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The password of the album.
+    password: option<string>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-album-videos-alt1-sort-enum>,
+    /// Whether to include private videos in the search. Please note that a separate search service provides this functionality. The service performs a partial text search on the video's name.
+    weak-search: option<bool>
+  }
+  get-album-videos: func(params: get-album-videos-params) -> result<string, string>;
+
+  /// Replace all the videos in an album
+  record replace-videos-in-album-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// A comma-separated list of video URIs.
+    videos: string
+  }
+  replace-videos-in-album: func(params: replace-videos-in-album-params) -> result<string, string>;
+
+  /// Get a specific video in an album
+  record get-album-video-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The password of the album.
+    password: option<string>
+  }
+  get-album-video: func(params: get-album-video-params) -> result<string, string>;
+
+  /// Add a specific video to an album
+  record add-video-to-album-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-album: func(params: add-video-to-album-params) -> result<string, string>;
+
+  /// Remove a video from an album
+  record remove-video-from-album-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  remove-video-from-album: func(params: remove-video-from-album-params) -> result<string, string>;
+
+  /// Set a video as the album thumbnail
+  record set-video-as-album-thumbnail-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string,
+    /// The video frame time in seconds to use as the album thumbnail.
+    time-code: option<f64>
+  }
+  set-video-as-album-thumbnail: func(params: set-video-as-album-thumbnail-params) -> result<string, string>;
+
+}
+
+interface videos-essentials {
+  enum get-appearances-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-appearances-alt1-filter-enum {
+    embeddable,
+  }
+
+  enum get-appearances-alt1-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    duration,
+    likes,
+    plays,
+  }
+
+  enum get-videos-alt1-filter-enum {
+    app-only,
+    embeddable,
+    featured,
+    playable,
+  }
+
+  enum get-videos-alt1-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    default,
+    duration,
+    last-user-action-event-date,
+    likes,
+    modified-time,
+    plays,
+  }
+
+  enum search-videos-filter-enum {
+    cc,
+    cc-by,
+    cc-by-nc,
+    cc-by-nc-nd,
+    cc-by-nc-sa,
+    cc-by-nd,
+    cc-by-sa,
+    cc0,
+    categories,
+    duration,
+    in-progress,
+    minimum-likes,
+    trending,
+    upload-date,
+  }
+
+  enum search-videos-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    duration,
+    likes,
+    plays,
+    relevant,
+  }
+
+  /// Get all the videos in which a user appears
+  record get-appearances-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-appearances-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-appearances-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-appearances-alt1-sort-enum>
+  }
+  get-appearances-alt1: func(params: get-appearances-alt1-params) -> result<string, string>;
+
+  /// Get all the videos that a user has uploaded
+  record get-videos-alt1-params {
+    /// The page that contains the video URI. Only available when not paired with `query`.
+    containing-uri: option<string>,
+    /// The sort direction of the results.
+    direction: option<get-appearances-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-videos-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// Whether to filter by all playable videos or by all videos that are not  playable.
+    filter-playable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-videos-alt1-sort-enum>
+  }
+  get-videos-alt1: func(params: get-videos-alt1-params) -> result<string, string>;
+
+  /// Check if a user owns a video
+  record check-if-user-owns-video-alt1-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  check-if-user-owns-video-alt1: func(params: check-if-user-owns-video-alt1-params) -> result<string, string>;
+
+  /// Get all the videos in which a user appears
+  record get-appearances-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-appearances-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-appearances-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-appearances-alt1-sort-enum>
+  }
+  get-appearances: func(params: get-appearances-params) -> result<string, string>;
+
+  /// Get all the videos that a user has uploaded
+  record get-videos-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The page that contains the video URI. Only available when not paired with `query`.
+    containing-uri: option<string>,
+    /// The sort direction of the results.
+    direction: option<get-appearances-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-videos-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// Whether to filter by all playable videos or by all videos that are not  playable.
+    filter-playable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-videos-alt1-sort-enum>
+  }
+  get-videos: func(params: get-videos-params) -> result<string, string>;
+
+  /// Check if a user owns a video
+  record check-if-user-owns-video-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  check-if-user-owns-video: func(params: check-if-user-owns-video-params) -> result<string, string>;
+
+  /// Search for videos
+  record search-videos-params {
+    /// The sort direction of the results.
+    direction: option<get-appearances-alt1-direction-enum>,
+    /// The attribute by which to filter the results. `CC` and related filters target videos with the corresponding Creative Commons licenses. For more information, see our [Creative Commons](https://vimeo.com/creativecommons) page.
+    filter: option<search-videos-filter-enum>,
+    /// A comma-separated list of video URLs to find.
+    links: option<string>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// Search query.
+    query: string,
+    /// The way to sort the results.
+    sort: option<search-videos-sort-enum>,
+    /// The comma-separated list of videos to find.
+    uris: option<string>
+  }
+  search-videos: func(params: search-videos-params) -> result<string, string>;
+
+  /// Get a specific video
+  record get-video-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  get-video: func(params: get-video-params) -> result<string, string>;
+
+  /// Edit a video
+  record edit-video-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  edit-video: func(params: edit-video-params) -> result<string, string>;
+
+  /// Delete a video
+  record delete-video-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video: func(params: delete-video-params) -> result<string, string>;
+
+}
+
+interface categories-subscriptions {
+  enum get-category-subscriptions-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-category-subscriptions-alt1-sort-enum {
+    alphabetical,
+    date,
+    name,
+  }
+
+  /// Get all the categories that a user follows
+  record get-category-subscriptions-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-category-subscriptions-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-category-subscriptions-alt1-sort-enum>
+  }
+  get-category-subscriptions-alt1: func(params: get-category-subscriptions-alt1-params) -> result<string, string>;
+
+  /// Check if a user follows a category
+  record check-if-user-subscribed-to-category-alt1-params {
+    /// The name of the category.
+    category: string
+  }
+  check-if-user-subscribed-to-category-alt1: func(params: check-if-user-subscribed-to-category-alt1-params) -> result<string, string>;
+
+  /// Subscribe a user to a single category
+  record subscribe-to-category-alt1-params {
+    /// The name of the category.
+    category: string
+  }
+  subscribe-to-category-alt1: func(params: subscribe-to-category-alt1-params) -> result<string, string>;
+
+  /// Unsubscribe a user from a category
+  record unsubscribe-from-category-alt1-params {
+    /// The name of the category.
+    category: string
+  }
+  unsubscribe-from-category-alt1: func(params: unsubscribe-from-category-alt1-params) -> result<string, string>;
+
+  /// Get all the categories that a user follows
+  record get-category-subscriptions-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-category-subscriptions-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-category-subscriptions-alt1-sort-enum>
+  }
+  get-category-subscriptions: func(params: get-category-subscriptions-params) -> result<string, string>;
+
+  /// Check if a user follows a category
+  record check-if-user-subscribed-to-category-params {
+    /// The name of the category.
+    category: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  check-if-user-subscribed-to-category: func(params: check-if-user-subscribed-to-category-params) -> result<string, string>;
+
+  /// Subscribe a user to a single category
+  record subscribe-to-category-params {
+    /// The name of the category.
+    category: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  subscribe-to-category: func(params: subscribe-to-category-params) -> result<string, string>;
+
+  /// Unsubscribe a user from a category
+  record unsubscribe-from-category-params {
+    /// The name of the category.
+    category: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  unsubscribe-from-category: func(params: unsubscribe-from-category-params) -> result<string, string>;
+
+}
+
+interface embed-presets-custom-logos {
+  /// Get all the custom logos that belong to a user
+  get-custom-logos-alt1: func() -> result<string, string>;
+
+  /// Add a custom logo
+  create-custom-logo-alt1: func() -> result<string, string>;
+
+  /// Get a specific custom logo
+  record get-custom-logo-alt1-params {
+    /// The ID of the custom logo.
+    logo-id: string
+  }
+  get-custom-logo-alt1: func(params: get-custom-logo-alt1-params) -> result<string, string>;
+
+  /// Get all the custom logos that belong to a user
+  record get-custom-logos-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  get-custom-logos: func(params: get-custom-logos-params) -> result<string, string>;
+
+  /// Add a custom logo
+  record create-custom-logo-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  create-custom-logo: func(params: create-custom-logo-params) -> result<string, string>;
+
+  /// Get a specific custom logo
+  record get-custom-logo-params {
+    /// The ID of the custom logo.
+    logo-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-custom-logo: func(params: get-custom-logo-params) -> result<string, string>;
+
+}
+
+interface users-feed {
+  enum get-feed-alt1-type-op-enum {
+    appears,
+    category-featured,
+    channel,
+    facebook-feed,
+    following,
+    group,
+    likes,
+    ondemand-publish,
+    share,
+    tagged-with,
+    twitter-timeline,
+    uploads,
+  }
+
+  /// Get all videos in a user's feed
+  record get-feed-alt1-params {
+    /// Necessary for proper pagination. You shouldn't provide this value yourself, and instead use the pagination links in the feed response. Please see our [pagination documentation](https://developer.vimeo.com/api/common-formats#using-the-pagination-parameter) for more information.
+    offset: option<string>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The feed type.
+    type-op: option<get-feed-alt1-type-op-enum>
+  }
+  get-feed-alt1: func(params: get-feed-alt1-params) -> result<string, string>;
+
+  /// Get all videos in a user's feed
+  record get-feed-params {
+    /// The ID of the user.
+    user-id: string,
+    /// Necessary for proper pagination. You shouldn't provide this value yourself, and instead use the pagination links in the feed response. Please see our [pagination documentation](https://developer.vimeo.com/api/common-formats#using-the-pagination-parameter) for more information.
+    offset: option<string>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The feed type.
+    type-op: option<get-feed-alt1-type-op-enum>
+  }
+  get-feed: func(params: get-feed-params) -> result<string, string>;
+
+}
+
+interface users-follows {
+  enum get-followers-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-followers-alt1-sort-enum {
+    alphabetical,
+    date,
+  }
+
+  enum get-user-following-alt1-filter-enum {
+    online,
+  }
+
+  /// Get all the followers of a user
+  record get-followers-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-followers-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-followers-alt1-sort-enum>
+  }
+  get-followers-alt1: func(params: get-followers-alt1-params) -> result<string, string>;
+
+  /// Get all the users that a user is following
+  record get-user-following-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-followers-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-user-following-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-followers-alt1-sort-enum>
+  }
+  get-user-following-alt1: func(params: get-user-following-alt1-params) -> result<string, string>;
+
+  /// Follow a list of users
+  record follow-users-alt1-params {
+    /// An array of user URIs for the list of users to follow.
+    users: list<string>
+  }
+  follow-users-alt1: func(params: follow-users-alt1-params) -> result<string, string>;
+
+  /// Check if a user is following another user
+  record check-if-user-is-following-alt1-params {
+    /// The ID of the following user.
+    follow-user-id: string
+  }
+  check-if-user-is-following-alt1: func(params: check-if-user-is-following-alt1-params) -> result<string, string>;
+
+  /// Follow a specific user
+  record follow-user-alt1-params {
+    /// The ID of the following user.
+    follow-user-id: string
+  }
+  follow-user-alt1: func(params: follow-user-alt1-params) -> result<string, string>;
+
+  /// Unfollow a user
+  record unfollow-user-alt1-params {
+    /// The ID of the following user.
+    follow-user-id: string
+  }
+  unfollow-user-alt1: func(params: unfollow-user-alt1-params) -> result<string, string>;
+
+  /// Get all the followers of a user
+  record get-followers-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-followers-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-followers-alt1-sort-enum>
+  }
+  get-followers: func(params: get-followers-params) -> result<string, string>;
+
+  /// Get all the users that a user is following
+  record get-user-following-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-followers-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-user-following-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-followers-alt1-sort-enum>
+  }
+  get-user-following: func(params: get-user-following-params) -> result<string, string>;
+
+  /// Follow a list of users
+  record follow-users-params {
+    /// The ID of the user.
+    user-id: string,
+    /// An array of user URIs for the list of users to follow.
+    users: list<string>
+  }
+  follow-users: func(params: follow-users-params) -> result<string, string>;
+
+  /// Check if a user is following another user
+  record check-if-user-is-following-params {
+    /// The ID of the following user.
+    follow-user-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  check-if-user-is-following: func(params: check-if-user-is-following-params) -> result<string, string>;
+
+  /// Follow a specific user
+  record follow-user-params {
+    /// The ID of the following user.
+    follow-user-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  follow-user: func(params: follow-user-params) -> result<string, string>;
+
+  /// Unfollow a user
+  record unfollow-user-params {
+    /// The ID of the following user.
+    follow-user-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  unfollow-user: func(params: unfollow-user-params) -> result<string, string>;
+
+}
+
+interface groups-subscription {
+  /// Add a user to a group
+  record join-group-alt1-params {
+    /// The ID of the group.
+    group-id: string
+  }
+  join-group-alt1: func(params: join-group-alt1-params) -> result<string, string>;
+
+  /// Remove a user from a group
+  record leave-group-alt1-params {
+    /// The ID of the group.
+    group-id: string
+  }
+  leave-group-alt1: func(params: leave-group-alt1-params) -> result<string, string>;
+
+  /// Add a user to a group
+  record join-group-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  join-group: func(params: join-group-params) -> result<string, string>;
+
+  /// Remove a user from a group
+  record leave-group-params {
+    /// The ID of the group.
+    group-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  leave-group: func(params: leave-group-params) -> result<string, string>;
+
+}
+
+interface on-demand-essentials {
+  enum get-user-vods-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-user-vods-alt1-filter-enum {
+    film,
+    series,
+  }
+
+  enum get-user-vods-alt1-sort-enum {
+    added,
+    alphabetical,
+    date,
+    modified-time,
+    name,
+    publish-time,
+    rating,
+  }
+
+  enum create-vod-alt1-body-accepted-currencies-enum {
+    aud,
+    cad,
+    chf,
+    dkk,
+    eur,
+    gbp,
+    jpy,
+    krw,
+    nok,
+    pln,
+    sek,
+    usd,
+  }
+
+  enum create-vod-alt1-body-content-rating-enum {
+    drugs,
+    language,
+    nudity,
+    safe,
+    unrated,
+    violence,
+  }
+
+  enum create-vod-alt1-body-episodes-rent-period-enum {
+    v1-week,
+    v1-year,
+    v24-hour,
+    v3-month,
+    v30-day,
+    v48-hour,
+    v6-month,
+    v72-hour,
+  }
+
+  record create-vod-alt1-body-buy {
+    /// Whether the Buy action is active. *Required if `rent.active` is false.
+    active: option<bool>,
+    /// Whether people who buy the video can download it. To use this field, `type` must be `film`.
+    download: option<bool>,
+    price: option<create-vod-alt1-body-buy-price>
+  }
+
+  record create-vod-alt1-body-buy-price {
+    /// The purchase price of this video in AUD.
+    aud: option<f64>,
+    /// The purchase price of this video in CAD.
+    cad: option<f64>,
+    /// The purchase price of this video in CHF.
+    chf: option<f64>,
+    /// The purchase price of this video in DKK.
+    dkk: option<f64>,
+    /// The purchase price of this video in EUR.
+    eur: option<f64>,
+    /// The purchase price of this video in GBP.
+    gbp: option<f64>,
+    /// The purchase price of this video in JPY.
+    jpy: option<f64>,
+    /// The purchase price of this video in KRW.
+    krw: option<f64>,
+    /// The purchase price of this video in NOK.
+    nok: option<f64>,
+    /// The purchase price of this video in PLN.
+    pln: option<f64>,
+    /// The purchase price of this video in SEK.
+    sek: option<f64>,
+    /// The purchase price of this video in USD when `type` is `film`, or the purchase price of the entire collection in USD when `type` is `series`.
+    usd: option<f64>
+  }
+
+  record create-vod-alt1-body-episodes {
+    buy: option<create-vod-alt1-body-episodes-buy>,
+    rent: option<create-vod-alt1-body-episodes-rent>
+  }
+
+  record create-vod-alt1-body-episodes-buy {
+    /// Whether episodes can be bought.
+    active: option<bool>,
+    /// Whether people who buy the episode can download it. To use this field, `type` must be `series`.
+    download: option<bool>,
+    price: option<create-vod-alt1-body-episodes-buy-price>
+  }
+
+  record create-vod-alt1-body-episodes-buy-price {
+    /// The purchase price per episode. *Required if `episodes.buy.active` is true.
+    usd: option<f64>
+  }
+
+  record create-vod-alt1-body-episodes-rent {
+    /// Whether episodes can be rented
+    active: option<bool>,
+    /// The period in which this episode can be rented for.
+    period: option<create-vod-alt1-body-episodes-rent-period-enum>,
+    price: option<create-vod-alt1-body-episodes-rent-price>
+  }
+
+  record create-vod-alt1-body-episodes-rent-price {
+    /// The default price to rent an episode. This field is applicable only when `type` is `series`. *Required if `episodes.rent.active` is true.
+    usd: option<f64>
+  }
+
+  record create-vod-alt1-body-rent {
+    /// Whether the video can be rented. *Required if `buy.active` is false.
+    active: option<bool>,
+    /// The period in which this can be rented for.
+    period: option<create-vod-alt1-body-episodes-rent-period-enum>,
+    price: option<create-vod-alt1-body-rent-price>
+  }
+
+  record create-vod-alt1-body-rent-price {
+    /// The rental price of this video in AUD.
+    aud: option<f64>,
+    /// The rental price of this video in CAD.
+    cad: option<f64>,
+    /// The rental price of this video in CHF.
+    chf: option<f64>,
+    /// The rental price of this video in DKK.
+    dkk: option<f64>,
+    /// The rental price of this video in EUR.
+    eur: option<f64>,
+    /// The rental price of this video in GBP.
+    gbp: option<f64>,
+    /// The rental price of this video in JPY.
+    jpy: option<f64>,
+    /// The rental price of this video in KRW.
+    krw: option<f64>,
+    /// The rental price of this video in NOK.
+    nok: option<f64>,
+    /// The rental price of this video in PLN.
+    pln: option<f64>,
+    /// The rental price of this video in SEK.
+    sek: option<f64>,
+    /// The rental price of this video in USD when `type` is `film`, or the rental price of the entire collection in USD when `type` is `series`.
+    usd: option<f64>
+  }
+
+  record create-vod-alt1-body-subscription {
+    monthly: option<create-vod-alt1-body-subscription-monthly>
+  }
+
+  record create-vod-alt1-body-subscription-monthly {
+    /// Whether monthly subscription is active. *Required if `rent.active` and `buy.active` are false.
+    active: option<bool>,
+    price: option<create-vod-alt1-body-subscription-monthly-price>
+  }
+
+  record create-vod-alt1-body-subscription-monthly-price {
+    /// The monthly subscription price in USD. *Required if `subscription.active` is true.
+    usd: option<f64>
+  }
+
+  record create-vod-body-buy {
+    /// Whether the Buy action is active. *Required if `rent.active` is false.
+    active: option<bool>,
+    /// Whether people who buy the video can download it. To use this field, `type` must be `film`.
+    download: option<bool>,
+    price: option<create-vod-body-buy-price>
+  }
+
+  record create-vod-body-buy-price {
+    /// The purchase price of this video in AUD.
+    aud: option<f64>,
+    /// The purchase price of this video in CAD.
+    cad: option<f64>,
+    /// The purchase price of this video in CHF.
+    chf: option<f64>,
+    /// The purchase price of this video in DKK.
+    dkk: option<f64>,
+    /// The purchase price of this video in EUR.
+    eur: option<f64>,
+    /// The purchase price of this video in GBP.
+    gbp: option<f64>,
+    /// The purchase price of this video in JPY.
+    jpy: option<f64>,
+    /// The purchase price of this video in KRW.
+    krw: option<f64>,
+    /// The purchase price of this video in NOK.
+    nok: option<f64>,
+    /// The purchase price of this video in PLN.
+    pln: option<f64>,
+    /// The purchase price of this video in SEK.
+    sek: option<f64>,
+    /// The purchase price of this video in USD when `type` is `film`, or the purchase price of the entire collection in USD when `type` is `series`.
+    usd: option<f64>
+  }
+
+  record create-vod-body-episodes {
+    buy: option<create-vod-body-episodes-buy>,
+    rent: option<create-vod-body-episodes-rent>
+  }
+
+  record create-vod-body-episodes-buy {
+    /// Whether episodes can be bought.
+    active: option<bool>,
+    /// Whether people who buy the episode can download it. To use this field, `type` must be `series`.
+    download: option<bool>,
+    price: option<create-vod-body-episodes-buy-price>
+  }
+
+  record create-vod-body-episodes-buy-price {
+    /// The purchase price per episode. *Required if `episodes.buy.active` is true.
+    usd: option<f64>
+  }
+
+  record create-vod-body-episodes-rent {
+    /// Whether episodes can be rented
+    active: option<bool>,
+    /// The period in which this episode can be rented for.
+    period: option<create-vod-alt1-body-episodes-rent-period-enum>,
+    price: option<create-vod-body-episodes-rent-price>
+  }
+
+  record create-vod-body-episodes-rent-price {
+    /// The default price to rent an episode. This field is applicable only when `type` is `series`. *Required if `episodes.rent.active` is true.
+    usd: option<f64>
+  }
+
+  record create-vod-body-rent {
+    /// Whether the video can be rented. *Required if `buy.active` is false.
+    active: option<bool>,
+    /// The period in which this can be rented for.
+    period: option<create-vod-alt1-body-episodes-rent-period-enum>,
+    price: option<create-vod-body-rent-price>
+  }
+
+  record create-vod-body-rent-price {
+    /// The rental price of this video in AUD.
+    aud: option<f64>,
+    /// The rental price of this video in CAD.
+    cad: option<f64>,
+    /// The rental price of this video in CHF.
+    chf: option<f64>,
+    /// The rental price of this video in DKK.
+    dkk: option<f64>,
+    /// The rental price of this video in EUR.
+    eur: option<f64>,
+    /// The rental price of this video in GBP.
+    gbp: option<f64>,
+    /// The rental price of this video in JPY.
+    jpy: option<f64>,
+    /// The rental price of this video in KRW.
+    krw: option<f64>,
+    /// The rental price of this video in NOK.
+    nok: option<f64>,
+    /// The rental price of this video in PLN.
+    pln: option<f64>,
+    /// The rental price of this video in SEK.
+    sek: option<f64>,
+    /// The rental price of this video in USD when `type` is `film`, or the rental price of the entire collection in USD when `type` is `series`.
+    usd: option<f64>
+  }
+
+  record create-vod-body-subscription {
+    monthly: option<create-vod-body-subscription-monthly>
+  }
+
+  record create-vod-body-subscription-monthly {
+    /// Whether monthly subscription is active. *Required if `rent.active` and `buy.active` are false.
+    active: option<bool>,
+    price: option<create-vod-body-subscription-monthly-price>
+  }
+
+  record create-vod-body-subscription-monthly-price {
+    /// The monthly subscription price in USD. *Required if `subscription.active` is true.
+    usd: option<f64>
+  }
+
+  /// Get all the On Demand pages of a user
+  record get-user-vods-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-user-vods-alt1-direction-enum>,
+    /// The type of On Demand pages to return.
+    filter: option<get-user-vods-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-user-vods-alt1-sort-enum>
+  }
+  get-user-vods-alt1: func(params: get-user-vods-alt1-params) -> result<string, string>;
+
+  /// Create an On Demand page
+  record create-vod-alt1-params {
+    /// An array of accepted currencies.
+    /// 
+    accepted-currencies: option<create-vod-alt1-body-accepted-currencies-enum>,
+    buy: option<create-vod-alt1-body-buy>,
+    /// One or more ratings, either as a comma-separated list or as a JSON array depending on the request format.
+    content-rating: create-vod-alt1-body-content-rating-enum,
+    /// The description of the On Demand page.
+    description: string,
+    /// The custom domain of the On Demand page.
+    domain-link: option<string>,
+    episodes: option<create-vod-alt1-body-episodes>,
+    /// The custom string to use in this On Demand page's Vimeo URL.
+    link: option<string>,
+    /// The name of the On Demand page.
+    name: string,
+    rent: option<create-vod-alt1-body-rent>,
+    subscription: option<create-vod-alt1-body-subscription>,
+    /// The type of On Demand page.
+    type-op: get-user-vods-alt1-filter-enum
+  }
+  create-vod-alt1: func(params: create-vod-alt1-params) -> result<string, string>;
+
+  /// Get a specific On Demand page
+  record get-vod-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  get-vod: func(params: get-vod-params) -> result<string, string>;
+
+  /// Edit an On Demand page
+  record edit-vod-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  edit-vod: func(params: edit-vod-params) -> result<string, string>;
+
+  /// Delete a draft of an On Demand page
+  record delete-vod-draft-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  delete-vod-draft: func(params: delete-vod-draft-params) -> result<string, string>;
+
+  /// Get all the On Demand pages of a user
+  record get-user-vods-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-user-vods-alt1-direction-enum>,
+    /// The type of On Demand pages to return.
+    filter: option<get-user-vods-alt1-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-user-vods-alt1-sort-enum>
+  }
+  get-user-vods: func(params: get-user-vods-params) -> result<string, string>;
+
+  /// Create an On Demand page
+  record create-vod-params {
+    /// The ID of the user.
+    user-id: string,
+    /// An array of accepted currencies.
+    /// 
+    accepted-currencies: option<create-vod-alt1-body-accepted-currencies-enum>,
+    buy: option<create-vod-body-buy>,
+    /// One or more ratings, either as a comma-separated list or as a JSON array depending on the request format.
+    content-rating: create-vod-alt1-body-content-rating-enum,
+    /// The description of the On Demand page.
+    description: string,
+    /// The custom domain of the On Demand page.
+    domain-link: option<string>,
+    episodes: option<create-vod-body-episodes>,
+    /// The custom string to use in this On Demand page's Vimeo URL.
+    link: option<string>,
+    /// The name of the On Demand page.
+    name: string,
+    rent: option<create-vod-body-rent>,
+    subscription: option<create-vod-body-subscription>,
+    /// The type of On Demand page.
+    type-op: get-user-vods-alt1-filter-enum
+  }
+  create-vod: func(params: create-vod-params) -> result<string, string>;
+
+}
+
+interface on-demand-purchases-and-rentals {
+  enum get-vod-purchases-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-vod-purchases-filter-enum {
+    all,
+    expiring-soon,
+    film,
+    important,
+    purchased,
+    rented,
+    series,
+    subscription,
+    unwatched,
+    watched,
+  }
+
+  enum get-vod-purchases-sort-enum {
+    added,
+    alphabetical,
+    date,
+    name,
+    purchase-time,
+    rating,
+    release-date,
+  }
+
+  /// Get all the On Demand purchases and rentals that a user has made
+  record get-vod-purchases-params {
+    /// The sort direction of the results.
+    direction: option<get-vod-purchases-direction-enum>,
+    /// The type of On Demand videos to show.
+    /// 
+    filter: option<get-vod-purchases-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-vod-purchases-sort-enum>
+  }
+  get-vod-purchases: func(params: get-vod-purchases-params) -> result<string, string>;
+
+  /// Check if a user has made a purchase or rental from an On Demand page
+  record check-if-vod-was-purchased-alt1-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  check-if-vod-was-purchased-alt1: func(params: check-if-vod-was-purchased-alt1-params) -> result<string, string>;
+
+  /// Check if a user has made a purchase or rental from an On Demand page
+  record check-if-vod-was-purchased-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  check-if-vod-was-purchased: func(params: check-if-vod-was-purchased-params) -> result<string, string>;
+
+}
+
+interface users-pictures {
+  /// Get all the pictures that belong to a user
+  record get-pictures-alt1-params {
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-pictures-alt1: func(params: get-pictures-alt1-params) -> result<string, string>;
+
+  /// Add a user picture
+  create-picture-alt1: func() -> result<string, string>;
+
+  /// Get a specific user picture
+  record get-picture-alt1-params {
+    /// The ID of the picture.
+    portraitset-id: string
+  }
+  get-picture-alt1: func(params: get-picture-alt1-params) -> result<string, string>;
+
+  /// Edit a user picture
+  record edit-picture-alt1-params {
+    /// The ID of the picture.
+    portraitset-id: string
+  }
+  edit-picture-alt1: func(params: edit-picture-alt1-params) -> result<string, string>;
+
+  /// Delete a user picture
+  record delete-picture-alt1-params {
+    /// The ID of the picture.
+    portraitset-id: string
+  }
+  delete-picture-alt1: func(params: delete-picture-alt1-params) -> result<string, string>;
+
+  /// Get all the pictures that belong to a user
+  record get-pictures-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-pictures: func(params: get-pictures-params) -> result<string, string>;
+
+  /// Add a user picture
+  record create-picture-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  create-picture: func(params: create-picture-params) -> result<string, string>;
+
+  /// Get a specific user picture
+  record get-picture-params {
+    /// The ID of the picture.
+    portraitset-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-picture: func(params: get-picture-params) -> result<string, string>;
+
+  /// Edit a user picture
+  record edit-picture-params {
+    /// The ID of the picture.
+    portraitset-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  edit-picture: func(params: edit-picture-params) -> result<string, string>;
+
+  /// Delete a user picture
+  record delete-picture-params {
+    /// The ID of the picture.
+    portraitset-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  delete-picture: func(params: delete-picture-params) -> result<string, string>;
+
+}
+
+interface portfolios-essentials {
+  enum get-portfolios-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-portfolios-alt1-sort-enum {
+    alphabetical,
+    date,
+  }
+
+  /// Get all the portfolios that belong to a user
+  record get-portfolios-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-portfolios-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-portfolios-alt1-sort-enum>
+  }
+  get-portfolios-alt1: func(params: get-portfolios-alt1-params) -> result<string, string>;
+
+  /// Get a specific portfolio
+  record get-portfolio-alt1-params {
+    /// The ID of the portfolio.
+    portfolio-id: string
+  }
+  get-portfolio-alt1: func(params: get-portfolio-alt1-params) -> result<string, string>;
+
+  /// Get all the portfolios that belong to a user
+  record get-portfolios-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-portfolios-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-portfolios-alt1-sort-enum>
+  }
+  get-portfolios: func(params: get-portfolios-params) -> result<string, string>;
+
+  /// Get a specific portfolio
+  record get-portfolio-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-portfolio: func(params: get-portfolio-params) -> result<string, string>;
+
+}
+
+interface portfolios-videos {
+  enum get-portfolio-videos-alt1-filter-enum {
+    embeddable,
+  }
+
+  enum get-portfolio-videos-alt1-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    default,
+    likes,
+    manual,
+    plays,
+  }
+
+  /// Get all the videos in a portfolio
+  record get-portfolio-videos-alt1-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The page that contains the video URI.
+    containing-uri: option<string>,
+    /// The attribute by which to filter the results.
+    filter: option<get-portfolio-videos-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    /// 
+    sort: option<get-portfolio-videos-alt1-sort-enum>
+  }
+  get-portfolio-videos-alt1: func(params: get-portfolio-videos-alt1-params) -> result<string, string>;
+
+  /// Get a specific video in a portfolio
+  record get-portfolio-video-alt1-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-portfolio-video-alt1: func(params: get-portfolio-video-alt1-params) -> result<string, string>;
+
+  /// Add a video to a portfolio
+  record add-video-to-portfolio-alt1-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-portfolio-alt1: func(params: add-video-to-portfolio-alt1-params) -> result<string, string>;
+
+  /// Remove a video from a portfolio
+  record delete-video-from-portfolio-alt1-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-from-portfolio-alt1: func(params: delete-video-from-portfolio-alt1-params) -> result<string, string>;
+
+  /// Get all the videos in a portfolio
+  record get-portfolio-videos-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The page that contains the video URI.
+    containing-uri: option<string>,
+    /// The attribute by which to filter the results.
+    filter: option<get-portfolio-videos-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    /// 
+    sort: option<get-portfolio-videos-alt1-sort-enum>
+  }
+  get-portfolio-videos: func(params: get-portfolio-videos-params) -> result<string, string>;
+
+  /// Get a specific video in a portfolio
+  record get-portfolio-video-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-portfolio-video: func(params: get-portfolio-video-params) -> result<string, string>;
+
+  /// Add a video to a portfolio
+  record add-video-to-portfolio-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-portfolio: func(params: add-video-to-portfolio-params) -> result<string, string>;
+
+  /// Remove a video from a portfolio
+  record delete-video-from-portfolio-params {
+    /// The ID of the portfolio.
+    portfolio-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-from-portfolio: func(params: delete-video-from-portfolio-params) -> result<string, string>;
+
+}
+
+interface embed-presets-essentials {
+  /// Get all the embed presets that a user has created
+  record get-embed-presets-alt1-params {
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-embed-presets-alt1: func(params: get-embed-presets-alt1-params) -> result<string, string>;
+
+  /// Get a specific embed preset
+  record get-embed-preset-alt1-params {
+    /// The ID of the preset.
+    preset-id: string
+  }
+  get-embed-preset-alt1: func(params: get-embed-preset-alt1-params) -> result<string, string>;
+
+  /// Edit an embed preset
+  record edit-embed-preset-alt1-params {
+    /// The ID of the preset.
+    preset-id: string
+  }
+  edit-embed-preset-alt1: func(params: edit-embed-preset-alt1-params) -> result<string, string>;
+
+  /// Get all the embed presets that a user has created
+  record get-embed-presets-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-embed-presets: func(params: get-embed-presets-params) -> result<string, string>;
+
+  /// Get a specific embed preset
+  record get-embed-preset-params {
+    /// The ID of the preset.
+    preset-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-embed-preset: func(params: get-embed-preset-params) -> result<string, string>;
+
+  /// Edit an embed preset
+  record edit-embed-preset-params {
+    /// The ID of the preset.
+    preset-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  edit-embed-preset: func(params: edit-embed-preset-params) -> result<string, string>;
+
+}
+
+interface embed-presets-videos {
+  /// Get all the videos that have been added to an embed preset
+  record get-embed-preset-videos-alt1-params {
+    /// The ID of the preset.
+    preset-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-embed-preset-videos-alt1: func(params: get-embed-preset-videos-alt1-params) -> result<string, string>;
+
+  /// Get all the videos that have been added to an embed preset
+  record get-embed-preset-videos-params {
+    /// The ID of the preset.
+    preset-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-embed-preset-videos: func(params: get-embed-preset-videos-params) -> result<string, string>;
+
+  /// Check if an embed preset has been added to a video
+  record get-video-embed-preset-params {
+    /// The ID of the preset.
+    preset-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-video-embed-preset: func(params: get-video-embed-preset-params) -> result<string, string>;
+
+  /// Add an embed preset to a video
+  record add-video-embed-preset-params {
+    /// The ID of the preset.
+    preset-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-embed-preset: func(params: add-video-embed-preset-params) -> result<string, string>;
+
+  /// Remove an embed preset from a video
+  record delete-video-embed-preset-params {
+    /// The ID of the preset.
+    preset-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-embed-preset: func(params: delete-video-embed-preset-params) -> result<string, string>;
+
+  /// Add a new custom logo to a video
+  record create-video-custom-logo-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  create-video-custom-logo: func(params: create-video-custom-logo-params) -> result<string, string>;
+
+  /// Get a custom video logo
+  record get-video-custom-logo-params {
+    /// The ID of the picture.
+    thumbnail-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-video-custom-logo: func(params: get-video-custom-logo-params) -> result<string, string>;
+
+}
+
+interface projects-essentials {
+  enum get-projects-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-projects-alt1-sort-enum {
+    date,
+    default,
+    modified-time,
+    name,
+  }
+
+  /// Get all the projects that belong to a user
+  record get-projects-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-projects-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-projects-alt1-sort-enum>
+  }
+  get-projects-alt1: func(params: get-projects-alt1-params) -> result<string, string>;
+
+  /// Create a project
+  record create-project-alt1-params {
+    /// The name of the project.
+    name: string
+  }
+  create-project-alt1: func(params: create-project-alt1-params) -> result<string, string>;
+
+  /// Get a specific project
+  record get-project-alt1-params {
+    /// The ID of the project.
+    project-id: string
+  }
+  get-project-alt1: func(params: get-project-alt1-params) -> result<string, string>;
+
+  /// Edit a project
+  record edit-project-alt1-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The name of the project.
+    name: string
+  }
+  edit-project-alt1: func(params: edit-project-alt1-params) -> result<string, string>;
+
+  /// Delete a project
+  record delete-project-alt1-params {
+    /// The ID of the project.
+    project-id: string,
+    /// Whether to delete all the videos in the project along with the project itself.
+    should-delete-clips: option<bool>
+  }
+  delete-project-alt1: func(params: delete-project-alt1-params) -> result<string, string>;
+
+  /// Get all the projects that belong to a user
+  record get-projects-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-projects-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-projects-alt1-sort-enum>
+  }
+  get-projects: func(params: get-projects-params) -> result<string, string>;
+
+  /// Create a project
+  record create-project-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The name of the project.
+    name: string
+  }
+  create-project: func(params: create-project-params) -> result<string, string>;
+
+  /// Get a specific project
+  record get-project-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-project: func(params: get-project-params) -> result<string, string>;
+
+  /// Edit a project
+  record edit-project-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The name of the project.
+    name: string
+  }
+  edit-project: func(params: edit-project-params) -> result<string, string>;
+
+  /// Delete a project
+  record delete-project-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// Whether to delete all the videos in the project along with the project itself.
+    should-delete-clips: option<bool>
+  }
+  delete-project: func(params: delete-project-params) -> result<string, string>;
+
+}
+
+interface projects-videos {
+  enum get-project-videos-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-project-videos-alt1-sort-enum {
+    alphabetical,
+    date,
+    default,
+    duration,
+    last-user-action-event-date,
+  }
+
+  /// Get all the videos in a project
+  record get-project-videos-alt1-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The sort direction of the results.
+    direction: option<get-project-videos-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-project-videos-alt1-sort-enum>
+  }
+  get-project-videos-alt1: func(params: get-project-videos-alt1-params) -> result<string, string>;
+
+  /// Add a list of videos to a project
+  record add-videos-to-project-alt1-params {
+    /// The ID of the project.
+    project-id: string,
+    /// A comma-separated list of video URIs to add.
+    uris: string
+  }
+  add-videos-to-project-alt1: func(params: add-videos-to-project-alt1-params) -> result<string, string>;
+
+  /// Remove a list of videos from a project
+  record remove-videos-from-project-alt1-params {
+    /// The ID of the project.
+    project-id: string,
+    /// Whether to delete the videos when removing them from the project.
+    should-delete-clips: option<bool>,
+    /// A comma-separated list of the video URIs to remove.
+    uris: string
+  }
+  remove-videos-from-project-alt1: func(params: remove-videos-from-project-alt1-params) -> result<string, string>;
+
+  /// Add a specific video to a project
+  record add-video-to-project-alt1-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-project-alt1: func(params: add-video-to-project-alt1-params) -> result<string, string>;
+
+  /// Remove a specific video from a project
+  record remove-video-from-project-alt1-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  remove-video-from-project-alt1: func(params: remove-video-from-project-alt1-params) -> result<string, string>;
+
+  /// Get all the videos in a project
+  record get-project-videos-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-project-videos-alt1-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-project-videos-alt1-sort-enum>
+  }
+  get-project-videos: func(params: get-project-videos-params) -> result<string, string>;
+
+  /// Add a list of videos to a project
+  record add-videos-to-project-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// A comma-separated list of video URIs to add.
+    uris: string
+  }
+  add-videos-to-project: func(params: add-videos-to-project-params) -> result<string, string>;
+
+  /// Remove a list of videos from a project
+  record remove-videos-from-project-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// Whether to delete the videos when removing them from the project.
+    should-delete-clips: option<bool>,
+    /// A comma-separated list of the video URIs to remove.
+    uris: string
+  }
+  remove-videos-from-project: func(params: remove-videos-from-project-params) -> result<string, string>;
+
+  /// Add a specific video to a project
+  record add-video-to-project-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-project: func(params: add-video-to-project-params) -> result<string, string>;
+
+  /// Remove a specific video from a project
+  record remove-video-from-project-params {
+    /// The ID of the project.
+    project-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  remove-video-from-project: func(params: remove-video-from-project-params) -> result<string, string>;
+
+}
+
+interface videos-upload {
+  /// Upload a video
+  upload-video-alt1: func() -> result<string, string>;
+
+  /// Get a user's upload attempt
+  record get-upload-attempt-params {
+    /// The ID of the upload attempt.
+    upload: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-upload-attempt: func(params: get-upload-attempt-params) -> result<string, string>;
+
+  /// Complete a user's streaming upload
+  record complete-streaming-upload-params {
+    /// The ID of the upload attempt.
+    upload: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The crypto signature of the completed upload.
+    signature: string,
+    /// The ID of the uploaded file.
+    video-file-id: f64
+  }
+  complete-streaming-upload: func(params: complete-streaming-upload-params) -> result<string, string>;
+
+  /// Upload a video
+  record upload-video-params {
+    /// The ID of the user.
+    user-id: string
+  }
+  upload-video: func(params: upload-video-params) -> result<string, string>;
+
+}
+
+interface users-watch-history {
+  /// Get all the videos that a user has watched
+  record get-watch-history-params {
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-watch-history: func(params: get-watch-history-params) -> result<string, string>;
+
+  /// Delete a user's watch history
+  delete-watch-history: func() -> result<string, string>;
+
+  /// Delete a specific video from a user's watch history
+  record delete-from-watch-history-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-from-watch-history: func(params: delete-from-watch-history-params) -> result<string, string>;
+
+}
+
+interface watch-later-queue-essentials {
+  enum get-watch-later-queue-alt1-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-watch-later-queue-alt1-filter-enum {
+    embeddable,
+  }
+
+  enum get-watch-later-queue-alt1-sort-enum {
+    alphabetical,
+    comments,
+    date,
+    duration,
+    likes,
+    plays,
+  }
+
+  /// Get all the videos in a user's Watch Later queue
+  record get-watch-later-queue-alt1-params {
+    /// The sort direction of the results.
+    direction: option<get-watch-later-queue-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-watch-later-queue-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-watch-later-queue-alt1-sort-enum>
+  }
+  get-watch-later-queue-alt1: func(params: get-watch-later-queue-alt1-params) -> result<string, string>;
+
+  /// Check if a user has added a specific video to their Watch Later queue
+  record check-watch-later-queue-alt1-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  check-watch-later-queue-alt1: func(params: check-watch-later-queue-alt1-params) -> result<string, string>;
+
+  /// Add a video to a user's Watch Later queue
+  record add-video-to-watch-later-alt1-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-watch-later-alt1: func(params: add-video-to-watch-later-alt1-params) -> result<string, string>;
+
+  /// Remove a video from a user's Watch Later queue
+  record delete-video-from-watch-later-alt1-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-from-watch-later-alt1: func(params: delete-video-from-watch-later-alt1-params) -> result<string, string>;
+
+  /// Get all the videos in a user's Watch Later queue
+  record get-watch-later-queue-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The sort direction of the results.
+    direction: option<get-watch-later-queue-alt1-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-watch-later-queue-alt1-filter-enum>,
+    /// Whether to filter the results by embeddable videos (`true`) or non-embeddable videos (`false`). Required only if **filter** is `embeddable`.
+    filter-embeddable: option<bool>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-watch-later-queue-alt1-sort-enum>
+  }
+  get-watch-later-queue: func(params: get-watch-later-queue-params) -> result<string, string>;
+
+  /// Check if a user has added a specific video to their Watch Later queue
+  record check-watch-later-queue-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  check-watch-later-queue: func(params: check-watch-later-queue-params) -> result<string, string>;
+
+  /// Add a video to a user's Watch Later queue
+  record add-video-to-watch-later-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-watch-later: func(params: add-video-to-watch-later-params) -> result<string, string>;
+
+  /// Remove a video from a user's Watch Later queue
+  record delete-video-from-watch-later-params {
+    /// The ID of the user.
+    user-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-from-watch-later: func(params: delete-video-from-watch-later-params) -> result<string, string>;
+
+}
+
+interface authentication-extras-essentials {
+  /// Exchange an authorization code for an access token
+  exchange-auth-code: func() -> result<string, string>;
+
+  /// Authorize a client with OAuth
+  client-auth: func() -> result<string, string>;
+
+  /// Convert OAuth 1 access tokens to OAuth 2 access tokens
+  convert-access-token: func() -> result<string, string>;
+
+  /// Verify an OAuth 2 token
+  verify-token: func() -> result<string, string>;
+
+  /// Revoke the current access token
+  delete-token: func() -> result<string, string>;
+
+}
+
+interface on-demand-genres {
+  enum get-genre-vods-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-genre-vods-filter-enum {
+    country,
+    my-region,
+  }
+
+  enum get-genre-vods-sort-enum {
+    alphabetical,
+    date,
+    name,
+    publish-time,
+    videos,
+  }
+
+  /// Get all On Demand genres
+  get-vod-genres: func() -> result<string, string>;
+
+  /// Get a specific On Demand genre
+  record get-vod-genre-params {
+    /// The ID of the genre.
+    genre-id: string
+  }
+  get-vod-genre: func(params: get-vod-genre-params) -> result<string, string>;
+
+  /// Get all the On Demand pages in a genre
+  record get-genre-vods-params {
+    /// The ID of the genre.
+    genre-id: string,
+    /// The sort direction of the results.
+    direction: option<get-genre-vods-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-genre-vods-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<get-genre-vods-sort-enum>
+  }
+  get-genre-vods: func(params: get-genre-vods-params) -> result<string, string>;
+
+  /// Get a specific On Demand page in a genre
+  record get-genre-vod-params {
+    /// The ID of the genre.
+    genre-id: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  get-genre-vod: func(params: get-genre-vod-params) -> result<string, string>;
+
+  /// Get all the genres of an On Demand page
+  record get-vod-genres-by-ondemand-id-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  get-vod-genres-by-ondemand-id: func(params: get-vod-genres-by-ondemand-id-params) -> result<string, string>;
+
+  /// Check whether an On Demand page belongs to a genre
+  record get-vod-genre-by-ondemand-id-params {
+    /// The ID of the genre.
+    genre-id: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  get-vod-genre-by-ondemand-id: func(params: get-vod-genre-by-ondemand-id-params) -> result<string, string>;
+
+  /// Add a genre to an On Demand page
+  record add-vod-genre-params {
+    /// The ID of the genre.
+    genre-id: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  add-vod-genre: func(params: add-vod-genre-params) -> result<string, string>;
+
+  /// Remove a genre from an On Demand page
+  record delete-vod-genre-params {
+    /// The ID of the genre.
+    genre-id: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  delete-vod-genre: func(params: delete-vod-genre-params) -> result<string, string>;
+
+}
+
+interface on-demand-backgrounds {
+  /// Get all the backgrounds of an On Demand page
+  record get-vod-backgrounds-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-vod-backgrounds: func(params: get-vod-backgrounds-params) -> result<string, string>;
+
+  /// Add a background to an On Demand page
+  record create-vod-background-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  create-vod-background: func(params: create-vod-background-params) -> result<string, string>;
+
+  /// Get a specific background of an On Demand page
+  record get-vod-background-params {
+    /// The ID of the background.
+    background-id: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  get-vod-background: func(params: get-vod-background-params) -> result<string, string>;
+
+  /// Edit a background of an On Demand page
+  record edit-vod-background-params {
+    /// The ID of the background.
+    background-id: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  edit-vod-background: func(params: edit-vod-background-params) -> result<string, string>;
+
+  /// Remove a background from an On Demand page
+  record delete-vod-background-params {
+    /// The ID of the background.
+    background-id: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  delete-vod-background: func(params: delete-vod-background-params) -> result<string, string>;
+
+}
+
+interface on-demand-posters {
+  /// Get all the posters of an On Demand page
+  record get-vod-posters-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-vod-posters: func(params: get-vod-posters-params) -> result<string, string>;
+
+  /// Add a poster to an On Demand page
+  record add-vod-poster-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  add-vod-poster: func(params: add-vod-poster-params) -> result<string, string>;
+
+  /// Get a specific poster of an On Demand page
+  record get-vod-poster-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the picture.
+    poster-id: string
+  }
+  get-vod-poster: func(params: get-vod-poster-params) -> result<string, string>;
+
+  /// Edit a poster of an On Demand page
+  record edit-vod-poster-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the picture.
+    poster-id: string
+  }
+  edit-vod-poster: func(params: edit-vod-poster-params) -> result<string, string>;
+
+}
+
+interface on-demand-promotions {
+  enum get-vod-promotions-filter-enum {
+    batch,
+    default,
+    single,
+    vip,
+  }
+
+  /// Get all the promotions on an On Demand page
+  record get-vod-promotions-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The filter to apply to the results.
+    filter: get-vod-promotions-filter-enum,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-vod-promotions: func(params: get-vod-promotions-params) -> result<string, string>;
+
+  /// Add a promotion to an On Demand page
+  record create-vod-promotion-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  create-vod-promotion: func(params: create-vod-promotion-params) -> result<string, string>;
+
+  /// Get a specific promotion on an On Demand page
+  record get-vod-promotion-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the promotion.
+    promotion-id: string
+  }
+  get-vod-promotion: func(params: get-vod-promotion-params) -> result<string, string>;
+
+  /// Remove a promotion from an On Demand page
+  record delete-vod-promotion-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the promotion.
+    promotion-id: string
+  }
+  delete-vod-promotion: func(params: delete-vod-promotion-params) -> result<string, string>;
+
+  /// Get all the codes of a promotion on an On Demand page
+  record get-vod-promotion-codes-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the promotion.
+    promotion-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-vod-promotion-codes: func(params: get-vod-promotion-codes-params) -> result<string, string>;
+
+}
+
+interface on-demand-regions {
+  /// Get all the regions of an On Demand page
+  record get-vod-regions-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  get-vod-regions: func(params: get-vod-regions-params) -> result<string, string>;
+
+  /// Add a list of regions to an On Demand page
+  record set-vod-regions-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  set-vod-regions: func(params: set-vod-regions-params) -> result<string, string>;
+
+  /// Remove a list of regions from an On Demand page
+  record delete-vod-regions-params {
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  delete-vod-regions: func(params: delete-vod-regions-params) -> result<string, string>;
+
+  /// Get a specific region of an On Demand page
+  record get-vod-region-params {
+    /// The country code.
+    country: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  get-vod-region: func(params: get-vod-region-params) -> result<string, string>;
+
+  /// Add a specific region to an On Demand page
+  record add-vod-region-params {
+    /// The country code.
+    country: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  add-vod-region: func(params: add-vod-region-params) -> result<string, string>;
+
+  /// Remove a specific region from an On Demand page
+  record delete-vod-region-params {
+    /// The country code.
+    country: string,
+    /// The ID of the On Demand.
+    ondemand-id: string
+  }
+  delete-vod-region: func(params: delete-vod-region-params) -> result<string, string>;
+
+  /// Get all the On Demand regions
+  get-regions: func() -> result<string, string>;
+
+  /// Get a specific On Demand region
+  record get-region-params {
+    /// The country code.
+    country: string
+  }
+  get-region: func(params: get-region-params) -> result<string, string>;
+
+}
+
+interface on-demand-seasons {
+  enum get-vod-seasons-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-vod-seasons-filter-enum {
+    viewable,
+  }
+
+  enum get-vod-seasons-sort-enum {
+    date,
+    manual,
+  }
+
+  enum get-vod-season-videos-sort-enum {
+    date,
+    default,
+    manual,
+    name,
+    purchase-time,
+    release-date,
+  }
+
+  /// Get all the seasons on an On Demand page
+  record get-vod-seasons-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The sort direction of the results.
+    direction: option<get-vod-seasons-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-vod-seasons-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-vod-seasons-sort-enum>
+  }
+  get-vod-seasons: func(params: get-vod-seasons-params) -> result<string, string>;
+
+  /// Get a specific season on an On Demand page
+  record get-vod-season-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the season.
+    season-id: string
+  }
+  get-vod-season: func(params: get-vod-season-params) -> result<string, string>;
+
+  /// Get all the videos in a season on an On Demand page
+  record get-vod-season-videos-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the season.
+    season-id: string,
+    /// The attribute by which to filter the results.
+    filter: option<get-vod-seasons-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-vod-season-videos-sort-enum>
+  }
+  get-vod-season-videos: func(params: get-vod-season-videos-params) -> result<string, string>;
+
+}
+
+interface on-demand-videos {
+  enum get-vod-videos-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-vod-videos-filter-enum {
+    all,
+    buy,
+    expiring-soon,
+    extra,
+    main,
+    main-viewable,
+    rent,
+    trailer,
+    unwatched,
+    viewable,
+    watched,
+  }
+
+  enum get-vod-videos-sort-enum {
+    date,
+    default,
+    episode,
+    manual,
+    name,
+    purchase-time,
+    release-date,
+  }
+
+  /// Get all the videos on an On Demand page
+  record get-vod-videos-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The sort direction of the results.
+    direction: option<get-vod-videos-direction-enum>,
+    /// The attribute by which to filter the results.
+    filter: option<get-vod-videos-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-vod-videos-sort-enum>
+  }
+  get-vod-videos: func(params: get-vod-videos-params) -> result<string, string>;
+
+  /// Get a specific video on an On Demand page
+  record get-vod-video-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  get-vod-video: func(params: get-vod-video-params) -> result<string, string>;
+
+  /// Add a video to an On Demand page
+  record add-video-to-vod-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-to-vod: func(params: add-video-to-vod-params) -> result<string, string>;
+
+  /// Remove a video from an On Demand page
+  record delete-video-from-vod-params {
+    /// The ID of the On Demand.
+    ondemand-id: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-from-vod: func(params: delete-video-from-vod-params) -> result<string, string>;
+
+}
+
+interface tags-essentials {
+  /// Get a specific tag
+  record get-tag-params {
+    /// The tag to return.
+    word: string
+  }
+  get-tag: func(params: get-tag-params) -> result<string, string>;
+
+}
+
+interface videos-tags {
+  enum get-videos-with-tag-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum get-videos-with-tag-sort-enum {
+    created-time,
+    duration,
+    name,
+  }
+
+  /// Get all the videos with a specific tag
+  record get-videos-with-tag-params {
+    /// The tag word.
+    word: string,
+    /// The sort direction of the results.
+    direction: option<get-videos-with-tag-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The way to sort the results.
+    sort: option<get-videos-with-tag-sort-enum>
+  }
+  get-videos-with-tag: func(params: get-videos-with-tag-params) -> result<string, string>;
+
+  /// Get all the tags of a video
+  record get-video-tags-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  get-video-tags: func(params: get-video-tags-params) -> result<string, string>;
+
+  /// Add a list of tags to a video
+  record add-video-tags-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-tags: func(params: add-video-tags-params) -> result<string, string>;
+
+  /// Check if a tag has been added to a video
+  record check-video-for-tag-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The tag word.
+    word: string
+  }
+  check-video-for-tag: func(params: check-video-for-tag-params) -> result<string, string>;
+
+  /// Add a specific tag to a video
+  record add-video-tag-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The tag word.
+    word: string
+  }
+  add-video-tag: func(params: add-video-tag-params) -> result<string, string>;
+
+  /// Remove a tag from a video
+  record delete-video-tag-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The tag word.
+    word: string
+  }
+  delete-video-tag: func(params: delete-video-tag-params) -> result<string, string>;
+
+}
+
+interface users-internal {
+  enum search-users-direction-enum {
+    asc,
+    desc,
+  }
+
+  enum search-users-sort-enum {
+    alphabetical,
+    date,
+    followers,
+    relevant,
+    videos,
+  }
+
+  /// Search for users
+  record search-users-params {
+    /// The sort direction of the results.
+    direction: option<search-users-direction-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>,
+    /// The search query to use to filter the results.
+    query: option<string>,
+    /// The way to sort the results.
+    sort: option<search-users-sort-enum>
+  }
+  search-users: func(params: search-users-params) -> result<string, string>;
+
+}
+
+interface albums-custom-album-thumbnails {
+  /// Get all the custom upload thumbnails of an album
+  record get-album-custom-thumbs-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-album-custom-thumbs: func(params: get-album-custom-thumbs-params) -> result<string, string>;
+
+  /// Add a custom uploaded thumbnail
+  record create-album-custom-thumb-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  create-album-custom-thumb: func(params: create-album-custom-thumb-params) -> result<string, string>;
+
+  /// Get a specific custom uploaded album thumbnail
+  record get-album-custom-thumbnail-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the custom thumbnail.
+    thumbnail-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-album-custom-thumbnail: func(params: get-album-custom-thumbnail-params) -> result<string, string>;
+
+  /// Replace a custom uploaded album thumbnail
+  record replace-album-custom-thumb-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the custom thumbnail.
+    thumbnail-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  replace-album-custom-thumb: func(params: replace-album-custom-thumb-params) -> result<string, string>;
+
+  /// Remove a custom uploaded album thumbnail
+  record delete-album-custom-thumbnail-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the custom thumbnail.
+    thumbnail-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  delete-album-custom-thumbnail: func(params: delete-album-custom-thumbnail-params) -> result<string, string>;
+
+}
+
+interface albums-custom-album-logos {
+  /// Get all the custom logos of an album
+  record get-album-logos-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-album-logos: func(params: get-album-logos-params) -> result<string, string>;
+
+  /// Add a custom album logo
+  record create-album-logo-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  create-album-logo: func(params: create-album-logo-params) -> result<string, string>;
+
+  /// Get a specific custom album logo
+  record get-album-logo-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the custom logo.
+    logo-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  get-album-logo: func(params: get-album-logo-params) -> result<string, string>;
+
+  /// Replace a custom album logo
+  record replace-album-logo-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the custom logo.
+    logo-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  replace-album-logo: func(params: replace-album-logo-params) -> result<string, string>;
+
+  /// Remove a custom album logo
+  record delete-album-logo-params {
+    /// The ID of the album.
+    album-id: string,
+    /// The ID of the custom logo.
+    logo-id: string,
+    /// The ID of the user.
+    user-id: string
+  }
+  delete-album-logo: func(params: delete-album-logo-params) -> result<string, string>;
+
+}
+
+interface videos-embed-privacy {
+  /// Get all the domains on which a video can be embedded
+  record get-video-privacy-domains-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-video-privacy-domains: func(params: get-video-privacy-domains-params) -> result<string, string>;
+
+  /// Permit a video to be embedded on a domain
+  record add-video-privacy-domain-params {
+    /// The domain name.
+    domain: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  add-video-privacy-domain: func(params: add-video-privacy-domain-params) -> result<string, string>;
+
+  /// Restrict a video from being embedded on a domain
+  record delete-video-privacy-domain-params {
+    /// The domain name.
+    domain: string,
+    /// The ID of the video.
+    video-id: string
+  }
+  delete-video-privacy-domain: func(params: delete-video-privacy-domain-params) -> result<string, string>;
+
+}
+
+interface videos-versions {
+  /// Add a version to a video
+  record create-video-version-params {
+    /// The ID of the video.
+    video-id: string
+  }
+  create-video-version: func(params: create-video-version-params) -> result<string, string>;
+
+}
+
+interface videos-recommendations {
+  enum get-related-videos-filter-enum {
+    related,
+  }
+
+  /// Get all the related videos of a video
+  record get-related-videos-params {
+    /// The ID of the video.
+    video-id: string,
+    /// The attribute by which to filter the results.
+    filter: option<get-related-videos-filter-enum>,
+    /// The page number of the results to show.
+    page: option<f64>,
+    /// The number of items to show on each page of results, up to a maximum of 100.
+    per-page: option<f64>
+  }
+  get-related-videos: func(params: get-related-videos-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export api-information;
+  export categories-essentials;
+  export categories-channels;
+  export categories-groups;
+  export categories-videos;
+  export channels-essentials;
+  export channels-categories;
+  export channels-moderators;
+  export channels-private-channel-members;
+  export channels-tags;
+  export channels-subscriptions-and-subscribers;
+  export channels-videos;
+  export videos-comments;
+  export videos-credits;
+  export likes-essentials;
+  export videos-thumbnails;
+  export videos-viewing-privacy;
+  export videos-text-tracks;
+  export videos-content-ratings;
+  export videos-creative-commons;
+  export groups-essentials;
+  export groups-users;
+  export groups-videos;
+  export videos-languages;
+  export users-essentials;
+  export albums-essentials;
+  export albums-album-videos;
+  export videos-essentials;
+  export categories-subscriptions;
+  export embed-presets-custom-logos;
+  export users-feed;
+  export users-follows;
+  export groups-subscription;
+  export on-demand-essentials;
+  export on-demand-purchases-and-rentals;
+  export users-pictures;
+  export portfolios-essentials;
+  export portfolios-videos;
+  export embed-presets-essentials;
+  export embed-presets-videos;
+  export projects-essentials;
+  export projects-videos;
+  export videos-upload;
+  export users-watch-history;
+  export watch-later-queue-essentials;
+  export authentication-extras-essentials;
+  export on-demand-genres;
+  export on-demand-backgrounds;
+  export on-demand-posters;
+  export on-demand-promotions;
+  export on-demand-regions;
+  export on-demand-seasons;
+  export on-demand-videos;
+  export tags-essentials;
+  export videos-tags;
+  export users-internal;
+  export albums-custom-album-thumbnails;
+  export albums-custom-album-logos;
+  export videos-embed-privacy;
+  export videos-versions;
+  export videos-recommendations;
+}

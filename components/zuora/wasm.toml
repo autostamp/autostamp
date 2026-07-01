@@ -1,0 +1,23 @@
+[package]
+name = "autostamp:zuora"
+version = "0.2.0+zuora-2021-08-20"
+registry = "ghcr.io/autostamp/zuora"
+kind = "component"
+file = "build/zuora.wasm"
+description = "WebAssembly component bindings for the zuora API, generated from an OpenAPI document."
+source = "https://github.com/yoshuawuyts/openapi-bindgen"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies.components]
+
+[dependencies.interfaces."wasi:http"]
+registry = "ghcr.io"
+namespace = "webassembly"
+package = "wasi/http"
+version = "0.2.3"
+
+[dependencies.interfaces."wasmcloud:secrets"]
+registry = "ghcr.io"
+namespace = "wasmcloud"
+package = "interfaces/wasmcloud/secrets"
+version = "1.0.0"

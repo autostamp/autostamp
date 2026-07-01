@@ -1,0 +1,30 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `apikey` | query `api-key` |
+package autostamp:nytimes@0.2.0;
+
+interface archive {
+  /// Archive API
+  record get-year-month-json-params {
+    /// The year (e.g. 2016).
+    year: string,
+    /// The month number (e.g. 1 for January).
+    month: string
+  }
+  get-year-month-json: func(params: get-year-month-json-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export archive;
+}

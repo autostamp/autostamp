@@ -1,0 +1,40 @@
+package autostamp:mastercard@0.2.0;
+
+interface rpps-payment-validator-api {
+  record bill-pay-account-validation {
+    /// Consumer account number populated in the message.  The minimum length is 8 and the maximum length is 22.
+    account-number: option<string>,
+    /// Biller ID populated in the message. The maximum length is 10.
+    biller-id: option<string>,
+    /// Consumer identifier populated in the message.
+    customer-identifier1: option<string>,
+    /// Consumer identifier populated in the message.
+    customer-identifier2: option<string>,
+    /// Consumer identifier populated in the message.
+    customer-identifier3: option<string>,
+    /// Consumer identifier populated in the message.
+    customer-identifier4: option<string>,
+    /// Indicates if the bill payment transaction information passed all RPPS transaction processing edits for the specified biller ID or indicates errors. The minimum length is 0 and the maximum length is 120.
+    response-string: option<string>,
+    /// Originator RPPS ID populated in the message.  The maximum length is 8.
+    rpps-id: option<string>,
+    /// Amount populated in the message.
+    transaction-amount: option<string>
+  }
+
+  /// Bill Payment Validator service returns the processing status for a potential RPPS transaction
+  record post-is-routing-valid-params {
+    bill-pay-account-validation: option<bill-pay-account-validation>
+  }
+  post-is-routing-valid: func(params: post-is-routing-valid-params) -> result<string, string>;
+
+}
+
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export rpps-payment-validator-api;
+}

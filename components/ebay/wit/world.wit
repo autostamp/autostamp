@@ -1,0 +1,79 @@
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `api_auth` | `Authorization: Bearer <secret>` |
+package autostamp:ebay@0.2.0;
+
+interface deal-item {
+  record get-deal-items-params {
+    /// The unique identifier of the eBay category for the search.
+    category-ids: option<string>,
+    /// A filter for commissionable deals. Restriction: This filter is currently only supported for the US marketplace.
+    commissionable: option<string>,
+    /// A filter for items that can be shipped to the specified country.
+    delivery-country: option<string>,
+    /// The maximum number of items, from the current result set, returned on a single page.
+    limit: option<string>,
+    /// The number of items that will be skipped in the result set. This is used with the limit field to control the pagination of the output. For example, if the offset is set to 0 and the limit is set to 10, the method will retrieve items 1 through 10 from the list of items returned. If the offset is set to 10 and the limit is set to 10, the method will retrieve items 11 through 20 from the list of items returned. Default: 0
+    offset: option<string>,
+    /// A header used to specify the eBay marketplace ID.
+    x-ebay-c-marketplace-id: string
+  }
+  get-deal-items: func(params: get-deal-items-params) -> result<string, string>;
+
+}
+
+
+interface event {
+  record get-events-params {
+    /// The maximum number of items, from the current result set, returned on a single page. Default: 20 Maximum Value: 100
+    limit: option<string>,
+    /// The number of items that will be skipped in the result set. This is used with the limit field to control the pagination of the output. For example, if the offset is set to 0 and the limit is set to 10, the method will retrieve items 1 through 10 from the list of items returned. If the offset is set to 10 and the limit is set to 10, the method will retrieve items 11 through 20 from the list of items returned. Default: 0
+    offset: option<string>,
+    /// A header used to specify the eBay marketplace ID.
+    x-ebay-c-marketplace-id: string
+  }
+  get-events: func(params: get-events-params) -> result<string, string>;
+
+  record get-event-params {
+    /// A header used to specify the eBay marketplace ID.
+    x-ebay-c-marketplace-id: string,
+    /// The unique identifier for the eBay event.
+    event-id: string
+  }
+  get-event: func(params: get-event-params) -> result<string, string>;
+
+}
+
+interface event-item {
+  record get-event-items-params {
+    /// The unique identifier of the eBay category for the search. Maximum Value: 1
+    category-ids: option<string>,
+    /// A filter for items that can be shipped to the specified country.
+    delivery-country: option<string>,
+    /// The unique identifiers for the eBay events. Maximum Value: 1
+    event-ids: string,
+    /// The maximum number of items, from the current result set, returned on a single page. Default: 20
+    limit: option<string>,
+    /// The number of items that will be skipped in the result set. This is used with the limit field to control the pagination of the output. For example, if the offset is set to 0 and the limit is set to 10, the method will retrieve items 1 through 10 from the list of items returned. If the offset is set to 10 and the limit is set to 10, the method will retrieve items 11 through 20 from the list of items returned. Default: 0
+    offset: option<string>,
+    /// A header used to specify the eBay marketplace ID.
+    x-ebay-c-marketplace-id: string
+  }
+  get-event-items: func(params: get-event-items-params) -> result<string, string>;
+
+}
+/// The component world: imports the HTTP + secrets host
+/// capabilities the runtime uses and exports the generated interfaces.
+world client {
+  import wasi:http/outgoing-handler@0.2.3;
+  import wasmcloud:secrets/store@1.0.0;
+  import wasmcloud:secrets/reveal@1.0.0;
+  export deal-item;
+  export event;
+  export event-item;
+}
