@@ -5,8 +5,9 @@ use crate::PackageName;
 /// Render the `Cargo.toml` for the generated WebAssembly component crate.
 ///
 /// The crate builds as a `cdylib` (the component shape) and depends on `wit-bindgen`
-/// for the exported component bindings and `serde_json`, which the generated
-/// `*_to_json` helpers use. The crate name and version are taken from `package`.
+/// for the exported component bindings, `serde_json`, which the generated `*_to_json`
+/// helpers use, and `wstd`, whose HTTP client the request runtime uses to perform calls.
+/// The crate name and version are taken from `package`.
 ///
 /// The emitted `[profile.release]` optimizes the component for size (`opt-level = "s"`)
 /// and splits code generation into many small units (`codegen-units = 256`). Large APIs
@@ -30,6 +31,7 @@ crate-type = ["cdylib"]
 [dependencies]
 serde_json = "1"
 wit-bindgen = "0.41"
+wstd = {{ version = "0.6", default-features = false }}
 
 [profile.release]
 opt-level = "s"
@@ -47,9 +49,11 @@ codegen-units = 256
 /// step deposits the compiled component. `version` is the full publish version, including any
 /// provider/schema build metadata (e.g. `0.1.0+github-2022-11-28`).
 ///
-/// The dependencies (`wasi:http` to perform requests, `wasmcloud:secrets` to fetch
-/// credentials) are written in the explicit table form (`registry`/`namespace`/`package`/
+/// The dependencies are written in the explicit table form (`registry`/`namespace`/`package`/
 /// `version`) so `component install` resolves them straight from GHCR without a meta-registry.
+/// `wasi:http` is imported transitively — the runtime performs requests with the `wstd` HTTP
+/// client, whose bindings import it — while `wasmcloud:secrets` provides the credentials the
+/// runtime fetches.
 pub(crate) fn render_wasm_manifest(package: &PackageName, publish_version: &str) -> String {
     let namespace = &package.namespace;
     let name = &package.name;
@@ -90,6 +94,14 @@ mod tests {
         // Build metadata never leaks into Cargo.toml — it stays clean SemVer.
         assert!(cargo.contains("version = \"0.1.0\""));
         assert!(cargo.contains("crate-type = [\"cdylib\"]"));
+    }
+
+    #[test]
+    fn cargo_toml_depends_on_wstd_for_the_http_runtime() {
+        let cargo = render(&package());
+        // The request runtime performs calls with the `wstd` HTTP client; its default `json`
+        // feature is unused (bodies are assembled with serde_json), so it is disabled.
+        assert!(cargo.contains("wstd = { version = \"0.6\", default-features = false }"));
     }
 
     #[test]

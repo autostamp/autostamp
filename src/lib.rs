@@ -365,14 +365,15 @@ fn is_version_segment(segment: &str) -> bool {
     }
 }
 
-/// Emit the generated `client` world: import the `wasi:http` outgoing-request surface and
-/// the `wasmcloud:secrets` store/reveal interfaces the runtime uses, and export every
-/// generated interface.
+/// Emit the generated `client` world: import the `wasmcloud:secrets` store/reveal interfaces
+/// the runtime uses, and export every generated interface. The HTTP host import
+/// (`wasi:http/outgoing-handler`) is contributed by the `wstd` crate's own bindings at build
+/// time, so it is not declared here.
 fn emit_world(interfaces: &[String]) -> String {
-    let mut world = String::from("/// The component world: imports the HTTP + secrets host\n");
-    world.push_str("/// capabilities the runtime uses and exports the generated interfaces.\n");
+    let mut world = String::from("/// The component world: imports the secrets host capability\n");
+    world.push_str("/// the runtime uses and exports the generated interfaces. The HTTP host\n");
+    world.push_str("/// capability is imported by the `wstd` crate's bindings at build time.\n");
     world.push_str("world client {\n");
-    world.push_str("  import wasi:http/outgoing-handler@0.2.3;\n");
     world.push_str("  import wasmcloud:secrets/store@1.0.0;\n");
     world.push_str("  import wasmcloud:secrets/reveal@1.0.0;\n");
     for iface in interfaces {

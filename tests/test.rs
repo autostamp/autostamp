@@ -267,20 +267,22 @@ const AUTH_SPEC: &str = r#"{
 }"#;
 
 #[test]
-fn emits_world_importing_http_and_secrets() {
+fn emits_world_importing_secrets_and_declaring_http_dep() {
     let spec = parse_openapi(AUTH_SPEC).unwrap();
     let package = PackageName::parse("widget:api@0.1.0").unwrap();
     let generated = generate(&spec, &package, None).unwrap();
 
-    // The generated world imports the host HTTP + secrets capabilities and exports the
-    // generated interface; operations themselves stay auth-free.
+    // The generated world imports only the secrets host capability and exports the generated
+    // interface; operations themselves stay auth-free. The HTTP host import is contributed by
+    // the `wstd` crate's own bindings at build time, so the world does not declare it.
     assert!(generated.wit.contains("world client {"));
-    assert!(generated.wit.contains("import wasi:http/outgoing-handler"));
+    assert!(!generated.wit.contains("import wasi:http"));
     assert!(generated.wit.contains("import wasmcloud:secrets/store"));
     assert!(generated.wit.contains("import wasmcloud:secrets/reveal"));
     assert!(generated.wit.contains("export widgets;"));
 
-    // The wasm.toml carries a publishable [package] section plus explicit interface deps.
+    // The wasm.toml carries a publishable [package] section plus explicit interface deps. The
+    // built component still imports `wasi:http` (via `wstd`), so it stays declared here.
     assert!(generated.wasm_toml.contains("[package]"));
     assert!(
         generated

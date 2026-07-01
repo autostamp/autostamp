@@ -5,7 +5,8 @@ every operation signature, generated components keep operations **auth-free** an
 credentials centrally at runtime. Each generated component:
 
 - imports [`wasmcloud:secrets`][secrets] and reads its credentials from the host, and
-- imports `wasi:http` and applies the credential to each outgoing request.
+- performs each request with the [`wstd`][wstd] HTTP client (which imports `wasi:http`) and
+  applies the credential to every outgoing request.
 
 The generator reads the document's `securitySchemes` / `security` and emits a per-operation
 auth table that the embedded runtime consumes. Operation arguments never carry a token.
@@ -57,3 +58,4 @@ an active security scheme would also be pruned. Path parameters are structural a
 pruned.
 
 [secrets]: https://github.com/wasmCloud/wasmCloud/tree/main/wit/secrets
+[wstd]: https://github.com/bytecodealliance/wstd

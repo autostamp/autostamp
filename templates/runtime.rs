@@ -3,8 +3,11 @@
 // The generic request runtime shared by every generated component. Codegen emits one
 // `OpSpec` per operation (an HTTP method, a path template, the parameter fields, and the
 // resolved auth schemes) and each `Guest` method calls `dispatch`. The runtime builds the
-// outgoing `wasi:http` request, attaches credentials fetched from `wasmcloud:secrets`, and
-// returns the response body.
+// outgoing request with the `wstd` HTTP client (which talks to the host over `wasi:http`),
+// attaches credentials fetched from `wasmcloud:secrets`, and returns the response body.
+//
+// The generated guest exports are synchronous, so the async `wstd` client is driven to
+// completion on a local reactor via `wstd::runtime::block_on`.
 //
 // Credentials are never passed as operation arguments: for each `AuthApply` the runtime
 // looks up the secret by `secret_key` (the OpenAPI security-scheme name) via
@@ -12,9 +15,8 @@
 // the request according to its `AuthKind`.
 
 use serde_json::Value;
+use wstd::http::{Body, Client, Method, Request};
 
-use crate::wasi::http::outgoing_handler;
-use crate::wasi::http::types::{Fields, Method, OutgoingRequest, RequestOptions, Scheme};
 use crate::wasmcloud::secrets::reveal;
 use crate::wasmcloud::secrets::store;
 
@@ -158,149 +160,65 @@ fn fetch_secret(key: &str) -> Result<String, String> {
     }
 }
 
-/// Build and send the outgoing request, returning the response body on a 2xx status.
+/// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
+/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
+/// to completion on a local reactor via `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
 ) -> Result<String, String> {
-    let (scheme, authority, base_path) = split_base_url(crate::BASE_URL)?;
-    let full_path = join_paths(&base_path, path_with_query);
+    let url = join_url(crate::BASE_URL, path_with_query);
+    let method = Method::from_bytes(method.as_bytes())
+        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
 
-    let header_entries: Vec<(String, Vec<u8>)> = headers
-        .iter()
-        .map(|(name, value)| (name.to_ascii_lowercase(), value.as_bytes().to_vec()))
-        .collect();
-    let fields = Fields::from_list(&header_entries)
-        .map_err(|err| format!("invalid request headers: {err:?}"))?;
+    let mut builder = Request::builder().method(method).uri(url);
+    for (name, value) in headers {
+        builder = builder.header(name.as_str(), value.as_str());
+    }
+    let request = builder
+        .body(if body.is_empty() {
+            Body::empty()
+        } else {
+            Body::from(body.to_vec())
+        })
+        .map_err(|err| format!("failed to build request: {err}"))?;
 
-    let request = OutgoingRequest::new(fields);
-    request
-        .set_method(&parse_method(method))
-        .map_err(|()| "failed to set request method".to_string())?;
-    request
-        .set_scheme(Some(&scheme))
-        .map_err(|()| "failed to set request scheme".to_string())?;
-    request
-        .set_authority(Some(&authority))
-        .map_err(|()| "failed to set request authority".to_string())?;
-    request
-        .set_path_with_query(Some(&full_path))
-        .map_err(|()| "failed to set request path".to_string())?;
+    wstd::runtime::block_on(async move {
+        let client = Client::new();
+        let response = client
+            .send(request)
+            .await
+            .map_err(|err| format!("request failed: {err:#}"))?;
 
-    // Write the request body, if any.
-    {
-        let outgoing_body = request
-            .body()
-            .map_err(|()| "failed to take request body".to_string())?;
-        if !body.is_empty() {
-            let stream = outgoing_body
-                .write()
-                .map_err(|()| "failed to open request body stream".to_string())?;
-            for chunk in body.chunks(4096) {
-                stream
-                    .blocking_write_and_flush(chunk)
-                    .map_err(|err| format!("failed to write request body: {err:?}"))?;
-            }
-            drop(stream);
+        let status = response.status().as_u16();
+        let mut response_body = response.into_body();
+        let bytes = response_body
+            .contents()
+            .await
+            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let body_text = String::from_utf8_lossy(bytes).into_owned();
+
+        if (200..300).contains(&status) {
+            Ok(body_text)
+        } else {
+            Err(format!("HTTP {status}: {body_text}"))
         }
-        crate::wasi::http::types::OutgoingBody::finish(outgoing_body, None)
-            .map_err(|err| format!("failed to finish request body: {err:?}"))?;
-    }
-
-    let options = RequestOptions::new();
-    let future = outgoing_handler::handle(request, Some(options))
-        .map_err(|err| format!("request failed: {err:?}"))?;
-
-    // Block until the response is available.
-    let pollable = future.subscribe();
-    pollable.block();
-    let response = future
-        .get()
-        .ok_or_else(|| "response future returned no value".to_string())?
-        .map_err(|()| "response future already consumed".to_string())?
-        .map_err(|err| format!("request error: {err:?}"))?;
-
-    let status = response.status();
-    let incoming_body = response
-        .consume()
-        .map_err(|()| "failed to consume response body".to_string())?;
-    let body_text = read_body(&incoming_body)?;
-
-    if (200..300).contains(&status) {
-        Ok(body_text)
-    } else {
-        Err(format!("HTTP {status}: {body_text}"))
-    }
+    })
 }
 
-/// Read an incoming response body to end as a UTF-8 (lossy) string.
-fn read_body(incoming: &crate::wasi::http::types::IncomingBody) -> Result<String, String> {
-    use crate::wasi::io::streams::StreamError;
-    let stream = incoming
-        .stream()
-        .map_err(|()| "failed to open response body stream".to_string())?;
-    let mut buf = Vec::new();
-    loop {
-        match stream.blocking_read(8192) {
-            Ok(chunk) => {
-                if chunk.is_empty() {
-                    break;
-                }
-                buf.extend_from_slice(&chunk);
-            }
-            Err(StreamError::Closed) => break,
-            Err(StreamError::LastOperationFailed(err)) => {
-                return Err(format!("failed to read response body: {err:?}"));
-            }
-        }
-    }
-    Ok(String::from_utf8_lossy(&buf).into_owned())
-}
-
-/// Parse an HTTP method string into a `wasi:http` `Method`.
-fn parse_method(method: &str) -> Method {
-    match method {
-        "GET" => Method::Get,
-        "HEAD" => Method::Head,
-        "POST" => Method::Post,
-        "PUT" => Method::Put,
-        "DELETE" => Method::Delete,
-        "CONNECT" => Method::Connect,
-        "OPTIONS" => Method::Options,
-        "TRACE" => Method::Trace,
-        "PATCH" => Method::Patch,
-        other => Method::Other(other.to_string()),
-    }
-}
-
-/// Split a base URL into `(scheme, authority, base-path)`.
-fn split_base_url(url: &str) -> Result<(Scheme, String, String), String> {
-    let (scheme, rest) = if let Some(rest) = url.strip_prefix("https://") {
-        (Scheme::Https, rest)
-    } else if let Some(rest) = url.strip_prefix("http://") {
-        (Scheme::Http, rest)
-    } else {
-        return Err(format!("unsupported base URL scheme: {url}"));
-    };
-    let (authority, base_path) = match rest.find('/') {
-        Some(idx) => (rest[..idx].to_string(), rest[idx..].to_string()),
-        None => (rest.to_string(), String::new()),
-    };
-    Ok((scheme, authority, base_path))
-}
-
-/// Join a base path with an operation path (which may include a query string).
-fn join_paths(base: &str, path: &str) -> String {
+/// Join the API base URL with an operation path (which may include a query string) into a
+/// single absolute URL. `wstd` parses the scheme, authority, and path from it.
+fn join_url(base: &str, path_with_query: &str) -> String {
     let base = base.trim_end_matches('/');
     if base.is_empty() {
-        return path.to_string();
+        return path_with_query.to_string();
     }
-    if path.starts_with('/') {
-        format!("{base}{path}")
+    if path_with_query.starts_with('/') {
+        format!("{base}{path_with_query}")
     } else {
-        format!("{base}/{path}")
+        format!("{base}/{path_with_query}")
     }
 }
 

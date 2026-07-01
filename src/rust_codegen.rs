@@ -26,8 +26,8 @@ pub(crate) fn emit_rust(
     out.push_str("#![allow(unused, clippy::all, non_snake_case)]\n\n");
 
     // Component bindings for the generated `client` world (defined in `wit/`). `generate_all`
-    // emits bindings for every transitively-imported interface (wasi:io, wasi:clocks, ...)
-    // the HTTP + secrets surface depends on.
+    // emits bindings for the `wasmcloud:secrets` interfaces the world imports (plus any of
+    // their transitive deps). The HTTP host binding is provided separately by the `wstd` crate.
     out.push_str(
         "wit_bindgen::generate!({\n    world: \"client\",\n    path: \"wit\",\n    generate_all,\n});\n\n",
     );
@@ -43,7 +43,7 @@ pub(crate) fn emit_rust(
     out.push_str("struct Component;\n\n");
 
     // The shared request + auth runtime, fetching credentials from `wasmcloud:secrets` and
-    // performing the call over `wasi:http`.
+    // performing the call with the `wstd` HTTP client (which talks to the host over `wasi:http`).
     out.push_str("mod runtime {\n");
     out.push_str(RUNTIME_SRC);
     out.push_str("}\n\n");
