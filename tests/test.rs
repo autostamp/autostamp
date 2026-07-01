@@ -477,6 +477,97 @@ fn documents_required_auth_secrets_in_readme_and_wit() {
     );
 }
 
+/// Mirrors the `ip2location`/`ip2whois` shape: a required query param named `key` (described as
+/// an API key) with no `securitySchemes` and no `security`. Also carries an unrelated required
+/// input (`ip`) and an optional pagination `token` that must NOT be mistaken for a credential.
+const NAKED_KEY_SPEC: &str = r#"{
+  "openapi": "3.0.0",
+  "info": { "title": "geo", "version": "1.0.0" },
+  "servers": [{ "url": "https://api.example.com/v2" }],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["geo"],
+        "operationId": "lookup",
+        "parameters": [
+          { "name": "ip", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "key", "in": "query", "required": true, "description": "API Key. Please sign up free trial license key.", "schema": { "type": "string" } },
+          { "name": "token", "in": "query", "required": false, "description": "Pagination token for the next page.", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  }
+}"#;
+
+#[test]
+fn infers_api_key_credential_from_naked_param() {
+    let spec = parse_openapi(NAKED_KEY_SPEC).unwrap();
+    let package = PackageName::parse("geo:api@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The naked `key` param is lifted off the operation surface: the params record keeps the
+    // real input `ip` and the optional `token` (not an API key), but drops `key`.
+    let wit = &generated.wit;
+    let start = wit
+        .find("record lookup-params")
+        .expect("params record present");
+    let record = &wit[start..start + wit[start..].find('}').expect("record closes")];
+    assert!(record.contains("ip"), "unrelated required input retained");
+    assert!(
+        record.contains("token"),
+        "optional pagination token retained, not treated as a credential:\n{record}"
+    );
+    assert!(
+        !record.contains("key"),
+        "inferred API-key param lifted out of the params record:\n{record}"
+    );
+
+    // It is injected centrally instead: the op carries a synthesized query-key auth entry, keyed
+    // by the param's kebab name, applying the secret to the `key` query param verbatim.
+    assert!(
+        generated
+            .rust
+            .contains(r#"AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") }"#),
+        "synthesized auth entry present:\n{}",
+        generated.rust
+    );
+
+    // The inferred secret is documented in the Authentication table in both surfaces …
+    assert!(generated.readme.contains("| `key` | query `key` |"));
+    assert!(generated.wit.contains("/// | `key` | query `key` |"));
+
+    // … and the Generator Diagnostics row reports the heuristic fired AND names the secret.
+    assert!(
+        generated.readme.contains(
+            "| Infer API-key credentials | enabled — **triggered**, inferred 1 secret: `key` |"
+        ),
+        "diagnostics names the inferred secret:\n{}",
+        generated.readme
+    );
+
+    // A spec with a real scheme does not infer anything: the heuristic reports not-triggered.
+    let declared = parse_openapi(AUTH_SPEC).unwrap();
+    let declared_pkg = PackageName::parse("widget:api@0.1.0").unwrap();
+    let declared = generate(&declared, &declared_pkg, None).unwrap();
+    assert!(
+        declared
+            .readme
+            .contains("| Infer API-key credentials | enabled — not triggered |"),
+        "declared-scheme spec must not infer credentials"
+    );
+
+    // A spec with no params at all also reports not-triggered.
+    let plain = parse_openapi(MINIMAL_SPEC).unwrap();
+    let plain_pkg = PackageName::parse("demo:things@0.1.0").unwrap();
+    let plain = generate(&plain, &plain_pkg, None).unwrap();
+    assert!(
+        plain
+            .readme
+            .contains("| Infer API-key credentials | enabled — not triggered |")
+    );
+}
+
 /// A document whose `paths` is empty defines no operations to bind. `generate` reports this with
 /// the distinct `NoOperations` error so callers can treat it as a benign skip rather than a
 /// failure (e.g. ipinfodb.com ships `paths: {}`).

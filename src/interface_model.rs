@@ -36,6 +36,10 @@ pub(crate) struct InterfaceModel {
     /// Count of request fields dropped by the duplicate-credential pruning heuristic, surfaced
     /// in the generated README's diagnostics.
     pub(crate) pruned_credential_fields: usize,
+    /// Secret keys synthesized by the API-key inference heuristic (a naked `key`-style parameter
+    /// lifted into a host-injected credential). Named in the generated README's diagnostics so a
+    /// reader can see the component now expects auth the spec never declared.
+    pub(crate) inferred_api_key_secrets: Vec<String>,
     /// Records currently being emitted (the recursion stack). A `$ref` to a
     /// record in this set is a cycle and gets degraded to `string`.
     emitting: BTreeSet<String>,
@@ -49,6 +53,7 @@ impl InterfaceModel {
             records: vec![],
             enums: vec![],
             pruned_credential_fields: 0,
+            inferred_api_key_secrets: vec![],
             emitting: BTreeSet::new(),
         }
     }
@@ -373,7 +378,7 @@ impl InterfaceModel {
         method: &str,
         path: &str,
         op: &Operation,
-        auth: Vec<AuthApply>,
+        mut auth: Vec<AuthApply>,
     ) -> Result<()> {
         // `operationId` is optional in OpenAPI; synthesize a deterministic id from the
         // method and path (unique per document) when it is absent or empty so the operation
@@ -504,6 +509,25 @@ impl InterfaceModel {
             }
         }
 
+        // Some specs carry their API key as an ordinary query/header parameter and declare no
+        // security scheme (e.g. ip2location's required `key`). When an operation resolves to no
+        // auth, infer such a parameter as a host-injected credential: lift it off the operation
+        // surface and record the synthesized scheme, so callers never pass a secret the runtime
+        // already supplies from `wasmcloud:secrets`. Runs before the duplicate-credential prune
+        // below so the two heuristics' diagnostics stay distinct.
+        if auth.is_empty() {
+            for cred in infer_api_key_credentials(op) {
+                let before = fields.len();
+                fields
+                    .retain(|f| !(f.location == cred.location && f.name_snake == cred.field_snake));
+                if fields.len() < before {
+                    self.inferred_api_key_secrets
+                        .push(cred.apply.secret_key.clone());
+                    auth.push(cred.apply);
+                }
+            }
+        }
+
         // Drop request fields that merely duplicate a credential we already inject centrally
         // for this operation. Some APIs (e.g. Plaid) declare a credential both as a security
         // scheme *and* as a redundant request-body/query/header property; carrying both would
@@ -597,6 +621,99 @@ fn is_injected_credential(field: &Field, auth: &[AuthApply]) -> bool {
             AuthKind::Bearer | AuthKind::Basic => false,
         }
     })
+}
+
+/// A credential inferred from a naked request parameter that no security scheme covers: the
+/// synthesized [`AuthApply`] plus the identity of the field to lift out of the operation.
+struct InferredCredential {
+    apply: AuthApply,
+    field_snake: String,
+    location: Location,
+}
+
+/// Infer host-injected API-key credentials from an operation's *query/header* parameters, for
+/// specs that model the key as an ordinary parameter and declare no applicable security scheme.
+///
+/// Returns one entry per matched parameter; the caller lifts each field off the operation and
+/// records the synthesized scheme on the operation's auth table, so the credential is sourced
+/// from `wasmcloud:secrets` like any declared scheme. Path and cookie parameters are out of
+/// scope (a path key would require substituting the secret into the URL template at runtime).
+/// The secret key is the parameter's kebab-cased name; the wire name preserves the original
+/// spelling so the request is reproduced verbatim.
+fn infer_api_key_credentials(op: &Operation) -> Vec<InferredCredential> {
+    let mut out = Vec::new();
+    for p in &op.parameters {
+        let ReferenceOr::Item(p) = p else { continue };
+        let (data, location) = match p {
+            Parameter::Query { parameter_data, .. } => (parameter_data, Location::Query),
+            Parameter::Header { parameter_data, .. } => (parameter_data, Location::Header),
+            Parameter::Path { .. } | Parameter::Cookie { .. } => continue,
+        };
+        let name_snake = data.name.to_snake_case();
+        if !looks_like_api_key(&name_snake, data.required, data.description.as_deref()) {
+            continue;
+        }
+        let kind = match location {
+            Location::Header => AuthKind::ApiKeyHeader {
+                name: data.name.clone(),
+            },
+            _ => AuthKind::ApiKeyQuery {
+                name: data.name.clone(),
+            },
+        };
+        out.push(InferredCredential {
+            apply: AuthApply {
+                secret_key: data.name.to_kebab_case(),
+                kind,
+            },
+            field_snake: name_snake,
+            location,
+        });
+    }
+    out
+}
+
+/// Whether a query/header parameter named `name_snake` looks like an API key that should be
+/// lifted into a host-injected secret.
+///
+/// Two tiers keep false positives low. Unambiguous key names (`api_key`, `apikey`, …) match
+/// outright. The generic `key` / `token` match only when the parameter is *required* **and** its
+/// description corroborates ("API key", "license key", …); pagination tokens — optional and
+/// described as such — are therefore left as ordinary inputs. The lists are intentionally
+/// conservative and easy to extend.
+fn looks_like_api_key(name_snake: &str, required: bool, description: Option<&str>) -> bool {
+    const STRONG: &[&str] = &[
+        "api_key",
+        "apikey",
+        "x_api_key",
+        "api_token",
+        "access_key",
+        "subscription_key",
+        "app_key",
+        "your_api_key_here",
+    ];
+    if STRONG.contains(&name_snake) {
+        return true;
+    }
+    if matches!(name_snake, "key" | "token") {
+        if !required {
+            return false;
+        }
+        let d = description.unwrap_or_default().to_ascii_lowercase();
+        const NEEDLES: &[&str] = &[
+            "api key",
+            "api-key",
+            "api_key",
+            "api token",
+            "api-token",
+            "api_token",
+            "access key",
+            "license key",
+            "subscription key",
+        ];
+        return NEEDLES.iter().any(|n| d.contains(n));
+    }
+    false
 }
 
 /// Ensure a record's fields have unique WIT names.
@@ -713,5 +830,66 @@ fn collect_named(ty: &WitType, out: &mut BTreeSet<String>) {
         }
         WitType::Option(inner) | WitType::List(inner) => collect_named(inner, out),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::looks_like_api_key;
+
+    #[test]
+    fn strong_key_names_match_regardless_of_corroboration() {
+        for name in [
+            "api_key",
+            "apikey",
+            "x_api_key",
+            "access_key",
+            "your_api_key_here",
+        ] {
+            assert!(looks_like_api_key(name, false, None), "{name} should match");
+        }
+    }
+
+    #[test]
+    fn generic_key_matches_only_with_required_and_description() {
+        // ip2location's shape: a required `key` whose description says "API Key".
+        assert!(looks_like_api_key(
+            "key",
+            true,
+            Some("API Key. Please sign up free trial license key at ip2location.com")
+        ));
+        // Required but no corroborating description → not enough signal.
+        assert!(!looks_like_api_key(
+            "key",
+            true,
+            Some("A sort key for results")
+        ));
+        // Corroborating description but optional → left as an ordinary input.
+        assert!(!looks_like_api_key("key", false, Some("API key")));
+    }
+
+    #[test]
+    fn optional_pagination_token_is_not_an_api_key() {
+        assert!(!looks_like_api_key(
+            "token",
+            false,
+            Some("The pagination token for the next page")
+        ));
+        // Even a required `token` needs its description to mention a key/token credential.
+        assert!(!looks_like_api_key(
+            "token",
+            true,
+            Some("Opaque cursor for the next page")
+        ));
+    }
+
+    #[test]
+    fn unrelated_parameters_never_match() {
+        assert!(!looks_like_api_key(
+            "ip",
+            true,
+            Some("IP address to look up")
+        ));
+        assert!(!looks_like_api_key("format", false, None));
     }
 }

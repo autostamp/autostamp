@@ -21,6 +21,11 @@ pub(crate) struct Diagnostics {
     pub(crate) operations: usize,
     /// Request fields dropped by the duplicate-credential pruning heuristic.
     pub(crate) pruned_credential_fields: usize,
+    /// Secret keys synthesized by the API-key inference heuristic — naked `key`-style parameters
+    /// lifted into host-injected credentials — deduplicated and ordered. Named in the diagnostics
+    /// so a reader sees the component now expects auth the spec never declared. Empty when the
+    /// heuristic did not fire.
+    pub(crate) inferred_api_key_secrets: Vec<String>,
     /// The named security schemes this component expects the host to provision, deduplicated
     /// and ordered. Empty when the component requires no authentication.
     pub(crate) auth: Vec<AuthApply>,
@@ -44,6 +49,19 @@ pub(crate) fn render(package: &PackageName, diagnostics: &Diagnostics) -> String
         0 => "enabled — not triggered".to_string(),
         1 => "enabled — **triggered**, 1 field pruned".to_string(),
         n => format!("enabled — **triggered**, {n} fields pruned"),
+    };
+    let infer = if diagnostics.inferred_api_key_secrets.is_empty() {
+        "enabled — not triggered".to_string()
+    } else {
+        let names = diagnostics
+            .inferred_api_key_secrets
+            .iter()
+            .map(|s| format!("`{s}`"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let n = diagnostics.inferred_api_key_secrets.len();
+        let noun = if n == 1 { "secret" } else { "secrets" };
+        format!("enabled — **triggered**, inferred {n} {noun}: {names}")
     };
 
     let mut out = format!(
@@ -72,6 +90,7 @@ pub(crate) fn render(package: &PackageName, diagnostics: &Diagnostics) -> String
         | Published version | `{published_version}` |\n\
         | Tag filter | {tag_filter} |\n\
         | Operations generated | {operations} |\n\
+        | Infer API-key credentials | {infer} |\n\
         | Prune duplicate credential fields | {prune} |\n",
         operations = diagnostics.operations,
         published_version = diagnostics.published_version,
@@ -89,16 +108,27 @@ mod tests {
         PackageName::parse("autostamp:plaid@0.1.0").unwrap()
     }
 
+    /// A baseline diagnostics value; tests override only the fields they exercise via `..diag()`.
+    fn diag() -> Diagnostics {
+        Diagnostics {
+            published_version: "0.1.0".into(),
+            tag_filter: None,
+            operations: 1,
+            pruned_credential_fields: 0,
+            inferred_api_key_secrets: vec![],
+            auth: vec![],
+        }
+    }
+
     #[test]
     fn title_matches_component_name_and_lists_options() {
         let readme = render(
             &package(),
             &Diagnostics {
                 published_version: "0.1.0+2024-01-01".into(),
-                tag_filter: None,
                 operations: 199,
                 pruned_credential_fields: 197,
-                auth: vec![],
+                ..diag()
             },
         );
         assert!(readme.starts_with("# plaid\n"));
@@ -114,11 +144,10 @@ mod tests {
         let readme = render(
             &package(),
             &Diagnostics {
-                published_version: "0.1.0".into(),
                 tag_filter: Some(vec!["billing".into()]),
                 operations: 3,
                 pruned_credential_fields: 2,
-                auth: vec![],
+                ..diag()
             },
         );
         assert!(readme.contains("| Tag filter | `billing` |"));
@@ -127,17 +156,30 @@ mod tests {
 
     #[test]
     fn notes_when_prune_heuristic_does_not_trigger() {
+        let readme = render(&package(), &diag());
+        assert!(readme.contains("| Prune duplicate credential fields | enabled — not triggered |"));
+    }
+
+    #[test]
+    fn names_inferred_api_key_secrets_in_diagnostics() {
         let readme = render(
             &package(),
             &Diagnostics {
-                published_version: "0.1.0".into(),
-                tag_filter: None,
-                operations: 1,
-                pruned_credential_fields: 0,
-                auth: vec![],
+                inferred_api_key_secrets: vec!["key".into()],
+                auth: vec![AuthApply {
+                    secret_key: "key".into(),
+                    kind: AuthKind::ApiKeyQuery { name: "key".into() },
+                }],
+                ..diag()
             },
         );
-        assert!(readme.contains("| Prune duplicate credential fields | enabled — not triggered |"));
+        // The heuristic is reported as triggered AND the inferred secret is named.
+        assert!(readme.contains(
+            "| Infer API-key credentials | enabled — **triggered**, inferred 1 secret: `key` |"
+        ));
+        // Not-triggered rendering when nothing was inferred.
+        let plain = render(&package(), &diag());
+        assert!(plain.contains("| Infer API-key credentials | enabled — not triggered |"));
     }
 
     #[test]
@@ -145,16 +187,13 @@ mod tests {
         let readme = render(
             &package(),
             &Diagnostics {
-                published_version: "0.1.0".into(),
-                tag_filter: None,
-                operations: 1,
-                pruned_credential_fields: 0,
                 auth: vec![AuthApply {
                     secret_key: "secret".into(),
                     kind: AuthKind::ApiKeyHeader {
                         name: "X-Secret".into(),
                     },
                 }],
+                ..diag()
             },
         );
         let auth_at = readme
@@ -167,16 +206,7 @@ mod tests {
 
     #[test]
     fn no_authentication_section_when_no_secrets() {
-        let readme = render(
-            &package(),
-            &Diagnostics {
-                published_version: "0.1.0".into(),
-                tag_filter: None,
-                operations: 1,
-                pruned_credential_fields: 0,
-                auth: vec![],
-            },
-        );
+        let readme = render(&package(), &diag());
         assert!(!readme.contains("## Authentication"));
     }
 }
