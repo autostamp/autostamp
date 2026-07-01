@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:ebay"
-version = "0.2.0+ebay-v1.3.0"
+version = "0.2.1+ebay-v1.3.0"
 registry = "ghcr.io/autostamp/ebay"
 kind = "component"
 file = "build/ebay.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

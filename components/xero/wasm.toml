@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:xero"
-version = "0.2.0+xero-2.9.4"
+version = "0.2.1+xero-2.9.4"
 registry = "ghcr.io/autostamp/xero"
 kind = "component"
 file = "build/xero.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

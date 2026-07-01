@@ -21,8 +21,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:twitter@0.2.0` |
-| Published version | `0.2.0+twitter-2.62` |
+| Package | `autostamp:twitter@0.2.1` |
+| Published version | `0.2.1+twitter-2.62` |
 | Tag filter | all tags |
 | Operations generated | 80 |
 | Prune duplicate credential fields | enabled — not triggered |

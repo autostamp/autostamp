@@ -22,8 +22,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:plaid@0.2.0` |
-| Published version | `0.2.0+plaid-2020-09-14-1.345.1` |
+| Package | `autostamp:plaid@0.2.1` |
+| Published version | `0.2.1+plaid-2020-09-14-1.345.1` |
 | Tag filter | all tags |
 | Operations generated | 200 |
 | Prune duplicate credential fields | enabled — **triggered**, 394 fields pruned |

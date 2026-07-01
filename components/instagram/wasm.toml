@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:instagram"
-version = "0.2.0+instagram-1.0.0"
+version = "0.2.1+instagram-1.0.0"
 registry = "ghcr.io/autostamp/instagram"
 kind = "component"
 file = "build/instagram.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

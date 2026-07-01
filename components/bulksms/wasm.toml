@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:bulksms"
-version = "0.2.0+bulksms-1.0.0"
+version = "0.2.1+bulksms-1.0.0"
 registry = "ghcr.io/autostamp/bulksms"
 kind = "component"
 file = "build/bulksms.wasm"
@@ -9,12 +9,6 @@ source = "https://github.com/yoshuawuyts/openapi-bindgen"
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies.components]
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"
 
 [dependencies.interfaces."wasmcloud:secrets"]
 registry = "ghcr.io"

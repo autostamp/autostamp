@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:apple@0.2.0` |
-| Published version | `0.2.0+apple-1.4.1` |
+| Package | `autostamp:apple@0.2.1` |
+| Published version | `0.2.1+apple-1.4.1` |
 | Tag filter | all tags |
 | Operations generated | 252 |
 | Prune duplicate credential fields | enabled — not triggered |

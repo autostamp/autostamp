@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:vimeo@0.2.0` |
-| Published version | `0.2.0+vimeo-3.4` |
+| Package | `autostamp:vimeo@0.2.1` |
+| Published version | `0.2.1+vimeo-3.4` |
 | Tag filter | all tags |
 | Operations generated | 326 |
 | Prune duplicate credential fields | enabled — not triggered |

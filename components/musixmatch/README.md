@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:musixmatch@0.2.0` |
-| Published version | `0.2.0+musixmatch-1.1.0` |
+| Package | `autostamp:musixmatch@0.2.1` |
+| Published version | `0.2.1+musixmatch-1.1.0` |
 | Tag filter | all tags |
 | Operations generated | 16 |
 | Prune duplicate credential fields | enabled — not triggered |

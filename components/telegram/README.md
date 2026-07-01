@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:telegram@0.2.0` |
-| Published version | `0.2.0+telegram-5.0.0` |
+| Package | `autostamp:telegram@0.2.1` |
+| Published version | `0.2.1+telegram-5.0.0` |
 | Tag filter | all tags |
 | Operations generated | 74 |
 | Prune duplicate credential fields | enabled — not triggered |

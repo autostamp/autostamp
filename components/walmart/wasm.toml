@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:walmart"
-version = "0.2.0+walmart-1.0.0"
+version = "0.2.1+walmart-1.0.0"
 registry = "ghcr.io/autostamp/walmart"
 kind = "component"
 file = "build/walmart.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

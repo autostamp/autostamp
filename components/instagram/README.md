@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:instagram@0.2.0` |
-| Published version | `0.2.0+instagram-1.0.0` |
+| Package | `autostamp:instagram@0.2.1` |
+| Published version | `0.2.1+instagram-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 27 |
 | Prune duplicate credential fields | enabled — not triggered |

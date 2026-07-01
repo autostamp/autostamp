@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:sendgrid@0.2.0` |
-| Published version | `0.2.0+sendgrid-1.0.0` |
+| Package | `autostamp:sendgrid@0.2.1` |
+| Published version | `0.2.1+sendgrid-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 334 |
 | Prune duplicate credential fields | enabled — **triggered**, 3 fields pruned |

@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:postmarkapp@0.2.0` |
-| Published version | `0.2.0+postmarkapp-0.9.0` |
+| Package | `autostamp:postmarkapp@0.2.1` |
+| Published version | `0.2.1+postmarkapp-0.9.0` |
 | Tag filter | all tags |
 | Operations generated | 23 |
 | Prune duplicate credential fields | enabled — not triggered |

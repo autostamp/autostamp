@@ -21,8 +21,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:zoom@0.2.0` |
-| Published version | `0.2.0+zoom-2.0.0` |
+| Package | `autostamp:zoom@0.2.1` |
+| Published version | `0.2.1+zoom-2.0.0` |
 | Tag filter | all tags |
 | Operations generated | 373 |
 | Prune duplicate credential fields | enabled — not triggered |

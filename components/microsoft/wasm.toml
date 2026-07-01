@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:microsoft"
-version = "0.2.0+microsoft-2.0"
+version = "0.2.1+microsoft-2.0"
 registry = "ghcr.io/autostamp/microsoft"
 kind = "component"
 file = "build/microsoft.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

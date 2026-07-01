@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:vonage@0.2.0` |
-| Published version | `0.2.0+vonage-1.11.8` |
+| Package | `autostamp:vonage@0.2.1` |
+| Published version | `0.2.1+vonage-1.11.8` |
 | Tag filter | all tags |
 | Operations generated | 3 |
 | Prune duplicate credential fields | enabled — not triggered |

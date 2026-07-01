@@ -23,9 +23,11 @@ just publish minor 1     # preview: bump + build, but pass dry_run to the publis
 
 `build` first regenerates the component crates from the vendored schemas (the `gen` recipe runs
 as a dependency), then compiles the generator itself to a component, then builds each generated
-crate: it resolves the WIT interface dependencies (`wasi:http`, `wasmcloud:secrets`) with
+crate: it resolves the WIT interface dependency (`wasmcloud:secrets`) with
 `component install`, bridges the vendored WIT into `wit/deps/`, and builds for `wasm32-wasip2`
-with a shared target directory so the common crates compile once. Pass a provider name to
+with a shared target directory so the common crates compile once. (The component also imports
+`wasi:http` — and `wasi:cli`/`clocks`/`io`/`random` — but the `wstd` crate contributes those
+bindings whole, so they are not declared in `wasm.toml`.) Pass a provider name to
 regenerate and build a single component (`just build nasa`); pass `dry_run=1` to
 `publish-components` to preview a publish without pushing (`just publish-components nasa 1`). Run
 `just gen` on its own to regenerate without compiling.
@@ -77,8 +79,9 @@ to a **classic** PAT with `write:packages`, or run `docker login ghcr.io` first.
   name is a Rust keyword — `box` becomes `box-api`, published as `ghcr.io/autostamp/box-api` —
   keeping the full name in the WIT `package` decl. A wit-bindgen-side escape (e.g. `box_`)
   would remove the need for the rename.
-- **Offline dependency resolution.** Short manifest keys (`"wasi:http@0.2.3" = "0.2.3"`)
-  need a running meta-registry; the generator emits explicit `{ registry, namespace,
-  package, version }` tables so `component install` resolves straight from GHCR.
+- **Offline dependency resolution.** Short manifest keys
+  (`"wasmcloud:secrets@1.0.0" = "1.0.0"`) need a running meta-registry; the generator emits
+  explicit `{ registry, namespace, package, version }` tables so `component install` resolves
+  straight from GHCR.
 - **Ergonomics (nice-to-have).** No `[package]` scaffolding, no `component build` (we shell
   out to cargo), and no batch/workspace publish (we loop in `just`).

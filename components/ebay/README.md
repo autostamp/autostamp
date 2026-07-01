@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:ebay@0.2.0` |
-| Published version | `0.2.0+ebay-v1.3.0` |
+| Package | `autostamp:ebay@0.2.1` |
+| Published version | `0.2.1+ebay-v1.3.0` |
 | Tag filter | all tags |
 | Operations generated | 4 |
 | Prune duplicate credential fields | enabled — not triggered |

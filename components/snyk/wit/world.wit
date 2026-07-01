@@ -1,4 +1,4 @@
-package autostamp:snyk@0.2.0;
+package autostamp:snyk@0.2.1;
 
 interface audit-logs {
   enum get-group-level-audit-logs-body-filters-event-enum {
@@ -2001,10 +2001,10 @@ interface users {
   get-user-details: func(params: get-user-details-params) -> result<string, string>;
 
 }
-/// The component world: imports the HTTP + secrets host
-/// capabilities the runtime uses and exports the generated interfaces.
+/// The component world: imports the secrets host capability
+/// the runtime uses and exports the generated interfaces. The HTTP host
+/// capability is imported by the `wstd` crate's bindings at build time.
 world client {
-  import wasi:http/outgoing-handler@0.2.3;
   import wasmcloud:secrets/store@1.0.0;
   import wasmcloud:secrets/reveal@1.0.0;
   export audit-logs;

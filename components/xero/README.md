@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:xero@0.2.0` |
-| Published version | `0.2.0+xero-2.9.4` |
+| Package | `autostamp:xero@0.2.1` |
+| Published version | `0.2.1+xero-2.9.4` |
 | Tag filter | all tags |
 | Operations generated | 224 |
 | Prune duplicate credential fields | enabled — not triggered |

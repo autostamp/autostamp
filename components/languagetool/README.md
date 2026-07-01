@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:languagetool@0.2.0` |
-| Published version | `0.2.0+languagetool-1.1.2` |
+| Package | `autostamp:languagetool@0.2.1` |
+| Published version | `0.2.1+languagetool-1.1.2` |
 | Tag filter | all tags |
 | Operations generated | 5 |
 | Prune duplicate credential fields | enabled — not triggered |

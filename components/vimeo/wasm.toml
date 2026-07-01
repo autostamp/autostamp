@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:vimeo"
-version = "0.2.0+vimeo-3.4"
+version = "0.2.1+vimeo-3.4"
 registry = "ghcr.io/autostamp/vimeo"
 kind = "component"
 file = "build/vimeo.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

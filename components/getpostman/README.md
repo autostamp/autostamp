@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:getpostman@0.2.0` |
-| Published version | `0.2.0+getpostman-1.20.0` |
+| Package | `autostamp:getpostman@0.2.1` |
+| Published version | `0.2.1+getpostman-1.20.0` |
 | Tag filter | all tags |
 | Operations generated | 57 |
 | Prune duplicate credential fields | enabled — not triggered |

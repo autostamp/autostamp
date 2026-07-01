@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:openfigi@0.2.0` |
-| Published version | `0.2.0+openfigi-1.4.0` |
+| Package | `autostamp:openfigi@0.2.1` |
+| Published version | `0.2.1+openfigi-1.4.0` |
 | Tag filter | all tags |
 | Operations generated | 2 |
 | Prune duplicate credential fields | enabled — not triggered |

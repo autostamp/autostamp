@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:graphhopper@0.2.0` |
-| Published version | `0.2.0+graphhopper-1.0.0` |
+| Package | `autostamp:graphhopper@0.2.1` |
+| Published version | `0.2.1+graphhopper-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 16 |
 | Prune duplicate credential fields | enabled — not triggered |

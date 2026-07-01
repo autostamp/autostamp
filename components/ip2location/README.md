@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:ip2location@0.2.0` |
-| Published version | `0.2.0+ip2location-1.0` |
+| Package | `autostamp:ip2location@0.2.1` |
+| Published version | `0.2.1+ip2location-1.0` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Prune duplicate credential fields | enabled — not triggered |

@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:visualcrossing@0.2.0` |
-| Published version | `0.2.0+visualcrossing-4.6` |
+| Package | `autostamp:visualcrossing@0.2.1` |
+| Published version | `0.2.1+visualcrossing-4.6` |
 | Tag filter | all tags |
 | Operations generated | 5 |
 | Prune duplicate credential fields | enabled — not triggered |

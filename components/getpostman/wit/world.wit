@@ -1,4 +1,4 @@
-package autostamp:getpostman@0.2.0;
+package autostamp:getpostman@0.2.1;
 
 interface api {
   record create-api-body-api {
@@ -631,10 +631,10 @@ interface workspaces {
   delete-workspace: func() -> result<string, string>;
 
 }
-/// The component world: imports the HTTP + secrets host
-/// capabilities the runtime uses and exports the generated interfaces.
+/// The component world: imports the secrets host capability
+/// the runtime uses and exports the generated interfaces. The HTTP host
+/// capability is imported by the `wstd` crate's bindings at build time.
 world client {
-  import wasi:http/outgoing-handler@0.2.3;
   import wasmcloud:secrets/store@1.0.0;
   import wasmcloud:secrets/reveal@1.0.0;
   export api;

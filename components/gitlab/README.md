@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:gitlab@0.2.0` |
-| Published version | `0.2.0+gitlab-v3` |
+| Package | `autostamp:gitlab@0.2.1` |
+| Published version | `0.2.1+gitlab-v3` |
 | Tag filter | all tags |
 | Operations generated | 358 |
 | Prune duplicate credential fields | enabled — not triggered |

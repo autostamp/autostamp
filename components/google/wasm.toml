@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:google"
-version = "0.2.0+google-v3"
+version = "0.2.1+google-v3"
 registry = "ghcr.io/autostamp/google"
 kind = "component"
 file = "build/google.wasm"
@@ -9,12 +9,6 @@ source = "https://github.com/yoshuawuyts/openapi-bindgen"
 license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies.components]
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"
 
 [dependencies.interfaces."wasmcloud:secrets"]
 registry = "ghcr.io"

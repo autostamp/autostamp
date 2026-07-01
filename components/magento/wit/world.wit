@@ -1,4 +1,4 @@
-package autostamp:magento@0.2.0;
+package autostamp:magento@0.2.1;
 
 interface addresses-address-id {
   /// addresses/{addressId}
@@ -18623,10 +18623,10 @@ interface worldpay-guest-carts-cart-id-payment-information {
   worldpay-guest-payment-information-management-proxy-v1-save-payment-information-and-place-order-post: func(params: worldpay-guest-payment-information-management-proxy-v1-save-payment-information-and-place-order-post-params) -> result<string, string>;
 
 }
-/// The component world: imports the HTTP + secrets host
-/// capabilities the runtime uses and exports the generated interfaces.
+/// The component world: imports the secrets host capability
+/// the runtime uses and exports the generated interfaces. The HTTP host
+/// capability is imported by the `wstd` crate's bindings at build time.
 world client {
-  import wasi:http/outgoing-handler@0.2.3;
   import wasmcloud:secrets/store@1.0.0;
   import wasmcloud:secrets/reveal@1.0.0;
   export addresses-address-id;

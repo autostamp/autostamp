@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:azure@0.2.0` |
-| Published version | `0.2.0+azure-2018-03-01` |
+| Package | `autostamp:azure@0.2.1` |
+| Published version | `0.2.1+azure-2018-03-01` |
 | Tag filter | all tags |
 | Operations generated | 5 |
 | Prune duplicate credential fields | enabled — not triggered |

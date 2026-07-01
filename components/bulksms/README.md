@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:bulksms@0.2.0` |
-| Published version | `0.2.0+bulksms-1.0.0` |
+| Package | `autostamp:bulksms@0.2.1` |
+| Published version | `0.2.1+bulksms-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 15 |
 | Prune duplicate credential fields | enabled — not triggered |

@@ -12,8 +12,8 @@ use crate::wit_type::WitType;
 
 /// The shared request + auth runtime, embedded verbatim into every generated component as a
 /// private `runtime` module. It lives outside `src/` so it is not compiled into the
-/// generator itself — only emitted into generated crates, where `wasi:http` and
-/// `wasmcloud:secrets` bindings exist.
+/// generator itself — only emitted into generated crates, where the `wstd` (HTTP) and
+/// `wasmcloud:secrets` bindings it references exist.
 const RUNTIME_SRC: &str = include_str!("../templates/runtime.rs");
 
 pub(crate) fn emit_rust(

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:wolframalpha"
-version = "0.2.0+wolframalpha-v0.1"
+version = "0.2.1+wolframalpha-v0.1"
 registry = "ghcr.io/autostamp/wolframalpha"
 kind = "component"
 file = "build/wolframalpha.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

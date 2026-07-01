@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:adobe"
-version = "0.2.0+adobe-3.7.1-pre.0"
+version = "0.2.1+adobe-3.7.1-pre.0"
 registry = "ghcr.io/autostamp/adobe"
 kind = "component"
 file = "build/adobe.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

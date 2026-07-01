@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:clicksend@0.2.0` |
-| Published version | `0.2.0+clicksend-1.0.0` |
+| Package | `autostamp:clicksend@0.2.1` |
+| Published version | `0.2.1+clicksend-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 205 |
 | Prune duplicate credential fields | enabled — not triggered |

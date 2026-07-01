@@ -21,8 +21,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:telnyx@0.2.0` |
-| Published version | `0.2.0+telnyx-2.0.0` |
+| Package | `autostamp:telnyx@0.2.1` |
+| Published version | `0.2.1+telnyx-2.0.0` |
 | Tag filter | all tags |
 | Operations generated | 361 |
 | Prune duplicate credential fields | enabled — not triggered |

@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:tfl@0.2.0` |
-| Published version | `0.2.0+tfl-v1` |
+| Package | `autostamp:tfl@0.2.1` |
+| Published version | `0.2.1+tfl-v1` |
 | Tag filter | all tags |
 | Operations generated | 84 |
 | Prune duplicate credential fields | enabled — not triggered |

@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:zuora@0.2.0` |
-| Published version | `0.2.0+zuora-2021-08-20` |
+| Package | `autostamp:zuora@0.2.1` |
+| Published version | `0.2.1+zuora-2021-08-20` |
 | Tag filter | all tags |
 | Operations generated | 428 |
 | Prune duplicate credential fields | enabled — not triggered |

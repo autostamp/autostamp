@@ -274,10 +274,9 @@ pub fn generate(
     // imports are not resolvable in this self-contained, in-memory check.
     validate_wit(&wit)?;
 
-    // Append the `client` world importing `wasi:http` + `wasmcloud:secrets` and exporting
-    // the generated interfaces. It is deliberately excluded from `validate_wit`, because its
-    // imports reference packages that are only fetched into `wit/deps/` at component-build
-    // time.
+    // Append the `client` world importing `wasmcloud:secrets` and exporting the generated
+    // interfaces. It is deliberately excluded from `validate_wit`, because its import
+    // references a package that is only fetched into `wit/deps/` at component-build time.
     wit.push('\n');
     wit.push_str(&emit_world(&interfaces));
 

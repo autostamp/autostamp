@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:ticketmaster@0.2.0` |
-| Published version | `0.2.0+ticketmaster-v2` |
+| Package | `autostamp:ticketmaster@0.2.1` |
+| Published version | `0.2.1+ticketmaster-v2` |
 | Tag filter | all tags |
 | Operations generated | 13 |
 | Prune duplicate credential fields | enabled — not triggered |

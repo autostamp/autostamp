@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:nytimes@0.2.0` |
-| Published version | `0.2.0+nytimes-1.0.0` |
+| Package | `autostamp:nytimes@0.2.1` |
+| Published version | `0.2.1+nytimes-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Prune duplicate credential fields | enabled — not triggered |

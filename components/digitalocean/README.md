@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:digitalocean@0.2.0` |
-| Published version | `0.2.0+digitalocean-2.0` |
+| Package | `autostamp:digitalocean@0.2.1` |
+| Published version | `0.2.1+digitalocean-2.0` |
 | Tag filter | all tags |
 | Operations generated | 290 |
 | Prune duplicate credential fields | enabled — not triggered |

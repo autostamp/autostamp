@@ -267,7 +267,7 @@ const AUTH_SPEC: &str = r#"{
 }"#;
 
 #[test]
-fn emits_world_importing_secrets_and_declaring_http_dep() {
+fn emits_world_and_wasm_toml_importing_only_secrets() {
     let spec = parse_openapi(AUTH_SPEC).unwrap();
     let package = PackageName::parse("widget:api@0.1.0").unwrap();
     let generated = generate(&spec, &package, None).unwrap();
@@ -281,17 +281,16 @@ fn emits_world_importing_secrets_and_declaring_http_dep() {
     assert!(generated.wit.contains("import wasmcloud:secrets/reveal"));
     assert!(generated.wit.contains("export widgets;"));
 
-    // The wasm.toml carries a publishable [package] section plus explicit interface deps. The
-    // built component still imports `wasi:http` (via `wstd`), so it stays declared here.
+    // The wasm.toml carries a publishable [package] section plus the single interface dep the
+    // build vendors: `wasmcloud:secrets`. The built component also imports `wasi:http`, but
+    // `wstd` supplies it whole, so — like `wasi:cli`/`clocks`/`io`/`random` — it is not declared.
     assert!(generated.wasm_toml.contains("[package]"));
     assert!(
         generated
             .wasm_toml
             .contains("registry = \"ghcr.io/widget/api\"")
     );
-    assert!(generated.wasm_toml.contains(
-        "\"wasi:http\" = { registry = \"ghcr.io\", namespace = \"webassembly\", package = \"wasi/http\", version = \"0.2.3\" }"
-    ));
+    assert!(!generated.wasm_toml.contains("wasi:http"));
     assert!(generated.wasm_toml.contains(
         "\"wasmcloud:secrets\" = { registry = \"ghcr.io\", namespace = \"wasmcloud\", package = \"interfaces/wasmcloud/secrets\", version = \"1.0.0\" }"
     ));

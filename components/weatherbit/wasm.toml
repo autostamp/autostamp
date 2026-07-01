@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:weatherbit"
-version = "0.2.0+weatherbit-2.0.0"
+version = "0.2.1+weatherbit-2.0.0"
 registry = "ghcr.io/autostamp/weatherbit"
 kind = "component"
 file = "build/weatherbit.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

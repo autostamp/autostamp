@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
-package autostamp:trakt@0.2.0;
+package autostamp:trakt@0.2.1;
 
 interface calendars {
   /// Get DVD releases
@@ -3172,10 +3172,10 @@ interface users {
   get-users-id-watchlist-type-sort: func(params: get-users-id-watchlist-type-sort-params) -> result<string, string>;
 
 }
-/// The component world: imports the HTTP + secrets host
-/// capabilities the runtime uses and exports the generated interfaces.
+/// The component world: imports the secrets host capability
+/// the runtime uses and exports the generated interfaces. The HTTP host
+/// capability is imported by the `wstd` crate's bindings at build time.
 world client {
-  import wasi:http/outgoing-handler@0.2.3;
   import wasmcloud:secrets/store@1.0.0;
   import wasmcloud:secrets/reveal@1.0.0;
   export calendars;

@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:adyen@0.2.0` |
-| Published version | `0.2.0+adyen-3` |
+| Package | `autostamp:adyen@0.2.1` |
+| Published version | `0.2.1+adyen-3` |
 | Tag filter | all tags |
 | Operations generated | 17 |
 | Prune duplicate credential fields | enabled — not triggered |

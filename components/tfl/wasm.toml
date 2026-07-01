@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:tfl"
-version = "0.2.0+tfl-v1"
+version = "0.2.1+tfl-v1"
 registry = "ghcr.io/autostamp/tfl"
 kind = "component"
 file = "build/tfl.wasm"
@@ -15,9 +15,3 @@ registry = "ghcr.io"
 namespace = "wasmcloud"
 package = "interfaces/wasmcloud/secrets"
 version = "1.0.0"
-
-[dependencies.interfaces."wasi:http"]
-registry = "ghcr.io"
-namespace = "webassembly"
-package = "wasi/http"
-version = "0.2.3"

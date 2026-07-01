@@ -41,19 +41,20 @@ codegen-units = 256
 }
 
 /// Render the `wasm.toml` for a generated component: a `[package]` section with the publish
-/// metadata `component publish` needs, plus the WIT interface dependencies the component
-/// imports.
+/// metadata `component publish` needs, plus the WIT interface dependency the build vendors.
 ///
 /// The `[package]` section targets the `<namespace>` org on GHCR
 /// (`ghcr.io/<namespace>/<name>`) and points `file` at `build/<name>.wasm`, where the build
 /// step deposits the compiled component. `version` is the full publish version, including any
 /// provider/schema build metadata (e.g. `0.1.0+github-2022-11-28`).
 ///
-/// The dependencies are written in the explicit table form (`registry`/`namespace`/`package`/
-/// `version`) so `component install` resolves them straight from GHCR without a meta-registry.
-/// `wasi:http` is imported transitively — the runtime performs requests with the `wstd` HTTP
-/// client, whose bindings import it — while `wasmcloud:secrets` provides the credentials the
-/// runtime fetches.
+/// The sole interface dependency is `wasmcloud:secrets`: `component install` vendors its WIT
+/// into `wit/deps/` so `wit-bindgen` can generate the store/reveal bindings the runtime uses.
+/// It is written in the explicit table form (`registry`/`namespace`/`package`/`version`) so
+/// `component install` resolves it straight from GHCR without a meta-registry. The built
+/// component also imports `wasi:http` (plus `wasi:cli`/`clocks`/`io`/`random`), but those are
+/// contributed whole by the `wstd` crate's own bundled bindings — `wit-bindgen` never sees
+/// them, so they need no entry here.
 pub(crate) fn render_wasm_manifest(package: &PackageName, publish_version: &str) -> String {
     let namespace = &package.namespace;
     let name = &package.name;
@@ -72,7 +73,6 @@ source = "https://github.com/yoshuawuyts/openapi-bindgen"
 [dependencies.components]
 
 [dependencies.interfaces]
-"wasi:http" = {{ registry = "ghcr.io", namespace = "webassembly", package = "wasi/http", version = "0.2.3" }}
 "wasmcloud:secrets" = {{ registry = "ghcr.io", namespace = "wasmcloud", package = "interfaces/wasmcloud/secrets", version = "1.0.0" }}
 "#
     )
@@ -127,14 +127,14 @@ mod tests {
     }
 
     #[test]
-    fn wasm_toml_uses_explicit_interface_deps() {
+    fn wasm_toml_declares_only_the_secrets_interface_dep() {
         let wasm = render_wasm_manifest(&package(), "0.1.0");
         // Explicit table form resolves from GHCR without a meta-registry.
         assert!(wasm.contains(
-            "\"wasi:http\" = { registry = \"ghcr.io\", namespace = \"webassembly\", package = \"wasi/http\", version = \"0.2.3\" }"
-        ));
-        assert!(wasm.contains(
             "\"wasmcloud:secrets\" = { registry = \"ghcr.io\", namespace = \"wasmcloud\", package = \"interfaces/wasmcloud/secrets\", version = \"1.0.0\" }"
         ));
+        // `wasi:http` is contributed whole by `wstd`'s bundled bindings, so `wit-bindgen` never
+        // vendors it — declaring it here would only pin a version the build ignores.
+        assert!(!wasm.contains("wasi:http"));
     }
 }
