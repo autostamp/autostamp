@@ -7,6 +7,13 @@ use crate::PackageName;
 /// The crate builds as a `cdylib` (the component shape) and depends on `wit-bindgen`
 /// for the exported component bindings and `serde_json`, which the generated
 /// `*_to_json` helpers use. The crate name and version are taken from `package`.
+///
+/// The emitted `[profile.release]` optimizes the component for size (`opt-level = "s"`)
+/// and splits code generation into many small units (`codegen-units = 256`). Large APIs
+/// produce very large crates (e.g. docusign is ~90k lines / ~400 operations); a high
+/// codegen-unit count keeps each LLVM module small so the backend parallelizes and its
+/// peak memory stays bounded, while `"s"` keeps the resulting `.wasm` compact. Very large
+/// specs can still exceed the compiler's memory on a small machine — see the README.
 pub(crate) fn render(package: &PackageName) -> String {
     let name = &package.name;
     let version = package.version.as_deref().unwrap_or("0.1.0");
@@ -23,6 +30,10 @@ crate-type = ["cdylib"]
 [dependencies]
 serde_json = "1"
 wit-bindgen = "0.41"
+
+[profile.release]
+opt-level = "s"
+codegen-units = 256
 "#
     )
 }
@@ -79,6 +90,16 @@ mod tests {
         // Build metadata never leaks into Cargo.toml — it stays clean SemVer.
         assert!(cargo.contains("version = \"0.1.0\""));
         assert!(cargo.contains("crate-type = [\"cdylib\"]"));
+    }
+
+    #[test]
+    fn cargo_toml_emits_size_and_memory_tuned_release_profile() {
+        let cargo = render(&package());
+        // Size-optimized components and a high codegen-unit count so large
+        // crates keep the backend's peak memory bounded.
+        assert!(cargo.contains("[profile.release]"));
+        assert!(cargo.contains("opt-level = \"s\""));
+        assert!(cargo.contains("codegen-units = 256"));
     }
 
     #[test]

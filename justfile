@@ -39,7 +39,9 @@ gen:
         microsoft.com box.com hubapi.com notion.com asana.com
         trello.com zapier.com nytimes.com nasa.gov stackexchange.com
         giphy.com wikimedia.org here.com tomtom.com vonage.com
-        docusign.net xero.com zuora.com qualtrics.com braze.com
+        # docusign.net intentionally excluded: its ~400-operation spec generates a
+        # ~90k-line crate that exhausts rustc's memory on a 16 GB machine (see README).
+        xero.com zuora.com qualtrics.com braze.com
         mandrillapp.com postmarkapp.com klarna.com bunq.com nordigen.com
         telnyx.com clicksend.com bulksms.com wolframalpha.com spoonacular.com
         # Tier 4 — strong niche & developer favorites
@@ -98,7 +100,13 @@ build-components name="":
         name="$(basename "$dir")"
         [[ -n "{{name}}" && "$name" != "{{name}}" ]] && continue
         [[ -f "$dir/wasm.toml" ]] || continue
-        artifact="${name//-/_}.wasm"
+        # The cargo crate (and thus the `.wasm` filename) is the package name from Cargo.toml,
+        # which can differ from the directory name when the generator renames a keyword package
+        # (e.g. dir `box` -> crate `box-api`). Derive both from Cargo.toml so they always agree
+        # with the manifest's `[package].file = build/<crate>.wasm`.
+        crate="$(sed -n 's/^name = "\(.*\)"/\1/p' "$dir/Cargo.toml" | head -n1)"
+        crate="${crate:-$name}"
+        artifact="${crate//-/_}.wasm"
         if (
             cd "$dir" || exit 1
             component install || exit 1
@@ -107,9 +115,9 @@ build-components name="":
             cp vendor/wit/*.wit wit/deps/ || exit 1
             cargo build --quiet --target wasm32-wasip2 --release || exit 1
             mkdir -p build
-            cp "$CARGO_TARGET_DIR/wasm32-wasip2/release/$artifact" "build/$name.wasm" || exit 1
+            cp "$CARGO_TARGET_DIR/wasm32-wasip2/release/$artifact" "build/$crate.wasm" || exit 1
         ); then
-            printf 'ok    %-24s %sbuild/%s.wasm\n' "$name" "$dir" "$name"
+            printf 'ok    %-24s %sbuild/%s.wasm\n' "$name" "$dir" "$crate"
             ok=$((ok + 1))
         else
             printf 'FAIL  %-24s\n' "$name"
@@ -136,8 +144,13 @@ publish-components name="" dry_run="":
         name="$(basename "$dir")"
         [[ -n "{{name}}" && "$name" != "{{name}}" ]] && continue
         [[ -f "$dir/wasm.toml" ]] || continue
-        if [[ ! -f "$dir/build/$name.wasm" ]]; then
-            printf 'skip  %-24s no build/%s.wasm (run `just build-components %s` first)\n' "$name" "$name" "$name"
+        # The artifact is named after the cargo crate, which may differ from the directory when
+        # a keyword package was renamed (dir `box` -> crate `box-api`); `component publish` reads
+        # the path from `[package].file`, so only this existence pre-check needs the crate name.
+        crate="$(sed -n 's/^name = "\(.*\)"/\1/p' "$dir/Cargo.toml" | head -n1)"
+        crate="${crate:-$name}"
+        if [[ ! -f "$dir/build/$crate.wasm" ]]; then
+            printf 'skip  %-24s no build/%s.wasm (run `just build-components %s` first)\n' "$name" "$crate" "$name"
             skip=$((skip + 1)); continue
         fi
         if component publish --manifest-path "$dir" $flag; then

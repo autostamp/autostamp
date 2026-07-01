@@ -1,11 +1,11 @@
 //! The Rust backend: render the intermediate model to `generated.rs` source.
 
-use heck::{ToSnakeCase, ToUpperCamelCase};
+use heck::ToSnakeCase;
 
 use crate::field::Field;
 use crate::interface_model::InterfaceModel;
 use crate::location::Location;
-use crate::naming::wit_field_to_rust_ident;
+use crate::naming::{to_rust_case_name, to_rust_ident, to_rust_type_name};
 use crate::package_name::PackageName;
 use crate::security::{AuthApply, AuthKind};
 use crate::wit_type::WitType;
@@ -55,9 +55,16 @@ pub(crate) fn emit_rust(
 
     let rust_path = package.rust_path();
     for iface in ifaces {
-        let mod_snake = iface.name_kebab.replace('-', "_");
+        // Alias the exported-interface module to a collision-proof local name. An interface
+        // whose name maps to `exports`, `wasi`, or `wasmcloud` would otherwise shadow the
+        // top-level modules wit-bindgen generates — the synthetic `exports` macro module and
+        // the `wasi`/`wasmcloud` import namespaces — yielding E0255 "defined multiple times"
+        // (mandrillapp and zuora both expose an `Exports` tag). The `iface_` prefix can't
+        // collide with those, with `runtime`, or with the generated helper/const names.
+        let module = to_rust_ident(&iface.name_kebab);
+        let mod_snake = format!("iface_{module}");
         out.push_str(&format!(
-            "use crate::exports::{rust_path}::{mod_snake};\n\n"
+            "use crate::exports::{rust_path}::{module} as {mod_snake};\n\n"
         ));
 
         // OpSpec consts
@@ -90,15 +97,19 @@ pub(crate) fn emit_rust(
         // Enum -> &'static str helpers (namespaced by interface to avoid collisions)
         for e in &iface.enums {
             let fn_name = helper_name(&mod_snake, &e.name_kebab, "to_str");
-            let pascal = e.name_kebab.to_upper_camel_case();
+            let pascal = to_rust_type_name(&e.name_kebab);
             out.push_str(&format!(
                 "fn {fn_name}(e: &{mod_snake}::{pascal}) -> &'static str {{\n"
             ));
             out.push_str("    match e {\n");
             for (kebab, raw) in &e.cases {
-                let case_pascal = kebab.to_upper_camel_case();
+                let case_pascal = to_rust_case_name(kebab);
+                // Emit the wire value with `{:?}` so any character the API declares in the enum
+                // value — embedded quotes (Telnyx ships `"Ashburn, VA"`, quotes and all),
+                // backslashes, newlines — is escaped into a valid Rust string literal instead of
+                // producing `""Ashburn, VA""` (a reserved-prefix lex error).
                 out.push_str(&format!(
-                    "        {mod_snake}::{pascal}::{case_pascal} => \"{raw}\",\n"
+                    "        {mod_snake}::{pascal}::{case_pascal} => {raw:?},\n"
                 ));
             }
             out.push_str("    }\n");
@@ -132,7 +143,7 @@ pub(crate) fn emit_rust(
                 out.push_str("    }\n");
                 continue;
             }
-            let params_pascal = op.params_record.to_upper_camel_case();
+            let params_pascal = to_rust_type_name(&op.params_record);
             let to_json = helper_name(&mod_snake, &op.params_record, "to_json");
             out.push_str(&format!(
                 "    fn {}(params: {mod_snake}::{params_pascal}) -> Result<String, String> {{\n",
@@ -220,13 +231,13 @@ fn emit_record_to_json(
     iface: &InterfaceModel,
 ) {
     let fn_name = helper_name(mod_snake, record_kebab, "to_json");
-    let pascal = record_kebab.to_upper_camel_case();
+    let pascal = to_rust_type_name(record_kebab);
     out.push_str(&format!(
         "fn {fn_name}(p: &{mod_snake}::{pascal}) -> Value {{\n"
     ));
     out.push_str("    let mut m = Map::new();\n");
     for f in fields {
-        let field_snake = wit_field_to_rust_ident(&f.name_kebab);
+        let field_snake = to_rust_ident(&f.name_kebab);
         let expr = field_to_json_expr(&format!("&p.{field_snake}"), &f.ty, iface, mod_snake);
         out.push_str(&format!(
             "    m.insert(\"{}\".into(), {});\n",

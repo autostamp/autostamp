@@ -217,6 +217,17 @@ pub fn generate(
         );
     }
 
+    // Drop interfaces that ended up with no operations. wit-bindgen emits a `Guest` trait only
+    // for an interface that has at least one function, so exporting a function-less interface
+    // (and generating an `impl Guest` for it) would not compile. An interface can end up empty
+    // when every operation grouped under its tag was skipped — e.g. an operation whose request
+    // body `$ref` couldn't be resolved still seeded the interface (and any param-derived enum)
+    // before being dropped. If nothing bindable remains, treat the document as a skip.
+    ifaces.retain(|i| !i.operations.is_empty());
+    if ifaces.is_empty() {
+        return Err(NoOperations.into());
+    }
+
     // Drop request-body records whose fields were inlined into params records and which
     // nothing else references, so they don't surface as dead WIT types.
     for iface in &mut ifaces {

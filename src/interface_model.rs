@@ -7,15 +7,15 @@
 use anyhow::Result;
 use heck::{ToKebabCase, ToSnakeCase};
 use openapiv3::{
-    AnySchema, Operation, Parameter, ParameterSchemaOrContent, ReferenceOr, Schema, SchemaKind,
-    Type,
+    AnySchema, Operation, Parameter, ParameterSchemaOrContent, ReferenceOr, RequestBody, Schema,
+    SchemaKind, Type,
 };
 use std::collections::BTreeSet;
 
 use crate::enum_model::EnumModel;
 use crate::field::Field;
 use crate::location::Location;
-use crate::naming::{sanitize_wit_name, synthesize_operation_id, unique_name};
+use crate::naming::{sanitize_wit_name, synthesize_operation_id, to_rust_ident, unique_name};
 use crate::operation_model::OperationModel;
 use crate::package_name::PackageName;
 use crate::record_model::RecordModel;
@@ -293,6 +293,7 @@ impl InterfaceModel {
                 location: Location::Body,
             });
         }
+        dedupe_field_names(&mut fields);
         if fields.is_empty() {
             // WIT records must have at least one field. For schemas with no named
             // properties (free-form `object`s, `additionalProperties: true`), provide
@@ -350,6 +351,7 @@ impl InterfaceModel {
                 location: Location::Body,
             });
         }
+        dedupe_field_names(&mut fields);
         if fields.is_empty() {
             fields.push(Field {
                 name_kebab: "data".into(),
@@ -447,11 +449,20 @@ impl InterfaceModel {
         }
 
         if let Some(body_ref) = &op.request_body {
-            let body = match body_ref {
-                ReferenceOr::Item(b) => b,
-                ReferenceOr::Reference { .. } => return Ok(()),
+            // Resolve a `$ref` body (a shared `#/components/requestBodies/...`) instead of
+            // dropping the operation outright. Many specs point several operations at one
+            // shared body (e.g. Azure Cognitive Services' `ImageUrl`); dropping them left
+            // function-less interfaces, which wit-bindgen emits no `Guest` trait for (an
+            // uncompilable component). If resolution fails, skip just the body and still emit
+            // the operation.
+            let resolved: Option<RequestBody> = match body_ref {
+                ReferenceOr::Item(b) => Some(b.clone()),
+                ReferenceOr::Reference { reference } => {
+                    ctx.resolve_request_body(reference).ok().cloned()
+                }
             };
-            if let Some(media) = body.content.get("application/json")
+            if let Some(body) = &resolved
+                && let Some(media) = body.content.get("application/json")
                 && let Some(body_schema_ref) = &media.schema
             {
                 let hint = format!("{op_kebab}-body");
@@ -502,12 +513,16 @@ impl InterfaceModel {
         fields.retain(|f| !is_injected_credential(f, &auth));
         self.pruned_credential_fields += before - fields.len();
 
+        // Collapse duplicate fields gathered from repeated parameters or an inlined body so the
+        // emitted record (and the wit-bindgen struct it produces) has unique field names.
+        dedupe_field_names(&mut fields);
+
         // Finalize identifiers so they're unique within the interface. WIT shares one namespace
         // for record/enum *types* and *functions*, so an operation's function name and its params
         // record must not collide with each other, with other operations, or with any generated
         // record/enum (e.g. Telnyx declares two `validateAddress` operations under one tag).
         let op_kebab = unique_name(&op_kebab, |n| self.name_in_use(n));
-        let op_snake = op_kebab.replace('-', "_");
+        let op_snake = to_rust_ident(&op_kebab);
         let params_record = unique_name(&format!("{op_kebab}-params"), |n| {
             op_kebab == n || self.name_in_use(n)
         });
@@ -584,8 +599,30 @@ fn is_injected_credential(field: &Field, auth: &[AuthApply]) -> bool {
     })
 }
 
-// ---------------------------------------------------------------------------
-// WIT emission: intermediate model -> WIT source
+/// Ensure a record's fields have unique WIT names.
+///
+/// Two situations produce colliding fields: an OpenAPI document can declare the same field
+/// twice (TfL repeats `startDate`/`endDate` as "automatically added" query params, and an
+/// inlined request body can restate a query parameter), or two distinct names can sanitize to
+/// the same WIT identifier. Either way the emitted record would carry duplicate fields, which
+/// makes wit-bindgen generate a struct with two identically-named fields (`E0124`) and a
+/// double-initialized literal (`E0062`). We keep the first occurrence of each WIT name; a later
+/// field with the *same* source (snake) name is a genuine duplicate and is dropped, while a
+/// collision between *distinct* source fields is disambiguated with a numeric suffix so no field
+/// is silently lost.
+fn dedupe_field_names(fields: &mut Vec<Field>) {
+    let mut kept: Vec<Field> = Vec::with_capacity(fields.len());
+    for mut f in std::mem::take(fields) {
+        if let Some(existing) = kept.iter().find(|g| g.name_kebab == f.name_kebab) {
+            if existing.name_snake == f.name_snake {
+                continue;
+            }
+            f.name_kebab = unique_name(&f.name_kebab, |n| kept.iter().any(|g| g.name_kebab == n));
+        }
+        kept.push(f);
+    }
+    *fields = kept;
+}
 
 impl InterfaceModel {
     /// Render this interface to WIT source, prefixed with `package`'s declaration.

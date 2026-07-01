@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 use indexmap::IndexMap;
-use openapiv3::{OpenAPI, ReferenceOr, Schema, SchemaKind, Type};
+use openapiv3::{OpenAPI, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
 
 /// Resolves schema references against the components section of an OpenAPI document.
 pub(crate) struct SchemaCtx<'a> {
@@ -30,6 +30,41 @@ impl<'a> SchemaCtx<'a> {
             ReferenceOr::Item(s) => Ok(s.as_ref()),
             ReferenceOr::Reference { reference } => self.resolve_reference(reference),
         }
+    }
+
+    /// Resolve a `#/components/requestBodies/{Name}` reference to the request body it points at.
+    ///
+    /// Operations commonly share a single request body via `$ref` — e.g. Azure Cognitive
+    /// Services points every Computer Vision operation's `requestBody` at
+    /// `#/components/requestBodies/ImageUrl`. Without resolving it the operation would carry no
+    /// body and, in the original generator, was dropped outright, leaving a function-less
+    /// interface that wit-bindgen emits no `Guest` trait for (an uncompilable component).
+    /// Follows up to a small fixed depth of indirection in case the named entry is itself a
+    /// `$ref`.
+    pub(crate) fn resolve_request_body(&self, reference: &str) -> Result<&'a RequestBody> {
+        let bodies = &self
+            .spec
+            .components
+            .as_ref()
+            .context("spec missing components section")?
+            .request_bodies;
+        let mut reference = reference;
+        for _ in 0..8 {
+            let name = reference
+                .strip_prefix("#/components/requestBodies/")
+                .with_context(|| format!("unsupported request-body $ref: {reference}"))?;
+            if name.is_empty() {
+                bail!("malformed request-body $ref: {reference}");
+            }
+            match bodies
+                .get(name)
+                .with_context(|| format!("request-body $ref not found: {reference}"))?
+            {
+                ReferenceOr::Item(b) => return Ok(b),
+                ReferenceOr::Reference { reference: next } => reference = next,
+            }
+        }
+        bail!("request-body $ref nested too deeply: {reference}")
     }
 
     /// Resolve a `#/components/schemas/...` reference string to the schema it points at.
@@ -180,5 +215,47 @@ mod tests {
         let r = reference("#/components/schemas/Parent/properties/missing");
         let ctx = SchemaCtx::new(&spec);
         assert!(ctx.resolve_schema(&r).is_err());
+    }
+
+    // r[verify schema-ctx.request-body.resolve-ref]
+    // Operations that share a request body via `$ref` (e.g. Azure Cognitive Services'
+    // `#/components/requestBodies/ImageUrl`) must resolve to the named body rather than being
+    // dropped, which previously left function-less, uncompilable interfaces.
+    #[test]
+    fn resolves_request_body_ref() {
+        let spec: OpenAPI = serde_json::from_str(
+            r##"{
+              "openapi": "3.0.0",
+              "info": { "title": "t", "version": "1" },
+              "paths": {},
+              "components": {
+                "requestBodies": {
+                  "ImageUrl": {
+                    "required": true,
+                    "content": { "application/json": { "schema": { "type": "object" } } }
+                  },
+                  "Alias": { "$ref": "#/components/requestBodies/ImageUrl" }
+                }
+              }
+            }"##,
+        )
+        .unwrap();
+        let ctx = SchemaCtx::new(&spec);
+        // Direct reference resolves to the named body.
+        let body = ctx
+            .resolve_request_body("#/components/requestBodies/ImageUrl")
+            .unwrap();
+        assert!(body.required);
+        assert!(body.content.contains_key("application/json"));
+        // A `$ref` that points at another `$ref` is followed to the concrete body.
+        let chained = ctx
+            .resolve_request_body("#/components/requestBodies/Alias")
+            .unwrap();
+        assert!(chained.required);
+        // A dangling reference is an error (callers fall back to emitting a body-less op).
+        assert!(
+            ctx.resolve_request_body("#/components/requestBodies/Missing")
+                .is_err()
+        );
     }
 }

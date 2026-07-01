@@ -555,3 +555,132 @@ fn inlines_paths_ref_into_concrete_schema() {
         generated.wit
     );
 }
+
+// r[verify codegen.request-body.shared-ref]
+// Several real specs (e.g. Azure Cognitive Services' Computer Vision) point many operations
+// at one shared `#/components/requestBodies/...` body. The generator must resolve that `$ref`
+// and still emit the operation; the original code dropped such operations, leaving
+// function-less interfaces that wit-bindgen generates no `Guest` trait for (E0405).
+#[test]
+fn resolves_shared_ref_request_body() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/analyze": {
+          "post": {
+            "tags": ["analyze"],
+            "operationId": "analyzeImage",
+            "requestBody": { "$ref": "#/components/requestBodies/ImageUrl" },
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "requestBodies": {
+          "ImageUrl": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "url": { "type": "string" } } }
+              }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The operation survives (the interface is not dropped as empty) ...
+    assert!(generated.interfaces.iter().any(|i| i == "analyze"));
+    // ... and the shared body's field is inlined into the operation's params record.
+    assert!(
+        generated.wit.contains("url: option<string>"),
+        "shared `$ref` request body should resolve and inline its fields:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.interface.exports-collision]
+// An interface whose name maps to `exports` (mandrillapp and zuora both expose an `Exports`
+// tag) collides with the synthetic top-level `exports` module wit-bindgen generates for
+// exported interfaces. The generated Rust must alias the interface module to a non-colliding
+// local name rather than `use ...::exports;` (which is E0255 "defined multiple times").
+#[test]
+fn exports_tag_module_is_aliased() {
+    let spec_json = r#"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/exports": {
+          "get": {
+            "tags": ["exports"],
+            "operationId": "listExports",
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      }
+    }"#;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(generated.interfaces.iter().any(|i| i == "exports"));
+    // The module import is aliased, and the `Guest` impl targets the alias — never a bare
+    // `exports` that would shadow wit-bindgen's top-level `exports` module.
+    assert!(
+        generated.rust.contains("::exports as iface_exports;"),
+        "exports interface module should be aliased:\n{}",
+        generated.rust
+    );
+    assert!(generated.rust.contains("impl iface_exports::Guest"));
+    assert!(
+        !generated.rust.contains("::demo::exports;"),
+        "must not emit a bare `exports` import that collides with wit-bindgen's module"
+    );
+}
+
+// r[verify codegen.enum.escape-wire-value]
+// Enum wire values are emitted into a Rust `&str` literal. A value containing characters that
+// are special in a Rust literal — Telnyx ships enum values *with embedded double quotes* like
+// `"Ashburn, VA"` — must be escaped, or the glue emits `""Ashburn, VA""` (a reserved-prefix
+// lex error: "prefix `VA` is unknown").
+#[test]
+fn escapes_enum_wire_values_with_quotes() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/sites": {
+          "get": {
+            "tags": ["sites"],
+            "operationId": "listSites",
+            "parameters": [
+              {
+                "name": "region",
+                "in": "query",
+                "schema": { "type": "string", "enum": ["\"Ashburn, VA\"", "Latency"] }
+              }
+            ],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The escaped literal is present; the doubled-quote form that fails to lex is not.
+    assert!(
+        generated.rust.contains(r#"=> "\"Ashburn, VA\"","#),
+        "enum wire value should be escaped:\n{}",
+        generated.rust
+    );
+    assert!(
+        !generated.rust.contains(r#"=> ""Ashburn"#),
+        "must not emit the doubled-quote form that fails to lex"
+    );
+}

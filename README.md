@@ -66,6 +66,12 @@ document's `info.version` as SemVer build metadata — e.g. `0.1.0+1.0.0`. The b
 stays on the WIT package decl and `Cargo.toml`; only `wasm.toml`'s `[package].version`
 carries the metadata, recording exactly which schema revision the bindings came from.
 
+**Build profile.** Generated crates ship a `[profile.release]` tuned for WebAssembly:
+`opt-level = "s"` keeps the `.wasm` small, and `codegen-units = 256` splits code generation
+into many small LLVM units so the backend parallelizes and its peak memory stays bounded.
+Large APIs produce large crates, and the biggest ones can still exhaust a small machine's
+memory while compiling — see [Known limitations](#known-limitations).
+
 **GHCR auth.** Publishing uses Docker credentials. Set `GHCR_TOKEN` (or `GH_TOKEN_CLASSIC`)
 to a **classic** PAT with `write:packages`, or run `docker login ghcr.io` first. CI uses a
 `GHCR_PAT` secret.
@@ -79,6 +85,13 @@ to a **classic** PAT with `write:packages`, or run `docker login ghcr.io` first.
 - **`wit/deps` bridge.** `component install` vendors WIT to `vendor/wit/`, but wit-bindgen
   reads `wit/deps/`; `build-components` copies between them. A native `wit/deps` output
   would remove the step.
+- **Keyword package names (wit-bindgen, not `component`).** wit-bindgen names a package's
+  Rust module `name.to_snake_case()` *without* keyword-escaping it
+  (`wit_bindgen_core::name_package_module`), so a package literally named `box` emits an
+  uncompilable `pub mod box { … }`. The generator works around this by renaming packages whose
+  name is a Rust keyword — `box` becomes `box-api`, published as `ghcr.io/autostamp/box-api` —
+  keeping the full name in the WIT `package` decl. A wit-bindgen-side escape (e.g. `box_`)
+  would remove the need for the rename.
 - **Offline dependency resolution.** Short manifest keys (`"wasi:http@0.2.3" = "0.2.3"`)
   need a running meta-registry; the generator emits explicit `{ registry, namespace,
   package, version }` tables so `component install` resolves straight from GHCR.
@@ -97,6 +110,14 @@ bind and is reported as a skip. A few input shapes are still unsupported and wil
   (type arrays, `const`, sibling `$ref`s) aren't deserialized yet.
 - **Malformed source documents.** Specs whose YAML is structurally invalid for a strict parser
   (e.g. inconsistent block-scalar indentation) can't be loaded.
+- **Very large specs are memory-bound to compile.** The generated code is correct, but a spec
+  with hundreds of operations produces a very large single crate, and `rustc` can exhaust the
+  memory of a small machine (~16 GB) while compiling it, regardless of `opt-level` or
+  `codegen-units`. This is a compiler-memory ceiling, not a codegen defect: the crate
+  type-checks; the build is killed (OOM) deep in code generation. DocuSign's API (~400
+  operations → a ~90k-line `lib.rs`) hits this, and is excluded from the curated provider set
+  for that reason. To bind a spec this large, build on a host with more RAM (a 32 GB+ CI
+  runner) or reduce the surface with a trimmed input spec.
 
 ## Documentation
 
