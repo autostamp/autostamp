@@ -290,11 +290,25 @@ pub fn generate(
     let publish_version = version::publish_version(base_version, &package.name, &spec.info.version);
     let wasm_toml = manifest::render_wasm_manifest(package, &publish_version);
 
+    // Secret keys the API-key inference heuristic synthesized, across all interfaces, deduped and
+    // ordered — named in the diagnostics so a reader sees which credentials were inferred rather
+    // than declared. (They already flow into the auth tables via `collect_auth_schemes`.)
+    let inferred_api_key_secrets = {
+        let mut v: Vec<String> = ifaces
+            .iter()
+            .flat_map(|i| i.inferred_api_key_secrets.iter().cloned())
+            .collect();
+        v.sort();
+        v.dedup();
+        v
+    };
+
     let diagnostics = readme::Diagnostics {
         published_version: publish_version,
         tag_filter: tags.map(<[String]>::to_vec),
         operations: ifaces.iter().map(|i| i.operations.len()).sum(),
         pruned_credential_fields: ifaces.iter().map(|i| i.pruned_credential_fields).sum(),
+        inferred_api_key_secrets,
         auth: auth_schemes,
     };
     let readme = readme::render(package, &diagnostics);
