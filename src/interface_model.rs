@@ -15,7 +15,9 @@ use std::collections::BTreeSet;
 use crate::enum_model::EnumModel;
 use crate::field::Field;
 use crate::location::Location;
-use crate::naming::{sanitize_wit_name, synthesize_operation_id, to_rust_ident, unique_name};
+use crate::naming::{
+    sanitize_wit_name, strip_scope_prefix, synthesize_operation_id, to_rust_ident, unique_name,
+};
 use crate::operation_model::OperationModel;
 use crate::package_name::PackageName;
 use crate::record_model::RecordModel;
@@ -43,6 +45,11 @@ pub(crate) struct InterfaceModel {
     /// Records currently being emitted (the recursion stack). A `$ref` to a
     /// record in this set is a cycle and gets degraded to `string`.
     emitting: BTreeSet<String>,
+    /// Stable WIT name assigned to each `#/components/schemas/{simple_name}` reference lowered
+    /// into this interface. The name is the schema name with the redundant enclosing-interface
+    /// prefix stripped; memoizing it keeps every reference to one schema resolving to the same
+    /// name and keeps distinct schemas that strip to the same tail from colliding.
+    schema_names: std::collections::BTreeMap<String, String>,
 }
 
 impl InterfaceModel {
@@ -55,6 +62,7 @@ impl InterfaceModel {
             pruned_credential_fields: 0,
             inferred_api_key_secrets: vec![],
             emitting: BTreeSet::new(),
+            schema_names: std::collections::BTreeMap::new(),
         }
     }
 
@@ -78,6 +86,29 @@ impl InterfaceModel {
                 .iter()
                 .any(|o| o.op_kebab == name_kebab || o.params_record == name_kebab)
     }
+
+    /// The stable WIT name for a `#/components/schemas/{simple_name}` reference lowered into this
+    /// interface. The schema name is sanitized and then has the redundant enclosing-interface
+    /// prefix stripped, so GitHub's `code-scanning-alert-state` schema surfaces as `alert-state`
+    /// inside `interface code-scanning` rather than stuttering the interface into every type.
+    ///
+    /// The assignment is memoized: a `$ref` is looked up (and referenced) by schema name many
+    /// times, and every hit must resolve to one WIT name. Because stripping can collapse two
+    /// distinct schemas onto the same tail — or onto an operation/enum name — the first
+    /// assignment for a fresh tail is disambiguated with a numeric suffix against every name
+    /// already taken or already assigned here, then remembered.
+    fn schema_record_name(&mut self, simple_name: &str) -> String {
+        if let Some(name) = self.schema_names.get(simple_name) {
+            return name.clone();
+        }
+        let base = strip_scope_prefix(&sanitize_wit_name(simple_name), &self.name_kebab);
+        let name = unique_name(&base, |n| {
+            self.name_in_use(n) || self.schema_names.values().any(|v| v == n)
+        });
+        self.schema_names
+            .insert(simple_name.to_string(), name.clone());
+        name
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -93,7 +124,7 @@ impl InterfaceModel {
         if let ReferenceOr::Reference { reference } = schema_ref
             && let Some(simple_name) = reference.strip_prefix("#/components/schemas/")
         {
-            let record_name = sanitize_wit_name(simple_name);
+            let record_name = self.schema_record_name(simple_name);
             // Cycle: break by degrading to opaque string.
             if self.emitting.contains(&record_name) {
                 return Ok(WitType::String);
@@ -120,7 +151,7 @@ impl InterfaceModel {
         if let ReferenceOr::Reference { reference } = schema_ref
             && let Some(simple_name) = reference.strip_prefix("#/components/schemas/")
         {
-            let record_name = sanitize_wit_name(simple_name);
+            let record_name = self.schema_record_name(simple_name);
             if self.emitting.contains(&record_name) {
                 return Ok(WitType::String);
             }
@@ -398,6 +429,13 @@ impl InterfaceModel {
             None => raw_id.to_kebab_case(),
         };
         let op_kebab = sanitize_wit_name(&op_kebab_raw);
+        // The interface already scopes every member, so a name that repeats the enclosing
+        // interface is redundant: under `interface migrations`, the operationId
+        // `migrations/list-for-org` should surface as `list-for-org`, not
+        // `migrations-list-for-org`. Strip the prefix here, at the source, so it also drops
+        // from the params record (`{op_kebab}-params`) and the param-derived enum name hints
+        // built from `op_kebab` below.
+        let op_kebab = strip_scope_prefix(&op_kebab, &self.name_kebab);
 
         let mut fields: Vec<Field> = vec![];
 

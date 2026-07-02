@@ -48,6 +48,27 @@ pub(crate) fn sanitize_wit_name(s: &str) -> String {
     }
 }
 
+/// Strip a redundant enclosing-scope prefix from a generated WIT identifier.
+///
+/// WIT already scopes every type and function by its interface, so repeating the interface name
+/// inside a member name is pure noise: under `interface migrations`, an operation derived from
+/// the operationId `migrations/list-for-org` should be `list-for-org`, not
+/// `migrations-list-for-org` — and, transitively, its params record `list-for-org-params` and
+/// param-derived enums (`list-for-org-*-enum`) rather than the doubly-prefixed forms.
+///
+/// A leading `{scope}-` is removed only on a dash boundary, so a name that merely shares a
+/// leading word is left intact (`users-list` is untouched by scope `user`). The result is
+/// re-sanitized because the exposed tail can be a bare keyword (`types/type` -> `type` ->
+/// `type-op`) or start with a digit. If stripping would leave nothing, the original is returned
+/// so callers always get a usable identifier; uniqueness is still the caller's job (route the
+/// result through [`unique_name`]).
+pub(crate) fn strip_scope_prefix(name: &str, scope: &str) -> String {
+    match name.strip_prefix(&format!("{scope}-")) {
+        Some(rest) if !rest.is_empty() => sanitize_wit_name(rest),
+        _ => name.to_string(),
+    }
+}
+
 /// Synthesize a deterministic `operationId` for an operation that lacks one, derived from its
 /// HTTP method and path. `operationId` is optional in OpenAPI, but the generator needs one to
 /// name each function; the method+path pair is unique within a document, so the result is
@@ -288,5 +309,47 @@ mod tests {
         // Non-keyword names are untouched, and the rename is idempotent.
         assert_eq!(sanitize_package_name("github"), "github");
         assert_eq!(sanitize_package_name("box-api"), "box-api");
+    }
+
+    // r[verify naming.scope-prefix.strip]
+    // WIT scopes members by interface, so a name repeating the interface (GitHub's
+    // `migrations/list-for-org` under `interface migrations`) is redundant. The prefix is
+    // stripped on a dash boundary, cascading to params records and param-derived enums.
+    #[test]
+    fn strip_scope_prefix_drops_redundant_interface_prefix() {
+        use super::strip_scope_prefix;
+        // The motivating case from the issue.
+        assert_eq!(
+            strip_scope_prefix("migrations-list-for-org", "migrations"),
+            "list-for-org"
+        );
+        // Multi-segment scopes strip whole.
+        assert_eq!(
+            strip_scope_prefix("pull-requests-merge", "pull-requests"),
+            "merge"
+        );
+    }
+
+    #[test]
+    fn strip_scope_prefix_matches_only_on_dash_boundary() {
+        use super::strip_scope_prefix;
+        // A shared leading word is not a scope prefix: `user` must not clip `users-list`.
+        assert_eq!(strip_scope_prefix("users-list", "user"), "users-list");
+        // A name equal to the scope has no trailing member to expose; leave it be.
+        assert_eq!(strip_scope_prefix("migrations", "migrations"), "migrations");
+        // Unrelated names pass through untouched.
+        assert_eq!(
+            strip_scope_prefix("list-for-org", "migrations"),
+            "list-for-org"
+        );
+    }
+
+    #[test]
+    fn strip_scope_prefix_resanitizes_exposed_tail() {
+        use super::strip_scope_prefix;
+        // The exposed tail can be a bare WIT keyword: `sanitize_wit_name` only escapes a name
+        // that is wholly a keyword, so `types-type` survives intact until the `types-` prefix
+        // is peeled off — the tail must be re-sanitized back to a valid identifier.
+        assert_eq!(strip_scope_prefix("types-type", "types"), "type-op");
     }
 }

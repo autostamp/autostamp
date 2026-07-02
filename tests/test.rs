@@ -187,6 +187,194 @@ fn dedupes_colliding_operation_names() {
 }
 
 #[test]
+fn strips_redundant_interface_prefix_from_operation_names() {
+    // GitHub's operationIds repeat the tag (`migrations/list-for-org` under tag `migrations`),
+    // so the naive lowering produced `migrations-list-for-org` inside `interface migrations` —
+    // the enclosing scope stuttered into every function, params record, and param-derived enum.
+    // The prefix must be stripped so members read `list-for-org` / `list-for-org-params` /
+    // `list-for-org-exclude-item-enum`.
+    let spec_json = r#"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/orgs/{org}/migrations": {
+          "get": {
+            "tags": ["migrations"],
+            "operationId": "migrations/list-for-org",
+            "parameters": [
+              { "name": "org", "in": "path", "required": true, "schema": { "type": "string" } },
+              { "name": "exclude", "in": "query", "schema": {
+                  "type": "array", "items": { "type": "string", "enum": ["repositories"] } } }
+            ],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      }
+    }"#;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("autostamp:github@0.1.0").unwrap();
+    // `generate` validates the WIT internally, so an Ok result also proves the stripped names
+    // stayed valid and unique.
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(generated.interfaces.iter().any(|i| i == "migrations"));
+
+    // The de-duplicated names are present ...
+    assert!(
+        generated.wit.contains("list-for-org: func("),
+        "function should drop the interface prefix:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("record list-for-org-params"),
+        "params record should drop the interface prefix:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("list-for-org-exclude-item-enum"),
+        "param-derived enum should drop the interface prefix:\n{}",
+        generated.wit
+    );
+
+    // ... and the stuttering forms are gone entirely.
+    assert!(
+        !generated.wit.contains("migrations-list-for-org"),
+        "redundant `migrations-` prefix should not appear:\n{}",
+        generated.wit
+    );
+}
+
+#[test]
+fn strips_redundant_interface_prefix_from_schema_types() {
+    // Named `#/components/schemas` types stutter the tag too: GitHub's `migrations-*` schemas
+    // under `interface migrations` should surface as bare types (`settings`, not
+    // `migrations-settings`). A nested `$ref` proves a *standalone* record — not just an
+    // operation-derived one — drops the prefix, so both types and functions are de-duplicated.
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/orgs/{org}/migrations": {
+          "post": {
+            "tags": ["migrations"],
+            "operationId": "migrations/start-for-org",
+            "requestBody": {
+              "required": true,
+              "content": { "application/json": {
+                "schema": { "$ref": "#/components/schemas/migrations-start-request" } } }
+            },
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "migrations-start-request": {
+            "type": "object",
+            "required": ["lock"],
+            "properties": {
+              "lock": { "type": "boolean" },
+              "settings": { "$ref": "#/components/schemas/migrations-settings" }
+            }
+          },
+          "migrations-settings": {
+            "type": "object",
+            "properties": { "exclude-attachments": { "type": "boolean" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("autostamp:github@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The nested `migrations-settings` schema surfaces as a standalone `record settings`,
+    // referenced from the params record by its stripped name.
+    assert!(
+        generated.wit.contains("record settings {"),
+        "schema-derived type should drop the interface prefix:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("settings: option<settings>"),
+        "reference to the stripped type should use the stripped name:\n{}",
+        generated.wit
+    );
+    // No `migrations-`-prefixed type or function survives.
+    assert!(
+        !generated.wit.contains("migrations-"),
+        "no member should stutter the interface name:\n{}",
+        generated.wit
+    );
+}
+
+#[test]
+fn disambiguates_schema_types_that_collide_after_prefix_stripping() {
+    // Stripping the interface prefix can collapse two distinct schemas onto one tail:
+    // `migrations-config` and `config` both want to become `config` under `interface
+    // migrations`. They must stay separate records (not silently merge), or a caller's data
+    // gets the wrong shape.
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/orgs/{org}/migrations": {
+          "post": {
+            "tags": ["migrations"],
+            "operationId": "migrations/start",
+            "requestBody": {
+              "required": true,
+              "content": { "application/json": {
+                "schema": { "$ref": "#/components/schemas/migrations-wrapper" } } }
+            },
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "migrations-wrapper": {
+            "type": "object",
+            "properties": {
+              "a": { "$ref": "#/components/schemas/migrations-config" },
+              "b": { "$ref": "#/components/schemas/config" }
+            }
+          },
+          "migrations-config": { "type": "object", "properties": { "x": { "type": "boolean" } } },
+          "config": { "type": "object", "properties": { "y": { "type": "string" } } }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("autostamp:github@0.1.0").unwrap();
+    // A successful `generate` already proves the WIT validated — i.e. the two records did not
+    // collide into one "defined more than once" error.
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // Both distinct shapes survive under distinct names, and the wrapper points at each.
+    assert!(
+        generated.wit.contains("record config {"),
+        "{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("record config-v2 {"),
+        "colliding schema should be disambiguated, not merged:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("a: option<config>"),
+        "{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("b: option<config-v2>"),
+        "the second schema keeps its own identity:\n{}",
+        generated.wit
+    );
+}
+
+#[test]
 fn generates_from_swagger_v2() {
     // A Swagger 2.0 document is normalized to v3 by `parse_openapi`, then drives generation
     // through the same pipeline. A successful `generate` means the WIT validated.
