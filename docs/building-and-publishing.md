@@ -63,6 +63,55 @@ memory while compiling — see [Known limitations](./known-limitations.md).
 to a **classic** PAT with `write:packages`, or run `docker login ghcr.io` first. CI uses a
 `GHCR_PAT` secret.
 
+## Automated regeneration & publishing (CI)
+
+The `.github/workflows/regen-and-publish.yaml` workflow runs the whole regenerate → build →
+publish loop on a schedule (weekly, Mondays 06:00 UTC) and on demand (`workflow_dispatch`).
+Each run:
+
+1. **regen** — fetches the vendored schemas and, on scheduled runs, re-pins them to the
+   latest upstream with `just vendor-update`; bumps the shared base version (`just bump`,
+   default `minor`); regenerates every component (`just gen`); commits `components/`,
+   `version.toml`, and the schema pin to a fresh `auto/regen-v<version>-<timestamp>` branch;
+   and opens an **intermediate PR** with the diff.
+2. **await-ci** — waits for that PR's checks to go green (and fails the pipeline if they
+   don't).
+3. **publish** — checks out the branch, runs `just build` then `just publish-components`
+   (GHCR auth via `GHCR_PAT`).
+4. **merge** — squash-merges the PR so `main` stays in sync with what was published.
+
+**Why the PR is closed and reopened.** A pull request opened with the built-in `GITHUB_TOKEN`
+does *not* trigger `on: pull_request` workflow runs — GitHub suppresses downstream runs from
+the built-in token to prevent loops — so CI would never run on the bot's PR. The workflow
+therefore opens the PR with `GITHUB_TOKEN` and then **closes and reopens it with a PAT**
+(`REGEN_PAT`); the `reopened` activity, performed as a real user, triggers `ci.yaml`.
+
+**What actually gates the publish.** `ci.yaml` only builds and tests the *generator* crate —
+the repo root is a single crate, not a workspace, so the generated component crates are never
+compiled there. The substantive component gate is the pipeline's own `just build` step (a
+per-component `wasm32-wasip2` compile); the reopened-PR CI provides the visible green check
+and the generator's cross-platform validation.
+
+**Manual dispatch inputs.** `bump_level` (`patch`/`minor`/`major`/`X.Y.Z`, default `minor`),
+`vendor_update` (default `true`), and `dry_run` (default `false`). A dry run still opens the
+PR and runs CI, but passes `--dry-run` to the publish step and skips the merge.
+
+**Prerequisites.**
+
+- **`REGEN_PAT` secret** — a **classic** PAT with the `repo` scope (add `workflow` if the
+  regen ever needs to touch `.github/`). Used for the close/reopen and the final merge. This
+  is separate from `GHCR_PAT` (which stays `write:packages` for the publish step).
+- Enable **Settings → Actions → General → "Allow GitHub Actions to create and approve pull
+  requests"**, or the `GITHUB_TOKEN`-created PR is rejected.
+- `main` branch protection must let the `REGEN_PAT` owner squash-merge (or exempt them), or
+  the merge step fails and the PR is left open for a human.
+
+**Notes.** Because the base version is bumped every run and `gen` stamps it into every
+component, **each run republishes all components** — change the "always bump" behavior if you
+only want to publish when the bindings actually changed. The workflow deliberately does *not*
+push a `v*` tag (that would double-trigger `publish-components.yaml`, which remains for manual
+tag-driven releases).
+
 ## `component` CLI requirements and gaps
 
 - **OCI-tag build metadata (required).** `component publish` maps a `+` in the version onto
