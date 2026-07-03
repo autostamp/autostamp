@@ -883,6 +883,66 @@ fn resolves_shared_ref_request_body() {
     );
 }
 
+// r[verify codegen.parameter.shared-ref]
+// GitHub's API (and many others) declare their operation parameters once under
+// `#/components/parameters` and reference them by `$ref` from every operation (`owner`, `repo`,
+// `username`, `per-page`, ...). The generator must resolve those `$ref`s into fields; the
+// original code skipped reference parameters outright, so e.g. "list repositories for a user"
+// generated with an empty argument list instead of taking the user to list for.
+#[test]
+fn resolves_shared_ref_parameters() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/users/{username}/repos": {
+          "get": {
+            "tags": ["repos"],
+            "operationId": "listForUser",
+            "parameters": [
+              { "$ref": "#/components/parameters/username" },
+              { "$ref": "#/components/parameters/per-page" }
+            ],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "parameters": {
+          "username": {
+            "name": "username",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          "per-page": {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(generated.interfaces.iter().any(|i| i == "repos"));
+    // The `$ref` path parameter resolves into a required field ...
+    assert!(
+        generated.wit.contains("username: string"),
+        "shared `$ref` path parameter should resolve into a field:\n{}",
+        generated.wit
+    );
+    // ... and the `$ref` query parameter resolves into an optional field.
+    assert!(
+        generated.wit.contains("per-page: option<"),
+        "shared `$ref` query parameter should resolve into a field:\n{}",
+        generated.wit
+    );
+}
+
 // r[verify codegen.interface.exports-collision]
 // An interface whose name maps to `exports` (mandrillapp and zuora both expose an `Exports`
 // tag) collides with the synthetic top-level `exports` module wit-bindgen generates for
