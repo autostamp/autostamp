@@ -284,7 +284,7 @@ use serde_json::{Map, Value};
 
 use crate::exports::autostamp::tfl::accident_stats as iface_accident_stats;
 
-const OP_ACCIDENT_STATS_ACCIDENT_STATS_GET: OpSpec = OpSpec {
+const OP_ACCIDENT_STATS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/AccidentStats/{year}",
     fields: &[
@@ -294,21 +294,21 @@ const OP_ACCIDENT_STATS_ACCIDENT_STATS_GET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_accident_stats__accident_stats_get_params__to_json(p: &iface_accident_stats::AccidentStatsGetParams) -> Value {
+fn iface_accident_stats__get_params__to_json(p: &iface_accident_stats::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("year".into(), Value::String((&p.year).clone()));
     Value::Object(m)
 }
 
 impl iface_accident_stats::Guest for crate::Component {
-    fn accident_stats_get(params: iface_accident_stats::AccidentStatsGetParams) -> Result<String, String> {
-        let json = iface_accident_stats__accident_stats_get_params__to_json(&params);
-        dispatch(&OP_ACCIDENT_STATS_ACCIDENT_STATS_GET, json)
+    fn get(params: iface_accident_stats::GetParams) -> Result<String, String> {
+        let json = iface_accident_stats__get_params__to_json(&params);
+        dispatch(&OP_ACCIDENT_STATS_GET, json)
     }
 }
 use crate::exports::autostamp::tfl::air_quality as iface_air_quality;
 
-const OP_AIR_QUALITY_AIR_QUALITY_GET: OpSpec = OpSpec {
+const OP_AIR_QUALITY_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/AirQuality",
     fields: &[
@@ -318,13 +318,13 @@ const OP_AIR_QUALITY_AIR_QUALITY_GET: OpSpec = OpSpec {
 };
 
 impl iface_air_quality::Guest for crate::Component {
-    fn air_quality_get() -> Result<String, String> {
-        dispatch(&OP_AIR_QUALITY_AIR_QUALITY_GET, Value::Object(Map::new()))
+    fn get() -> Result<String, String> {
+        dispatch(&OP_AIR_QUALITY_GET, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::tfl::bike_point as iface_bike_point;
 
-const OP_BIKE_POINT_BIKE_POINT_GET_ALL: OpSpec = OpSpec {
+const OP_BIKE_POINT_GET_ALL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BikePoint",
     fields: &[
@@ -333,7 +333,7 @@ const OP_BIKE_POINT_BIKE_POINT_GET_ALL: OpSpec = OpSpec {
     ],
 };
 
-const OP_BIKE_POINT_BIKE_POINT_SEARCH: OpSpec = OpSpec {
+const OP_BIKE_POINT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BikePoint/Search",
     fields: &[
@@ -343,7 +343,7 @@ const OP_BIKE_POINT_BIKE_POINT_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-const OP_BIKE_POINT_BIKE_POINT_GET: OpSpec = OpSpec {
+const OP_BIKE_POINT_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BikePoint/{id}",
     fields: &[
@@ -353,34 +353,34 @@ const OP_BIKE_POINT_BIKE_POINT_GET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_bike_point__bike_point_search_params__to_json(p: &iface_bike_point::BikePointSearchParams) -> Value {
+fn iface_bike_point__search_params__to_json(p: &iface_bike_point::SearchParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
     Value::Object(m)
 }
 
-fn iface_bike_point__bike_point_get_params__to_json(p: &iface_bike_point::BikePointGetParams) -> Value {
+fn iface_bike_point__get_params__to_json(p: &iface_bike_point::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_bike_point::Guest for crate::Component {
-    fn bike_point_get_all() -> Result<String, String> {
-        dispatch(&OP_BIKE_POINT_BIKE_POINT_GET_ALL, Value::Object(Map::new()))
+    fn get_all() -> Result<String, String> {
+        dispatch(&OP_BIKE_POINT_GET_ALL, Value::Object(Map::new()))
     }
-    fn bike_point_search(params: iface_bike_point::BikePointSearchParams) -> Result<String, String> {
-        let json = iface_bike_point__bike_point_search_params__to_json(&params);
-        dispatch(&OP_BIKE_POINT_BIKE_POINT_SEARCH, json)
+    fn search(params: iface_bike_point::SearchParams) -> Result<String, String> {
+        let json = iface_bike_point__search_params__to_json(&params);
+        dispatch(&OP_BIKE_POINT_SEARCH, json)
     }
-    fn bike_point_get(params: iface_bike_point::BikePointGetParams) -> Result<String, String> {
-        let json = iface_bike_point__bike_point_get_params__to_json(&params);
-        dispatch(&OP_BIKE_POINT_BIKE_POINT_GET, json)
+    fn get(params: iface_bike_point::GetParams) -> Result<String, String> {
+        let json = iface_bike_point__get_params__to_json(&params);
+        dispatch(&OP_BIKE_POINT_GET, json)
     }
 }
 use crate::exports::autostamp::tfl::cabwise as iface_cabwise;
 
-const OP_CABWISE_CABWISE_GET: OpSpec = OpSpec {
+const OP_CABWISE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Cabwise/search",
     fields: &[
@@ -399,7 +399,7 @@ const OP_CABWISE_CABWISE_GET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_cabwise__cabwise_get_params__to_json(p: &iface_cabwise::CabwiseGetParams) -> Value {
+fn iface_cabwise__get_params__to_json(p: &iface_cabwise::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("lat".into(), serde_json::Number::from_f64(*(&p.lat)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("lon".into(), serde_json::Number::from_f64(*(&p.lon)).map(Value::Number).unwrap_or(Value::Null));
@@ -415,14 +415,14 @@ fn iface_cabwise__cabwise_get_params__to_json(p: &iface_cabwise::CabwiseGetParam
 }
 
 impl iface_cabwise::Guest for crate::Component {
-    fn cabwise_get(params: iface_cabwise::CabwiseGetParams) -> Result<String, String> {
-        let json = iface_cabwise__cabwise_get_params__to_json(&params);
-        dispatch(&OP_CABWISE_CABWISE_GET, json)
+    fn get(params: iface_cabwise::GetParams) -> Result<String, String> {
+        let json = iface_cabwise__get_params__to_json(&params);
+        dispatch(&OP_CABWISE_GET, json)
     }
 }
 use crate::exports::autostamp::tfl::journey as iface_journey;
 
-const OP_JOURNEY_JOURNEY_JOURNEY_RESULTS: OpSpec = OpSpec {
+const OP_JOURNEY_JOURNEY_RESULTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Journey/JourneyResults/{from}/to/{to}",
     fields: &[
@@ -459,7 +459,7 @@ const OP_JOURNEY_JOURNEY_JOURNEY_RESULTS: OpSpec = OpSpec {
     ],
 };
 
-const OP_JOURNEY_JOURNEY_META: OpSpec = OpSpec {
+const OP_JOURNEY_META: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Journey/Meta/Modes",
     fields: &[
@@ -468,59 +468,59 @@ const OP_JOURNEY_JOURNEY_META: OpSpec = OpSpec {
     ],
 };
 
-fn iface_journey__journey_journey_results_time_is_enum__to_str(e: &iface_journey::JourneyJourneyResultsTimeIsEnum) -> &'static str {
+fn iface_journey__journey_results_time_is_enum__to_str(e: &iface_journey::JourneyResultsTimeIsEnum) -> &'static str {
     match e {
-        iface_journey::JourneyJourneyResultsTimeIsEnum::Arriving => "Arriving",
-        iface_journey::JourneyJourneyResultsTimeIsEnum::Departing => "Departing",
+        iface_journey::JourneyResultsTimeIsEnum::Arriving => "Arriving",
+        iface_journey::JourneyResultsTimeIsEnum::Departing => "Departing",
     }
 }
 
-fn iface_journey__journey_journey_results_journey_preference_enum__to_str(e: &iface_journey::JourneyJourneyResultsJourneyPreferenceEnum) -> &'static str {
+fn iface_journey__journey_results_journey_preference_enum__to_str(e: &iface_journey::JourneyResultsJourneyPreferenceEnum) -> &'static str {
     match e {
-        iface_journey::JourneyJourneyResultsJourneyPreferenceEnum::LeastInterchange => "LeastInterchange",
-        iface_journey::JourneyJourneyResultsJourneyPreferenceEnum::LeastTime => "LeastTime",
-        iface_journey::JourneyJourneyResultsJourneyPreferenceEnum::LeastWalking => "LeastWalking",
+        iface_journey::JourneyResultsJourneyPreferenceEnum::LeastInterchange => "LeastInterchange",
+        iface_journey::JourneyResultsJourneyPreferenceEnum::LeastTime => "LeastTime",
+        iface_journey::JourneyResultsJourneyPreferenceEnum::LeastWalking => "LeastWalking",
     }
 }
 
-fn iface_journey__journey_journey_results_accessibility_preference_item_enum__to_str(e: &iface_journey::JourneyJourneyResultsAccessibilityPreferenceItemEnum) -> &'static str {
+fn iface_journey__journey_results_accessibility_preference_item_enum__to_str(e: &iface_journey::JourneyResultsAccessibilityPreferenceItemEnum) -> &'static str {
     match e {
-        iface_journey::JourneyJourneyResultsAccessibilityPreferenceItemEnum::NoRequirements => "NoRequirements",
-        iface_journey::JourneyJourneyResultsAccessibilityPreferenceItemEnum::NoSolidStairs => "NoSolidStairs",
-        iface_journey::JourneyJourneyResultsAccessibilityPreferenceItemEnum::NoEscalators => "NoEscalators",
-        iface_journey::JourneyJourneyResultsAccessibilityPreferenceItemEnum::NoElevators => "NoElevators",
-        iface_journey::JourneyJourneyResultsAccessibilityPreferenceItemEnum::StepFreeToVehicle => "StepFreeToVehicle",
-        iface_journey::JourneyJourneyResultsAccessibilityPreferenceItemEnum::StepFreeToPlatform => "StepFreeToPlatform",
+        iface_journey::JourneyResultsAccessibilityPreferenceItemEnum::NoRequirements => "NoRequirements",
+        iface_journey::JourneyResultsAccessibilityPreferenceItemEnum::NoSolidStairs => "NoSolidStairs",
+        iface_journey::JourneyResultsAccessibilityPreferenceItemEnum::NoEscalators => "NoEscalators",
+        iface_journey::JourneyResultsAccessibilityPreferenceItemEnum::NoElevators => "NoElevators",
+        iface_journey::JourneyResultsAccessibilityPreferenceItemEnum::StepFreeToVehicle => "StepFreeToVehicle",
+        iface_journey::JourneyResultsAccessibilityPreferenceItemEnum::StepFreeToPlatform => "StepFreeToPlatform",
     }
 }
 
-fn iface_journey__journey_journey_results_walking_speed_enum__to_str(e: &iface_journey::JourneyJourneyResultsWalkingSpeedEnum) -> &'static str {
+fn iface_journey__journey_results_walking_speed_enum__to_str(e: &iface_journey::JourneyResultsWalkingSpeedEnum) -> &'static str {
     match e {
-        iface_journey::JourneyJourneyResultsWalkingSpeedEnum::Slow => "Slow",
-        iface_journey::JourneyJourneyResultsWalkingSpeedEnum::Average => "Average",
-        iface_journey::JourneyJourneyResultsWalkingSpeedEnum::Fast => "Fast",
+        iface_journey::JourneyResultsWalkingSpeedEnum::Slow => "Slow",
+        iface_journey::JourneyResultsWalkingSpeedEnum::Average => "Average",
+        iface_journey::JourneyResultsWalkingSpeedEnum::Fast => "Fast",
     }
 }
 
-fn iface_journey__journey_journey_results_cycle_preference_enum__to_str(e: &iface_journey::JourneyJourneyResultsCyclePreferenceEnum) -> &'static str {
+fn iface_journey__journey_results_cycle_preference_enum__to_str(e: &iface_journey::JourneyResultsCyclePreferenceEnum) -> &'static str {
     match e {
-        iface_journey::JourneyJourneyResultsCyclePreferenceEnum::None => "None",
-        iface_journey::JourneyJourneyResultsCyclePreferenceEnum::LeaveAtStation => "LeaveAtStation",
-        iface_journey::JourneyJourneyResultsCyclePreferenceEnum::TakeOnTransport => "TakeOnTransport",
-        iface_journey::JourneyJourneyResultsCyclePreferenceEnum::AllTheWay => "AllTheWay",
-        iface_journey::JourneyJourneyResultsCyclePreferenceEnum::CycleHire => "CycleHire",
+        iface_journey::JourneyResultsCyclePreferenceEnum::None => "None",
+        iface_journey::JourneyResultsCyclePreferenceEnum::LeaveAtStation => "LeaveAtStation",
+        iface_journey::JourneyResultsCyclePreferenceEnum::TakeOnTransport => "TakeOnTransport",
+        iface_journey::JourneyResultsCyclePreferenceEnum::AllTheWay => "AllTheWay",
+        iface_journey::JourneyResultsCyclePreferenceEnum::CycleHire => "CycleHire",
     }
 }
 
-fn iface_journey__journey_journey_results_bike_proficiency_item_enum__to_str(e: &iface_journey::JourneyJourneyResultsBikeProficiencyItemEnum) -> &'static str {
+fn iface_journey__journey_results_bike_proficiency_item_enum__to_str(e: &iface_journey::JourneyResultsBikeProficiencyItemEnum) -> &'static str {
     match e {
-        iface_journey::JourneyJourneyResultsBikeProficiencyItemEnum::Easy => "Easy",
-        iface_journey::JourneyJourneyResultsBikeProficiencyItemEnum::Moderate => "Moderate",
-        iface_journey::JourneyJourneyResultsBikeProficiencyItemEnum::Fast => "Fast",
+        iface_journey::JourneyResultsBikeProficiencyItemEnum::Easy => "Easy",
+        iface_journey::JourneyResultsBikeProficiencyItemEnum::Moderate => "Moderate",
+        iface_journey::JourneyResultsBikeProficiencyItemEnum::Fast => "Fast",
     }
 }
 
-fn iface_journey__journey_journey_results_params__to_json(p: &iface_journey::JourneyJourneyResultsParams) -> Value {
+fn iface_journey__journey_results_params__to_json(p: &iface_journey::JourneyResultsParams) -> Value {
     let mut m = Map::new();
     m.insert("from".into(), Value::String((&p.from_op).clone()));
     m.insert("to".into(), Value::String((&p.to).clone()));
@@ -528,19 +528,19 @@ fn iface_journey__journey_journey_results_params__to_json(p: &iface_journey::Jou
     m.insert("national_search".into(), match (&p.national_search) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("date".into(), match (&p.date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("time_is".into(), match (&p.time_is) { Some(v) => Value::String(iface_journey__journey_journey_results_time_is_enum__to_str(v).into()), None => Value::Null });
-    m.insert("journey_preference".into(), match (&p.journey_preference) { Some(v) => Value::String(iface_journey__journey_journey_results_journey_preference_enum__to_str(v).into()), None => Value::Null });
+    m.insert("time_is".into(), match (&p.time_is) { Some(v) => Value::String(iface_journey__journey_results_time_is_enum__to_str(v).into()), None => Value::Null });
+    m.insert("journey_preference".into(), match (&p.journey_preference) { Some(v) => Value::String(iface_journey__journey_results_journey_preference_enum__to_str(v).into()), None => Value::Null });
     m.insert("mode".into(), match (&p.mode) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("accessibility_preference".into(), match (&p.accessibility_preference) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_journey__journey_journey_results_accessibility_preference_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("accessibility_preference".into(), match (&p.accessibility_preference) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_journey__journey_results_accessibility_preference_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("from_name".into(), match (&p.from_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("to_name".into(), match (&p.to_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("via_name".into(), match (&p.via_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_transfer_minutes".into(), match (&p.max_transfer_minutes) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_walking_minutes".into(), match (&p.max_walking_minutes) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("walking_speed".into(), match (&p.walking_speed) { Some(v) => Value::String(iface_journey__journey_journey_results_walking_speed_enum__to_str(v).into()), None => Value::Null });
-    m.insert("cycle_preference".into(), match (&p.cycle_preference) { Some(v) => Value::String(iface_journey__journey_journey_results_cycle_preference_enum__to_str(v).into()), None => Value::Null });
+    m.insert("walking_speed".into(), match (&p.walking_speed) { Some(v) => Value::String(iface_journey__journey_results_walking_speed_enum__to_str(v).into()), None => Value::Null });
+    m.insert("cycle_preference".into(), match (&p.cycle_preference) { Some(v) => Value::String(iface_journey__journey_results_cycle_preference_enum__to_str(v).into()), None => Value::Null });
     m.insert("adjustment".into(), match (&p.adjustment) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bike_proficiency".into(), match (&p.bike_proficiency) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_journey__journey_journey_results_bike_proficiency_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("bike_proficiency".into(), match (&p.bike_proficiency) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_journey__journey_results_bike_proficiency_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("alternative_cycle".into(), match (&p.alternative_cycle) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("alternative_walking".into(), match (&p.alternative_walking) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("apply_html_markup".into(), match (&p.apply_html_markup) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -554,17 +554,17 @@ fn iface_journey__journey_journey_results_params__to_json(p: &iface_journey::Jou
 }
 
 impl iface_journey::Guest for crate::Component {
-    fn journey_journey_results(params: iface_journey::JourneyJourneyResultsParams) -> Result<String, String> {
-        let json = iface_journey__journey_journey_results_params__to_json(&params);
-        dispatch(&OP_JOURNEY_JOURNEY_JOURNEY_RESULTS, json)
+    fn journey_results(params: iface_journey::JourneyResultsParams) -> Result<String, String> {
+        let json = iface_journey__journey_results_params__to_json(&params);
+        dispatch(&OP_JOURNEY_JOURNEY_RESULTS, json)
     }
-    fn journey_meta() -> Result<String, String> {
-        dispatch(&OP_JOURNEY_JOURNEY_META, Value::Object(Map::new()))
+    fn meta() -> Result<String, String> {
+        dispatch(&OP_JOURNEY_META, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::tfl::line as iface_line;
 
-const OP_LINE_LINE_META_DISRUPTION_CATEGORIES: OpSpec = OpSpec {
+const OP_LINE_META_DISRUPTION_CATEGORIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Meta/DisruptionCategories",
     fields: &[
@@ -573,7 +573,7 @@ const OP_LINE_LINE_META_DISRUPTION_CATEGORIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_META_MODES: OpSpec = OpSpec {
+const OP_LINE_META_MODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Meta/Modes",
     fields: &[
@@ -582,7 +582,7 @@ const OP_LINE_LINE_META_MODES: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_META_SERVICE_TYPES: OpSpec = OpSpec {
+const OP_LINE_META_SERVICE_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Meta/ServiceTypes",
     fields: &[
@@ -591,7 +591,7 @@ const OP_LINE_LINE_META_SERVICE_TYPES: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_META_SEVERITY: OpSpec = OpSpec {
+const OP_LINE_META_SEVERITY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Meta/Severity",
     fields: &[
@@ -600,7 +600,7 @@ const OP_LINE_LINE_META_SEVERITY: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_GET_BY_MODE: OpSpec = OpSpec {
+const OP_LINE_GET_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}",
     fields: &[
@@ -610,7 +610,7 @@ const OP_LINE_LINE_GET_BY_MODE: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_DISRUPTION_BY_MODE: OpSpec = OpSpec {
+const OP_LINE_DISRUPTION_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}/Disruption",
     fields: &[
@@ -620,7 +620,7 @@ const OP_LINE_LINE_DISRUPTION_BY_MODE: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_ROUTE_BY_MODE: OpSpec = OpSpec {
+const OP_LINE_ROUTE_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}/Route",
     fields: &[
@@ -631,7 +631,7 @@ const OP_LINE_LINE_ROUTE_BY_MODE: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_STATUS_BY_MODE: OpSpec = OpSpec {
+const OP_LINE_STATUS_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}/Status",
     fields: &[
@@ -643,7 +643,7 @@ const OP_LINE_LINE_STATUS_BY_MODE: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_ROUTE: OpSpec = OpSpec {
+const OP_LINE_ROUTE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Route",
     fields: &[
@@ -653,7 +653,7 @@ const OP_LINE_LINE_ROUTE: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_SEARCH: OpSpec = OpSpec {
+const OP_LINE_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Search/{query}",
     fields: &[
@@ -665,7 +665,7 @@ const OP_LINE_LINE_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_STATUS_BY_SEVERITY: OpSpec = OpSpec {
+const OP_LINE_STATUS_BY_SEVERITY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Status/{severity}",
     fields: &[
@@ -675,7 +675,7 @@ const OP_LINE_LINE_STATUS_BY_SEVERITY: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_GET: OpSpec = OpSpec {
+const OP_LINE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}",
     fields: &[
@@ -685,7 +685,7 @@ const OP_LINE_LINE_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_ARRIVALS: OpSpec = OpSpec {
+const OP_LINE_ARRIVALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Arrivals/{stop_point_id}",
     fields: &[
@@ -698,7 +698,7 @@ const OP_LINE_LINE_ARRIVALS: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_DISRUPTION: OpSpec = OpSpec {
+const OP_LINE_DISRUPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Disruption",
     fields: &[
@@ -708,7 +708,7 @@ const OP_LINE_LINE_DISRUPTION: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_LINE_ROUTES_BY_IDS: OpSpec = OpSpec {
+const OP_LINE_LINE_ROUTES_BY_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Route",
     fields: &[
@@ -719,7 +719,7 @@ const OP_LINE_LINE_LINE_ROUTES_BY_IDS: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_STATUS_BY_IDS: OpSpec = OpSpec {
+const OP_LINE_STATUS_BY_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Status",
     fields: &[
@@ -730,7 +730,7 @@ const OP_LINE_LINE_STATUS_BY_IDS: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_STATUS: OpSpec = OpSpec {
+const OP_LINE_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Status/{start_date}/to/{end_date}",
     fields: &[
@@ -745,7 +745,7 @@ const OP_LINE_LINE_STATUS: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_ROUTE_SEQUENCE: OpSpec = OpSpec {
+const OP_LINE_ROUTE_SEQUENCE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/Route/Sequence/{direction}",
     fields: &[
@@ -758,7 +758,7 @@ const OP_LINE_LINE_ROUTE_SEQUENCE: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_STOP_POINTS: OpSpec = OpSpec {
+const OP_LINE_STOP_POINTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/StopPoints",
     fields: &[
@@ -769,7 +769,7 @@ const OP_LINE_LINE_STOP_POINTS: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_TIMETABLE: OpSpec = OpSpec {
+const OP_LINE_TIMETABLE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/Timetable/{from_stop_point_id}",
     fields: &[
@@ -780,7 +780,7 @@ const OP_LINE_LINE_TIMETABLE: OpSpec = OpSpec {
     ],
 };
 
-const OP_LINE_LINE_TIMETABLE_TO: OpSpec = OpSpec {
+const OP_LINE_TIMETABLE_TO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/Timetable/{from_stop_point_id}/to/{to_stop_point_id}",
     fields: &[
@@ -792,41 +792,41 @@ const OP_LINE_LINE_TIMETABLE_TO: OpSpec = OpSpec {
     ],
 };
 
-fn iface_line__line_route_by_mode_service_types_item_enum__to_str(e: &iface_line::LineRouteByModeServiceTypesItemEnum) -> &'static str {
+fn iface_line__route_by_mode_service_types_item_enum__to_str(e: &iface_line::RouteByModeServiceTypesItemEnum) -> &'static str {
     match e {
-        iface_line::LineRouteByModeServiceTypesItemEnum::Regular => "Regular",
-        iface_line::LineRouteByModeServiceTypesItemEnum::Night => "Night",
+        iface_line::RouteByModeServiceTypesItemEnum::Regular => "Regular",
+        iface_line::RouteByModeServiceTypesItemEnum::Night => "Night",
     }
 }
 
-fn iface_line__line_arrivals_direction_enum__to_str(e: &iface_line::LineArrivalsDirectionEnum) -> &'static str {
+fn iface_line__arrivals_direction_enum__to_str(e: &iface_line::ArrivalsDirectionEnum) -> &'static str {
     match e {
-        iface_line::LineArrivalsDirectionEnum::Inbound => "inbound",
-        iface_line::LineArrivalsDirectionEnum::Outbound => "outbound",
-        iface_line::LineArrivalsDirectionEnum::All => "all",
+        iface_line::ArrivalsDirectionEnum::Inbound => "inbound",
+        iface_line::ArrivalsDirectionEnum::Outbound => "outbound",
+        iface_line::ArrivalsDirectionEnum::All => "all",
     }
 }
 
-fn iface_line__line_get_by_mode_params__to_json(p: &iface_line::LineGetByModeParams) -> Value {
+fn iface_line__get_by_mode_params__to_json(p: &iface_line::GetByModeParams) -> Value {
     let mut m = Map::new();
     m.insert("modes".into(), Value::String((&p.modes).clone()));
     Value::Object(m)
 }
 
-fn iface_line__line_disruption_by_mode_params__to_json(p: &iface_line::LineDisruptionByModeParams) -> Value {
+fn iface_line__disruption_by_mode_params__to_json(p: &iface_line::DisruptionByModeParams) -> Value {
     let mut m = Map::new();
     m.insert("modes".into(), Value::String((&p.modes).clone()));
     Value::Object(m)
 }
 
-fn iface_line__line_route_by_mode_params__to_json(p: &iface_line::LineRouteByModeParams) -> Value {
+fn iface_line__route_by_mode_params__to_json(p: &iface_line::RouteByModeParams) -> Value {
     let mut m = Map::new();
     m.insert("modes".into(), Value::String((&p.modes).clone()));
-    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__line_route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_status_by_mode_params__to_json(p: &iface_line::LineStatusByModeParams) -> Value {
+fn iface_line__status_by_mode_params__to_json(p: &iface_line::StatusByModeParams) -> Value {
     let mut m = Map::new();
     m.insert("modes".into(), Value::String((&p.modes).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -834,62 +834,62 @@ fn iface_line__line_status_by_mode_params__to_json(p: &iface_line::LineStatusByM
     Value::Object(m)
 }
 
-fn iface_line__line_route_params__to_json(p: &iface_line::LineRouteParams) -> Value {
+fn iface_line__route_params__to_json(p: &iface_line::RouteParams) -> Value {
     let mut m = Map::new();
-    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__line_route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_search_params__to_json(p: &iface_line::LineSearchParams) -> Value {
+fn iface_line__search_params__to_json(p: &iface_line::SearchParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__line_route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_status_by_severity_params__to_json(p: &iface_line::LineStatusBySeverityParams) -> Value {
+fn iface_line__status_by_severity_params__to_json(p: &iface_line::StatusBySeverityParams) -> Value {
     let mut m = Map::new();
     m.insert("severity".into(), Value::String((&p.severity).clone()));
     Value::Object(m)
 }
 
-fn iface_line__line_get_params__to_json(p: &iface_line::LineGetParams) -> Value {
+fn iface_line__get_params__to_json(p: &iface_line::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
-fn iface_line__line_arrivals_params__to_json(p: &iface_line::LineArrivalsParams) -> Value {
+fn iface_line__arrivals_params__to_json(p: &iface_line::ArrivalsParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("stop_point_id".into(), Value::String((&p.stop_point_id).clone()));
-    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_line__line_arrivals_direction_enum__to_str(v).into()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String(iface_line__arrivals_direction_enum__to_str(v).into()), None => Value::Null });
     m.insert("destination_station_id".into(), match (&p.destination_station_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_disruption_params__to_json(p: &iface_line::LineDisruptionParams) -> Value {
+fn iface_line__disruption_params__to_json(p: &iface_line::DisruptionParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
-fn iface_line__line_line_routes_by_ids_params__to_json(p: &iface_line::LineLineRoutesByIdsParams) -> Value {
+fn iface_line__line_routes_by_ids_params__to_json(p: &iface_line::LineRoutesByIdsParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
-    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__line_route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_status_by_ids_params__to_json(p: &iface_line::LineStatusByIdsParams) -> Value {
+fn iface_line__status_by_ids_params__to_json(p: &iface_line::StatusByIdsParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_status_params__to_json(p: &iface_line::LineStatusParams) -> Value {
+fn iface_line__status_params__to_json(p: &iface_line::StatusParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -900,30 +900,30 @@ fn iface_line__line_status_params__to_json(p: &iface_line::LineStatusParams) -> 
     Value::Object(m)
 }
 
-fn iface_line__line_route_sequence_params__to_json(p: &iface_line::LineRouteSequenceParams) -> Value {
+fn iface_line__route_sequence_params__to_json(p: &iface_line::RouteSequenceParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("direction".into(), Value::String((&p.direction).clone()));
-    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__line_route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_line__route_by_mode_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("exclude_crowding".into(), match (&p.exclude_crowding) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_stop_points_params__to_json(p: &iface_line::LineStopPointsParams) -> Value {
+fn iface_line__stop_points_params__to_json(p: &iface_line::StopPointsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("tfl_operated_national_rail_stations_only".into(), match (&p.tfl_operated_national_rail_stations_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_line__line_timetable_params__to_json(p: &iface_line::LineTimetableParams) -> Value {
+fn iface_line__timetable_params__to_json(p: &iface_line::TimetableParams) -> Value {
     let mut m = Map::new();
     m.insert("from_stop_point_id".into(), Value::String((&p.from_stop_point_id).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_line__line_timetable_to_params__to_json(p: &iface_line::LineTimetableToParams) -> Value {
+fn iface_line__timetable_to_params__to_json(p: &iface_line::TimetableToParams) -> Value {
     let mut m = Map::new();
     m.insert("from_stop_point_id".into(), Value::String((&p.from_stop_point_id).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -932,90 +932,90 @@ fn iface_line__line_timetable_to_params__to_json(p: &iface_line::LineTimetableTo
 }
 
 impl iface_line::Guest for crate::Component {
-    fn line_meta_disruption_categories() -> Result<String, String> {
-        dispatch(&OP_LINE_LINE_META_DISRUPTION_CATEGORIES, Value::Object(Map::new()))
+    fn meta_disruption_categories() -> Result<String, String> {
+        dispatch(&OP_LINE_META_DISRUPTION_CATEGORIES, Value::Object(Map::new()))
     }
-    fn line_meta_modes() -> Result<String, String> {
-        dispatch(&OP_LINE_LINE_META_MODES, Value::Object(Map::new()))
+    fn meta_modes() -> Result<String, String> {
+        dispatch(&OP_LINE_META_MODES, Value::Object(Map::new()))
     }
-    fn line_meta_service_types() -> Result<String, String> {
-        dispatch(&OP_LINE_LINE_META_SERVICE_TYPES, Value::Object(Map::new()))
+    fn meta_service_types() -> Result<String, String> {
+        dispatch(&OP_LINE_META_SERVICE_TYPES, Value::Object(Map::new()))
     }
-    fn line_meta_severity() -> Result<String, String> {
-        dispatch(&OP_LINE_LINE_META_SEVERITY, Value::Object(Map::new()))
+    fn meta_severity() -> Result<String, String> {
+        dispatch(&OP_LINE_META_SEVERITY, Value::Object(Map::new()))
     }
-    fn line_get_by_mode(params: iface_line::LineGetByModeParams) -> Result<String, String> {
-        let json = iface_line__line_get_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_GET_BY_MODE, json)
+    fn get_by_mode(params: iface_line::GetByModeParams) -> Result<String, String> {
+        let json = iface_line__get_by_mode_params__to_json(&params);
+        dispatch(&OP_LINE_GET_BY_MODE, json)
     }
-    fn line_disruption_by_mode(params: iface_line::LineDisruptionByModeParams) -> Result<String, String> {
-        let json = iface_line__line_disruption_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_DISRUPTION_BY_MODE, json)
+    fn disruption_by_mode(params: iface_line::DisruptionByModeParams) -> Result<String, String> {
+        let json = iface_line__disruption_by_mode_params__to_json(&params);
+        dispatch(&OP_LINE_DISRUPTION_BY_MODE, json)
     }
-    fn line_route_by_mode(params: iface_line::LineRouteByModeParams) -> Result<String, String> {
-        let json = iface_line__line_route_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_ROUTE_BY_MODE, json)
+    fn route_by_mode(params: iface_line::RouteByModeParams) -> Result<String, String> {
+        let json = iface_line__route_by_mode_params__to_json(&params);
+        dispatch(&OP_LINE_ROUTE_BY_MODE, json)
     }
-    fn line_status_by_mode(params: iface_line::LineStatusByModeParams) -> Result<String, String> {
-        let json = iface_line__line_status_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_STATUS_BY_MODE, json)
+    fn status_by_mode(params: iface_line::StatusByModeParams) -> Result<String, String> {
+        let json = iface_line__status_by_mode_params__to_json(&params);
+        dispatch(&OP_LINE_STATUS_BY_MODE, json)
     }
-    fn line_route(params: iface_line::LineRouteParams) -> Result<String, String> {
-        let json = iface_line__line_route_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_ROUTE, json)
+    fn route(params: iface_line::RouteParams) -> Result<String, String> {
+        let json = iface_line__route_params__to_json(&params);
+        dispatch(&OP_LINE_ROUTE, json)
     }
-    fn line_search(params: iface_line::LineSearchParams) -> Result<String, String> {
-        let json = iface_line__line_search_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_SEARCH, json)
+    fn search(params: iface_line::SearchParams) -> Result<String, String> {
+        let json = iface_line__search_params__to_json(&params);
+        dispatch(&OP_LINE_SEARCH, json)
     }
-    fn line_status_by_severity(params: iface_line::LineStatusBySeverityParams) -> Result<String, String> {
-        let json = iface_line__line_status_by_severity_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_STATUS_BY_SEVERITY, json)
+    fn status_by_severity(params: iface_line::StatusBySeverityParams) -> Result<String, String> {
+        let json = iface_line__status_by_severity_params__to_json(&params);
+        dispatch(&OP_LINE_STATUS_BY_SEVERITY, json)
     }
-    fn line_get(params: iface_line::LineGetParams) -> Result<String, String> {
-        let json = iface_line__line_get_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_GET, json)
+    fn get(params: iface_line::GetParams) -> Result<String, String> {
+        let json = iface_line__get_params__to_json(&params);
+        dispatch(&OP_LINE_GET, json)
     }
-    fn line_arrivals(params: iface_line::LineArrivalsParams) -> Result<String, String> {
-        let json = iface_line__line_arrivals_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_ARRIVALS, json)
+    fn arrivals(params: iface_line::ArrivalsParams) -> Result<String, String> {
+        let json = iface_line__arrivals_params__to_json(&params);
+        dispatch(&OP_LINE_ARRIVALS, json)
     }
-    fn line_disruption(params: iface_line::LineDisruptionParams) -> Result<String, String> {
-        let json = iface_line__line_disruption_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_DISRUPTION, json)
+    fn disruption(params: iface_line::DisruptionParams) -> Result<String, String> {
+        let json = iface_line__disruption_params__to_json(&params);
+        dispatch(&OP_LINE_DISRUPTION, json)
     }
-    fn line_line_routes_by_ids(params: iface_line::LineLineRoutesByIdsParams) -> Result<String, String> {
-        let json = iface_line__line_line_routes_by_ids_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_LINE_ROUTES_BY_IDS, json)
+    fn line_routes_by_ids(params: iface_line::LineRoutesByIdsParams) -> Result<String, String> {
+        let json = iface_line__line_routes_by_ids_params__to_json(&params);
+        dispatch(&OP_LINE_LINE_ROUTES_BY_IDS, json)
     }
-    fn line_status_by_ids(params: iface_line::LineStatusByIdsParams) -> Result<String, String> {
-        let json = iface_line__line_status_by_ids_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_STATUS_BY_IDS, json)
+    fn status_by_ids(params: iface_line::StatusByIdsParams) -> Result<String, String> {
+        let json = iface_line__status_by_ids_params__to_json(&params);
+        dispatch(&OP_LINE_STATUS_BY_IDS, json)
     }
-    fn line_status(params: iface_line::LineStatusParams) -> Result<String, String> {
-        let json = iface_line__line_status_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_STATUS, json)
+    fn status(params: iface_line::StatusParams) -> Result<String, String> {
+        let json = iface_line__status_params__to_json(&params);
+        dispatch(&OP_LINE_STATUS, json)
     }
-    fn line_route_sequence(params: iface_line::LineRouteSequenceParams) -> Result<String, String> {
-        let json = iface_line__line_route_sequence_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_ROUTE_SEQUENCE, json)
+    fn route_sequence(params: iface_line::RouteSequenceParams) -> Result<String, String> {
+        let json = iface_line__route_sequence_params__to_json(&params);
+        dispatch(&OP_LINE_ROUTE_SEQUENCE, json)
     }
-    fn line_stop_points(params: iface_line::LineStopPointsParams) -> Result<String, String> {
-        let json = iface_line__line_stop_points_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_STOP_POINTS, json)
+    fn stop_points(params: iface_line::StopPointsParams) -> Result<String, String> {
+        let json = iface_line__stop_points_params__to_json(&params);
+        dispatch(&OP_LINE_STOP_POINTS, json)
     }
-    fn line_timetable(params: iface_line::LineTimetableParams) -> Result<String, String> {
-        let json = iface_line__line_timetable_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_TIMETABLE, json)
+    fn timetable(params: iface_line::TimetableParams) -> Result<String, String> {
+        let json = iface_line__timetable_params__to_json(&params);
+        dispatch(&OP_LINE_TIMETABLE, json)
     }
-    fn line_timetable_to(params: iface_line::LineTimetableToParams) -> Result<String, String> {
-        let json = iface_line__line_timetable_to_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_TIMETABLE_TO, json)
+    fn timetable_to(params: iface_line::TimetableToParams) -> Result<String, String> {
+        let json = iface_line__timetable_to_params__to_json(&params);
+        dispatch(&OP_LINE_TIMETABLE_TO, json)
     }
 }
 use crate::exports::autostamp::tfl::mode as iface_mode;
 
-const OP_MODE_MODE_GET_ACTIVE_SERVICE_TYPES: OpSpec = OpSpec {
+const OP_MODE_GET_ACTIVE_SERVICE_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Mode/ActiveServiceTypes",
     fields: &[
@@ -1024,7 +1024,7 @@ const OP_MODE_MODE_GET_ACTIVE_SERVICE_TYPES: OpSpec = OpSpec {
     ],
 };
 
-const OP_MODE_MODE_ARRIVALS: OpSpec = OpSpec {
+const OP_MODE_ARRIVALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Mode/{mode}/Arrivals",
     fields: &[
@@ -1035,7 +1035,7 @@ const OP_MODE_MODE_ARRIVALS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_mode__mode_arrivals_params__to_json(p: &iface_mode::ModeArrivalsParams) -> Value {
+fn iface_mode__arrivals_params__to_json(p: &iface_mode::ArrivalsParams) -> Value {
     let mut m = Map::new();
     m.insert("mode".into(), Value::String((&p.mode).clone()));
     m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1043,17 +1043,17 @@ fn iface_mode__mode_arrivals_params__to_json(p: &iface_mode::ModeArrivalsParams)
 }
 
 impl iface_mode::Guest for crate::Component {
-    fn mode_get_active_service_types() -> Result<String, String> {
-        dispatch(&OP_MODE_MODE_GET_ACTIVE_SERVICE_TYPES, Value::Object(Map::new()))
+    fn get_active_service_types() -> Result<String, String> {
+        dispatch(&OP_MODE_GET_ACTIVE_SERVICE_TYPES, Value::Object(Map::new()))
     }
-    fn mode_arrivals(params: iface_mode::ModeArrivalsParams) -> Result<String, String> {
-        let json = iface_mode__mode_arrivals_params__to_json(&params);
-        dispatch(&OP_MODE_MODE_ARRIVALS, json)
+    fn arrivals(params: iface_mode::ArrivalsParams) -> Result<String, String> {
+        let json = iface_mode__arrivals_params__to_json(&params);
+        dispatch(&OP_MODE_ARRIVALS, json)
     }
 }
 use crate::exports::autostamp::tfl::occupancy as iface_occupancy;
 
-const OP_OCCUPANCY_OCCUPANCY_GET_BIKE_POINTS_OCCUPANCIES: OpSpec = OpSpec {
+const OP_OCCUPANCY_GET_BIKE_POINTS_OCCUPANCIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Occupancy/BikePoints/{ids}",
     fields: &[
@@ -1072,7 +1072,7 @@ const OP_OCCUPANCY_GET_OCCUPANCY_CAR_PARK: OpSpec = OpSpec {
     ],
 };
 
-const OP_OCCUPANCY_OCCUPANCY_GET: OpSpec = OpSpec {
+const OP_OCCUPANCY_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Occupancy/CarPark/{id}",
     fields: &[
@@ -1082,7 +1082,7 @@ const OP_OCCUPANCY_OCCUPANCY_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_OCCUPANCY_OCCUPANCY_GET_ALL_CHARGE_CONNECTOR_STATUS: OpSpec = OpSpec {
+const OP_OCCUPANCY_GET_ALL_CHARGE_CONNECTOR_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Occupancy/ChargeConnector",
     fields: &[
@@ -1091,7 +1091,7 @@ const OP_OCCUPANCY_OCCUPANCY_GET_ALL_CHARGE_CONNECTOR_STATUS: OpSpec = OpSpec {
     ],
 };
 
-const OP_OCCUPANCY_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS: OpSpec = OpSpec {
+const OP_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Occupancy/ChargeConnector/{ids}",
     fields: &[
@@ -1101,47 +1101,47 @@ const OP_OCCUPANCY_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_occupancy__occupancy_get_bike_points_occupancies_params__to_json(p: &iface_occupancy::OccupancyGetBikePointsOccupanciesParams) -> Value {
+fn iface_occupancy__get_bike_points_occupancies_params__to_json(p: &iface_occupancy::GetBikePointsOccupanciesParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
-fn iface_occupancy__occupancy_get_params__to_json(p: &iface_occupancy::OccupancyGetParams) -> Value {
+fn iface_occupancy__get_params__to_json(p: &iface_occupancy::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_occupancy__occupancy_get_charge_connector_status_params__to_json(p: &iface_occupancy::OccupancyGetChargeConnectorStatusParams) -> Value {
+fn iface_occupancy__get_charge_connector_status_params__to_json(p: &iface_occupancy::GetChargeConnectorStatusParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
 impl iface_occupancy::Guest for crate::Component {
-    fn occupancy_get_bike_points_occupancies(params: iface_occupancy::OccupancyGetBikePointsOccupanciesParams) -> Result<String, String> {
-        let json = iface_occupancy__occupancy_get_bike_points_occupancies_params__to_json(&params);
-        dispatch(&OP_OCCUPANCY_OCCUPANCY_GET_BIKE_POINTS_OCCUPANCIES, json)
+    fn get_bike_points_occupancies(params: iface_occupancy::GetBikePointsOccupanciesParams) -> Result<String, String> {
+        let json = iface_occupancy__get_bike_points_occupancies_params__to_json(&params);
+        dispatch(&OP_OCCUPANCY_GET_BIKE_POINTS_OCCUPANCIES, json)
     }
     fn get_occupancy_car_park() -> Result<String, String> {
         dispatch(&OP_OCCUPANCY_GET_OCCUPANCY_CAR_PARK, Value::Object(Map::new()))
     }
-    fn occupancy_get(params: iface_occupancy::OccupancyGetParams) -> Result<String, String> {
-        let json = iface_occupancy__occupancy_get_params__to_json(&params);
-        dispatch(&OP_OCCUPANCY_OCCUPANCY_GET, json)
+    fn get(params: iface_occupancy::GetParams) -> Result<String, String> {
+        let json = iface_occupancy__get_params__to_json(&params);
+        dispatch(&OP_OCCUPANCY_GET, json)
     }
-    fn occupancy_get_all_charge_connector_status() -> Result<String, String> {
-        dispatch(&OP_OCCUPANCY_OCCUPANCY_GET_ALL_CHARGE_CONNECTOR_STATUS, Value::Object(Map::new()))
+    fn get_all_charge_connector_status() -> Result<String, String> {
+        dispatch(&OP_OCCUPANCY_GET_ALL_CHARGE_CONNECTOR_STATUS, Value::Object(Map::new()))
     }
-    fn occupancy_get_charge_connector_status(params: iface_occupancy::OccupancyGetChargeConnectorStatusParams) -> Result<String, String> {
-        let json = iface_occupancy__occupancy_get_charge_connector_status_params__to_json(&params);
-        dispatch(&OP_OCCUPANCY_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS, json)
+    fn get_charge_connector_status(params: iface_occupancy::GetChargeConnectorStatusParams) -> Result<String, String> {
+        let json = iface_occupancy__get_charge_connector_status_params__to_json(&params);
+        dispatch(&OP_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS, json)
     }
 }
 use crate::exports::autostamp::tfl::place as iface_place;
 
-const OP_PLACE_PLACE_GET_BY_GEO: OpSpec = OpSpec {
+const OP_PLACE_GET_BY_GEO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place",
     fields: &[
@@ -1162,7 +1162,7 @@ const OP_PLACE_PLACE_GET_BY_GEO: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_GET_STREETS_BY_POST_CODE: OpSpec = OpSpec {
+const OP_PLACE_GET_STREETS_BY_POST_CODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Address/Streets/{postcode}",
     fields: &[
@@ -1173,7 +1173,7 @@ const OP_PLACE_PLACE_GET_STREETS_BY_POST_CODE: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_META_CATEGORIES: OpSpec = OpSpec {
+const OP_PLACE_META_CATEGORIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Meta/Categories",
     fields: &[
@@ -1182,7 +1182,7 @@ const OP_PLACE_PLACE_META_CATEGORIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_META_PLACE_TYPES: OpSpec = OpSpec {
+const OP_PLACE_META_PLACE_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Meta/PlaceTypes",
     fields: &[
@@ -1191,7 +1191,7 @@ const OP_PLACE_PLACE_META_PLACE_TYPES: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_SEARCH: OpSpec = OpSpec {
+const OP_PLACE_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Search",
     fields: &[
@@ -1202,7 +1202,7 @@ const OP_PLACE_PLACE_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_GET_BY_TYPE: OpSpec = OpSpec {
+const OP_PLACE_GET_BY_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Type/{types}",
     fields: &[
@@ -1213,7 +1213,7 @@ const OP_PLACE_PLACE_GET_BY_TYPE: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_GET: OpSpec = OpSpec {
+const OP_PLACE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/{id}",
     fields: &[
@@ -1224,7 +1224,7 @@ const OP_PLACE_PLACE_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_GET_AT: OpSpec = OpSpec {
+const OP_PLACE_GET_AT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/{type}/At/{lat}/{lon}",
     fields: &[
@@ -1238,7 +1238,7 @@ const OP_PLACE_PLACE_GET_AT: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLACE_PLACE_GET_OVERLAY: OpSpec = OpSpec {
+const OP_PLACE_GET_OVERLAY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/{type}/overlay/{z}/{lat}/{lon}/{width}/{height}",
     fields: &[
@@ -1255,7 +1255,7 @@ const OP_PLACE_PLACE_GET_OVERLAY: OpSpec = OpSpec {
     ],
 };
 
-fn iface_place__place_get_by_geo_params__to_json(p: &iface_place::PlaceGetByGeoParams) -> Value {
+fn iface_place__get_by_geo_params__to_json(p: &iface_place::GetByGeoParams) -> Value {
     let mut m = Map::new();
     m.insert("radius".into(), match (&p.radius) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("categories".into(), match (&p.categories) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -1272,35 +1272,35 @@ fn iface_place__place_get_by_geo_params__to_json(p: &iface_place::PlaceGetByGeoP
     Value::Object(m)
 }
 
-fn iface_place__place_get_streets_by_post_code_params__to_json(p: &iface_place::PlaceGetStreetsByPostCodeParams) -> Value {
+fn iface_place__get_streets_by_post_code_params__to_json(p: &iface_place::GetStreetsByPostCodeParams) -> Value {
     let mut m = Map::new();
     m.insert("postcode".into(), Value::String((&p.postcode).clone()));
     m.insert("postcode_input_postcode".into(), match (&p.postcode_input_postcode) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_place__place_search_params__to_json(p: &iface_place::PlaceSearchParams) -> Value {
+fn iface_place__search_params__to_json(p: &iface_place::SearchParams) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("types".into(), match (&p.types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_place__place_get_by_type_params__to_json(p: &iface_place::PlaceGetByTypeParams) -> Value {
+fn iface_place__get_by_type_params__to_json(p: &iface_place::GetByTypeParams) -> Value {
     let mut m = Map::new();
     m.insert("types".into(), Value::String((&p.types).clone()));
     m.insert("active_only".into(), match (&p.active_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_place__place_get_params__to_json(p: &iface_place::PlaceGetParams) -> Value {
+fn iface_place__get_params__to_json(p: &iface_place::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("include_children".into(), match (&p.include_children) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_place__place_get_at_params__to_json(p: &iface_place::PlaceGetAtParams) -> Value {
+fn iface_place__get_at_params__to_json(p: &iface_place::GetAtParams) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("lat".into(), Value::String((&p.lat).clone()));
@@ -1310,7 +1310,7 @@ fn iface_place__place_get_at_params__to_json(p: &iface_place::PlaceGetAtParams) 
     Value::Object(m)
 }
 
-fn iface_place__place_get_overlay_params__to_json(p: &iface_place::PlaceGetOverlayParams) -> Value {
+fn iface_place__get_overlay_params__to_json(p: &iface_place::GetOverlayParams) -> Value {
     let mut m = Map::new();
     m.insert("z".into(), Value::String((&p.z).clone()));
     m.insert("type".into(), Value::String((&p.type_op).clone()));
@@ -1324,44 +1324,44 @@ fn iface_place__place_get_overlay_params__to_json(p: &iface_place::PlaceGetOverl
 }
 
 impl iface_place::Guest for crate::Component {
-    fn place_get_by_geo(params: iface_place::PlaceGetByGeoParams) -> Result<String, String> {
-        let json = iface_place__place_get_by_geo_params__to_json(&params);
-        dispatch(&OP_PLACE_PLACE_GET_BY_GEO, json)
+    fn get_by_geo(params: iface_place::GetByGeoParams) -> Result<String, String> {
+        let json = iface_place__get_by_geo_params__to_json(&params);
+        dispatch(&OP_PLACE_GET_BY_GEO, json)
     }
-    fn place_get_streets_by_post_code(params: iface_place::PlaceGetStreetsByPostCodeParams) -> Result<String, String> {
-        let json = iface_place__place_get_streets_by_post_code_params__to_json(&params);
-        dispatch(&OP_PLACE_PLACE_GET_STREETS_BY_POST_CODE, json)
+    fn get_streets_by_post_code(params: iface_place::GetStreetsByPostCodeParams) -> Result<String, String> {
+        let json = iface_place__get_streets_by_post_code_params__to_json(&params);
+        dispatch(&OP_PLACE_GET_STREETS_BY_POST_CODE, json)
     }
-    fn place_meta_categories() -> Result<String, String> {
-        dispatch(&OP_PLACE_PLACE_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<String, String> {
+        dispatch(&OP_PLACE_META_CATEGORIES, Value::Object(Map::new()))
     }
-    fn place_meta_place_types() -> Result<String, String> {
-        dispatch(&OP_PLACE_PLACE_META_PLACE_TYPES, Value::Object(Map::new()))
+    fn meta_place_types() -> Result<String, String> {
+        dispatch(&OP_PLACE_META_PLACE_TYPES, Value::Object(Map::new()))
     }
-    fn place_search(params: iface_place::PlaceSearchParams) -> Result<String, String> {
-        let json = iface_place__place_search_params__to_json(&params);
-        dispatch(&OP_PLACE_PLACE_SEARCH, json)
+    fn search(params: iface_place::SearchParams) -> Result<String, String> {
+        let json = iface_place__search_params__to_json(&params);
+        dispatch(&OP_PLACE_SEARCH, json)
     }
-    fn place_get_by_type(params: iface_place::PlaceGetByTypeParams) -> Result<String, String> {
-        let json = iface_place__place_get_by_type_params__to_json(&params);
-        dispatch(&OP_PLACE_PLACE_GET_BY_TYPE, json)
+    fn get_by_type(params: iface_place::GetByTypeParams) -> Result<String, String> {
+        let json = iface_place__get_by_type_params__to_json(&params);
+        dispatch(&OP_PLACE_GET_BY_TYPE, json)
     }
-    fn place_get(params: iface_place::PlaceGetParams) -> Result<String, String> {
-        let json = iface_place__place_get_params__to_json(&params);
-        dispatch(&OP_PLACE_PLACE_GET, json)
+    fn get(params: iface_place::GetParams) -> Result<String, String> {
+        let json = iface_place__get_params__to_json(&params);
+        dispatch(&OP_PLACE_GET, json)
     }
-    fn place_get_at(params: iface_place::PlaceGetAtParams) -> Result<String, String> {
-        let json = iface_place__place_get_at_params__to_json(&params);
-        dispatch(&OP_PLACE_PLACE_GET_AT, json)
+    fn get_at(params: iface_place::GetAtParams) -> Result<String, String> {
+        let json = iface_place__get_at_params__to_json(&params);
+        dispatch(&OP_PLACE_GET_AT, json)
     }
-    fn place_get_overlay(params: iface_place::PlaceGetOverlayParams) -> Result<String, String> {
-        let json = iface_place__place_get_overlay_params__to_json(&params);
-        dispatch(&OP_PLACE_PLACE_GET_OVERLAY, json)
+    fn get_overlay(params: iface_place::GetOverlayParams) -> Result<String, String> {
+        let json = iface_place__get_overlay_params__to_json(&params);
+        dispatch(&OP_PLACE_GET_OVERLAY, json)
     }
 }
 use crate::exports::autostamp::tfl::road as iface_road;
 
-const OP_ROAD_ROAD_GET: OpSpec = OpSpec {
+const OP_ROAD_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road",
     fields: &[
@@ -1370,7 +1370,7 @@ const OP_ROAD_ROAD_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_ROAD_ROAD_META_CATEGORIES: OpSpec = OpSpec {
+const OP_ROAD_META_CATEGORIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/Meta/Categories",
     fields: &[
@@ -1379,7 +1379,7 @@ const OP_ROAD_ROAD_META_CATEGORIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_ROAD_ROAD_META_SEVERITIES: OpSpec = OpSpec {
+const OP_ROAD_META_SEVERITIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/Meta/Severities",
     fields: &[
@@ -1388,7 +1388,7 @@ const OP_ROAD_ROAD_META_SEVERITIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_ROAD_ROAD_DISRUPTION_BY_ID: OpSpec = OpSpec {
+const OP_ROAD_DISRUPTION_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/all/Disruption/{disruption_ids}",
     fields: &[
@@ -1399,7 +1399,7 @@ const OP_ROAD_ROAD_DISRUPTION_BY_ID: OpSpec = OpSpec {
     ],
 };
 
-const OP_ROAD_ROAD_DISRUPTED_STREETS: OpSpec = OpSpec {
+const OP_ROAD_DISRUPTED_STREETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/all/Street/Disruption",
     fields: &[
@@ -1420,7 +1420,7 @@ const OP_ROAD_GET_ROAD_IDS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ROAD_ROAD_DISRUPTION: OpSpec = OpSpec {
+const OP_ROAD_DISRUPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/{ids}/Disruption",
     fields: &[
@@ -1434,7 +1434,7 @@ const OP_ROAD_ROAD_DISRUPTION: OpSpec = OpSpec {
     ],
 };
 
-const OP_ROAD_ROAD_STATUS: OpSpec = OpSpec {
+const OP_ROAD_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/{ids}/Status",
     fields: &[
@@ -1446,14 +1446,14 @@ const OP_ROAD_ROAD_STATUS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_road__road_disruption_by_id_params__to_json(p: &iface_road::RoadDisruptionByIdParams) -> Value {
+fn iface_road__disruption_by_id_params__to_json(p: &iface_road::DisruptionByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("disruption_ids".into(), Value::String((&p.disruption_ids).clone()));
     m.insert("strip_content".into(), match (&p.strip_content) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_road__road_disrupted_streets_params__to_json(p: &iface_road::RoadDisruptedStreetsParams) -> Value {
+fn iface_road__disrupted_streets_params__to_json(p: &iface_road::DisruptedStreetsParams) -> Value {
     let mut m = Map::new();
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     m.insert("end_date".into(), Value::String((&p.end_date).clone()));
@@ -1466,7 +1466,7 @@ fn iface_road__get_road_ids_params__to_json(p: &iface_road::GetRoadIdsParams) ->
     Value::Object(m)
 }
 
-fn iface_road__road_disruption_params__to_json(p: &iface_road::RoadDisruptionParams) -> Value {
+fn iface_road__disruption_params__to_json(p: &iface_road::DisruptionParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("strip_content".into(), match (&p.strip_content) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1476,7 +1476,7 @@ fn iface_road__road_disruption_params__to_json(p: &iface_road::RoadDisruptionPar
     Value::Object(m)
 }
 
-fn iface_road__road_status_params__to_json(p: &iface_road::RoadStatusParams) -> Value {
+fn iface_road__status_params__to_json(p: &iface_road::StatusParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("date_range_nullable_start_date".into(), match (&p.date_range_nullable_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1485,39 +1485,39 @@ fn iface_road__road_status_params__to_json(p: &iface_road::RoadStatusParams) -> 
 }
 
 impl iface_road::Guest for crate::Component {
-    fn road_get() -> Result<String, String> {
-        dispatch(&OP_ROAD_ROAD_GET, Value::Object(Map::new()))
+    fn get() -> Result<String, String> {
+        dispatch(&OP_ROAD_GET, Value::Object(Map::new()))
     }
-    fn road_meta_categories() -> Result<String, String> {
-        dispatch(&OP_ROAD_ROAD_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<String, String> {
+        dispatch(&OP_ROAD_META_CATEGORIES, Value::Object(Map::new()))
     }
-    fn road_meta_severities() -> Result<String, String> {
-        dispatch(&OP_ROAD_ROAD_META_SEVERITIES, Value::Object(Map::new()))
+    fn meta_severities() -> Result<String, String> {
+        dispatch(&OP_ROAD_META_SEVERITIES, Value::Object(Map::new()))
     }
-    fn road_disruption_by_id(params: iface_road::RoadDisruptionByIdParams) -> Result<String, String> {
-        let json = iface_road__road_disruption_by_id_params__to_json(&params);
-        dispatch(&OP_ROAD_ROAD_DISRUPTION_BY_ID, json)
+    fn disruption_by_id(params: iface_road::DisruptionByIdParams) -> Result<String, String> {
+        let json = iface_road__disruption_by_id_params__to_json(&params);
+        dispatch(&OP_ROAD_DISRUPTION_BY_ID, json)
     }
-    fn road_disrupted_streets(params: iface_road::RoadDisruptedStreetsParams) -> Result<String, String> {
-        let json = iface_road__road_disrupted_streets_params__to_json(&params);
-        dispatch(&OP_ROAD_ROAD_DISRUPTED_STREETS, json)
+    fn disrupted_streets(params: iface_road::DisruptedStreetsParams) -> Result<String, String> {
+        let json = iface_road__disrupted_streets_params__to_json(&params);
+        dispatch(&OP_ROAD_DISRUPTED_STREETS, json)
     }
     fn get_road_ids(params: iface_road::GetRoadIdsParams) -> Result<String, String> {
         let json = iface_road__get_road_ids_params__to_json(&params);
         dispatch(&OP_ROAD_GET_ROAD_IDS, json)
     }
-    fn road_disruption(params: iface_road::RoadDisruptionParams) -> Result<String, String> {
-        let json = iface_road__road_disruption_params__to_json(&params);
-        dispatch(&OP_ROAD_ROAD_DISRUPTION, json)
+    fn disruption(params: iface_road::DisruptionParams) -> Result<String, String> {
+        let json = iface_road__disruption_params__to_json(&params);
+        dispatch(&OP_ROAD_DISRUPTION, json)
     }
-    fn road_status(params: iface_road::RoadStatusParams) -> Result<String, String> {
-        let json = iface_road__road_status_params__to_json(&params);
-        dispatch(&OP_ROAD_ROAD_STATUS, json)
+    fn status(params: iface_road::StatusParams) -> Result<String, String> {
+        let json = iface_road__status_params__to_json(&params);
+        dispatch(&OP_ROAD_STATUS, json)
     }
 }
 use crate::exports::autostamp::tfl::search as iface_search;
 
-const OP_SEARCH_SEARCH_GET: OpSpec = OpSpec {
+const OP_SEARCH_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Search",
     fields: &[
@@ -1527,7 +1527,7 @@ const OP_SEARCH_SEARCH_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_SEARCH_SEARCH_BUS_SCHEDULES: OpSpec = OpSpec {
+const OP_SEARCH_BUS_SCHEDULES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Search/BusSchedules",
     fields: &[
@@ -1537,7 +1537,7 @@ const OP_SEARCH_SEARCH_BUS_SCHEDULES: OpSpec = OpSpec {
     ],
 };
 
-const OP_SEARCH_SEARCH_META_CATEGORIES: OpSpec = OpSpec {
+const OP_SEARCH_META_CATEGORIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Search/Meta/Categories",
     fields: &[
@@ -1546,7 +1546,7 @@ const OP_SEARCH_SEARCH_META_CATEGORIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_SEARCH_SEARCH_META_SEARCH_PROVIDERS: OpSpec = OpSpec {
+const OP_SEARCH_META_SEARCH_PROVIDERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Search/Meta/SearchProviders",
     fields: &[
@@ -1555,7 +1555,7 @@ const OP_SEARCH_SEARCH_META_SEARCH_PROVIDERS: OpSpec = OpSpec {
     ],
 };
 
-const OP_SEARCH_SEARCH_META_SORTS: OpSpec = OpSpec {
+const OP_SEARCH_META_SORTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Search/Meta/Sorts",
     fields: &[
@@ -1564,40 +1564,40 @@ const OP_SEARCH_SEARCH_META_SORTS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_search__search_get_params__to_json(p: &iface_search::SearchGetParams) -> Value {
+fn iface_search__get_params__to_json(p: &iface_search::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
     Value::Object(m)
 }
 
-fn iface_search__search_bus_schedules_params__to_json(p: &iface_search::SearchBusSchedulesParams) -> Value {
+fn iface_search__bus_schedules_params__to_json(p: &iface_search::BusSchedulesParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
     Value::Object(m)
 }
 
 impl iface_search::Guest for crate::Component {
-    fn search_get(params: iface_search::SearchGetParams) -> Result<String, String> {
-        let json = iface_search__search_get_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_GET, json)
+    fn get(params: iface_search::GetParams) -> Result<String, String> {
+        let json = iface_search__get_params__to_json(&params);
+        dispatch(&OP_SEARCH_GET, json)
     }
-    fn search_bus_schedules(params: iface_search::SearchBusSchedulesParams) -> Result<String, String> {
-        let json = iface_search__search_bus_schedules_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_BUS_SCHEDULES, json)
+    fn bus_schedules(params: iface_search::BusSchedulesParams) -> Result<String, String> {
+        let json = iface_search__bus_schedules_params__to_json(&params);
+        dispatch(&OP_SEARCH_BUS_SCHEDULES, json)
     }
-    fn search_meta_categories() -> Result<String, String> {
-        dispatch(&OP_SEARCH_SEARCH_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<String, String> {
+        dispatch(&OP_SEARCH_META_CATEGORIES, Value::Object(Map::new()))
     }
-    fn search_meta_search_providers() -> Result<String, String> {
-        dispatch(&OP_SEARCH_SEARCH_META_SEARCH_PROVIDERS, Value::Object(Map::new()))
+    fn meta_search_providers() -> Result<String, String> {
+        dispatch(&OP_SEARCH_META_SEARCH_PROVIDERS, Value::Object(Map::new()))
     }
-    fn search_meta_sorts() -> Result<String, String> {
-        dispatch(&OP_SEARCH_SEARCH_META_SORTS, Value::Object(Map::new()))
+    fn meta_sorts() -> Result<String, String> {
+        dispatch(&OP_SEARCH_META_SORTS, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::tfl::stop_point as iface_stop_point;
 
-const OP_STOP_POINT_STOP_POINT_GET_BY_GEO_POINT: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_BY_GEO_POINT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint",
     fields: &[
@@ -1614,7 +1614,7 @@ const OP_STOP_POINT_STOP_POINT_GET_BY_GEO_POINT: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_META_CATEGORIES: OpSpec = OpSpec {
+const OP_STOP_POINT_META_CATEGORIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Meta/Categories",
     fields: &[
@@ -1623,7 +1623,7 @@ const OP_STOP_POINT_STOP_POINT_META_CATEGORIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_META_MODES: OpSpec = OpSpec {
+const OP_STOP_POINT_META_MODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Meta/Modes",
     fields: &[
@@ -1632,7 +1632,7 @@ const OP_STOP_POINT_STOP_POINT_META_MODES: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_META_STOP_TYPES: OpSpec = OpSpec {
+const OP_STOP_POINT_META_STOP_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Meta/StopTypes",
     fields: &[
@@ -1641,7 +1641,7 @@ const OP_STOP_POINT_STOP_POINT_META_STOP_TYPES: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET_BY_MODE: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Mode/{modes}",
     fields: &[
@@ -1652,7 +1652,7 @@ const OP_STOP_POINT_STOP_POINT_GET_BY_MODE: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_DISRUPTION_BY_MODE: OpSpec = OpSpec {
+const OP_STOP_POINT_DISRUPTION_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Mode/{modes}/Disruption",
     fields: &[
@@ -1679,7 +1679,7 @@ const OP_STOP_POINT_GET_STOP_POINT_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_SEARCH: OpSpec = OpSpec {
+const OP_STOP_POINT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Search/{query}",
     fields: &[
@@ -1695,7 +1695,7 @@ const OP_STOP_POINT_STOP_POINT_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET_SERVICE_TYPES: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_SERVICE_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/ServiceTypes",
     fields: &[
@@ -1707,7 +1707,7 @@ const OP_STOP_POINT_STOP_POINT_GET_SERVICE_TYPES: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET_BY_SMS: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_BY_SMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Sms/{id}",
     fields: &[
@@ -1718,7 +1718,7 @@ const OP_STOP_POINT_STOP_POINT_GET_BY_SMS: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET_BY_TYPE: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_BY_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Type/{types}",
     fields: &[
@@ -1728,7 +1728,7 @@ const OP_STOP_POINT_STOP_POINT_GET_BY_TYPE: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Type/{types}/page/{page}",
     fields: &[
@@ -1739,7 +1739,7 @@ const OP_STOP_POINT_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET: OpSpec = OpSpec {
+const OP_STOP_POINT_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{ids}",
     fields: &[
@@ -1750,7 +1750,7 @@ const OP_STOP_POINT_STOP_POINT_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_DISRUPTION: OpSpec = OpSpec {
+const OP_STOP_POINT_DISRUPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{ids}/Disruption",
     fields: &[
@@ -1763,7 +1763,7 @@ const OP_STOP_POINT_STOP_POINT_DISRUPTION: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_ARRIVAL_DEPARTURES: OpSpec = OpSpec {
+const OP_STOP_POINT_ARRIVAL_DEPARTURES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/ArrivalDepartures",
     fields: &[
@@ -1774,7 +1774,7 @@ const OP_STOP_POINT_STOP_POINT_ARRIVAL_DEPARTURES: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_ARRIVALS: OpSpec = OpSpec {
+const OP_STOP_POINT_ARRIVALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/Arrivals",
     fields: &[
@@ -1784,7 +1784,7 @@ const OP_STOP_POINT_STOP_POINT_ARRIVALS: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_REACHABLE_FROM: OpSpec = OpSpec {
+const OP_STOP_POINT_REACHABLE_FROM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/CanReachOnLine/{line_id}",
     fields: &[
@@ -1796,7 +1796,7 @@ const OP_STOP_POINT_STOP_POINT_REACHABLE_FROM: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_CROWDING: OpSpec = OpSpec {
+const OP_STOP_POINT_CROWDING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/Crowding/{line}",
     fields: &[
@@ -1808,7 +1808,7 @@ const OP_STOP_POINT_STOP_POINT_CROWDING: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_DIRECTION: OpSpec = OpSpec {
+const OP_STOP_POINT_DIRECTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/DirectionTo/{to_stop_point_id}",
     fields: &[
@@ -1820,7 +1820,7 @@ const OP_STOP_POINT_STOP_POINT_DIRECTION: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_ROUTE: OpSpec = OpSpec {
+const OP_STOP_POINT_ROUTE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/Route",
     fields: &[
@@ -1842,7 +1842,7 @@ const OP_STOP_POINT_GET_STOP_POINT_ID_PLACE_TYPES: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET_CAR_PARKS_BY_ID: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_CAR_PARKS_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{stop_point_id}/CarParks",
     fields: &[
@@ -1852,7 +1852,7 @@ const OP_STOP_POINT_STOP_POINT_GET_CAR_PARKS_BY_ID: OpSpec = OpSpec {
     ],
 };
 
-const OP_STOP_POINT_STOP_POINT_GET_TAXI_RANKS_BY_IDS: OpSpec = OpSpec {
+const OP_STOP_POINT_GET_TAXI_RANKS_BY_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{stop_point_id}/TaxiRanks",
     fields: &[
@@ -1862,22 +1862,22 @@ const OP_STOP_POINT_STOP_POINT_GET_TAXI_RANKS_BY_IDS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_stop_point__stop_point_reachable_from_service_types_item_enum__to_str(e: &iface_stop_point::StopPointReachableFromServiceTypesItemEnum) -> &'static str {
+fn iface_stop_point__reachable_from_service_types_item_enum__to_str(e: &iface_stop_point::ReachableFromServiceTypesItemEnum) -> &'static str {
     match e {
-        iface_stop_point::StopPointReachableFromServiceTypesItemEnum::Regular => "Regular",
-        iface_stop_point::StopPointReachableFromServiceTypesItemEnum::Night => "Night",
+        iface_stop_point::ReachableFromServiceTypesItemEnum::Regular => "Regular",
+        iface_stop_point::ReachableFromServiceTypesItemEnum::Night => "Night",
     }
 }
 
-fn iface_stop_point__stop_point_crowding_direction_enum__to_str(e: &iface_stop_point::StopPointCrowdingDirectionEnum) -> &'static str {
+fn iface_stop_point__crowding_direction_enum__to_str(e: &iface_stop_point::CrowdingDirectionEnum) -> &'static str {
     match e {
-        iface_stop_point::StopPointCrowdingDirectionEnum::Inbound => "inbound",
-        iface_stop_point::StopPointCrowdingDirectionEnum::Outbound => "outbound",
-        iface_stop_point::StopPointCrowdingDirectionEnum::All => "all",
+        iface_stop_point::CrowdingDirectionEnum::Inbound => "inbound",
+        iface_stop_point::CrowdingDirectionEnum::Outbound => "outbound",
+        iface_stop_point::CrowdingDirectionEnum::All => "all",
     }
 }
 
-fn iface_stop_point__stop_point_get_by_geo_point_params__to_json(p: &iface_stop_point::StopPointGetByGeoPointParams) -> Value {
+fn iface_stop_point__get_by_geo_point_params__to_json(p: &iface_stop_point::GetByGeoPointParams) -> Value {
     let mut m = Map::new();
     m.insert("stop_types".into(), Value::Array((&p.stop_types).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("radius".into(), match (&p.radius) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1890,14 +1890,14 @@ fn iface_stop_point__stop_point_get_by_geo_point_params__to_json(p: &iface_stop_
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_by_mode_params__to_json(p: &iface_stop_point::StopPointGetByModeParams) -> Value {
+fn iface_stop_point__get_by_mode_params__to_json(p: &iface_stop_point::GetByModeParams) -> Value {
     let mut m = Map::new();
     m.insert("modes".into(), Value::String((&p.modes).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_disruption_by_mode_params__to_json(p: &iface_stop_point::StopPointDisruptionByModeParams) -> Value {
+fn iface_stop_point__disruption_by_mode_params__to_json(p: &iface_stop_point::DisruptionByModeParams) -> Value {
     let mut m = Map::new();
     m.insert("modes".into(), Value::String((&p.modes).clone()));
     m.insert("include_route_blocked_stops".into(), match (&p.include_route_blocked_stops) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1916,7 +1916,7 @@ fn iface_stop_point__get_stop_point_search_params__to_json(p: &iface_stop_point:
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_search_params__to_json(p: &iface_stop_point::StopPointSearchParams) -> Value {
+fn iface_stop_point__search_params__to_json(p: &iface_stop_point::SearchParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -1928,7 +1928,7 @@ fn iface_stop_point__stop_point_search_params__to_json(p: &iface_stop_point::Sto
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_service_types_params__to_json(p: &iface_stop_point::StopPointGetServiceTypesParams) -> Value {
+fn iface_stop_point__get_service_types_params__to_json(p: &iface_stop_point::GetServiceTypesParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("line_ids".into(), match (&p.line_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -1936,34 +1936,34 @@ fn iface_stop_point__stop_point_get_service_types_params__to_json(p: &iface_stop
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_by_sms_params__to_json(p: &iface_stop_point::StopPointGetBySmsParams) -> Value {
+fn iface_stop_point__get_by_sms_params__to_json(p: &iface_stop_point::GetBySmsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("output".into(), match (&p.output) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_by_type_params__to_json(p: &iface_stop_point::StopPointGetByTypeParams) -> Value {
+fn iface_stop_point__get_by_type_params__to_json(p: &iface_stop_point::GetByTypeParams) -> Value {
     let mut m = Map::new();
     m.insert("types".into(), Value::String((&p.types).clone()));
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_by_type_with_pagination_params__to_json(p: &iface_stop_point::StopPointGetByTypeWithPaginationParams) -> Value {
+fn iface_stop_point__get_by_type_with_pagination_params__to_json(p: &iface_stop_point::GetByTypeWithPaginationParams) -> Value {
     let mut m = Map::new();
     m.insert("types".into(), Value::String((&p.types).clone()));
     m.insert("page".into(), Value::String((&p.page).clone()));
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_params__to_json(p: &iface_stop_point::StopPointGetParams) -> Value {
+fn iface_stop_point__get_params__to_json(p: &iface_stop_point::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("include_crowding_data".into(), match (&p.include_crowding_data) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_disruption_params__to_json(p: &iface_stop_point::StopPointDisruptionParams) -> Value {
+fn iface_stop_point__disruption_params__to_json(p: &iface_stop_point::DisruptionParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("get_family".into(), match (&p.get_family) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1972,36 +1972,36 @@ fn iface_stop_point__stop_point_disruption_params__to_json(p: &iface_stop_point:
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_arrival_departures_params__to_json(p: &iface_stop_point::StopPointArrivalDeparturesParams) -> Value {
+fn iface_stop_point__arrival_departures_params__to_json(p: &iface_stop_point::ArrivalDeparturesParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("line_ids".into(), Value::Array((&p.line_ids).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_arrivals_params__to_json(p: &iface_stop_point::StopPointArrivalsParams) -> Value {
+fn iface_stop_point__arrivals_params__to_json(p: &iface_stop_point::ArrivalsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_reachable_from_params__to_json(p: &iface_stop_point::StopPointReachableFromParams) -> Value {
+fn iface_stop_point__reachable_from_params__to_json(p: &iface_stop_point::ReachableFromParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("line_id".into(), Value::String((&p.line_id).clone()));
-    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_stop_point__stop_point_reachable_from_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_stop_point__reachable_from_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_crowding_params__to_json(p: &iface_stop_point::StopPointCrowdingParams) -> Value {
+fn iface_stop_point__crowding_params__to_json(p: &iface_stop_point::CrowdingParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("line".into(), Value::String((&p.line).clone()));
-    m.insert("direction".into(), Value::String(iface_stop_point__stop_point_crowding_direction_enum__to_str(&p.direction).into()));
+    m.insert("direction".into(), Value::String(iface_stop_point__crowding_direction_enum__to_str(&p.direction).into()));
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_direction_params__to_json(p: &iface_stop_point::StopPointDirectionParams) -> Value {
+fn iface_stop_point__direction_params__to_json(p: &iface_stop_point::DirectionParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("to_stop_point_id".into(), Value::String((&p.to_stop_point_id).clone()));
@@ -2009,10 +2009,10 @@ fn iface_stop_point__stop_point_direction_params__to_json(p: &iface_stop_point::
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_route_params__to_json(p: &iface_stop_point::StopPointRouteParams) -> Value {
+fn iface_stop_point__route_params__to_json(p: &iface_stop_point::RouteParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_stop_point__stop_point_reachable_from_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("service_types".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_stop_point__reachable_from_service_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2023,112 +2023,112 @@ fn iface_stop_point__get_stop_point_id_place_types_params__to_json(p: &iface_sto
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_car_parks_by_id_params__to_json(p: &iface_stop_point::StopPointGetCarParksByIdParams) -> Value {
+fn iface_stop_point__get_car_parks_by_id_params__to_json(p: &iface_stop_point::GetCarParksByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("stop_point_id".into(), Value::String((&p.stop_point_id).clone()));
     Value::Object(m)
 }
 
-fn iface_stop_point__stop_point_get_taxi_ranks_by_ids_params__to_json(p: &iface_stop_point::StopPointGetTaxiRanksByIdsParams) -> Value {
+fn iface_stop_point__get_taxi_ranks_by_ids_params__to_json(p: &iface_stop_point::GetTaxiRanksByIdsParams) -> Value {
     let mut m = Map::new();
     m.insert("stop_point_id".into(), Value::String((&p.stop_point_id).clone()));
     Value::Object(m)
 }
 
 impl iface_stop_point::Guest for crate::Component {
-    fn stop_point_get_by_geo_point(params: iface_stop_point::StopPointGetByGeoPointParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_by_geo_point_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_BY_GEO_POINT, json)
+    fn get_by_geo_point(params: iface_stop_point::GetByGeoPointParams) -> Result<String, String> {
+        let json = iface_stop_point__get_by_geo_point_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_BY_GEO_POINT, json)
     }
-    fn stop_point_meta_categories() -> Result<String, String> {
-        dispatch(&OP_STOP_POINT_STOP_POINT_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<String, String> {
+        dispatch(&OP_STOP_POINT_META_CATEGORIES, Value::Object(Map::new()))
     }
-    fn stop_point_meta_modes() -> Result<String, String> {
-        dispatch(&OP_STOP_POINT_STOP_POINT_META_MODES, Value::Object(Map::new()))
+    fn meta_modes() -> Result<String, String> {
+        dispatch(&OP_STOP_POINT_META_MODES, Value::Object(Map::new()))
     }
-    fn stop_point_meta_stop_types() -> Result<String, String> {
-        dispatch(&OP_STOP_POINT_STOP_POINT_META_STOP_TYPES, Value::Object(Map::new()))
+    fn meta_stop_types() -> Result<String, String> {
+        dispatch(&OP_STOP_POINT_META_STOP_TYPES, Value::Object(Map::new()))
     }
-    fn stop_point_get_by_mode(params: iface_stop_point::StopPointGetByModeParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_by_mode_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_BY_MODE, json)
+    fn get_by_mode(params: iface_stop_point::GetByModeParams) -> Result<String, String> {
+        let json = iface_stop_point__get_by_mode_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_BY_MODE, json)
     }
-    fn stop_point_disruption_by_mode(params: iface_stop_point::StopPointDisruptionByModeParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_disruption_by_mode_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_DISRUPTION_BY_MODE, json)
+    fn disruption_by_mode(params: iface_stop_point::DisruptionByModeParams) -> Result<String, String> {
+        let json = iface_stop_point__disruption_by_mode_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_DISRUPTION_BY_MODE, json)
     }
     fn get_stop_point_search(params: iface_stop_point::GetStopPointSearchParams) -> Result<String, String> {
         let json = iface_stop_point__get_stop_point_search_params__to_json(&params);
         dispatch(&OP_STOP_POINT_GET_STOP_POINT_SEARCH, json)
     }
-    fn stop_point_search(params: iface_stop_point::StopPointSearchParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_search_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_SEARCH, json)
+    fn search(params: iface_stop_point::SearchParams) -> Result<String, String> {
+        let json = iface_stop_point__search_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_SEARCH, json)
     }
-    fn stop_point_get_service_types(params: iface_stop_point::StopPointGetServiceTypesParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_service_types_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_SERVICE_TYPES, json)
+    fn get_service_types(params: iface_stop_point::GetServiceTypesParams) -> Result<String, String> {
+        let json = iface_stop_point__get_service_types_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_SERVICE_TYPES, json)
     }
-    fn stop_point_get_by_sms(params: iface_stop_point::StopPointGetBySmsParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_by_sms_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_BY_SMS, json)
+    fn get_by_sms(params: iface_stop_point::GetBySmsParams) -> Result<String, String> {
+        let json = iface_stop_point__get_by_sms_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_BY_SMS, json)
     }
-    fn stop_point_get_by_type(params: iface_stop_point::StopPointGetByTypeParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_by_type_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_BY_TYPE, json)
+    fn get_by_type(params: iface_stop_point::GetByTypeParams) -> Result<String, String> {
+        let json = iface_stop_point__get_by_type_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_BY_TYPE, json)
     }
-    fn stop_point_get_by_type_with_pagination(params: iface_stop_point::StopPointGetByTypeWithPaginationParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_by_type_with_pagination_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION, json)
+    fn get_by_type_with_pagination(params: iface_stop_point::GetByTypeWithPaginationParams) -> Result<String, String> {
+        let json = iface_stop_point__get_by_type_with_pagination_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION, json)
     }
-    fn stop_point_get(params: iface_stop_point::StopPointGetParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET, json)
+    fn get(params: iface_stop_point::GetParams) -> Result<String, String> {
+        let json = iface_stop_point__get_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET, json)
     }
-    fn stop_point_disruption(params: iface_stop_point::StopPointDisruptionParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_disruption_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_DISRUPTION, json)
+    fn disruption(params: iface_stop_point::DisruptionParams) -> Result<String, String> {
+        let json = iface_stop_point__disruption_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_DISRUPTION, json)
     }
-    fn stop_point_arrival_departures(params: iface_stop_point::StopPointArrivalDeparturesParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_arrival_departures_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_ARRIVAL_DEPARTURES, json)
+    fn arrival_departures(params: iface_stop_point::ArrivalDeparturesParams) -> Result<String, String> {
+        let json = iface_stop_point__arrival_departures_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_ARRIVAL_DEPARTURES, json)
     }
-    fn stop_point_arrivals(params: iface_stop_point::StopPointArrivalsParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_arrivals_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_ARRIVALS, json)
+    fn arrivals(params: iface_stop_point::ArrivalsParams) -> Result<String, String> {
+        let json = iface_stop_point__arrivals_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_ARRIVALS, json)
     }
-    fn stop_point_reachable_from(params: iface_stop_point::StopPointReachableFromParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_reachable_from_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_REACHABLE_FROM, json)
+    fn reachable_from(params: iface_stop_point::ReachableFromParams) -> Result<String, String> {
+        let json = iface_stop_point__reachable_from_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_REACHABLE_FROM, json)
     }
-    fn stop_point_crowding(params: iface_stop_point::StopPointCrowdingParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_crowding_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_CROWDING, json)
+    fn crowding(params: iface_stop_point::CrowdingParams) -> Result<String, String> {
+        let json = iface_stop_point__crowding_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_CROWDING, json)
     }
-    fn stop_point_direction(params: iface_stop_point::StopPointDirectionParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_direction_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_DIRECTION, json)
+    fn direction(params: iface_stop_point::DirectionParams) -> Result<String, String> {
+        let json = iface_stop_point__direction_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_DIRECTION, json)
     }
-    fn stop_point_route(params: iface_stop_point::StopPointRouteParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_route_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_ROUTE, json)
+    fn route(params: iface_stop_point::RouteParams) -> Result<String, String> {
+        let json = iface_stop_point__route_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_ROUTE, json)
     }
     fn get_stop_point_id_place_types(params: iface_stop_point::GetStopPointIdPlaceTypesParams) -> Result<String, String> {
         let json = iface_stop_point__get_stop_point_id_place_types_params__to_json(&params);
         dispatch(&OP_STOP_POINT_GET_STOP_POINT_ID_PLACE_TYPES, json)
     }
-    fn stop_point_get_car_parks_by_id(params: iface_stop_point::StopPointGetCarParksByIdParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_car_parks_by_id_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_CAR_PARKS_BY_ID, json)
+    fn get_car_parks_by_id(params: iface_stop_point::GetCarParksByIdParams) -> Result<String, String> {
+        let json = iface_stop_point__get_car_parks_by_id_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_CAR_PARKS_BY_ID, json)
     }
-    fn stop_point_get_taxi_ranks_by_ids(params: iface_stop_point::StopPointGetTaxiRanksByIdsParams) -> Result<String, String> {
-        let json = iface_stop_point__stop_point_get_taxi_ranks_by_ids_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_STOP_POINT_GET_TAXI_RANKS_BY_IDS, json)
+    fn get_taxi_ranks_by_ids(params: iface_stop_point::GetTaxiRanksByIdsParams) -> Result<String, String> {
+        let json = iface_stop_point__get_taxi_ranks_by_ids_params__to_json(&params);
+        dispatch(&OP_STOP_POINT_GET_TAXI_RANKS_BY_IDS, json)
     }
 }
 use crate::exports::autostamp::tfl::travel_time as iface_travel_time;
 
-const OP_TRAVEL_TIME_TRAVEL_TIME_GET_COMPARE_OVERLAY: OpSpec = OpSpec {
+const OP_TRAVEL_TIME_GET_COMPARE_OVERLAY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/TravelTimes/compareOverlay/{z}/mapcenter/{map_center_lat}/{map_center_lon}/pinlocation/{pin_lat}/{pin_lon}/dimensions/{width}/{height}",
     fields: &[
@@ -2151,7 +2151,7 @@ const OP_TRAVEL_TIME_TRAVEL_TIME_GET_COMPARE_OVERLAY: OpSpec = OpSpec {
     ],
 };
 
-const OP_TRAVEL_TIME_TRAVEL_TIME_GET_OVERLAY: OpSpec = OpSpec {
+const OP_TRAVEL_TIME_GET_OVERLAY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/TravelTimes/overlay/{z}/mapcenter/{map_center_lat}/{map_center_lon}/pinlocation/{pin_lat}/{pin_lon}/dimensions/{width}/{height}",
     fields: &[
@@ -2172,15 +2172,15 @@ const OP_TRAVEL_TIME_TRAVEL_TIME_GET_OVERLAY: OpSpec = OpSpec {
     ],
 };
 
-fn iface_travel_time__travel_time_get_compare_overlay_direction_enum__to_str(e: &iface_travel_time::TravelTimeGetCompareOverlayDirectionEnum) -> &'static str {
+fn iface_travel_time__get_compare_overlay_direction_enum__to_str(e: &iface_travel_time::GetCompareOverlayDirectionEnum) -> &'static str {
     match e {
-        iface_travel_time::TravelTimeGetCompareOverlayDirectionEnum::Average => "Average",
-        iface_travel_time::TravelTimeGetCompareOverlayDirectionEnum::FromOp => "From",
-        iface_travel_time::TravelTimeGetCompareOverlayDirectionEnum::To => "To",
+        iface_travel_time::GetCompareOverlayDirectionEnum::Average => "Average",
+        iface_travel_time::GetCompareOverlayDirectionEnum::FromOp => "From",
+        iface_travel_time::GetCompareOverlayDirectionEnum::To => "To",
     }
 }
 
-fn iface_travel_time__travel_time_get_compare_overlay_params__to_json(p: &iface_travel_time::TravelTimeGetCompareOverlayParams) -> Value {
+fn iface_travel_time__get_compare_overlay_params__to_json(p: &iface_travel_time::GetCompareOverlayParams) -> Value {
     let mut m = Map::new();
     m.insert("z".into(), Value::String((&p.z).clone()));
     m.insert("pin_lat".into(), Value::String((&p.pin_lat).clone()));
@@ -2192,14 +2192,14 @@ fn iface_travel_time__travel_time_get_compare_overlay_params__to_json(p: &iface_
     m.insert("mode_id".into(), Value::String((&p.mode_id).clone()));
     m.insert("width".into(), Value::String((&p.width).clone()));
     m.insert("height".into(), Value::String((&p.height).clone()));
-    m.insert("direction".into(), Value::String(iface_travel_time__travel_time_get_compare_overlay_direction_enum__to_str(&p.direction).into()));
+    m.insert("direction".into(), Value::String(iface_travel_time__get_compare_overlay_direction_enum__to_str(&p.direction).into()));
     m.insert("travel_time_interval".into(), Value::Number(serde_json::Number::from(*(&p.travel_time_interval))));
     m.insert("compare_type".into(), Value::String((&p.compare_type).clone()));
     m.insert("compare_value".into(), Value::String((&p.compare_value).clone()));
     Value::Object(m)
 }
 
-fn iface_travel_time__travel_time_get_overlay_params__to_json(p: &iface_travel_time::TravelTimeGetOverlayParams) -> Value {
+fn iface_travel_time__get_overlay_params__to_json(p: &iface_travel_time::GetOverlayParams) -> Value {
     let mut m = Map::new();
     m.insert("z".into(), Value::String((&p.z).clone()));
     m.insert("pin_lat".into(), Value::String((&p.pin_lat).clone()));
@@ -2211,24 +2211,24 @@ fn iface_travel_time__travel_time_get_overlay_params__to_json(p: &iface_travel_t
     m.insert("mode_id".into(), Value::String((&p.mode_id).clone()));
     m.insert("width".into(), Value::String((&p.width).clone()));
     m.insert("height".into(), Value::String((&p.height).clone()));
-    m.insert("direction".into(), Value::String(iface_travel_time__travel_time_get_compare_overlay_direction_enum__to_str(&p.direction).into()));
+    m.insert("direction".into(), Value::String(iface_travel_time__get_compare_overlay_direction_enum__to_str(&p.direction).into()));
     m.insert("travel_time_interval".into(), Value::Number(serde_json::Number::from(*(&p.travel_time_interval))));
     Value::Object(m)
 }
 
 impl iface_travel_time::Guest for crate::Component {
-    fn travel_time_get_compare_overlay(params: iface_travel_time::TravelTimeGetCompareOverlayParams) -> Result<String, String> {
-        let json = iface_travel_time__travel_time_get_compare_overlay_params__to_json(&params);
-        dispatch(&OP_TRAVEL_TIME_TRAVEL_TIME_GET_COMPARE_OVERLAY, json)
+    fn get_compare_overlay(params: iface_travel_time::GetCompareOverlayParams) -> Result<String, String> {
+        let json = iface_travel_time__get_compare_overlay_params__to_json(&params);
+        dispatch(&OP_TRAVEL_TIME_GET_COMPARE_OVERLAY, json)
     }
-    fn travel_time_get_overlay(params: iface_travel_time::TravelTimeGetOverlayParams) -> Result<String, String> {
-        let json = iface_travel_time__travel_time_get_overlay_params__to_json(&params);
-        dispatch(&OP_TRAVEL_TIME_TRAVEL_TIME_GET_OVERLAY, json)
+    fn get_overlay(params: iface_travel_time::GetOverlayParams) -> Result<String, String> {
+        let json = iface_travel_time__get_overlay_params__to_json(&params);
+        dispatch(&OP_TRAVEL_TIME_GET_OVERLAY, json)
     }
 }
 use crate::exports::autostamp::tfl::vehicle as iface_vehicle;
 
-const OP_VEHICLE_VEHICLE_GET: OpSpec = OpSpec {
+const OP_VEHICLE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Vehicle/{ids}/Arrivals",
     fields: &[
@@ -2238,16 +2238,16 @@ const OP_VEHICLE_VEHICLE_GET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_vehicle__vehicle_get_params__to_json(p: &iface_vehicle::VehicleGetParams) -> Value {
+fn iface_vehicle__get_params__to_json(p: &iface_vehicle::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
 impl iface_vehicle::Guest for crate::Component {
-    fn vehicle_get(params: iface_vehicle::VehicleGetParams) -> Result<String, String> {
-        let json = iface_vehicle__vehicle_get_params__to_json(&params);
-        dispatch(&OP_VEHICLE_VEHICLE_GET, json)
+    fn get(params: iface_vehicle::GetParams) -> Result<String, String> {
+        let json = iface_vehicle__get_params__to_json(&params);
+        dispatch(&OP_VEHICLE_GET, json)
     }
 }
 

@@ -1,4 +1,4 @@
-package autostamp:stackexchange@0.2.1;
+package autostamp:stackexchange@0.3.0;
 
 interface access-tokens {
   record get-access-tokens-access-tokens-params {

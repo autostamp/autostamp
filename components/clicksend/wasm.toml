@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:clicksend"
-version = "0.2.1+clicksend-1.0.0"
+version = "0.3.0+clicksend-1.0.0"
 registry = "ghcr.io/autostamp/clicksend"
 kind = "component"
 file = "build/clicksend.wasm"

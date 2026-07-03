@@ -6,42 +6,110 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `api_key` |
-package autostamp:giphy@0.2.1;
+package autostamp:giphy@0.3.0;
 
 interface gifs {
   /// Get GIFs by ID
-  get-gifs-by-id: func() -> result<string, string>;
+  record get-gifs-by-id-params {
+    /// Filters results by specified GIF IDs, separated by commas.
+    ids: option<string>
+  }
+  get-gifs-by-id: func(params: get-gifs-by-id-params) -> result<string, string>;
 
   /// Random GIF
-  random-gif: func() -> result<string, string>;
+  record random-gif-params {
+    /// Filters results by specified tag.
+    tag: option<string>,
+    /// Filters results by specified rating.
+    rating: option<string>
+  }
+  random-gif: func(params: random-gif-params) -> result<string, string>;
 
   /// Search GIFs
-  search-gifs: func() -> result<string, string>;
+  record search-gifs-params {
+    /// Search query term or prhase.
+    q: string,
+    /// The maximum number of records to return.
+    limit: option<s32>,
+    /// An optional results offset.
+    offset: option<s32>,
+    /// Filters results by specified rating.
+    rating: option<string>,
+    /// Specify default language for regional content; use a 2-letter ISO 639-1 language code.
+    lang: option<string>
+  }
+  search-gifs: func(params: search-gifs-params) -> result<string, string>;
 
   /// Translate phrase to GIF
-  translate-gif: func() -> result<string, string>;
+  record translate-gif-params {
+    /// Search term.
+    s: string
+  }
+  translate-gif: func(params: translate-gif-params) -> result<string, string>;
 
   /// Trending GIFs
-  trending-gifs: func() -> result<string, string>;
+  record trending-gifs-params {
+    /// The maximum number of records to return.
+    limit: option<s32>,
+    /// An optional results offset.
+    offset: option<s32>,
+    /// Filters results by specified rating.
+    rating: option<string>
+  }
+  trending-gifs: func(params: trending-gifs-params) -> result<string, string>;
 
   /// Get GIF by Id
-  get-gif-by-id: func() -> result<string, string>;
+  record get-gif-by-id-params {
+    /// Filters results by specified GIF ID.
+    gif-id: string
+  }
+  get-gif-by-id: func(params: get-gif-by-id-params) -> result<string, string>;
 
 }
 
 
 interface stickers {
   /// Random Sticker
-  random-sticker: func() -> result<string, string>;
+  record random-sticker-params {
+    /// Filters results by specified tag.
+    tag: option<string>,
+    /// Filters results by specified rating.
+    rating: option<string>
+  }
+  random-sticker: func(params: random-sticker-params) -> result<string, string>;
 
   /// Search Stickers
-  search-stickers: func() -> result<string, string>;
+  record search-stickers-params {
+    /// Search query term or prhase.
+    q: string,
+    /// The maximum number of records to return.
+    limit: option<s32>,
+    /// An optional results offset.
+    offset: option<s32>,
+    /// Filters results by specified rating.
+    rating: option<string>,
+    /// Specify default language for regional content; use a 2-letter ISO 639-1 language code.
+    lang: option<string>
+  }
+  search-stickers: func(params: search-stickers-params) -> result<string, string>;
 
   /// Translate phrase to Sticker
-  translate-sticker: func() -> result<string, string>;
+  record translate-sticker-params {
+    /// Search term.
+    s: string
+  }
+  translate-sticker: func(params: translate-sticker-params) -> result<string, string>;
 
   /// Trending Stickers
-  trending-stickers: func() -> result<string, string>;
+  record trending-stickers-params {
+    /// The maximum number of records to return.
+    limit: option<s32>,
+    /// An optional results offset.
+    offset: option<s32>,
+    /// Filters results by specified rating.
+    rating: option<string>
+  }
+  trending-stickers: func(params: trending-stickers-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

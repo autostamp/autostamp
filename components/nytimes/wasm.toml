@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:nytimes"
-version = "0.2.1+nytimes-1.0.0"
+version = "0.3.0+nytimes-1.0.0"
 registry = "ghcr.io/autostamp/nytimes"
 kind = "component"
 file = "build/nytimes.wasm"

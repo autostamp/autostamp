@@ -353,6 +353,8 @@ const OP_ACCOUNT_GET_ENTITY_TRANSFERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/entity-transfers",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -404,6 +406,8 @@ const OP_ACCOUNT_GET_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/events",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -444,6 +448,8 @@ const OP_ACCOUNT_GET_INVOICES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/invoices",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -464,6 +470,8 @@ const OP_ACCOUNT_GET_INVOICE_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/invoices/{invoice_id}/items",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -514,6 +522,8 @@ const OP_ACCOUNT_GET_CLIENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/oauth-clients",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -601,6 +611,8 @@ const OP_ACCOUNT_GET_PAYMENT_METHODS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/payment-methods",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -654,6 +666,8 @@ const OP_ACCOUNT_GET_PAYMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/payments",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -723,6 +737,8 @@ const OP_ACCOUNT_GET_SERVICE_TRANSFERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/service-transfers",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -819,6 +835,8 @@ const OP_ACCOUNT_GET_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/users",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -939,11 +957,11 @@ fn iface_account__create_payment_method_body_type_op_enum__to_str(e: &iface_acco
     }
 }
 
-fn iface_account__account_settings_object_storage_enum__to_str(e: &iface_account::AccountSettingsObjectStorageEnum) -> &'static str {
+fn iface_account__settings_object_storage_enum__to_str(e: &iface_account::SettingsObjectStorageEnum) -> &'static str {
     match e {
-        iface_account::AccountSettingsObjectStorageEnum::Disabled => "disabled",
-        iface_account::AccountSettingsObjectStorageEnum::Suspended => "suspended",
-        iface_account::AccountSettingsObjectStorageEnum::Active => "active",
+        iface_account::SettingsObjectStorageEnum::Disabled => "disabled",
+        iface_account::SettingsObjectStorageEnum::Suspended => "suspended",
+        iface_account::SettingsObjectStorageEnum::Active => "active",
     }
 }
 
@@ -1066,9 +1084,44 @@ fn iface_account__create_credit_card_params__to_json(p: &iface_account::CreateCr
     Value::Object(m)
 }
 
+fn iface_account__get_entity_transfers_params__to_json(p: &iface_account::GetEntityTransfersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_account__create_entity_transfer_params__to_json(p: &iface_account::CreateEntityTransferParams) -> Value {
     let mut m = Map::new();
     m.insert("entities".into(), iface_account__entity_transfer_properties_entities__to_json(&p.entities));
+    Value::Object(m)
+}
+
+fn iface_account__get_events_params__to_json(p: &iface_account::GetEventsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account__get_invoices_params__to_json(p: &iface_account::GetInvoicesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account__get_invoice_items_params__to_json(p: &iface_account::GetInvoiceItemsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account__get_clients_params__to_json(p: &iface_account::GetClientsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1090,11 +1143,25 @@ fn iface_account__update_client_params__to_json(p: &iface_account::UpdateClientP
     Value::Object(m)
 }
 
+fn iface_account__get_payment_methods_params__to_json(p: &iface_account::GetPaymentMethodsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_account__create_payment_method_params__to_json(p: &iface_account::CreatePaymentMethodParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), iface_account__credit_card__to_json(&p.data));
     m.insert("is_default".into(), iface_account__payment_method_properties_is_default__to_json(&p.is_default));
     m.insert("type".into(), Value::String(iface_account__create_payment_method_body_type_op_enum__to_str(&p.type_op).into()));
+    Value::Object(m)
+}
+
+fn iface_account__get_payments_params__to_json(p: &iface_account::GetPaymentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1127,6 +1194,13 @@ fn iface_account__create_promo_credit_params__to_json(p: &iface_account::CreateP
     Value::Object(m)
 }
 
+fn iface_account__get_service_transfers_params__to_json(p: &iface_account::GetServiceTransfersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_account__create_service_transfer_params__to_json(p: &iface_account::CreateServiceTransferParams) -> Value {
     let mut m = Map::new();
     m.insert("entities".into(), iface_account__service_transfer_properties_entities__to_json(&p.entities));
@@ -1139,7 +1213,14 @@ fn iface_account__update_account_settings_params__to_json(p: &iface_account::Upd
     m.insert("longview_subscription".into(), match (&p.longview_subscription) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("managed".into(), match (&p.managed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("network_helper".into(), match (&p.network_helper) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("object_storage".into(), match (&p.object_storage) { Some(v) => Value::String(iface_account__account_settings_object_storage_enum__to_str(v).into()), None => Value::Null });
+    m.insert("object_storage".into(), match (&p.object_storage) { Some(v) => Value::String(iface_account__settings_object_storage_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account__get_users_params__to_json(p: &iface_account::GetUsersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1189,8 +1270,9 @@ impl iface_account::Guest for crate::Component {
         let json = iface_account__create_credit_card_params__to_json(&params);
         dispatch(&OP_ACCOUNT_CREATE_CREDIT_CARD, json)
     }
-    fn get_entity_transfers() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_ENTITY_TRANSFERS, Value::Object(Map::new()))
+    fn get_entity_transfers(params: iface_account::GetEntityTransfersParams) -> Result<String, String> {
+        let json = iface_account__get_entity_transfers_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_ENTITY_TRANSFERS, json)
     }
     fn create_entity_transfer(params: iface_account::CreateEntityTransferParams) -> Result<String, String> {
         let json = iface_account__create_entity_transfer_params__to_json(&params);
@@ -1205,8 +1287,9 @@ impl iface_account::Guest for crate::Component {
     fn accept_entity_transfer() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_ACCEPT_ENTITY_TRANSFER, Value::Object(Map::new()))
     }
-    fn get_events() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_EVENTS, Value::Object(Map::new()))
+    fn get_events(params: iface_account::GetEventsParams) -> Result<String, String> {
+        let json = iface_account__get_events_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_EVENTS, json)
     }
     fn get_event() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_GET_EVENT, Value::Object(Map::new()))
@@ -1217,14 +1300,16 @@ impl iface_account::Guest for crate::Component {
     fn event_seen() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_EVENT_SEEN, Value::Object(Map::new()))
     }
-    fn get_invoices() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_INVOICES, Value::Object(Map::new()))
+    fn get_invoices(params: iface_account::GetInvoicesParams) -> Result<String, String> {
+        let json = iface_account__get_invoices_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_INVOICES, json)
     }
     fn get_invoice() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_GET_INVOICE, Value::Object(Map::new()))
     }
-    fn get_invoice_items() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_INVOICE_ITEMS, Value::Object(Map::new()))
+    fn get_invoice_items(params: iface_account::GetInvoiceItemsParams) -> Result<String, String> {
+        let json = iface_account__get_invoice_items_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_INVOICE_ITEMS, json)
     }
     fn get_account_logins() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_GET_ACCOUNT_LOGINS, Value::Object(Map::new()))
@@ -1238,8 +1323,9 @@ impl iface_account::Guest for crate::Component {
     fn get_notifications() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_GET_NOTIFICATIONS, Value::Object(Map::new()))
     }
-    fn get_clients() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_CLIENTS, Value::Object(Map::new()))
+    fn get_clients(params: iface_account::GetClientsParams) -> Result<String, String> {
+        let json = iface_account__get_clients_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_CLIENTS, json)
     }
     fn create_client(params: iface_account::CreateClientParams) -> Result<String, String> {
         let json = iface_account__create_client_params__to_json(&params);
@@ -1264,8 +1350,9 @@ impl iface_account::Guest for crate::Component {
     fn set_client_thumbnail() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_SET_CLIENT_THUMBNAIL, Value::Object(Map::new()))
     }
-    fn get_payment_methods() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_PAYMENT_METHODS, Value::Object(Map::new()))
+    fn get_payment_methods(params: iface_account::GetPaymentMethodsParams) -> Result<String, String> {
+        let json = iface_account__get_payment_methods_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_PAYMENT_METHODS, json)
     }
     fn create_payment_method(params: iface_account::CreatePaymentMethodParams) -> Result<String, String> {
         let json = iface_account__create_payment_method_params__to_json(&params);
@@ -1280,8 +1367,9 @@ impl iface_account::Guest for crate::Component {
     fn make_payment_method_default() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_MAKE_PAYMENT_METHOD_DEFAULT, Value::Object(Map::new()))
     }
-    fn get_payments() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_PAYMENTS, Value::Object(Map::new()))
+    fn get_payments(params: iface_account::GetPaymentsParams) -> Result<String, String> {
+        let json = iface_account__get_payments_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_PAYMENTS, json)
     }
     fn create_payment(params: iface_account::CreatePaymentParams) -> Result<String, String> {
         let json = iface_account__create_payment_params__to_json(&params);
@@ -1302,8 +1390,9 @@ impl iface_account::Guest for crate::Component {
         let json = iface_account__create_promo_credit_params__to_json(&params);
         dispatch(&OP_ACCOUNT_CREATE_PROMO_CREDIT, json)
     }
-    fn get_service_transfers() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_SERVICE_TRANSFERS, Value::Object(Map::new()))
+    fn get_service_transfers(params: iface_account::GetServiceTransfersParams) -> Result<String, String> {
+        let json = iface_account__get_service_transfers_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_SERVICE_TRANSFERS, json)
     }
     fn create_service_transfer(params: iface_account::CreateServiceTransferParams) -> Result<String, String> {
         let json = iface_account__create_service_transfer_params__to_json(&params);
@@ -1331,8 +1420,9 @@ impl iface_account::Guest for crate::Component {
     fn get_transfer() -> Result<String, String> {
         dispatch(&OP_ACCOUNT_GET_TRANSFER, Value::Object(Map::new()))
     }
-    fn get_users() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_USERS, Value::Object(Map::new()))
+    fn get_users(params: iface_account::GetUsersParams) -> Result<String, String> {
+        let json = iface_account__get_users_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_GET_USERS, json)
     }
     fn create_user(params: iface_account::CreateUserParams) -> Result<String, String> {
         let json = iface_account__create_user_params__to_json(&params);
@@ -1362,6 +1452,8 @@ const OP_DATABASES_GET_DATABASES_ENGINES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/engines",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1371,6 +1463,8 @@ const OP_DATABASES_GET_DATABASES_ENGINE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/engines/{engine_id}",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1380,6 +1474,8 @@ const OP_DATABASES_GET_DATABASES_INSTANCES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/instances",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1390,6 +1486,8 @@ const OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/mongodb/instances",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1433,6 +1531,8 @@ const OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCE_BACKUPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/mongodb/instances/{instance_id}/backups",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1525,6 +1625,8 @@ const OP_DATABASES_GET_DATABASES_MY_SQL_INSTANCES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/mysql/instances",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1587,6 +1689,8 @@ const OP_DATABASES_GET_DATABASES_MY_SQL_INSTANCE_BACKUPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/mysql/instances/{instance_id}/backups",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1679,6 +1783,8 @@ const OP_DATABASES_GET_DATABASES_POSTGRE_SQL_INSTANCES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/postgresql/instances",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1742,6 +1848,8 @@ const OP_DATABASES_GET_DATABASES_POSTGRE_SQL_INSTANCE_BACKUPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/postgresql/instances/{instance_id}/backups",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1834,6 +1942,8 @@ const OP_DATABASES_GET_DATABASES_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/types",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1843,6 +1953,8 @@ const OP_DATABASES_GET_DATABASES_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/types/{type_id}",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2030,6 +2142,34 @@ fn iface_databases__database_postgre_sql_properties_updates__to_json(p: &iface_d
     Value::Object(m)
 }
 
+fn iface_databases__get_databases_engines_params__to_json(p: &iface_databases::GetDatabasesEnginesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__get_databases_engine_params__to_json(p: &iface_databases::GetDatabasesEngineParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__get_databases_instances_params__to_json(p: &iface_databases::GetDatabasesInstancesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__get_databases_mongo_db_instances_params__to_json(p: &iface_databases::GetDatabasesMongoDbInstancesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_databases__put_databases_mongo_db_instance_params__to_json(p: &iface_databases::PutDatabasesMongoDbInstanceParams) -> Value {
     let mut m = Map::new();
     m.insert("allow_list".into(), match (&p.allow_list) { Some(v) => iface_databases__database_mongo_db_request_properties_allow_list__to_json(v), None => Value::Null });
@@ -2038,10 +2178,24 @@ fn iface_databases__put_databases_mongo_db_instance_params__to_json(p: &iface_da
     Value::Object(m)
 }
 
+fn iface_databases__get_databases_mongo_db_instance_backups_params__to_json(p: &iface_databases::GetDatabasesMongoDbInstanceBackupsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_databases__post_databases_mongo_db_instance_backup_params__to_json(p: &iface_databases::PostDatabasesMongoDbInstanceBackupParams) -> Value {
     let mut m = Map::new();
     m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("target".into(), match (&p.target) { Some(v) => Value::String(iface_databases__database_backup_snapshot_target_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__get_databases_my_sql_instances_params__to_json(p: &iface_databases::GetDatabasesMySqlInstancesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2067,10 +2221,24 @@ fn iface_databases__put_databases_my_sql_instance_params__to_json(p: &iface_data
     Value::Object(m)
 }
 
+fn iface_databases__get_databases_my_sql_instance_backups_params__to_json(p: &iface_databases::GetDatabasesMySqlInstanceBackupsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_databases__post_databases_my_sql_instance_backup_params__to_json(p: &iface_databases::PostDatabasesMySqlInstanceBackupParams) -> Value {
     let mut m = Map::new();
     m.insert("label".into(), Value::String((&p.label).clone()));
     m.insert("target".into(), match (&p.target) { Some(v) => Value::String(iface_databases__database_backup_snapshot_target_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__get_databases_postgre_sql_instances_params__to_json(p: &iface_databases::GetDatabasesPostgreSqlInstancesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2097,6 +2265,13 @@ fn iface_databases__put_databases_postgre_sql_instance_params__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_databases__get_databases_postgre_sql_instance_backups_params__to_json(p: &iface_databases::GetDatabasesPostgreSqlInstanceBackupsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_databases__post_databases_postgre_sql_instance_backup_params__to_json(p: &iface_databases::PostDatabasesPostgreSqlInstanceBackupParams) -> Value {
     let mut m = Map::new();
     m.insert("label".into(), Value::String((&p.label).clone()));
@@ -2104,18 +2279,36 @@ fn iface_databases__post_databases_postgre_sql_instance_backup_params__to_json(p
     Value::Object(m)
 }
 
+fn iface_databases__get_databases_types_params__to_json(p: &iface_databases::GetDatabasesTypesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__get_databases_type_params__to_json(p: &iface_databases::GetDatabasesTypeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_databases::Guest for crate::Component {
-    fn get_databases_engines() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_ENGINES, Value::Object(Map::new()))
+    fn get_databases_engines(params: iface_databases::GetDatabasesEnginesParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_engines_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_ENGINES, json)
     }
-    fn get_databases_engine() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_ENGINE, Value::Object(Map::new()))
+    fn get_databases_engine(params: iface_databases::GetDatabasesEngineParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_engine_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_ENGINE, json)
     }
-    fn get_databases_instances() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_INSTANCES, Value::Object(Map::new()))
+    fn get_databases_instances(params: iface_databases::GetDatabasesInstancesParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_instances_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_INSTANCES, json)
     }
-    fn get_databases_mongo_db_instances() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCES, Value::Object(Map::new()))
+    fn get_databases_mongo_db_instances(params: iface_databases::GetDatabasesMongoDbInstancesParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_mongo_db_instances_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCES, json)
     }
     fn get_databases_mongo_db_instance() -> Result<String, String> {
         dispatch(&OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCE, Value::Object(Map::new()))
@@ -2127,8 +2320,9 @@ impl iface_databases::Guest for crate::Component {
     fn delete_databases_mongo_db_instance() -> Result<String, String> {
         dispatch(&OP_DATABASES_DELETE_DATABASES_MONGO_DB_INSTANCE, Value::Object(Map::new()))
     }
-    fn get_databases_mongo_db_instance_backups() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCE_BACKUPS, Value::Object(Map::new()))
+    fn get_databases_mongo_db_instance_backups(params: iface_databases::GetDatabasesMongoDbInstanceBackupsParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_mongo_db_instance_backups_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCE_BACKUPS, json)
     }
     fn post_databases_mongo_db_instance_backup(params: iface_databases::PostDatabasesMongoDbInstanceBackupParams) -> Result<String, String> {
         let json = iface_databases__post_databases_mongo_db_instance_backup_params__to_json(&params);
@@ -2155,8 +2349,9 @@ impl iface_databases::Guest for crate::Component {
     fn get_databases_mongo_db_instance_ssl() -> Result<String, String> {
         dispatch(&OP_DATABASES_GET_DATABASES_MONGO_DB_INSTANCE_SSL, Value::Object(Map::new()))
     }
-    fn get_databases_my_sql_instances() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_MY_SQL_INSTANCES, Value::Object(Map::new()))
+    fn get_databases_my_sql_instances(params: iface_databases::GetDatabasesMySqlInstancesParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_my_sql_instances_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_MY_SQL_INSTANCES, json)
     }
     fn post_databases_my_sql_instances(params: iface_databases::PostDatabasesMySqlInstancesParams) -> Result<String, String> {
         let json = iface_databases__post_databases_my_sql_instances_params__to_json(&params);
@@ -2172,8 +2367,9 @@ impl iface_databases::Guest for crate::Component {
     fn delete_databases_my_sql_instance() -> Result<String, String> {
         dispatch(&OP_DATABASES_DELETE_DATABASES_MY_SQL_INSTANCE, Value::Object(Map::new()))
     }
-    fn get_databases_my_sql_instance_backups() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_MY_SQL_INSTANCE_BACKUPS, Value::Object(Map::new()))
+    fn get_databases_my_sql_instance_backups(params: iface_databases::GetDatabasesMySqlInstanceBackupsParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_my_sql_instance_backups_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_MY_SQL_INSTANCE_BACKUPS, json)
     }
     fn post_databases_my_sql_instance_backup(params: iface_databases::PostDatabasesMySqlInstanceBackupParams) -> Result<String, String> {
         let json = iface_databases__post_databases_my_sql_instance_backup_params__to_json(&params);
@@ -2200,8 +2396,9 @@ impl iface_databases::Guest for crate::Component {
     fn get_databases_my_sql_instance_ssl() -> Result<String, String> {
         dispatch(&OP_DATABASES_GET_DATABASES_MY_SQL_INSTANCE_SSL, Value::Object(Map::new()))
     }
-    fn get_databases_postgre_sql_instances() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_POSTGRE_SQL_INSTANCES, Value::Object(Map::new()))
+    fn get_databases_postgre_sql_instances(params: iface_databases::GetDatabasesPostgreSqlInstancesParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_postgre_sql_instances_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_POSTGRE_SQL_INSTANCES, json)
     }
     fn post_databases_postgre_sql_instances(params: iface_databases::PostDatabasesPostgreSqlInstancesParams) -> Result<String, String> {
         let json = iface_databases__post_databases_postgre_sql_instances_params__to_json(&params);
@@ -2217,8 +2414,9 @@ impl iface_databases::Guest for crate::Component {
     fn delete_databases_postgre_sql_instance() -> Result<String, String> {
         dispatch(&OP_DATABASES_DELETE_DATABASES_POSTGRE_SQL_INSTANCE, Value::Object(Map::new()))
     }
-    fn get_databases_postgre_sql_instance_backups() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_POSTGRE_SQL_INSTANCE_BACKUPS, Value::Object(Map::new()))
+    fn get_databases_postgre_sql_instance_backups(params: iface_databases::GetDatabasesPostgreSqlInstanceBackupsParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_postgre_sql_instance_backups_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_POSTGRE_SQL_INSTANCE_BACKUPS, json)
     }
     fn post_databases_postgre_sql_instance_backup(params: iface_databases::PostDatabasesPostgreSqlInstanceBackupParams) -> Result<String, String> {
         let json = iface_databases__post_databases_postgre_sql_instance_backup_params__to_json(&params);
@@ -2245,11 +2443,13 @@ impl iface_databases::Guest for crate::Component {
     fn get_databases_postgre_sql_instance_ssl() -> Result<String, String> {
         dispatch(&OP_DATABASES_GET_DATABASES_POSTGRE_SQL_INSTANCE_SSL, Value::Object(Map::new()))
     }
-    fn get_databases_types() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_TYPES, Value::Object(Map::new()))
+    fn get_databases_types(params: iface_databases::GetDatabasesTypesParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_types_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_TYPES, json)
     }
-    fn get_databases_type() -> Result<String, String> {
-        dispatch(&OP_DATABASES_GET_DATABASES_TYPE, Value::Object(Map::new()))
+    fn get_databases_type(params: iface_databases::GetDatabasesTypeParams) -> Result<String, String> {
+        let json = iface_databases__get_databases_type_params__to_json(&params);
+        dispatch(&OP_DATABASES_GET_DATABASES_TYPE, json)
     }
 }
 use crate::exports::autostamp::linode::domains as iface_domains;
@@ -2258,6 +2458,8 @@ const OP_DOMAINS_GET_DOMAINS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/domains",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2346,6 +2548,8 @@ const OP_DOMAINS_GET_DOMAIN_RECORDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/domains/{domain_id}/records",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2480,6 +2684,13 @@ fn iface_domains__domain_record_properties_weight__to_json(p: &iface_domains::Do
     Value::Object(m)
 }
 
+fn iface_domains__get_domains_params__to_json(p: &iface_domains::GetDomainsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_domains__create_domain_params__to_json(p: &iface_domains::CreateDomainParams) -> Value {
     let mut m = Map::new();
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -2518,6 +2729,13 @@ fn iface_domains__clone_domain_params__to_json(p: &iface_domains::CloneDomainPar
     Value::Object(m)
 }
 
+fn iface_domains__get_domain_records_params__to_json(p: &iface_domains::GetDomainRecordsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_domains__create_domain_record_params__to_json(p: &iface_domains::CreateDomainRecordParams) -> Value {
     let mut m = Map::new();
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -2539,8 +2757,9 @@ fn iface_domains__update_domain_record_params__to_json(p: &iface_domains::Update
 }
 
 impl iface_domains::Guest for crate::Component {
-    fn get_domains() -> Result<String, String> {
-        dispatch(&OP_DOMAINS_GET_DOMAINS, Value::Object(Map::new()))
+    fn get_domains(params: iface_domains::GetDomainsParams) -> Result<String, String> {
+        let json = iface_domains__get_domains_params__to_json(&params);
+        dispatch(&OP_DOMAINS_GET_DOMAINS, json)
     }
     fn create_domain(params: iface_domains::CreateDomainParams) -> Result<String, String> {
         let json = iface_domains__create_domain_params__to_json(&params);
@@ -2564,8 +2783,9 @@ impl iface_domains::Guest for crate::Component {
         let json = iface_domains__clone_domain_params__to_json(&params);
         dispatch(&OP_DOMAINS_CLONE_DOMAIN, json)
     }
-    fn get_domain_records() -> Result<String, String> {
-        dispatch(&OP_DOMAINS_GET_DOMAIN_RECORDS, Value::Object(Map::new()))
+    fn get_domain_records(params: iface_domains::GetDomainRecordsParams) -> Result<String, String> {
+        let json = iface_domains__get_domain_records_params__to_json(&params);
+        dispatch(&OP_DOMAINS_GET_DOMAIN_RECORDS, json)
     }
     fn create_domain_record(params: iface_domains::CreateDomainRecordParams) -> Result<String, String> {
         let json = iface_domains__create_domain_record_params__to_json(&params);
@@ -2591,6 +2811,8 @@ const OP_IMAGES_GET_IMAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/images",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2682,6 +2904,13 @@ fn iface_images__image_type_op_enum__to_str(e: &iface_images::ImageTypeOpEnum) -
     }
 }
 
+fn iface_images__get_images_params__to_json(p: &iface_images::GetImagesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_images__create_image_params__to_json(p: &iface_images::CreateImageParams) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2718,8 +2947,9 @@ fn iface_images__update_image_params__to_json(p: &iface_images::UpdateImageParam
 }
 
 impl iface_images::Guest for crate::Component {
-    fn get_images() -> Result<String, String> {
-        dispatch(&OP_IMAGES_GET_IMAGES, Value::Object(Map::new()))
+    fn get_images(params: iface_images::GetImagesParams) -> Result<String, String> {
+        let json = iface_images__get_images_params__to_json(&params);
+        dispatch(&OP_IMAGES_GET_IMAGES, json)
     }
     fn create_image(params: iface_images::CreateImageParams) -> Result<String, String> {
         let json = iface_images__create_image_params__to_json(&params);
@@ -2746,6 +2976,8 @@ const OP_LINODE_INSTANCES_GET_LINODE_INSTANCES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/linode/instances",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2908,6 +3140,8 @@ const OP_LINODE_INSTANCES_GET_LINODE_CONFIGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/linode/instances/{linode_id}/configs",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2970,6 +3204,8 @@ const OP_LINODE_INSTANCES_GET_LINODE_DISKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/linode/instances/{linode_id}/disks",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -3060,6 +3296,8 @@ const OP_LINODE_INSTANCES_GET_LINODE_FIREWALLS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/linode/instances/{linode_id}/firewalls",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -3262,6 +3500,8 @@ const OP_LINODE_INSTANCES_GET_LINODE_VOLUMES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/linode/instances/{linode_id}/volumes",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -3272,6 +3512,8 @@ const OP_LINODE_INSTANCES_GET_KERNELS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/linode/kernels",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3463,6 +3705,13 @@ fn iface_linode_instances__rescue_devices__to_json(p: &iface_linode_instances::R
     Value::Object(m)
 }
 
+fn iface_linode_instances__get_linode_instances_params__to_json(p: &iface_linode_instances::GetLinodeInstancesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_linode_instances__create_linode_instance_params__to_json(p: &iface_linode_instances::CreateLinodeInstanceParams) -> Value {
     let mut m = Map::new();
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -3525,6 +3774,13 @@ fn iface_linode_instances__clone_linode_instance_params__to_json(p: &iface_linod
     Value::Object(m)
 }
 
+fn iface_linode_instances__get_linode_configs_params__to_json(p: &iface_linode_instances::GetLinodeConfigsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_linode_instances__add_linode_config_params__to_json(p: &iface_linode_instances::AddLinodeConfigParams) -> Value {
     let mut m = Map::new();
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -3544,6 +3800,13 @@ fn iface_linode_instances__update_linode_config_params__to_json(p: &iface_linode
     m.insert("root_device".into(), match (&p.root_device) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("run_level".into(), match (&p.run_level) { Some(v) => Value::String(iface_linode_instances__linode_config_run_level_enum__to_str(v).into()), None => Value::Null });
     m.insert("virt_mode".into(), match (&p.virt_mode) { Some(v) => Value::String(iface_linode_instances__linode_config_virt_mode_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_linode_instances__get_linode_disks_params__to_json(p: &iface_linode_instances::GetLinodeDisksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3574,6 +3837,13 @@ fn iface_linode_instances__reset_disk_password_params__to_json(p: &iface_linode_
 fn iface_linode_instances__resize_disk_params__to_json(p: &iface_linode_instances::ResizeDiskParams) -> Value {
     let mut m = Map::new();
     m.insert("size".into(), Value::Number(serde_json::Number::from(*(&p.size))));
+    Value::Object(m)
+}
+
+fn iface_linode_instances__get_linode_firewalls_params__to_json(p: &iface_linode_instances::GetLinodeFirewallsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3634,9 +3904,24 @@ fn iface_linode_instances__resize_linode_instance_params__to_json(p: &iface_lino
     Value::Object(m)
 }
 
+fn iface_linode_instances__get_linode_volumes_params__to_json(p: &iface_linode_instances::GetLinodeVolumesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_linode_instances__get_kernels_params__to_json(p: &iface_linode_instances::GetKernelsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_linode_instances::Guest for crate::Component {
-    fn get_linode_instances() -> Result<String, String> {
-        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_INSTANCES, Value::Object(Map::new()))
+    fn get_linode_instances(params: iface_linode_instances::GetLinodeInstancesParams) -> Result<String, String> {
+        let json = iface_linode_instances__get_linode_instances_params__to_json(&params);
+        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_INSTANCES, json)
     }
     fn create_linode_instance(params: iface_linode_instances::CreateLinodeInstanceParams) -> Result<String, String> {
         let json = iface_linode_instances__create_linode_instance_params__to_json(&params);
@@ -3680,8 +3965,9 @@ impl iface_linode_instances::Guest for crate::Component {
         let json = iface_linode_instances__clone_linode_instance_params__to_json(&params);
         dispatch(&OP_LINODE_INSTANCES_CLONE_LINODE_INSTANCE, json)
     }
-    fn get_linode_configs() -> Result<String, String> {
-        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_CONFIGS, Value::Object(Map::new()))
+    fn get_linode_configs(params: iface_linode_instances::GetLinodeConfigsParams) -> Result<String, String> {
+        let json = iface_linode_instances__get_linode_configs_params__to_json(&params);
+        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_CONFIGS, json)
     }
     fn add_linode_config(params: iface_linode_instances::AddLinodeConfigParams) -> Result<String, String> {
         let json = iface_linode_instances__add_linode_config_params__to_json(&params);
@@ -3697,8 +3983,9 @@ impl iface_linode_instances::Guest for crate::Component {
     fn delete_linode_config() -> Result<String, String> {
         dispatch(&OP_LINODE_INSTANCES_DELETE_LINODE_CONFIG, Value::Object(Map::new()))
     }
-    fn get_linode_disks() -> Result<String, String> {
-        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_DISKS, Value::Object(Map::new()))
+    fn get_linode_disks(params: iface_linode_instances::GetLinodeDisksParams) -> Result<String, String> {
+        let json = iface_linode_instances__get_linode_disks_params__to_json(&params);
+        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_DISKS, json)
     }
     fn add_linode_disk(params: iface_linode_instances::AddLinodeDiskParams) -> Result<String, String> {
         let json = iface_linode_instances__add_linode_disk_params__to_json(&params);
@@ -3725,8 +4012,9 @@ impl iface_linode_instances::Guest for crate::Component {
         let json = iface_linode_instances__resize_disk_params__to_json(&params);
         dispatch(&OP_LINODE_INSTANCES_RESIZE_DISK, json)
     }
-    fn get_linode_firewalls() -> Result<String, String> {
-        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_FIREWALLS, Value::Object(Map::new()))
+    fn get_linode_firewalls(params: iface_linode_instances::GetLinodeFirewallsParams) -> Result<String, String> {
+        let json = iface_linode_instances__get_linode_firewalls_params__to_json(&params);
+        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_FIREWALLS, json)
     }
     fn get_linode_i_ps() -> Result<String, String> {
         dispatch(&OP_LINODE_INSTANCES_GET_LINODE_I_PS, Value::Object(Map::new()))
@@ -3791,11 +4079,13 @@ impl iface_linode_instances::Guest for crate::Component {
     fn get_linode_transfer_by_year_month() -> Result<String, String> {
         dispatch(&OP_LINODE_INSTANCES_GET_LINODE_TRANSFER_BY_YEAR_MONTH, Value::Object(Map::new()))
     }
-    fn get_linode_volumes() -> Result<String, String> {
-        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_VOLUMES, Value::Object(Map::new()))
+    fn get_linode_volumes(params: iface_linode_instances::GetLinodeVolumesParams) -> Result<String, String> {
+        let json = iface_linode_instances__get_linode_volumes_params__to_json(&params);
+        dispatch(&OP_LINODE_INSTANCES_GET_LINODE_VOLUMES, json)
     }
-    fn get_kernels() -> Result<String, String> {
-        dispatch(&OP_LINODE_INSTANCES_GET_KERNELS, Value::Object(Map::new()))
+    fn get_kernels(params: iface_linode_instances::GetKernelsParams) -> Result<String, String> {
+        let json = iface_linode_instances__get_kernels_params__to_json(&params);
+        dispatch(&OP_LINODE_INSTANCES_GET_KERNELS, json)
     }
     fn get_kernel() -> Result<String, String> {
         dispatch(&OP_LINODE_INSTANCES_GET_KERNEL, Value::Object(Map::new()))
@@ -3807,6 +4097,8 @@ const OP_STACK_SCRIPTS_GET_STACK_SCRIPTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/linode/stackscripts",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -3880,6 +4172,13 @@ fn iface_stack_scripts__user_defined_field__to_json(p: &iface_stack_scripts::Use
     Value::Object(m)
 }
 
+fn iface_stack_scripts__get_stack_scripts_params__to_json(p: &iface_stack_scripts::GetStackScriptsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_stack_scripts__add_stack_script_params__to_json(p: &iface_stack_scripts::AddStackScriptParams) -> Value {
     let mut m = Map::new();
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -3907,8 +4206,9 @@ fn iface_stack_scripts__update_stack_script_params__to_json(p: &iface_stack_scri
 }
 
 impl iface_stack_scripts::Guest for crate::Component {
-    fn get_stack_scripts() -> Result<String, String> {
-        dispatch(&OP_STACK_SCRIPTS_GET_STACK_SCRIPTS, Value::Object(Map::new()))
+    fn get_stack_scripts(params: iface_stack_scripts::GetStackScriptsParams) -> Result<String, String> {
+        let json = iface_stack_scripts__get_stack_scripts_params__to_json(&params);
+        dispatch(&OP_STACK_SCRIPTS_GET_STACK_SCRIPTS, json)
     }
     fn add_stack_script(params: iface_stack_scripts::AddStackScriptParams) -> Result<String, String> {
         let json = iface_stack_scripts__add_stack_script_params__to_json(&params);
@@ -4372,6 +4672,8 @@ const OP_LONGVIEW_GET_LONGVIEW_CLIENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/longview/clients",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -4457,6 +4759,8 @@ const OP_LONGVIEW_GET_LONGVIEW_SUBSCRIPTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/longview/subscriptions",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4471,16 +4775,16 @@ const OP_LONGVIEW_GET_LONGVIEW_SUBSCRIPTION: OpSpec = OpSpec {
     ],
 };
 
-fn iface_longview__longview_plan_longview_subscription_enum__to_str(e: &iface_longview::LongviewPlanLongviewSubscriptionEnum) -> &'static str {
+fn iface_longview__plan_longview_subscription_enum__to_str(e: &iface_longview::PlanLongviewSubscriptionEnum) -> &'static str {
     match e {
-        iface_longview::LongviewPlanLongviewSubscriptionEnum::LongviewV3 => "longview-3",
-        iface_longview::LongviewPlanLongviewSubscriptionEnum::LongviewV10 => "longview-10",
-        iface_longview::LongviewPlanLongviewSubscriptionEnum::LongviewV40 => "longview-40",
-        iface_longview::LongviewPlanLongviewSubscriptionEnum::LongviewV100 => "longview-100",
+        iface_longview::PlanLongviewSubscriptionEnum::LongviewV3 => "longview-3",
+        iface_longview::PlanLongviewSubscriptionEnum::LongviewV10 => "longview-10",
+        iface_longview::PlanLongviewSubscriptionEnum::LongviewV40 => "longview-40",
+        iface_longview::PlanLongviewSubscriptionEnum::LongviewV100 => "longview-100",
     }
 }
 
-fn iface_longview__longview_client_apps__to_json(p: &iface_longview::LongviewClientApps) -> Value {
+fn iface_longview__client_apps__to_json(p: &iface_longview::ClientApps) -> Value {
     let mut m = Map::new();
     m.insert("apache".into(), match (&p.apache) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("mysql".into(), match (&p.mysql) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -4488,10 +4792,17 @@ fn iface_longview__longview_client_apps__to_json(p: &iface_longview::LongviewCli
     Value::Object(m)
 }
 
+fn iface_longview__get_longview_clients_params__to_json(p: &iface_longview::GetLongviewClientsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_longview__create_longview_client_params__to_json(p: &iface_longview::CreateLongviewClientParams) -> Value {
     let mut m = Map::new();
     m.insert("api_key".into(), match (&p.api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("apps".into(), match (&p.apps) { Some(v) => iface_longview__longview_client_apps__to_json(v), None => Value::Null });
+    m.insert("apps".into(), match (&p.apps) { Some(v) => iface_longview__client_apps__to_json(v), None => Value::Null });
     m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("install_code".into(), match (&p.install_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -4503,7 +4814,7 @@ fn iface_longview__create_longview_client_params__to_json(p: &iface_longview::Cr
 fn iface_longview__update_longview_client_params__to_json(p: &iface_longview::UpdateLongviewClientParams) -> Value {
     let mut m = Map::new();
     m.insert("api_key".into(), match (&p.api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("apps".into(), match (&p.apps) { Some(v) => iface_longview__longview_client_apps__to_json(v), None => Value::Null });
+    m.insert("apps".into(), match (&p.apps) { Some(v) => iface_longview__client_apps__to_json(v), None => Value::Null });
     m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("install_code".into(), match (&p.install_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -4514,13 +4825,21 @@ fn iface_longview__update_longview_client_params__to_json(p: &iface_longview::Up
 
 fn iface_longview__update_longview_plan_params__to_json(p: &iface_longview::UpdateLongviewPlanParams) -> Value {
     let mut m = Map::new();
-    m.insert("longview_subscription".into(), match (&p.longview_subscription) { Some(v) => Value::String(iface_longview__longview_plan_longview_subscription_enum__to_str(v).into()), None => Value::Null });
+    m.insert("longview_subscription".into(), match (&p.longview_subscription) { Some(v) => Value::String(iface_longview__plan_longview_subscription_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_longview__get_longview_subscriptions_params__to_json(p: &iface_longview::GetLongviewSubscriptionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_longview::Guest for crate::Component {
-    fn get_longview_clients() -> Result<String, String> {
-        dispatch(&OP_LONGVIEW_GET_LONGVIEW_CLIENTS, Value::Object(Map::new()))
+    fn get_longview_clients(params: iface_longview::GetLongviewClientsParams) -> Result<String, String> {
+        let json = iface_longview__get_longview_clients_params__to_json(&params);
+        dispatch(&OP_LONGVIEW_GET_LONGVIEW_CLIENTS, json)
     }
     fn create_longview_client(params: iface_longview::CreateLongviewClientParams) -> Result<String, String> {
         let json = iface_longview__create_longview_client_params__to_json(&params);
@@ -4543,8 +4862,9 @@ impl iface_longview::Guest for crate::Component {
         let json = iface_longview__update_longview_plan_params__to_json(&params);
         dispatch(&OP_LONGVIEW_UPDATE_LONGVIEW_PLAN, json)
     }
-    fn get_longview_subscriptions() -> Result<String, String> {
-        dispatch(&OP_LONGVIEW_GET_LONGVIEW_SUBSCRIPTIONS, Value::Object(Map::new()))
+    fn get_longview_subscriptions(params: iface_longview::GetLongviewSubscriptionsParams) -> Result<String, String> {
+        let json = iface_longview__get_longview_subscriptions_params__to_json(&params);
+        dispatch(&OP_LONGVIEW_GET_LONGVIEW_SUBSCRIPTIONS, json)
     }
     fn get_longview_subscription() -> Result<String, String> {
         dispatch(&OP_LONGVIEW_GET_LONGVIEW_SUBSCRIPTION, Value::Object(Map::new()))
@@ -4556,6 +4876,8 @@ const OP_MANAGED_GET_MANAGED_CONTACTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/managed/contacts",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -4618,6 +4940,8 @@ const OP_MANAGED_GET_MANAGED_CREDENTIALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/managed/credentials",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -4694,6 +5018,8 @@ const OP_MANAGED_GET_MANAGED_ISSUES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/managed/issues",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -4714,6 +5040,8 @@ const OP_MANAGED_GET_MANAGED_LINODE_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/managed/linode-settings",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -4838,35 +5166,42 @@ const OP_MANAGED_GET_MANAGED_STATS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_managed__managed_service_service_type_enum__to_str(e: &iface_managed::ManagedServiceServiceTypeEnum) -> &'static str {
+fn iface_managed__service_service_type_enum__to_str(e: &iface_managed::ServiceServiceTypeEnum) -> &'static str {
     match e {
-        iface_managed::ManagedServiceServiceTypeEnum::Url => "url",
-        iface_managed::ManagedServiceServiceTypeEnum::Tcp => "tcp",
+        iface_managed::ServiceServiceTypeEnum::Url => "url",
+        iface_managed::ServiceServiceTypeEnum::Tcp => "tcp",
     }
 }
 
-fn iface_managed__managed_service_status_enum__to_str(e: &iface_managed::ManagedServiceStatusEnum) -> &'static str {
+fn iface_managed__service_status_enum__to_str(e: &iface_managed::ServiceStatusEnum) -> &'static str {
     match e {
-        iface_managed::ManagedServiceStatusEnum::Disabled => "disabled",
-        iface_managed::ManagedServiceStatusEnum::Pending => "pending",
-        iface_managed::ManagedServiceStatusEnum::Ok => "ok",
-        iface_managed::ManagedServiceStatusEnum::Problem => "problem",
+        iface_managed::ServiceStatusEnum::Disabled => "disabled",
+        iface_managed::ServiceStatusEnum::Pending => "pending",
+        iface_managed::ServiceStatusEnum::Ok => "ok",
+        iface_managed::ServiceStatusEnum::Problem => "problem",
     }
 }
 
-fn iface_managed__managed_contact_phone__to_json(p: &iface_managed::ManagedContactPhone) -> Value {
+fn iface_managed__contact_phone__to_json(p: &iface_managed::ContactPhone) -> Value {
     let mut m = Map::new();
     m.insert("primary".into(), match (&p.primary) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("secondary".into(), match (&p.secondary) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_managed__managed_linode_settings_ssh__to_json(p: &iface_managed::ManagedLinodeSettingsSsh) -> Value {
+fn iface_managed__linode_settings_ssh__to_json(p: &iface_managed::LinodeSettingsSsh) -> Value {
     let mut m = Map::new();
     m.insert("access".into(), match (&p.access) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_managed__get_managed_contacts_params__to_json(p: &iface_managed::GetManagedContactsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4876,7 +5211,7 @@ fn iface_managed__create_managed_contact_params__to_json(p: &iface_managed::Crea
     m.insert("group".into(), match (&p.group) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone".into(), match (&p.phone) { Some(v) => iface_managed__managed_contact_phone__to_json(v), None => Value::Null });
+    m.insert("phone".into(), match (&p.phone) { Some(v) => iface_managed__contact_phone__to_json(v), None => Value::Null });
     m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -4887,8 +5222,15 @@ fn iface_managed__update_managed_contact_params__to_json(p: &iface_managed::Upda
     m.insert("group".into(), match (&p.group) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone".into(), match (&p.phone) { Some(v) => iface_managed__managed_contact_phone__to_json(v), None => Value::Null });
+    m.insert("phone".into(), match (&p.phone) { Some(v) => iface_managed__contact_phone__to_json(v), None => Value::Null });
     m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_managed__get_managed_credentials_params__to_json(p: &iface_managed::GetManagedCredentialsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4913,12 +5255,26 @@ fn iface_managed__update_managed_credential_username_password_params__to_json(p:
     Value::Object(m)
 }
 
+fn iface_managed__get_managed_issues_params__to_json(p: &iface_managed::GetManagedIssuesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_managed__get_managed_linode_settings_params__to_json(p: &iface_managed::GetManagedLinodeSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_managed__update_managed_linode_setting_params__to_json(p: &iface_managed::UpdateManagedLinodeSettingParams) -> Value {
     let mut m = Map::new();
     m.insert("group".into(), match (&p.group) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("ssh".into(), match (&p.ssh) { Some(v) => iface_managed__managed_linode_settings_ssh__to_json(v), None => Value::Null });
+    m.insert("ssh".into(), match (&p.ssh) { Some(v) => iface_managed__linode_settings_ssh__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4939,16 +5295,17 @@ fn iface_managed__update_managed_service_params__to_json(p: &iface_managed::Upda
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("notes".into(), match (&p.notes) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("service_type".into(), match (&p.service_type) { Some(v) => Value::String(iface_managed__managed_service_service_type_enum__to_str(v).into()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_managed__managed_service_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("service_type".into(), match (&p.service_type) { Some(v) => Value::String(iface_managed__service_service_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_managed__service_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("timeout".into(), match (&p.timeout) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_managed::Guest for crate::Component {
-    fn get_managed_contacts() -> Result<String, String> {
-        dispatch(&OP_MANAGED_GET_MANAGED_CONTACTS, Value::Object(Map::new()))
+    fn get_managed_contacts(params: iface_managed::GetManagedContactsParams) -> Result<String, String> {
+        let json = iface_managed__get_managed_contacts_params__to_json(&params);
+        dispatch(&OP_MANAGED_GET_MANAGED_CONTACTS, json)
     }
     fn create_managed_contact(params: iface_managed::CreateManagedContactParams) -> Result<String, String> {
         let json = iface_managed__create_managed_contact_params__to_json(&params);
@@ -4964,8 +5321,9 @@ impl iface_managed::Guest for crate::Component {
     fn delete_managed_contact() -> Result<String, String> {
         dispatch(&OP_MANAGED_DELETE_MANAGED_CONTACT, Value::Object(Map::new()))
     }
-    fn get_managed_credentials() -> Result<String, String> {
-        dispatch(&OP_MANAGED_GET_MANAGED_CREDENTIALS, Value::Object(Map::new()))
+    fn get_managed_credentials(params: iface_managed::GetManagedCredentialsParams) -> Result<String, String> {
+        let json = iface_managed__get_managed_credentials_params__to_json(&params);
+        dispatch(&OP_MANAGED_GET_MANAGED_CREDENTIALS, json)
     }
     fn create_managed_credential(params: iface_managed::CreateManagedCredentialParams) -> Result<String, String> {
         let json = iface_managed__create_managed_credential_params__to_json(&params);
@@ -4988,14 +5346,16 @@ impl iface_managed::Guest for crate::Component {
         let json = iface_managed__update_managed_credential_username_password_params__to_json(&params);
         dispatch(&OP_MANAGED_UPDATE_MANAGED_CREDENTIAL_USERNAME_PASSWORD, json)
     }
-    fn get_managed_issues() -> Result<String, String> {
-        dispatch(&OP_MANAGED_GET_MANAGED_ISSUES, Value::Object(Map::new()))
+    fn get_managed_issues(params: iface_managed::GetManagedIssuesParams) -> Result<String, String> {
+        let json = iface_managed__get_managed_issues_params__to_json(&params);
+        dispatch(&OP_MANAGED_GET_MANAGED_ISSUES, json)
     }
     fn get_managed_issue() -> Result<String, String> {
         dispatch(&OP_MANAGED_GET_MANAGED_ISSUE, Value::Object(Map::new()))
     }
-    fn get_managed_linode_settings() -> Result<String, String> {
-        dispatch(&OP_MANAGED_GET_MANAGED_LINODE_SETTINGS, Value::Object(Map::new()))
+    fn get_managed_linode_settings(params: iface_managed::GetManagedLinodeSettingsParams) -> Result<String, String> {
+        let json = iface_managed__get_managed_linode_settings_params__to_json(&params);
+        dispatch(&OP_MANAGED_GET_MANAGED_LINODE_SETTINGS, json)
     }
     fn get_managed_linode_setting() -> Result<String, String> {
         dispatch(&OP_MANAGED_GET_MANAGED_LINODE_SETTING, Value::Object(Map::new()))
@@ -5037,6 +5397,8 @@ const OP_NETWORKING_GET_FIREWALLS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/networking/firewalls",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5092,6 +5454,8 @@ const OP_NETWORKING_GET_FIREWALL_DEVICES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/networking/firewalls/{firewall_id}/devices",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5247,6 +5611,8 @@ const OP_NETWORKING_GET_I_PV6_POOLS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/networking/ipv6/pools",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5257,6 +5623,8 @@ const OP_NETWORKING_GET_I_PV6_RANGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/networking/ipv6/ranges",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5300,6 +5668,8 @@ const OP_NETWORKING_GET_VLA_NS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/networking/vlans",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5344,6 +5714,13 @@ fn iface_networking__firewall_properties_tags__to_json(p: &iface_networking::Fir
     Value::Object(m)
 }
 
+fn iface_networking__get_firewalls_params__to_json(p: &iface_networking::GetFirewallsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_networking__create_firewalls_params__to_json(p: &iface_networking::CreateFirewallsParams) -> Value {
     let mut m = Map::new();
     m.insert("devices".into(), match (&p.devices) { Some(v) => iface_networking__create_firewalls_body_devices__to_json(v), None => Value::Null });
@@ -5356,6 +5733,13 @@ fn iface_networking__update_firewall_params__to_json(p: &iface_networking::Updat
     m.insert("label".into(), match (&p.label) { Some(v) => iface_networking__firewall_properties_label__to_json(v), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_networking__update_firewall_body_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => iface_networking__firewall_properties_tags__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_networking__get_firewall_devices_params__to_json(p: &iface_networking::GetFirewallDevicesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5414,6 +5798,20 @@ fn iface_networking__share_i_pv4s_params__to_json(p: &iface_networking::ShareIPv
     Value::Object(m)
 }
 
+fn iface_networking__get_i_pv6_pools_params__to_json(p: &iface_networking::GetIPv6PoolsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_networking__get_i_pv6_ranges_params__to_json(p: &iface_networking::GetIPv6RangesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_networking__post_i_pv6_range_params__to_json(p: &iface_networking::PostIPv6RangeParams) -> Value {
     let mut m = Map::new();
     m.insert("linode_id".into(), match (&p.linode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -5422,9 +5820,17 @@ fn iface_networking__post_i_pv6_range_params__to_json(p: &iface_networking::Post
     Value::Object(m)
 }
 
+fn iface_networking__get_vla_ns_params__to_json(p: &iface_networking::GetVlaNsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_networking::Guest for crate::Component {
-    fn get_firewalls() -> Result<String, String> {
-        dispatch(&OP_NETWORKING_GET_FIREWALLS, Value::Object(Map::new()))
+    fn get_firewalls(params: iface_networking::GetFirewallsParams) -> Result<String, String> {
+        let json = iface_networking__get_firewalls_params__to_json(&params);
+        dispatch(&OP_NETWORKING_GET_FIREWALLS, json)
     }
     fn create_firewalls(params: iface_networking::CreateFirewallsParams) -> Result<String, String> {
         let json = iface_networking__create_firewalls_params__to_json(&params);
@@ -5440,8 +5846,9 @@ impl iface_networking::Guest for crate::Component {
     fn delete_firewall() -> Result<String, String> {
         dispatch(&OP_NETWORKING_DELETE_FIREWALL, Value::Object(Map::new()))
     }
-    fn get_firewall_devices() -> Result<String, String> {
-        dispatch(&OP_NETWORKING_GET_FIREWALL_DEVICES, Value::Object(Map::new()))
+    fn get_firewall_devices(params: iface_networking::GetFirewallDevicesParams) -> Result<String, String> {
+        let json = iface_networking__get_firewall_devices_params__to_json(&params);
+        dispatch(&OP_NETWORKING_GET_FIREWALL_DEVICES, json)
     }
     fn create_firewall_device(params: iface_networking::CreateFirewallDeviceParams) -> Result<String, String> {
         let json = iface_networking__create_firewall_device_params__to_json(&params);
@@ -5490,11 +5897,13 @@ impl iface_networking::Guest for crate::Component {
         let json = iface_networking__share_i_pv4s_params__to_json(&params);
         dispatch(&OP_NETWORKING_SHARE_I_PV4S, json)
     }
-    fn get_i_pv6_pools() -> Result<String, String> {
-        dispatch(&OP_NETWORKING_GET_I_PV6_POOLS, Value::Object(Map::new()))
+    fn get_i_pv6_pools(params: iface_networking::GetIPv6PoolsParams) -> Result<String, String> {
+        let json = iface_networking__get_i_pv6_pools_params__to_json(&params);
+        dispatch(&OP_NETWORKING_GET_I_PV6_POOLS, json)
     }
-    fn get_i_pv6_ranges() -> Result<String, String> {
-        dispatch(&OP_NETWORKING_GET_I_PV6_RANGES, Value::Object(Map::new()))
+    fn get_i_pv6_ranges(params: iface_networking::GetIPv6RangesParams) -> Result<String, String> {
+        let json = iface_networking__get_i_pv6_ranges_params__to_json(&params);
+        dispatch(&OP_NETWORKING_GET_I_PV6_RANGES, json)
     }
     fn post_i_pv6_range(params: iface_networking::PostIPv6RangeParams) -> Result<String, String> {
         let json = iface_networking__post_i_pv6_range_params__to_json(&params);
@@ -5506,8 +5915,9 @@ impl iface_networking::Guest for crate::Component {
     fn delete_i_pv6_range() -> Result<String, String> {
         dispatch(&OP_NETWORKING_DELETE_I_PV6_RANGE, Value::Object(Map::new()))
     }
-    fn get_vla_ns() -> Result<String, String> {
-        dispatch(&OP_NETWORKING_GET_VLA_NS, Value::Object(Map::new()))
+    fn get_vla_ns(params: iface_networking::GetVlaNsParams) -> Result<String, String> {
+        let json = iface_networking__get_vla_ns_params__to_json(&params);
+        dispatch(&OP_NETWORKING_GET_VLA_NS, json)
     }
 }
 use crate::exports::autostamp::linode::node_balancers as iface_node_balancers;
@@ -5516,6 +5926,8 @@ const OP_NODE_BALANCERS_GET_NODE_BALANCERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/nodebalancers",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5581,6 +5993,8 @@ const OP_NODE_BALANCERS_GET_NODE_BALANCER_CONFIGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/nodebalancers/{node_balancer_id}/configs",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5671,6 +6085,8 @@ const OP_NODE_BALANCERS_GET_NODE_BALANCER_CONFIG_NODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/nodebalancers/{node_balancer_id}/configs/{config_id}/nodes",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -5839,6 +6255,13 @@ fn iface_node_balancers__node_balancer_config_nodes_status__to_json(p: &iface_no
     Value::Object(m)
 }
 
+fn iface_node_balancers__get_node_balancers_params__to_json(p: &iface_node_balancers::GetNodeBalancersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_node_balancers__create_node_balancer_params__to_json(p: &iface_node_balancers::CreateNodeBalancerParams) -> Value {
     let mut m = Map::new();
     m.insert("client_conn_throttle".into(), match (&p.client_conn_throttle) { Some(v) => iface_node_balancers__node_balancer_properties_client_conn_throttle__to_json(v), None => Value::Null });
@@ -5861,6 +6284,13 @@ fn iface_node_balancers__update_node_balancer_params__to_json(p: &iface_node_bal
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("transfer".into(), match (&p.transfer) { Some(v) => iface_node_balancers__node_balancer_transfer__to_json(v), None => Value::Null });
     m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_node_balancers__get_node_balancer_configs_params__to_json(p: &iface_node_balancers::GetNodeBalancerConfigsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5914,6 +6344,13 @@ fn iface_node_balancers__update_node_balancer_config_params__to_json(p: &iface_n
     Value::Object(m)
 }
 
+fn iface_node_balancers__get_node_balancer_config_nodes_params__to_json(p: &iface_node_balancers::GetNodeBalancerConfigNodesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_node_balancers__create_node_balancer_node_params__to_json(p: &iface_node_balancers::CreateNodeBalancerNodeParams) -> Value {
     let mut m = Map::new();
     m.insert("body".into(), Value::String((&p.body).clone()));
@@ -5940,8 +6377,9 @@ fn iface_node_balancers__rebuild_node_balancer_config_params__to_json(p: &iface_
 }
 
 impl iface_node_balancers::Guest for crate::Component {
-    fn get_node_balancers() -> Result<String, String> {
-        dispatch(&OP_NODE_BALANCERS_GET_NODE_BALANCERS, Value::Object(Map::new()))
+    fn get_node_balancers(params: iface_node_balancers::GetNodeBalancersParams) -> Result<String, String> {
+        let json = iface_node_balancers__get_node_balancers_params__to_json(&params);
+        dispatch(&OP_NODE_BALANCERS_GET_NODE_BALANCERS, json)
     }
     fn create_node_balancer(params: iface_node_balancers::CreateNodeBalancerParams) -> Result<String, String> {
         let json = iface_node_balancers__create_node_balancer_params__to_json(&params);
@@ -5957,8 +6395,9 @@ impl iface_node_balancers::Guest for crate::Component {
     fn delete_node_balancer() -> Result<String, String> {
         dispatch(&OP_NODE_BALANCERS_DELETE_NODE_BALANCER, Value::Object(Map::new()))
     }
-    fn get_node_balancer_configs() -> Result<String, String> {
-        dispatch(&OP_NODE_BALANCERS_GET_NODE_BALANCER_CONFIGS, Value::Object(Map::new()))
+    fn get_node_balancer_configs(params: iface_node_balancers::GetNodeBalancerConfigsParams) -> Result<String, String> {
+        let json = iface_node_balancers__get_node_balancer_configs_params__to_json(&params);
+        dispatch(&OP_NODE_BALANCERS_GET_NODE_BALANCER_CONFIGS, json)
     }
     fn create_node_balancer_config(params: iface_node_balancers::CreateNodeBalancerConfigParams) -> Result<String, String> {
         let json = iface_node_balancers__create_node_balancer_config_params__to_json(&params);
@@ -5974,8 +6413,9 @@ impl iface_node_balancers::Guest for crate::Component {
     fn delete_node_balancer_config() -> Result<String, String> {
         dispatch(&OP_NODE_BALANCERS_DELETE_NODE_BALANCER_CONFIG, Value::Object(Map::new()))
     }
-    fn get_node_balancer_config_nodes() -> Result<String, String> {
-        dispatch(&OP_NODE_BALANCERS_GET_NODE_BALANCER_CONFIG_NODES, Value::Object(Map::new()))
+    fn get_node_balancer_config_nodes(params: iface_node_balancers::GetNodeBalancerConfigNodesParams) -> Result<String, String> {
+        let json = iface_node_balancers__get_node_balancer_config_nodes_params__to_json(&params);
+        dispatch(&OP_NODE_BALANCERS_GET_NODE_BALANCER_CONFIG_NODES, json)
     }
     fn create_node_balancer_node(params: iface_node_balancers::CreateNodeBalancerNodeParams) -> Result<String, String> {
         let json = iface_node_balancers__create_node_balancer_node_params__to_json(&params);
@@ -6109,6 +6549,7 @@ const OP_OBJECT_STORAGE_GET_OBJECT_STORAGE_BUCKET_CONTENT: OpSpec = OpSpec {
         FieldSpec { snake: "marker", location: FieldLocation::Query },
         FieldSpec { snake: "delimiter", location: FieldLocation::Query },
         FieldSpec { snake: "prefix", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -6275,18 +6716,18 @@ fn iface_object_storage__modify_object_storage_bucket_access_body_acl_enum__to_s
     }
 }
 
-fn iface_object_storage__object_storage_key_bucket_access_item_permissions_enum__to_str(e: &iface_object_storage::ObjectStorageKeyBucketAccessItemPermissionsEnum) -> &'static str {
+fn iface_object_storage__key_bucket_access_item_permissions_enum__to_str(e: &iface_object_storage::KeyBucketAccessItemPermissionsEnum) -> &'static str {
     match e {
-        iface_object_storage::ObjectStorageKeyBucketAccessItemPermissionsEnum::ReadWrite => "read_write",
-        iface_object_storage::ObjectStorageKeyBucketAccessItemPermissionsEnum::ReadOnly => "read_only",
+        iface_object_storage::KeyBucketAccessItemPermissionsEnum::ReadWrite => "read_write",
+        iface_object_storage::KeyBucketAccessItemPermissionsEnum::ReadOnly => "read_only",
     }
 }
 
-fn iface_object_storage__object_storage_key_bucket_access_item__to_json(p: &iface_object_storage::ObjectStorageKeyBucketAccessItem) -> Value {
+fn iface_object_storage__key_bucket_access_item__to_json(p: &iface_object_storage::KeyBucketAccessItem) -> Value {
     let mut m = Map::new();
     m.insert("bucket_name".into(), match (&p.bucket_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cluster".into(), match (&p.cluster) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("permissions".into(), match (&p.permissions) { Some(v) => Value::String(iface_object_storage__object_storage_key_bucket_access_item_permissions_enum__to_str(v).into()), None => Value::Null });
+    m.insert("permissions".into(), match (&p.permissions) { Some(v) => Value::String(iface_object_storage__key_bucket_access_item_permissions_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6331,6 +6772,7 @@ fn iface_object_storage__get_object_storage_bucket_content_params__to_json(p: &i
     m.insert("marker".into(), match (&p.marker) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("delimiter".into(), match (&p.delimiter) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("prefix".into(), match (&p.prefix) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6353,7 +6795,7 @@ fn iface_object_storage__create_object_storage_ssl_params__to_json(p: &iface_obj
 fn iface_object_storage__create_object_storage_keys_params__to_json(p: &iface_object_storage::CreateObjectStorageKeysParams) -> Value {
     let mut m = Map::new();
     m.insert("access_key".into(), match (&p.access_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bucket_access".into(), match (&p.bucket_access) { Some(v) => Value::Array((v).iter().map(|v| iface_object_storage__object_storage_key_bucket_access_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("bucket_access".into(), match (&p.bucket_access) { Some(v) => Value::Array((v).iter().map(|v| iface_object_storage__key_bucket_access_item__to_json(v)).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("limited".into(), match (&p.limited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -6487,6 +6929,8 @@ const OP_PROFILE_GET_PROFILE_APPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/profile/apps",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -6652,6 +7096,8 @@ const OP_PROFILE_GET_SSH_KEYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/profile/sshkeys",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -6875,6 +7321,13 @@ fn iface_profile__update_profile_params__to_json(p: &iface_profile::UpdateProfil
     Value::Object(m)
 }
 
+fn iface_profile__get_profile_apps_params__to_json(p: &iface_profile::GetProfileAppsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_profile__post_profile_phone_number_params__to_json(p: &iface_profile::PostProfilePhoneNumberParams) -> Value {
     let mut m = Map::new();
     m.insert("iso_code".into(), Value::String((&p.iso_code).clone()));
@@ -6897,6 +7350,13 @@ fn iface_profile__update_user_preferences_params__to_json(p: &iface_profile::Upd
 fn iface_profile__post_security_questions_params__to_json(p: &iface_profile::PostSecurityQuestionsParams) -> Value {
     let mut m = Map::new();
     m.insert("security_questions".into(), match (&p.security_questions) { Some(v) => Value::Array((v).iter().map(|v| iface_profile__security_questions_post_security_questions_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_profile__get_ssh_keys_params__to_json(p: &iface_profile::GetSshKeysParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6948,8 +7408,9 @@ impl iface_profile::Guest for crate::Component {
         let json = iface_profile__update_profile_params__to_json(&params);
         dispatch(&OP_PROFILE_UPDATE_PROFILE, json)
     }
-    fn get_profile_apps() -> Result<String, String> {
-        dispatch(&OP_PROFILE_GET_PROFILE_APPS, Value::Object(Map::new()))
+    fn get_profile_apps(params: iface_profile::GetProfileAppsParams) -> Result<String, String> {
+        let json = iface_profile__get_profile_apps_params__to_json(&params);
+        dispatch(&OP_PROFILE_GET_PROFILE_APPS, json)
     }
     fn get_profile_app() -> Result<String, String> {
         dispatch(&OP_PROFILE_GET_PROFILE_APP, Value::Object(Map::new()))
@@ -7000,8 +7461,9 @@ impl iface_profile::Guest for crate::Component {
         let json = iface_profile__post_security_questions_params__to_json(&params);
         dispatch(&OP_PROFILE_POST_SECURITY_QUESTIONS, json)
     }
-    fn get_ssh_keys() -> Result<String, String> {
-        dispatch(&OP_PROFILE_GET_SSH_KEYS, Value::Object(Map::new()))
+    fn get_ssh_keys(params: iface_profile::GetSshKeysParams) -> Result<String, String> {
+        let json = iface_profile__get_ssh_keys_params__to_json(&params);
+        dispatch(&OP_PROFILE_GET_SSH_KEYS, json)
     }
     fn add_ssh_key(params: iface_profile::AddSshKeyParams) -> Result<String, String> {
         let json = iface_profile__add_ssh_key_params__to_json(&params);
@@ -7079,6 +7541,8 @@ const OP_SUPPORT_GET_TICKETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/support/tickets",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -7142,6 +7606,8 @@ const OP_SUPPORT_GET_TICKET_REPLIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/support/tickets/{ticket_id}/replies",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -7158,6 +7624,13 @@ const OP_SUPPORT_CREATE_TICKET_REPLY: OpSpec = OpSpec {
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_support__get_tickets_params__to_json(p: &iface_support::GetTicketsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_support__create_ticket_params__to_json(p: &iface_support::CreateTicketParams) -> Value {
     let mut m = Map::new();
@@ -7177,6 +7650,13 @@ fn iface_support__create_ticket_params__to_json(p: &iface_support::CreateTicketP
     Value::Object(m)
 }
 
+fn iface_support__get_ticket_replies_params__to_json(p: &iface_support::GetTicketRepliesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_support__create_ticket_reply_params__to_json(p: &iface_support::CreateTicketReplyParams) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), Value::String((&p.description).clone()));
@@ -7184,8 +7664,9 @@ fn iface_support__create_ticket_reply_params__to_json(p: &iface_support::CreateT
 }
 
 impl iface_support::Guest for crate::Component {
-    fn get_tickets() -> Result<String, String> {
-        dispatch(&OP_SUPPORT_GET_TICKETS, Value::Object(Map::new()))
+    fn get_tickets(params: iface_support::GetTicketsParams) -> Result<String, String> {
+        let json = iface_support__get_tickets_params__to_json(&params);
+        dispatch(&OP_SUPPORT_GET_TICKETS, json)
     }
     fn create_ticket(params: iface_support::CreateTicketParams) -> Result<String, String> {
         let json = iface_support__create_ticket_params__to_json(&params);
@@ -7200,8 +7681,9 @@ impl iface_support::Guest for crate::Component {
     fn close_ticket() -> Result<String, String> {
         dispatch(&OP_SUPPORT_CLOSE_TICKET, Value::Object(Map::new()))
     }
-    fn get_ticket_replies() -> Result<String, String> {
-        dispatch(&OP_SUPPORT_GET_TICKET_REPLIES, Value::Object(Map::new()))
+    fn get_ticket_replies(params: iface_support::GetTicketRepliesParams) -> Result<String, String> {
+        let json = iface_support__get_ticket_replies_params__to_json(&params);
+        dispatch(&OP_SUPPORT_GET_TICKET_REPLIES, json)
     }
     fn create_ticket_reply(params: iface_support::CreateTicketReplyParams) -> Result<String, String> {
         let json = iface_support__create_ticket_reply_params__to_json(&params);
@@ -7214,6 +7696,8 @@ const OP_TAGS_GET_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -7239,6 +7723,8 @@ const OP_TAGS_GET_TAGGED_OBJECTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{label}",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -7255,6 +7741,13 @@ const OP_TAGS_DELETE_TAG: OpSpec = OpSpec {
     ],
 };
 
+fn iface_tags__get_tags_params__to_json(p: &iface_tags::GetTagsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_tags__create_tag_params__to_json(p: &iface_tags::CreateTagParams) -> Value {
     let mut m = Map::new();
     m.insert("domains".into(), match (&p.domains) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
@@ -7265,16 +7758,25 @@ fn iface_tags__create_tag_params__to_json(p: &iface_tags::CreateTagParams) -> Va
     Value::Object(m)
 }
 
+fn iface_tags__get_tagged_objects_params__to_json(p: &iface_tags::GetTaggedObjectsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_tags::Guest for crate::Component {
-    fn get_tags() -> Result<String, String> {
-        dispatch(&OP_TAGS_GET_TAGS, Value::Object(Map::new()))
+    fn get_tags(params: iface_tags::GetTagsParams) -> Result<String, String> {
+        let json = iface_tags__get_tags_params__to_json(&params);
+        dispatch(&OP_TAGS_GET_TAGS, json)
     }
     fn create_tag(params: iface_tags::CreateTagParams) -> Result<String, String> {
         let json = iface_tags__create_tag_params__to_json(&params);
         dispatch(&OP_TAGS_CREATE_TAG, json)
     }
-    fn get_tagged_objects() -> Result<String, String> {
-        dispatch(&OP_TAGS_GET_TAGGED_OBJECTS, Value::Object(Map::new()))
+    fn get_tagged_objects(params: iface_tags::GetTaggedObjectsParams) -> Result<String, String> {
+        let json = iface_tags__get_tagged_objects_params__to_json(&params);
+        dispatch(&OP_TAGS_GET_TAGGED_OBJECTS, json)
     }
     fn delete_tag() -> Result<String, String> {
         dispatch(&OP_TAGS_DELETE_TAG, Value::Object(Map::new()))
@@ -7286,6 +7788,8 @@ const OP_VOLUMES_GET_VOLUMES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/volumes",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -7312,6 +7816,8 @@ const OP_VOLUMES_GET_VOLUME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/volumes/{volume_id}",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -7396,6 +7902,13 @@ fn iface_volumes__volume_properties_size__to_json(p: &iface_volumes::VolumePrope
     Value::Object(m)
 }
 
+fn iface_volumes__get_volumes_params__to_json(p: &iface_volumes::GetVolumesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_volumes__create_volume_params__to_json(p: &iface_volumes::CreateVolumeParams) -> Value {
     let mut m = Map::new();
     m.insert("config_id".into(), match (&p.config_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -7404,6 +7917,13 @@ fn iface_volumes__create_volume_params__to_json(p: &iface_volumes::CreateVolumeP
     m.insert("region".into(), match (&p.region) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_volumes__get_volume_params__to_json(p: &iface_volumes::GetVolumeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7434,15 +7954,17 @@ fn iface_volumes__resize_volume_params__to_json(p: &iface_volumes::ResizeVolumeP
 }
 
 impl iface_volumes::Guest for crate::Component {
-    fn get_volumes() -> Result<String, String> {
-        dispatch(&OP_VOLUMES_GET_VOLUMES, Value::Object(Map::new()))
+    fn get_volumes(params: iface_volumes::GetVolumesParams) -> Result<String, String> {
+        let json = iface_volumes__get_volumes_params__to_json(&params);
+        dispatch(&OP_VOLUMES_GET_VOLUMES, json)
     }
     fn create_volume(params: iface_volumes::CreateVolumeParams) -> Result<String, String> {
         let json = iface_volumes__create_volume_params__to_json(&params);
         dispatch(&OP_VOLUMES_CREATE_VOLUME, json)
     }
-    fn get_volume() -> Result<String, String> {
-        dispatch(&OP_VOLUMES_GET_VOLUME, Value::Object(Map::new()))
+    fn get_volume(params: iface_volumes::GetVolumeParams) -> Result<String, String> {
+        let json = iface_volumes__get_volume_params__to_json(&params);
+        dispatch(&OP_VOLUMES_GET_VOLUME, json)
     }
     fn update_volume(params: iface_volumes::UpdateVolumeParams) -> Result<String, String> {
         let json = iface_volumes__update_volume_params__to_json(&params);

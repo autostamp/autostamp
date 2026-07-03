@@ -1,54 +1,54 @@
-package autostamp:rawg@0.2.1;
+package autostamp:rawg@0.3.0;
 
 interface creator-roles {
   /// Get a list of creator positions (jobs).
-  record creator-roles-list-params {
+  record list-op-params {
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  creator-roles-list: func(params: creator-roles-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 
 interface creators {
   /// Get a list of game creators.
-  record creators-list-params {
+  record list-op-params {
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  creators-list: func(params: creators-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Get details of the creator.
-  record creators-read-params {
+  record read-params {
     id: string
   }
-  creators-read: func(params: creators-read-params) -> result<string, string>;
+  read: func(params: read-params) -> result<string, string>;
 
 }
 
 interface developers {
   /// Get a list of game developers.
-  record developers-list-params {
+  record list-op-params {
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  developers-list: func(params: developers-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Get details of the developer.
-  developers-read: func() -> result<string, string>;
+  read: func() -> result<string, string>;
 
 }
 
 interface games {
   /// Get a list of games.
-  record games-list-params {
+  record list-op-params {
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
@@ -96,19 +96,19 @@ interface games {
     /// Available fields: `name`, `released`, `added`, `created`, `updated`, `rating`, `metacritic`. You can reverse the sort order adding a hyphen, for example: `-released`.
     ordering: option<string>
   }
-  games-list: func(params: games-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Get a list of DLC's for the game, GOTY and other editions, companion apps, etc.
-  record games-additions-list-params {
+  record additions-list-params {
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  games-additions-list: func(params: games-additions-list-params) -> result<string, string>;
+  additions-list: func(params: additions-list-params) -> result<string, string>;
 
   /// Get a list of individual creators that were part of the development team.
-  record games-development-team-list-params {
+  record development-team-list-params {
     /// Which field to use when ordering the results.
     ordering: option<string>,
     /// A page number within the paginated result set.
@@ -116,28 +116,28 @@ interface games {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  games-development-team-list: func(params: games-development-team-list-params) -> result<string, string>;
+  development-team-list: func(params: development-team-list-params) -> result<string, string>;
 
   /// Get a list of games that are part of the same series.
-  record games-game-series-list-params {
+  record game-series-list-params {
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  games-game-series-list: func(params: games-game-series-list-params) -> result<string, string>;
+  game-series-list: func(params: game-series-list-params) -> result<string, string>;
 
   /// Get a list of parent games for DLC's and editions.
-  record games-parent-games-list-params {
+  record parent-games-list-params {
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  games-parent-games-list: func(params: games-parent-games-list-params) -> result<string, string>;
+  parent-games-list: func(params: parent-games-list-params) -> result<string, string>;
 
   /// Get screenshots for the game.
-  record games-screenshots-list-params {
+  record screenshots-list-params {
     /// Which field to use when ordering the results.
     ordering: option<string>,
     /// A page number within the paginated result set.
@@ -145,132 +145,9 @@ interface games {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  games-screenshots-list: func(params: games-screenshots-list-params) -> result<string, string>;
+  screenshots-list: func(params: screenshots-list-params) -> result<string, string>;
 
   /// Get links to the stores that sell the game.
-  record games-stores-list-params {
-    /// Which field to use when ordering the results.
-    ordering: option<string>,
-    /// A page number within the paginated result set.
-    page: option<s32>,
-    /// Number of results to return per page.
-    page-size: option<s32>
-  }
-  games-stores-list: func(params: games-stores-list-params) -> result<string, string>;
-
-  /// Get details of the game.
-  record games-read-params {
-    /// An ID or a slug identifying this Game.
-    id: string
-  }
-  games-read: func(params: games-read-params) -> result<string, string>;
-
-  /// Get a list of game achievements.
-  record games-achievements-read-params {
-    /// An ID or a slug identifying this Game.
-    id: string
-  }
-  games-achievements-read: func(params: games-achievements-read-params) -> result<string, string>;
-
-  /// Get a list of game trailers.
-  record games-movies-read-params {
-    /// An ID or a slug identifying this Game.
-    id: string
-  }
-  games-movies-read: func(params: games-movies-read-params) -> result<string, string>;
-
-  /// Get a list of most recent posts from the game's subreddit.
-  record games-reddit-read-params {
-    /// An ID or a slug identifying this Game.
-    id: string
-  }
-  games-reddit-read: func(params: games-reddit-read-params) -> result<string, string>;
-
-  /// Get a list of visually similar games, available only for business and enterprise API users.
-  record games-suggested-read-params {
-    /// An ID or a slug identifying this Game.
-    id: string
-  }
-  games-suggested-read: func(params: games-suggested-read-params) -> result<string, string>;
-
-  /// Get streams on Twitch associated with the game, available only for business and enterprise API users.
-  record games-twitch-read-params {
-    /// An ID or a slug identifying this Game.
-    id: string
-  }
-  games-twitch-read: func(params: games-twitch-read-params) -> result<string, string>;
-
-  /// Get videos from YouTube associated with the game, available only for business and enterprise API users.
-  record games-youtube-read-params {
-    /// An ID or a slug identifying this Game.
-    id: string
-  }
-  games-youtube-read: func(params: games-youtube-read-params) -> result<string, string>;
-
-}
-
-interface genres {
-  /// Get a list of video game genres.
-  record genres-list-params {
-    /// Which field to use when ordering the results.
-    ordering: option<string>,
-    /// A page number within the paginated result set.
-    page: option<s32>,
-    /// Number of results to return per page.
-    page-size: option<s32>
-  }
-  genres-list: func(params: genres-list-params) -> result<string, string>;
-
-  /// Get details of the genre.
-  genres-read: func() -> result<string, string>;
-
-}
-
-interface platforms {
-  /// Get a list of video game platforms.
-  record platforms-list-params {
-    /// Which field to use when ordering the results.
-    ordering: option<string>,
-    /// A page number within the paginated result set.
-    page: option<s32>,
-    /// Number of results to return per page.
-    page-size: option<s32>
-  }
-  platforms-list: func(params: platforms-list-params) -> result<string, string>;
-
-  /// Get a list of parent platforms.
-  record platforms-lists-parents-list-params {
-    /// Which field to use when ordering the results.
-    ordering: option<string>,
-    /// A page number within the paginated result set.
-    page: option<s32>,
-    /// Number of results to return per page.
-    page-size: option<s32>
-  }
-  platforms-lists-parents-list: func(params: platforms-lists-parents-list-params) -> result<string, string>;
-
-  /// Get details of the platform.
-  platforms-read: func() -> result<string, string>;
-
-}
-
-interface publishers {
-  /// Get a list of video game publishers.
-  record publishers-list-params {
-    /// A page number within the paginated result set.
-    page: option<s32>,
-    /// Number of results to return per page.
-    page-size: option<s32>
-  }
-  publishers-list: func(params: publishers-list-params) -> result<string, string>;
-
-  /// Get details of the publisher.
-  publishers-read: func() -> result<string, string>;
-
-}
-
-interface stores {
-  /// Get a list of video game storefronts.
   record stores-list-params {
     /// Which field to use when ordering the results.
     ordering: option<string>,
@@ -281,23 +158,146 @@ interface stores {
   }
   stores-list: func(params: stores-list-params) -> result<string, string>;
 
-  /// Get details of the store.
-  stores-read: func() -> result<string, string>;
+  /// Get details of the game.
+  record read-params {
+    /// An ID or a slug identifying this Game.
+    id: string
+  }
+  read: func(params: read-params) -> result<string, string>;
+
+  /// Get a list of game achievements.
+  record achievements-read-params {
+    /// An ID or a slug identifying this Game.
+    id: string
+  }
+  achievements-read: func(params: achievements-read-params) -> result<string, string>;
+
+  /// Get a list of game trailers.
+  record movies-read-params {
+    /// An ID or a slug identifying this Game.
+    id: string
+  }
+  movies-read: func(params: movies-read-params) -> result<string, string>;
+
+  /// Get a list of most recent posts from the game's subreddit.
+  record reddit-read-params {
+    /// An ID or a slug identifying this Game.
+    id: string
+  }
+  reddit-read: func(params: reddit-read-params) -> result<string, string>;
+
+  /// Get a list of visually similar games, available only for business and enterprise API users.
+  record suggested-read-params {
+    /// An ID or a slug identifying this Game.
+    id: string
+  }
+  suggested-read: func(params: suggested-read-params) -> result<string, string>;
+
+  /// Get streams on Twitch associated with the game, available only for business and enterprise API users.
+  record twitch-read-params {
+    /// An ID or a slug identifying this Game.
+    id: string
+  }
+  twitch-read: func(params: twitch-read-params) -> result<string, string>;
+
+  /// Get videos from YouTube associated with the game, available only for business and enterprise API users.
+  record youtube-read-params {
+    /// An ID or a slug identifying this Game.
+    id: string
+  }
+  youtube-read: func(params: youtube-read-params) -> result<string, string>;
 
 }
 
-interface tags {
-  /// Get a list of tags.
-  record tags-list-params {
+interface genres {
+  /// Get a list of video game genres.
+  record list-op-params {
+    /// Which field to use when ordering the results.
+    ordering: option<string>,
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  tags-list: func(params: tags-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
+
+  /// Get details of the genre.
+  read: func() -> result<string, string>;
+
+}
+
+interface platforms {
+  /// Get a list of video game platforms.
+  record list-op-params {
+    /// Which field to use when ordering the results.
+    ordering: option<string>,
+    /// A page number within the paginated result set.
+    page: option<s32>,
+    /// Number of results to return per page.
+    page-size: option<s32>
+  }
+  list-op: func(params: list-op-params) -> result<string, string>;
+
+  /// Get a list of parent platforms.
+  record lists-parents-list-params {
+    /// Which field to use when ordering the results.
+    ordering: option<string>,
+    /// A page number within the paginated result set.
+    page: option<s32>,
+    /// Number of results to return per page.
+    page-size: option<s32>
+  }
+  lists-parents-list: func(params: lists-parents-list-params) -> result<string, string>;
+
+  /// Get details of the platform.
+  read: func() -> result<string, string>;
+
+}
+
+interface publishers {
+  /// Get a list of video game publishers.
+  record list-op-params {
+    /// A page number within the paginated result set.
+    page: option<s32>,
+    /// Number of results to return per page.
+    page-size: option<s32>
+  }
+  list-op: func(params: list-op-params) -> result<string, string>;
+
+  /// Get details of the publisher.
+  read: func() -> result<string, string>;
+
+}
+
+interface stores {
+  /// Get a list of video game storefronts.
+  record list-op-params {
+    /// Which field to use when ordering the results.
+    ordering: option<string>,
+    /// A page number within the paginated result set.
+    page: option<s32>,
+    /// Number of results to return per page.
+    page-size: option<s32>
+  }
+  list-op: func(params: list-op-params) -> result<string, string>;
+
+  /// Get details of the store.
+  read: func() -> result<string, string>;
+
+}
+
+interface tags {
+  /// Get a list of tags.
+  record list-op-params {
+    /// A page number within the paginated result set.
+    page: option<s32>,
+    /// Number of results to return per page.
+    page-size: option<s32>
+  }
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Get details of the tag.
-  tags-read: func() -> result<string, string>;
+  read: func() -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

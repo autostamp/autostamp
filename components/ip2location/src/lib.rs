@@ -293,9 +293,9 @@ const OP_IP2_LOCATION_IP_GEOLOCATION_GET: OpSpec = OpSpec {
         FieldSpec { snake: "ip", location: FieldLocation::Query },
         FieldSpec { snake: "format", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -382,7 +382,6 @@ fn iface_ip2_location_ip_geolocation__get_params__to_json(p: &iface_ip2_location
     m.insert("ip".into(), Value::String((&p.ip).clone()));
     m.insert("format".into(), match (&p.format) { Some(v) => Value::String(iface_ip2_location_ip_geolocation__get_format_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_ip2_location_ip_geolocation__get_lang_enum__to_str(v).into()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 

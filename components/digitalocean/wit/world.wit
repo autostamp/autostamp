@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `bearer_auth` | `Authorization: Bearer <secret>` |
-package autostamp:digitalocean@0.2.1;
+package autostamp:digitalocean@0.3.0;
 
 interface v1-click-applications {
   enum one-clicks-list-type-op-enum {
@@ -35,22 +35,22 @@ interface v1-click-applications {
 
 interface account {
   /// Get User Information
-  account-get: func() -> result<string, string>;
+  get: func() -> result<string, string>;
 
 }
 
 interface ssh-keys {
   /// List All SSH Keys
-  record ssh-keys-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  ssh-keys-list: func(params: ssh-keys-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New SSH Key
-  record ssh-keys-create-params {
+  record create-params {
     /// A unique identifier that differentiates this key from other keys using  a format that SSH recognizes. The fingerprint is created when the key is added to your account.
     fingerprint: option<string>,
     /// A unique identification number for this key. Can be used to embed a  specific SSH key into a Droplet.
@@ -60,84 +60,84 @@ interface ssh-keys {
     /// The entire public key string that was uploaded. Embedded into the root user's `authorized_keys` file if you include this key during Droplet creation.
     public-key: string
   }
-  ssh-keys-create: func(params: ssh-keys-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve an Existing SSH Key
-  record ssh-keys-get-params {
+  record get-params {
     /// Either the ID or the fingerprint of an existing SSH key.
     ssh-key-identifier: string
   }
-  ssh-keys-get: func(params: ssh-keys-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Update an SSH Key's Name
-  record ssh-keys-update-params {
+  record update-params {
     /// Either the ID or the fingerprint of an existing SSH key.
     ssh-key-identifier: string,
     /// A human-readable display name for this key, used to easily identify the SSH keys when they are displayed.
     name: option<string>
   }
-  ssh-keys-update: func(params: ssh-keys-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
   /// Delete an SSH Key
-  record ssh-keys-delete-params {
+  record delete-params {
     /// Either the ID or the fingerprint of an existing SSH key.
     ssh-key-identifier: string
   }
-  ssh-keys-delete: func(params: ssh-keys-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
 interface actions {
   /// List All Actions
-  record actions-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  actions-list: func(params: actions-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Retrieve an Existing Action
-  record actions-get-params {
+  record get-params {
     /// A unique numeric ID that can be used to identify and reference an action.
     action-id: string
   }
-  actions-get: func(params: actions-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 
 interface apps {
-  enum apps-create-accept-enum {
+  enum create-accept-enum {
     application-json,
     application-yaml,
   }
 
-  enum apps-create-body-spec-databases-item-engine-enum {
+  enum create-body-spec-databases-item-engine-enum {
     unset,
     mysql,
     pg,
     redis,
   }
 
-  enum apps-create-body-spec-domains-item-minimum-tls-version-enum {
+  enum create-body-spec-domains-item-minimum-tls-version-enum {
     v1-v2,
     v1-v3,
   }
 
-  enum apps-create-body-spec-domains-item-type-op-enum {
+  enum create-body-spec-domains-item-type-op-enum {
     unspecified,
     default,
     primary,
     alias,
   }
 
-  enum apps-create-body-spec-functions-item-alerts-item-operator-enum {
+  enum create-body-spec-functions-item-alerts-item-operator-enum {
     unspecified-operator,
     greater-than,
     less-than,
   }
 
-  enum apps-create-body-spec-functions-item-alerts-item-rule-enum {
+  enum create-body-spec-functions-item-alerts-item-rule-enum {
     unspecified-rule,
     cpu-utilization,
     mem-utilization,
@@ -154,7 +154,7 @@ interface apps {
     functions-gb-rate-per-second,
   }
 
-  enum apps-create-body-spec-functions-item-alerts-item-window-enum {
+  enum create-body-spec-functions-item-alerts-item-window-enum {
     unspecified-window,
     five-minutes,
     ten-minutes,
@@ -162,19 +162,19 @@ interface apps {
     one-hour,
   }
 
-  enum apps-create-body-spec-functions-item-envs-item-scope-enum {
+  enum create-body-spec-functions-item-envs-item-scope-enum {
     unset,
     run-time,
     build-time,
     run-and-build-time,
   }
 
-  enum apps-create-body-spec-functions-item-envs-item-type-op-enum {
+  enum create-body-spec-functions-item-envs-item-type-op-enum {
     general,
     secret,
   }
 
-  enum apps-create-body-spec-region-enum {
+  enum create-body-spec-region-enum {
     ams,
     nyc,
     fra,
@@ -186,7 +186,7 @@ interface apps {
     syd,
   }
 
-  enum apps-get-logs-active-deployment-type-op-enum {
+  enum get-logs-active-deployment-type-op-enum {
     unspecified,
     build,
     deploy,
@@ -194,22 +194,22 @@ interface apps {
   }
 
   /// The desired configuration of an application.
-  record apps-create-body-spec {
+  record create-body-spec {
     /// Database instances which can provide persistence to workloads within the
     /// application.
-    databases: option<list<apps-create-body-spec-databases-item>>,
+    databases: option<list<create-body-spec-databases-item>>,
     /// A set of hostnames where the application will be available.
-    domains: option<list<apps-create-body-spec-domains-item>>,
+    domains: option<list<create-body-spec-domains-item>>,
     /// Workloads which expose publicly-accessible HTTP services via Functions Components.
-    functions: option<list<apps-create-body-spec-functions-item>>,
+    functions: option<list<create-body-spec-functions-item>>,
     /// Specification for app ingress configurations.
-    ingress: option<apps-create-body-spec-ingress>,
+    ingress: option<create-body-spec-ingress>,
     /// Pre and post deployment workloads which do not expose publicly-accessible HTTP routes.
     jobs: option<list<string>>,
     /// The name of the app. Must be unique across all apps in the same account.
     name: string,
     /// The slug form of the geographical origin of the app. Default: `nearest available`
-    region: option<apps-create-body-spec-region-enum>,
+    region: option<create-body-spec-region-enum>,
     /// Workloads which expose publicly-accessible HTTP services.
     services: option<list<string>>,
     /// Content which can be rendered to static web assets.
@@ -218,7 +218,7 @@ interface apps {
     workers: option<list<string>>
   }
 
-  record apps-create-body-spec-databases-item {
+  record create-body-spec-databases-item {
     /// The name of the underlying DigitalOcean DBaaS cluster. This is required for production databases. For dev databases, if cluster_name is not set, a new cluster will be provisioned.
     cluster-name: option<string>,
     /// The name of the MySQL or PostgreSQL database to configure.
@@ -227,7 +227,7 @@ interface apps {
     db-user: option<string>,
     /// - MYSQL: MySQL
     /// - PG: PostgreSQL
-    engine: option<apps-create-body-spec-databases-item-engine-enum>,
+    engine: option<create-body-spec-databases-item-engine-enum>,
     /// The name. Must be unique across all components within the same app.
     name: string,
     /// Whether this is a production or dev database.
@@ -236,14 +236,14 @@ interface apps {
     version: option<string>
   }
 
-  record apps-create-body-spec-domains-item {
+  record create-body-spec-domains-item {
     /// The hostname for the domain
     domain: string,
     /// The minimum version of TLS a client application can use to access resources for the domain.  Must be one of the following values wrapped within quotations: `"1.2"` or `"1.3"`.
-    minimum-tls-version: option<apps-create-body-spec-domains-item-minimum-tls-version-enum>,
+    minimum-tls-version: option<create-body-spec-domains-item-minimum-tls-version-enum>,
     /// - DEFAULT: The default `.ondigitalocean.app` domain assigned to this app
     /// - PRIMARY: The primary domain for this app that is displayed as the default in the control panel, used in bindable environment variables, and any other places that reference an app's live URL. Only one domain may be set as primary.
-    type-op: option<apps-create-body-spec-domains-item-type-op-enum>,
+    type-op: option<create-body-spec-domains-item-type-op-enum>,
     /// Indicates whether the domain includes all sub-domains, in addition to the given domain
     wildcard: option<bool>,
     /// Optional. If the domain uses DigitalOcean DNS and you would like App
@@ -251,34 +251,34 @@ interface apps {
     zone: option<string>
   }
 
-  record apps-create-body-spec-functions-item {
-    alerts: option<list<apps-create-body-spec-functions-item-alerts-item>>,
-    cors: option<apps-create-body-spec-functions-item-cors>,
+  record create-body-spec-functions-item {
+    alerts: option<list<create-body-spec-functions-item-alerts-item>>,
+    cors: option<create-body-spec-functions-item-cors>,
     /// A list of environment variables made available to the component.
-    envs: option<list<apps-create-body-spec-functions-item-envs-item>>,
-    git: option<apps-create-body-spec-functions-item-git>,
-    github: option<apps-create-body-spec-functions-item-github>,
-    gitlab: option<apps-create-body-spec-functions-item-gitlab>,
-    log-destinations: option<apps-create-body-spec-functions-item-log-destinations>,
+    envs: option<list<create-body-spec-functions-item-envs-item>>,
+    git: option<create-body-spec-functions-item-git>,
+    github: option<create-body-spec-functions-item-github>,
+    gitlab: option<create-body-spec-functions-item-gitlab>,
+    log-destinations: option<create-body-spec-functions-item-log-destinations>,
     /// The name. Must be unique across all components within the same app.
     name: string,
     /// A list of HTTP routes that should be routed to this component.
-    routes: option<list<apps-create-body-spec-functions-item-routes-item>>,
+    routes: option<list<create-body-spec-functions-item-routes-item>>,
     /// An optional path to the working directory to use for the build. For Dockerfile builds, this will be used as the build context. Must be relative to the root of the repo.
     source-dir: option<string>
   }
 
-  record apps-create-body-spec-functions-item-alerts-item {
+  record create-body-spec-functions-item-alerts-item {
     /// Is the alert disabled?
     disabled: option<bool>,
-    operator: option<apps-create-body-spec-functions-item-alerts-item-operator-enum>,
-    rule: option<apps-create-body-spec-functions-item-alerts-item-rule-enum>,
+    operator: option<create-body-spec-functions-item-alerts-item-operator-enum>,
+    rule: option<create-body-spec-functions-item-alerts-item-rule-enum>,
     /// Threshold value for alert
     value: option<f64>,
-    window: option<apps-create-body-spec-functions-item-alerts-item-window-enum>
+    window: option<create-body-spec-functions-item-alerts-item-window-enum>
   }
 
-  record apps-create-body-spec-functions-item-cors {
+  record create-body-spec-functions-item-cors {
     /// Whether browsers should expose the response to the client-side JavaScript code when the request’s credentials mode is include. This configures the `Access-Control-Allow-Credentials` header.
     allow-credentials: option<bool>,
     /// The set of allowed HTTP request headers. This configures the `Access-Control-Allow-Headers` header.
@@ -286,14 +286,14 @@ interface apps {
     /// The set of allowed HTTP methods. This configures the `Access-Control-Allow-Methods` header.
     allow-methods: option<list<string>>,
     /// The set of allowed CORS origins.
-    allow-origins: option<list<apps-create-body-spec-functions-item-cors-allow-origins-item>>,
+    allow-origins: option<list<create-body-spec-functions-item-cors-allow-origins-item>>,
     /// The set of HTTP response headers that browsers are allowed to access. This configures the `Access-Control-Expose-Headers` header.
     expose-headers: option<list<string>>,
     /// An optional duration specifying how long browsers can cache the results of a preflight request. This configures the `Access-Control-Max-Age` header.
     max-age: option<string>
   }
 
-  record apps-create-body-spec-functions-item-cors-allow-origins-item {
+  record create-body-spec-functions-item-cors-allow-origins-item {
     /// Exact string match. Only 1 of `exact`, `prefix`, or `regex` must be set.
     exact: option<string>,
     /// Prefix-based match. Only 1 of `exact`, `prefix`, or `regex` must be set.
@@ -302,27 +302,27 @@ interface apps {
     regex: option<string>
   }
 
-  record apps-create-body-spec-functions-item-envs-item {
+  record create-body-spec-functions-item-envs-item {
     /// The variable name
     key: string,
     /// - RUN_TIME: Made available only at run-time
     /// - BUILD_TIME: Made available only at build-time
-    scope: option<apps-create-body-spec-functions-item-envs-item-scope-enum>,
+    scope: option<create-body-spec-functions-item-envs-item-scope-enum>,
     /// - GENERAL: A plain-text environment variable
     /// - SECRET: A secret encrypted environment variable
-    type-op: option<apps-create-body-spec-functions-item-envs-item-type-op-enum>,
+    type-op: option<create-body-spec-functions-item-envs-item-type-op-enum>,
     /// The value. If the type is `SECRET`, the value will be encrypted on first submission. On following submissions, the encrypted value should be used.
     value: option<string>
   }
 
-  record apps-create-body-spec-functions-item-git {
+  record create-body-spec-functions-item-git {
     /// The name of the branch to use
     branch: option<string>,
     /// The clone URL of the repo. Example: `https://github.com/digitalocean/sample-golang.git`
     repo-clone-url: option<string>
   }
 
-  record apps-create-body-spec-functions-item-github {
+  record create-body-spec-functions-item-github {
     /// The name of the branch to use
     branch: option<string>,
     /// Whether to automatically deploy new commits made to the repo
@@ -331,7 +331,7 @@ interface apps {
     repo: option<string>
   }
 
-  record apps-create-body-spec-functions-item-gitlab {
+  record create-body-spec-functions-item-gitlab {
     /// The name of the branch to use
     branch: option<string>,
     /// Whether to automatically deploy new commits made to the repo
@@ -340,18 +340,18 @@ interface apps {
     repo: option<string>
   }
 
-  record apps-create-body-spec-functions-item-log-destinations {
+  record create-body-spec-functions-item-log-destinations {
     /// DataDog configuration.
-    datadog: option<apps-create-body-spec-functions-item-log-destinations-datadog>,
+    datadog: option<create-body-spec-functions-item-log-destinations-datadog>,
     /// Logtail configuration.
-    logtail: option<apps-create-body-spec-functions-item-log-destinations-logtail>,
+    logtail: option<create-body-spec-functions-item-log-destinations-logtail>,
     name: string,
     /// Papertrail configuration.
-    papertrail: option<apps-create-body-spec-functions-item-log-destinations-papertrail>
+    papertrail: option<create-body-spec-functions-item-log-destinations-papertrail>
   }
 
   /// DataDog configuration.
-  record apps-create-body-spec-functions-item-log-destinations-datadog {
+  record create-body-spec-functions-item-log-destinations-datadog {
     /// Datadog API key.
     api-key: string,
     /// Datadog HTTP log intake endpoint.
@@ -359,18 +359,18 @@ interface apps {
   }
 
   /// Logtail configuration.
-  record apps-create-body-spec-functions-item-log-destinations-logtail {
+  record create-body-spec-functions-item-log-destinations-logtail {
     /// Logtail token.
     token: option<string>
   }
 
   /// Papertrail configuration.
-  record apps-create-body-spec-functions-item-log-destinations-papertrail {
+  record create-body-spec-functions-item-log-destinations-papertrail {
     /// Papertrail syslog endpoint.
     endpoint: string
   }
 
-  record apps-create-body-spec-functions-item-routes-item {
+  record create-body-spec-functions-item-routes-item {
     /// An HTTP path prefix. Paths must start with / and must be unique across all components within an app.
     path: option<string>,
     /// An optional flag to preserve the path that is forwarded to the backend service. By default, the HTTP request path will be trimmed from the left when forwarded to the component. For example, a component with `path=/api` will have requests to `/api/list` trimmed to `/list`. If this value is `true`, the path will remain `/api/list`.
@@ -378,23 +378,23 @@ interface apps {
   }
 
   /// Specification for app ingress configurations.
-  record apps-create-body-spec-ingress {
+  record create-body-spec-ingress {
     /// Rules for configuring HTTP ingress for component routes, CORS, rewrites, and redirects.
-    rules: option<list<apps-create-body-spec-ingress-rules-item>>
+    rules: option<list<create-body-spec-ingress-rules-item>>
   }
 
-  record apps-create-body-spec-ingress-rules-item {
+  record create-body-spec-ingress-rules-item {
     /// The component to route to. Only one of `component` or `redirect` may be set.
-    component: option<apps-create-body-spec-ingress-rules-item-component>,
-    cors: option<apps-create-body-spec-ingress-rules-item-cors>,
+    component: option<create-body-spec-ingress-rules-item-component>,
+    cors: option<create-body-spec-ingress-rules-item-cors>,
     /// The match configuration for the rule.
-    match: option<apps-create-body-spec-ingress-rules-item-match>,
+    match: option<create-body-spec-ingress-rules-item-match>,
     /// The redirect configuration for the rule. Only one of `component` or `redirect` may be set.
-    redirect: option<apps-create-body-spec-ingress-rules-item-redirect>
+    redirect: option<create-body-spec-ingress-rules-item-redirect>
   }
 
   /// The component to route to. Only one of `component` or `redirect` may be set.
-  record apps-create-body-spec-ingress-rules-item-component {
+  record create-body-spec-ingress-rules-item-component {
     /// The name of the component to route to.
     name: string,
     /// An optional flag to preserve the path that is forwarded to the backend service. By default, the HTTP request path will be trimmed from the left when forwarded to the component. For example, a component with `path=/api` will have requests to `/api/list` trimmed to `/list`. If this value is `true`, the path will remain `/api/list`. Note: this is not applicable for Functions Components and is mutually exclusive with `rewrite`.
@@ -403,7 +403,7 @@ interface apps {
     rewrite: option<string>
   }
 
-  record apps-create-body-spec-ingress-rules-item-cors {
+  record create-body-spec-ingress-rules-item-cors {
     /// Whether browsers should expose the response to the client-side JavaScript code when the request’s credentials mode is include. This configures the `Access-Control-Allow-Credentials` header.
     allow-credentials: option<bool>,
     /// The set of allowed HTTP request headers. This configures the `Access-Control-Allow-Headers` header.
@@ -411,14 +411,14 @@ interface apps {
     /// The set of allowed HTTP methods. This configures the `Access-Control-Allow-Methods` header.
     allow-methods: option<list<string>>,
     /// The set of allowed CORS origins.
-    allow-origins: option<list<apps-create-body-spec-ingress-rules-item-cors-allow-origins-item>>,
+    allow-origins: option<list<create-body-spec-ingress-rules-item-cors-allow-origins-item>>,
     /// The set of HTTP response headers that browsers are allowed to access. This configures the `Access-Control-Expose-Headers` header.
     expose-headers: option<list<string>>,
     /// An optional duration specifying how long browsers can cache the results of a preflight request. This configures the `Access-Control-Max-Age` header.
     max-age: option<string>
   }
 
-  record apps-create-body-spec-ingress-rules-item-cors-allow-origins-item {
+  record create-body-spec-ingress-rules-item-cors-allow-origins-item {
     /// Exact string match. Only 1 of `exact`, `prefix`, or `regex` must be set.
     exact: option<string>,
     /// Prefix-based match. Only 1 of `exact`, `prefix`, or `regex` must be set.
@@ -428,19 +428,19 @@ interface apps {
   }
 
   /// The match configuration for the rule.
-  record apps-create-body-spec-ingress-rules-item-match {
+  record create-body-spec-ingress-rules-item-match {
     /// The path to match on.
-    path: apps-create-body-spec-ingress-rules-item-match-path
+    path: create-body-spec-ingress-rules-item-match-path
   }
 
   /// The path to match on.
-  record apps-create-body-spec-ingress-rules-item-match-path {
+  record create-body-spec-ingress-rules-item-match-path {
     /// Prefix-based match. For example, `/api` will match `/api`, `/api/`, and any nested paths such as `/api/v1/endpoint`.
     prefix: string
   }
 
   /// The redirect configuration for the rule. Only one of `component` or `redirect` may be set.
-  record apps-create-body-spec-ingress-rules-item-redirect {
+  record create-body-spec-ingress-rules-item-redirect {
     /// The authority/host to redirect to. This can be a hostname or IP address. Note: use `port` to set the port.
     authority: option<string>,
     /// The port to redirect to.
@@ -454,22 +454,22 @@ interface apps {
   }
 
   /// The desired configuration of an application.
-  record apps-validate-app-spec-body-spec {
+  record validate-app-spec-body-spec {
     /// Database instances which can provide persistence to workloads within the
     /// application.
-    databases: option<list<apps-validate-app-spec-body-spec-databases-item>>,
+    databases: option<list<validate-app-spec-body-spec-databases-item>>,
     /// A set of hostnames where the application will be available.
-    domains: option<list<apps-validate-app-spec-body-spec-domains-item>>,
+    domains: option<list<validate-app-spec-body-spec-domains-item>>,
     /// Workloads which expose publicly-accessible HTTP services via Functions Components.
-    functions: option<list<apps-validate-app-spec-body-spec-functions-item>>,
+    functions: option<list<validate-app-spec-body-spec-functions-item>>,
     /// Specification for app ingress configurations.
-    ingress: option<apps-validate-app-spec-body-spec-ingress>,
+    ingress: option<validate-app-spec-body-spec-ingress>,
     /// Pre and post deployment workloads which do not expose publicly-accessible HTTP routes.
     jobs: option<list<string>>,
     /// The name of the app. Must be unique across all apps in the same account.
     name: string,
     /// The slug form of the geographical origin of the app. Default: `nearest available`
-    region: option<apps-create-body-spec-region-enum>,
+    region: option<create-body-spec-region-enum>,
     /// Workloads which expose publicly-accessible HTTP services.
     services: option<list<string>>,
     /// Content which can be rendered to static web assets.
@@ -478,7 +478,7 @@ interface apps {
     workers: option<list<string>>
   }
 
-  record apps-validate-app-spec-body-spec-databases-item {
+  record validate-app-spec-body-spec-databases-item {
     /// The name of the underlying DigitalOcean DBaaS cluster. This is required for production databases. For dev databases, if cluster_name is not set, a new cluster will be provisioned.
     cluster-name: option<string>,
     /// The name of the MySQL or PostgreSQL database to configure.
@@ -487,7 +487,7 @@ interface apps {
     db-user: option<string>,
     /// - MYSQL: MySQL
     /// - PG: PostgreSQL
-    engine: option<apps-create-body-spec-databases-item-engine-enum>,
+    engine: option<create-body-spec-databases-item-engine-enum>,
     /// The name. Must be unique across all components within the same app.
     name: string,
     /// Whether this is a production or dev database.
@@ -496,14 +496,14 @@ interface apps {
     version: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-domains-item {
+  record validate-app-spec-body-spec-domains-item {
     /// The hostname for the domain
     domain: string,
     /// The minimum version of TLS a client application can use to access resources for the domain.  Must be one of the following values wrapped within quotations: `"1.2"` or `"1.3"`.
-    minimum-tls-version: option<apps-create-body-spec-domains-item-minimum-tls-version-enum>,
+    minimum-tls-version: option<create-body-spec-domains-item-minimum-tls-version-enum>,
     /// - DEFAULT: The default `.ondigitalocean.app` domain assigned to this app
     /// - PRIMARY: The primary domain for this app that is displayed as the default in the control panel, used in bindable environment variables, and any other places that reference an app's live URL. Only one domain may be set as primary.
-    type-op: option<apps-create-body-spec-domains-item-type-op-enum>,
+    type-op: option<create-body-spec-domains-item-type-op-enum>,
     /// Indicates whether the domain includes all sub-domains, in addition to the given domain
     wildcard: option<bool>,
     /// Optional. If the domain uses DigitalOcean DNS and you would like App
@@ -511,34 +511,34 @@ interface apps {
     zone: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item {
-    alerts: option<list<apps-validate-app-spec-body-spec-functions-item-alerts-item>>,
-    cors: option<apps-validate-app-spec-body-spec-functions-item-cors>,
+  record validate-app-spec-body-spec-functions-item {
+    alerts: option<list<validate-app-spec-body-spec-functions-item-alerts-item>>,
+    cors: option<validate-app-spec-body-spec-functions-item-cors>,
     /// A list of environment variables made available to the component.
-    envs: option<list<apps-validate-app-spec-body-spec-functions-item-envs-item>>,
-    git: option<apps-validate-app-spec-body-spec-functions-item-git>,
-    github: option<apps-validate-app-spec-body-spec-functions-item-github>,
-    gitlab: option<apps-validate-app-spec-body-spec-functions-item-gitlab>,
-    log-destinations: option<apps-validate-app-spec-body-spec-functions-item-log-destinations>,
+    envs: option<list<validate-app-spec-body-spec-functions-item-envs-item>>,
+    git: option<validate-app-spec-body-spec-functions-item-git>,
+    github: option<validate-app-spec-body-spec-functions-item-github>,
+    gitlab: option<validate-app-spec-body-spec-functions-item-gitlab>,
+    log-destinations: option<validate-app-spec-body-spec-functions-item-log-destinations>,
     /// The name. Must be unique across all components within the same app.
     name: string,
     /// A list of HTTP routes that should be routed to this component.
-    routes: option<list<apps-validate-app-spec-body-spec-functions-item-routes-item>>,
+    routes: option<list<validate-app-spec-body-spec-functions-item-routes-item>>,
     /// An optional path to the working directory to use for the build. For Dockerfile builds, this will be used as the build context. Must be relative to the root of the repo.
     source-dir: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-alerts-item {
+  record validate-app-spec-body-spec-functions-item-alerts-item {
     /// Is the alert disabled?
     disabled: option<bool>,
-    operator: option<apps-create-body-spec-functions-item-alerts-item-operator-enum>,
-    rule: option<apps-create-body-spec-functions-item-alerts-item-rule-enum>,
+    operator: option<create-body-spec-functions-item-alerts-item-operator-enum>,
+    rule: option<create-body-spec-functions-item-alerts-item-rule-enum>,
     /// Threshold value for alert
     value: option<f64>,
-    window: option<apps-create-body-spec-functions-item-alerts-item-window-enum>
+    window: option<create-body-spec-functions-item-alerts-item-window-enum>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-cors {
+  record validate-app-spec-body-spec-functions-item-cors {
     /// Whether browsers should expose the response to the client-side JavaScript code when the request’s credentials mode is include. This configures the `Access-Control-Allow-Credentials` header.
     allow-credentials: option<bool>,
     /// The set of allowed HTTP request headers. This configures the `Access-Control-Allow-Headers` header.
@@ -546,14 +546,14 @@ interface apps {
     /// The set of allowed HTTP methods. This configures the `Access-Control-Allow-Methods` header.
     allow-methods: option<list<string>>,
     /// The set of allowed CORS origins.
-    allow-origins: option<list<apps-validate-app-spec-body-spec-functions-item-cors-allow-origins-item>>,
+    allow-origins: option<list<validate-app-spec-body-spec-functions-item-cors-allow-origins-item>>,
     /// The set of HTTP response headers that browsers are allowed to access. This configures the `Access-Control-Expose-Headers` header.
     expose-headers: option<list<string>>,
     /// An optional duration specifying how long browsers can cache the results of a preflight request. This configures the `Access-Control-Max-Age` header.
     max-age: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-cors-allow-origins-item {
+  record validate-app-spec-body-spec-functions-item-cors-allow-origins-item {
     /// Exact string match. Only 1 of `exact`, `prefix`, or `regex` must be set.
     exact: option<string>,
     /// Prefix-based match. Only 1 of `exact`, `prefix`, or `regex` must be set.
@@ -562,27 +562,27 @@ interface apps {
     regex: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-envs-item {
+  record validate-app-spec-body-spec-functions-item-envs-item {
     /// The variable name
     key: string,
     /// - RUN_TIME: Made available only at run-time
     /// - BUILD_TIME: Made available only at build-time
-    scope: option<apps-create-body-spec-functions-item-envs-item-scope-enum>,
+    scope: option<create-body-spec-functions-item-envs-item-scope-enum>,
     /// - GENERAL: A plain-text environment variable
     /// - SECRET: A secret encrypted environment variable
-    type-op: option<apps-create-body-spec-functions-item-envs-item-type-op-enum>,
+    type-op: option<create-body-spec-functions-item-envs-item-type-op-enum>,
     /// The value. If the type is `SECRET`, the value will be encrypted on first submission. On following submissions, the encrypted value should be used.
     value: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-git {
+  record validate-app-spec-body-spec-functions-item-git {
     /// The name of the branch to use
     branch: option<string>,
     /// The clone URL of the repo. Example: `https://github.com/digitalocean/sample-golang.git`
     repo-clone-url: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-github {
+  record validate-app-spec-body-spec-functions-item-github {
     /// The name of the branch to use
     branch: option<string>,
     /// Whether to automatically deploy new commits made to the repo
@@ -591,7 +591,7 @@ interface apps {
     repo: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-gitlab {
+  record validate-app-spec-body-spec-functions-item-gitlab {
     /// The name of the branch to use
     branch: option<string>,
     /// Whether to automatically deploy new commits made to the repo
@@ -600,18 +600,18 @@ interface apps {
     repo: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-log-destinations {
+  record validate-app-spec-body-spec-functions-item-log-destinations {
     /// DataDog configuration.
-    datadog: option<apps-validate-app-spec-body-spec-functions-item-log-destinations-datadog>,
+    datadog: option<validate-app-spec-body-spec-functions-item-log-destinations-datadog>,
     /// Logtail configuration.
-    logtail: option<apps-validate-app-spec-body-spec-functions-item-log-destinations-logtail>,
+    logtail: option<validate-app-spec-body-spec-functions-item-log-destinations-logtail>,
     name: string,
     /// Papertrail configuration.
-    papertrail: option<apps-validate-app-spec-body-spec-functions-item-log-destinations-papertrail>
+    papertrail: option<validate-app-spec-body-spec-functions-item-log-destinations-papertrail>
   }
 
   /// DataDog configuration.
-  record apps-validate-app-spec-body-spec-functions-item-log-destinations-datadog {
+  record validate-app-spec-body-spec-functions-item-log-destinations-datadog {
     /// Datadog API key.
     api-key: string,
     /// Datadog HTTP log intake endpoint.
@@ -619,18 +619,18 @@ interface apps {
   }
 
   /// Logtail configuration.
-  record apps-validate-app-spec-body-spec-functions-item-log-destinations-logtail {
+  record validate-app-spec-body-spec-functions-item-log-destinations-logtail {
     /// Logtail token.
     token: option<string>
   }
 
   /// Papertrail configuration.
-  record apps-validate-app-spec-body-spec-functions-item-log-destinations-papertrail {
+  record validate-app-spec-body-spec-functions-item-log-destinations-papertrail {
     /// Papertrail syslog endpoint.
     endpoint: string
   }
 
-  record apps-validate-app-spec-body-spec-functions-item-routes-item {
+  record validate-app-spec-body-spec-functions-item-routes-item {
     /// An HTTP path prefix. Paths must start with / and must be unique across all components within an app.
     path: option<string>,
     /// An optional flag to preserve the path that is forwarded to the backend service. By default, the HTTP request path will be trimmed from the left when forwarded to the component. For example, a component with `path=/api` will have requests to `/api/list` trimmed to `/list`. If this value is `true`, the path will remain `/api/list`.
@@ -638,23 +638,23 @@ interface apps {
   }
 
   /// Specification for app ingress configurations.
-  record apps-validate-app-spec-body-spec-ingress {
+  record validate-app-spec-body-spec-ingress {
     /// Rules for configuring HTTP ingress for component routes, CORS, rewrites, and redirects.
-    rules: option<list<apps-validate-app-spec-body-spec-ingress-rules-item>>
+    rules: option<list<validate-app-spec-body-spec-ingress-rules-item>>
   }
 
-  record apps-validate-app-spec-body-spec-ingress-rules-item {
+  record validate-app-spec-body-spec-ingress-rules-item {
     /// The component to route to. Only one of `component` or `redirect` may be set.
-    component: option<apps-validate-app-spec-body-spec-ingress-rules-item-component>,
-    cors: option<apps-validate-app-spec-body-spec-ingress-rules-item-cors>,
+    component: option<validate-app-spec-body-spec-ingress-rules-item-component>,
+    cors: option<validate-app-spec-body-spec-ingress-rules-item-cors>,
     /// The match configuration for the rule.
-    match: option<apps-validate-app-spec-body-spec-ingress-rules-item-match>,
+    match: option<validate-app-spec-body-spec-ingress-rules-item-match>,
     /// The redirect configuration for the rule. Only one of `component` or `redirect` may be set.
-    redirect: option<apps-validate-app-spec-body-spec-ingress-rules-item-redirect>
+    redirect: option<validate-app-spec-body-spec-ingress-rules-item-redirect>
   }
 
   /// The component to route to. Only one of `component` or `redirect` may be set.
-  record apps-validate-app-spec-body-spec-ingress-rules-item-component {
+  record validate-app-spec-body-spec-ingress-rules-item-component {
     /// The name of the component to route to.
     name: string,
     /// An optional flag to preserve the path that is forwarded to the backend service. By default, the HTTP request path will be trimmed from the left when forwarded to the component. For example, a component with `path=/api` will have requests to `/api/list` trimmed to `/list`. If this value is `true`, the path will remain `/api/list`. Note: this is not applicable for Functions Components and is mutually exclusive with `rewrite`.
@@ -663,7 +663,7 @@ interface apps {
     rewrite: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-ingress-rules-item-cors {
+  record validate-app-spec-body-spec-ingress-rules-item-cors {
     /// Whether browsers should expose the response to the client-side JavaScript code when the request’s credentials mode is include. This configures the `Access-Control-Allow-Credentials` header.
     allow-credentials: option<bool>,
     /// The set of allowed HTTP request headers. This configures the `Access-Control-Allow-Headers` header.
@@ -671,14 +671,14 @@ interface apps {
     /// The set of allowed HTTP methods. This configures the `Access-Control-Allow-Methods` header.
     allow-methods: option<list<string>>,
     /// The set of allowed CORS origins.
-    allow-origins: option<list<apps-validate-app-spec-body-spec-ingress-rules-item-cors-allow-origins-item>>,
+    allow-origins: option<list<validate-app-spec-body-spec-ingress-rules-item-cors-allow-origins-item>>,
     /// The set of HTTP response headers that browsers are allowed to access. This configures the `Access-Control-Expose-Headers` header.
     expose-headers: option<list<string>>,
     /// An optional duration specifying how long browsers can cache the results of a preflight request. This configures the `Access-Control-Max-Age` header.
     max-age: option<string>
   }
 
-  record apps-validate-app-spec-body-spec-ingress-rules-item-cors-allow-origins-item {
+  record validate-app-spec-body-spec-ingress-rules-item-cors-allow-origins-item {
     /// Exact string match. Only 1 of `exact`, `prefix`, or `regex` must be set.
     exact: option<string>,
     /// Prefix-based match. Only 1 of `exact`, `prefix`, or `regex` must be set.
@@ -688,19 +688,19 @@ interface apps {
   }
 
   /// The match configuration for the rule.
-  record apps-validate-app-spec-body-spec-ingress-rules-item-match {
+  record validate-app-spec-body-spec-ingress-rules-item-match {
     /// The path to match on.
-    path: apps-validate-app-spec-body-spec-ingress-rules-item-match-path
+    path: validate-app-spec-body-spec-ingress-rules-item-match-path
   }
 
   /// The path to match on.
-  record apps-validate-app-spec-body-spec-ingress-rules-item-match-path {
+  record validate-app-spec-body-spec-ingress-rules-item-match-path {
     /// Prefix-based match. For example, `/api` will match `/api`, `/api/`, and any nested paths such as `/api/v1/endpoint`.
     prefix: string
   }
 
   /// The redirect configuration for the rule. Only one of `component` or `redirect` may be set.
-  record apps-validate-app-spec-body-spec-ingress-rules-item-redirect {
+  record validate-app-spec-body-spec-ingress-rules-item-redirect {
     /// The authority/host to redirect to. This can be a hostname or IP address. Note: use `port` to set the port.
     authority: option<string>,
     /// The port to redirect to.
@@ -713,28 +713,28 @@ interface apps {
     uri: option<string>
   }
 
-  record apps-assign-alert-destinations-body-slack-webhooks-item {
+  record assign-alert-destinations-body-slack-webhooks-item {
     channel: option<string>,
     url: option<string>
   }
 
   /// The desired configuration of an application.
-  record apps-update-body-spec {
+  record update-body-spec {
     /// Database instances which can provide persistence to workloads within the
     /// application.
-    databases: option<list<apps-update-body-spec-databases-item>>,
+    databases: option<list<update-body-spec-databases-item>>,
     /// A set of hostnames where the application will be available.
-    domains: option<list<apps-update-body-spec-domains-item>>,
+    domains: option<list<update-body-spec-domains-item>>,
     /// Workloads which expose publicly-accessible HTTP services via Functions Components.
-    functions: option<list<apps-update-body-spec-functions-item>>,
+    functions: option<list<update-body-spec-functions-item>>,
     /// Specification for app ingress configurations.
-    ingress: option<apps-update-body-spec-ingress>,
+    ingress: option<update-body-spec-ingress>,
     /// Pre and post deployment workloads which do not expose publicly-accessible HTTP routes.
     jobs: option<list<string>>,
     /// The name of the app. Must be unique across all apps in the same account.
     name: string,
     /// The slug form of the geographical origin of the app. Default: `nearest available`
-    region: option<apps-create-body-spec-region-enum>,
+    region: option<create-body-spec-region-enum>,
     /// Workloads which expose publicly-accessible HTTP services.
     services: option<list<string>>,
     /// Content which can be rendered to static web assets.
@@ -743,7 +743,7 @@ interface apps {
     workers: option<list<string>>
   }
 
-  record apps-update-body-spec-databases-item {
+  record update-body-spec-databases-item {
     /// The name of the underlying DigitalOcean DBaaS cluster. This is required for production databases. For dev databases, if cluster_name is not set, a new cluster will be provisioned.
     cluster-name: option<string>,
     /// The name of the MySQL or PostgreSQL database to configure.
@@ -752,7 +752,7 @@ interface apps {
     db-user: option<string>,
     /// - MYSQL: MySQL
     /// - PG: PostgreSQL
-    engine: option<apps-create-body-spec-databases-item-engine-enum>,
+    engine: option<create-body-spec-databases-item-engine-enum>,
     /// The name. Must be unique across all components within the same app.
     name: string,
     /// Whether this is a production or dev database.
@@ -761,14 +761,14 @@ interface apps {
     version: option<string>
   }
 
-  record apps-update-body-spec-domains-item {
+  record update-body-spec-domains-item {
     /// The hostname for the domain
     domain: string,
     /// The minimum version of TLS a client application can use to access resources for the domain.  Must be one of the following values wrapped within quotations: `"1.2"` or `"1.3"`.
-    minimum-tls-version: option<apps-create-body-spec-domains-item-minimum-tls-version-enum>,
+    minimum-tls-version: option<create-body-spec-domains-item-minimum-tls-version-enum>,
     /// - DEFAULT: The default `.ondigitalocean.app` domain assigned to this app
     /// - PRIMARY: The primary domain for this app that is displayed as the default in the control panel, used in bindable environment variables, and any other places that reference an app's live URL. Only one domain may be set as primary.
-    type-op: option<apps-create-body-spec-domains-item-type-op-enum>,
+    type-op: option<create-body-spec-domains-item-type-op-enum>,
     /// Indicates whether the domain includes all sub-domains, in addition to the given domain
     wildcard: option<bool>,
     /// Optional. If the domain uses DigitalOcean DNS and you would like App
@@ -776,34 +776,34 @@ interface apps {
     zone: option<string>
   }
 
-  record apps-update-body-spec-functions-item {
-    alerts: option<list<apps-update-body-spec-functions-item-alerts-item>>,
-    cors: option<apps-update-body-spec-functions-item-cors>,
+  record update-body-spec-functions-item {
+    alerts: option<list<update-body-spec-functions-item-alerts-item>>,
+    cors: option<update-body-spec-functions-item-cors>,
     /// A list of environment variables made available to the component.
-    envs: option<list<apps-update-body-spec-functions-item-envs-item>>,
-    git: option<apps-update-body-spec-functions-item-git>,
-    github: option<apps-update-body-spec-functions-item-github>,
-    gitlab: option<apps-update-body-spec-functions-item-gitlab>,
-    log-destinations: option<apps-update-body-spec-functions-item-log-destinations>,
+    envs: option<list<update-body-spec-functions-item-envs-item>>,
+    git: option<update-body-spec-functions-item-git>,
+    github: option<update-body-spec-functions-item-github>,
+    gitlab: option<update-body-spec-functions-item-gitlab>,
+    log-destinations: option<update-body-spec-functions-item-log-destinations>,
     /// The name. Must be unique across all components within the same app.
     name: string,
     /// A list of HTTP routes that should be routed to this component.
-    routes: option<list<apps-update-body-spec-functions-item-routes-item>>,
+    routes: option<list<update-body-spec-functions-item-routes-item>>,
     /// An optional path to the working directory to use for the build. For Dockerfile builds, this will be used as the build context. Must be relative to the root of the repo.
     source-dir: option<string>
   }
 
-  record apps-update-body-spec-functions-item-alerts-item {
+  record update-body-spec-functions-item-alerts-item {
     /// Is the alert disabled?
     disabled: option<bool>,
-    operator: option<apps-create-body-spec-functions-item-alerts-item-operator-enum>,
-    rule: option<apps-create-body-spec-functions-item-alerts-item-rule-enum>,
+    operator: option<create-body-spec-functions-item-alerts-item-operator-enum>,
+    rule: option<create-body-spec-functions-item-alerts-item-rule-enum>,
     /// Threshold value for alert
     value: option<f64>,
-    window: option<apps-create-body-spec-functions-item-alerts-item-window-enum>
+    window: option<create-body-spec-functions-item-alerts-item-window-enum>
   }
 
-  record apps-update-body-spec-functions-item-cors {
+  record update-body-spec-functions-item-cors {
     /// Whether browsers should expose the response to the client-side JavaScript code when the request’s credentials mode is include. This configures the `Access-Control-Allow-Credentials` header.
     allow-credentials: option<bool>,
     /// The set of allowed HTTP request headers. This configures the `Access-Control-Allow-Headers` header.
@@ -811,14 +811,14 @@ interface apps {
     /// The set of allowed HTTP methods. This configures the `Access-Control-Allow-Methods` header.
     allow-methods: option<list<string>>,
     /// The set of allowed CORS origins.
-    allow-origins: option<list<apps-update-body-spec-functions-item-cors-allow-origins-item>>,
+    allow-origins: option<list<update-body-spec-functions-item-cors-allow-origins-item>>,
     /// The set of HTTP response headers that browsers are allowed to access. This configures the `Access-Control-Expose-Headers` header.
     expose-headers: option<list<string>>,
     /// An optional duration specifying how long browsers can cache the results of a preflight request. This configures the `Access-Control-Max-Age` header.
     max-age: option<string>
   }
 
-  record apps-update-body-spec-functions-item-cors-allow-origins-item {
+  record update-body-spec-functions-item-cors-allow-origins-item {
     /// Exact string match. Only 1 of `exact`, `prefix`, or `regex` must be set.
     exact: option<string>,
     /// Prefix-based match. Only 1 of `exact`, `prefix`, or `regex` must be set.
@@ -827,27 +827,27 @@ interface apps {
     regex: option<string>
   }
 
-  record apps-update-body-spec-functions-item-envs-item {
+  record update-body-spec-functions-item-envs-item {
     /// The variable name
     key: string,
     /// - RUN_TIME: Made available only at run-time
     /// - BUILD_TIME: Made available only at build-time
-    scope: option<apps-create-body-spec-functions-item-envs-item-scope-enum>,
+    scope: option<create-body-spec-functions-item-envs-item-scope-enum>,
     /// - GENERAL: A plain-text environment variable
     /// - SECRET: A secret encrypted environment variable
-    type-op: option<apps-create-body-spec-functions-item-envs-item-type-op-enum>,
+    type-op: option<create-body-spec-functions-item-envs-item-type-op-enum>,
     /// The value. If the type is `SECRET`, the value will be encrypted on first submission. On following submissions, the encrypted value should be used.
     value: option<string>
   }
 
-  record apps-update-body-spec-functions-item-git {
+  record update-body-spec-functions-item-git {
     /// The name of the branch to use
     branch: option<string>,
     /// The clone URL of the repo. Example: `https://github.com/digitalocean/sample-golang.git`
     repo-clone-url: option<string>
   }
 
-  record apps-update-body-spec-functions-item-github {
+  record update-body-spec-functions-item-github {
     /// The name of the branch to use
     branch: option<string>,
     /// Whether to automatically deploy new commits made to the repo
@@ -856,7 +856,7 @@ interface apps {
     repo: option<string>
   }
 
-  record apps-update-body-spec-functions-item-gitlab {
+  record update-body-spec-functions-item-gitlab {
     /// The name of the branch to use
     branch: option<string>,
     /// Whether to automatically deploy new commits made to the repo
@@ -865,18 +865,18 @@ interface apps {
     repo: option<string>
   }
 
-  record apps-update-body-spec-functions-item-log-destinations {
+  record update-body-spec-functions-item-log-destinations {
     /// DataDog configuration.
-    datadog: option<apps-update-body-spec-functions-item-log-destinations-datadog>,
+    datadog: option<update-body-spec-functions-item-log-destinations-datadog>,
     /// Logtail configuration.
-    logtail: option<apps-update-body-spec-functions-item-log-destinations-logtail>,
+    logtail: option<update-body-spec-functions-item-log-destinations-logtail>,
     name: string,
     /// Papertrail configuration.
-    papertrail: option<apps-update-body-spec-functions-item-log-destinations-papertrail>
+    papertrail: option<update-body-spec-functions-item-log-destinations-papertrail>
   }
 
   /// DataDog configuration.
-  record apps-update-body-spec-functions-item-log-destinations-datadog {
+  record update-body-spec-functions-item-log-destinations-datadog {
     /// Datadog API key.
     api-key: string,
     /// Datadog HTTP log intake endpoint.
@@ -884,18 +884,18 @@ interface apps {
   }
 
   /// Logtail configuration.
-  record apps-update-body-spec-functions-item-log-destinations-logtail {
+  record update-body-spec-functions-item-log-destinations-logtail {
     /// Logtail token.
     token: option<string>
   }
 
   /// Papertrail configuration.
-  record apps-update-body-spec-functions-item-log-destinations-papertrail {
+  record update-body-spec-functions-item-log-destinations-papertrail {
     /// Papertrail syslog endpoint.
     endpoint: string
   }
 
-  record apps-update-body-spec-functions-item-routes-item {
+  record update-body-spec-functions-item-routes-item {
     /// An HTTP path prefix. Paths must start with / and must be unique across all components within an app.
     path: option<string>,
     /// An optional flag to preserve the path that is forwarded to the backend service. By default, the HTTP request path will be trimmed from the left when forwarded to the component. For example, a component with `path=/api` will have requests to `/api/list` trimmed to `/list`. If this value is `true`, the path will remain `/api/list`.
@@ -903,23 +903,23 @@ interface apps {
   }
 
   /// Specification for app ingress configurations.
-  record apps-update-body-spec-ingress {
+  record update-body-spec-ingress {
     /// Rules for configuring HTTP ingress for component routes, CORS, rewrites, and redirects.
-    rules: option<list<apps-update-body-spec-ingress-rules-item>>
+    rules: option<list<update-body-spec-ingress-rules-item>>
   }
 
-  record apps-update-body-spec-ingress-rules-item {
+  record update-body-spec-ingress-rules-item {
     /// The component to route to. Only one of `component` or `redirect` may be set.
-    component: option<apps-update-body-spec-ingress-rules-item-component>,
-    cors: option<apps-update-body-spec-ingress-rules-item-cors>,
+    component: option<update-body-spec-ingress-rules-item-component>,
+    cors: option<update-body-spec-ingress-rules-item-cors>,
     /// The match configuration for the rule.
-    match: option<apps-update-body-spec-ingress-rules-item-match>,
+    match: option<update-body-spec-ingress-rules-item-match>,
     /// The redirect configuration for the rule. Only one of `component` or `redirect` may be set.
-    redirect: option<apps-update-body-spec-ingress-rules-item-redirect>
+    redirect: option<update-body-spec-ingress-rules-item-redirect>
   }
 
   /// The component to route to. Only one of `component` or `redirect` may be set.
-  record apps-update-body-spec-ingress-rules-item-component {
+  record update-body-spec-ingress-rules-item-component {
     /// The name of the component to route to.
     name: string,
     /// An optional flag to preserve the path that is forwarded to the backend service. By default, the HTTP request path will be trimmed from the left when forwarded to the component. For example, a component with `path=/api` will have requests to `/api/list` trimmed to `/list`. If this value is `true`, the path will remain `/api/list`. Note: this is not applicable for Functions Components and is mutually exclusive with `rewrite`.
@@ -928,7 +928,7 @@ interface apps {
     rewrite: option<string>
   }
 
-  record apps-update-body-spec-ingress-rules-item-cors {
+  record update-body-spec-ingress-rules-item-cors {
     /// Whether browsers should expose the response to the client-side JavaScript code when the request’s credentials mode is include. This configures the `Access-Control-Allow-Credentials` header.
     allow-credentials: option<bool>,
     /// The set of allowed HTTP request headers. This configures the `Access-Control-Allow-Headers` header.
@@ -936,14 +936,14 @@ interface apps {
     /// The set of allowed HTTP methods. This configures the `Access-Control-Allow-Methods` header.
     allow-methods: option<list<string>>,
     /// The set of allowed CORS origins.
-    allow-origins: option<list<apps-update-body-spec-ingress-rules-item-cors-allow-origins-item>>,
+    allow-origins: option<list<update-body-spec-ingress-rules-item-cors-allow-origins-item>>,
     /// The set of HTTP response headers that browsers are allowed to access. This configures the `Access-Control-Expose-Headers` header.
     expose-headers: option<list<string>>,
     /// An optional duration specifying how long browsers can cache the results of a preflight request. This configures the `Access-Control-Max-Age` header.
     max-age: option<string>
   }
 
-  record apps-update-body-spec-ingress-rules-item-cors-allow-origins-item {
+  record update-body-spec-ingress-rules-item-cors-allow-origins-item {
     /// Exact string match. Only 1 of `exact`, `prefix`, or `regex` must be set.
     exact: option<string>,
     /// Prefix-based match. Only 1 of `exact`, `prefix`, or `regex` must be set.
@@ -953,19 +953,19 @@ interface apps {
   }
 
   /// The match configuration for the rule.
-  record apps-update-body-spec-ingress-rules-item-match {
+  record update-body-spec-ingress-rules-item-match {
     /// The path to match on.
-    path: apps-update-body-spec-ingress-rules-item-match-path
+    path: update-body-spec-ingress-rules-item-match-path
   }
 
   /// The path to match on.
-  record apps-update-body-spec-ingress-rules-item-match-path {
+  record update-body-spec-ingress-rules-item-match-path {
     /// Prefix-based match. For example, `/api` will match `/api`, `/api/`, and any nested paths such as `/api/v1/endpoint`.
     prefix: string
   }
 
   /// The redirect configuration for the rule. Only one of `component` or `redirect` may be set.
-  record apps-update-body-spec-ingress-rules-item-redirect {
+  record update-body-spec-ingress-rules-item-redirect {
     /// The authority/host to redirect to. This can be a hostname or IP address. Note: use `port` to set the port.
     authority: option<string>,
     /// The port to redirect to.
@@ -979,7 +979,7 @@ interface apps {
   }
 
   /// List All Apps
-  record apps-list-params {
+  record list-op-params {
     /// Which 'page' of paginated results to return.
     page: option<s32>,
     /// Number of items returned per page
@@ -987,82 +987,82 @@ interface apps {
     /// Whether the project_id of listed apps should be fetched and included.
     with-projects: option<bool>
   }
-  apps-list: func(params: apps-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New App
-  record apps-create-params {
+  record create-params {
     /// The content-type that should be used by the response. By default, the response will be `application/json`. `application/yaml` is also supported.
-    accept: option<apps-create-accept-enum>,
+    accept: option<create-accept-enum>,
     /// The content-type used for the request. By default, the requests are assumed to use `application/json`. `application/yaml` is also supported.
-    content-type: option<apps-create-accept-enum>,
+    content-type: option<create-accept-enum>,
     /// The ID of the project the app should be assigned to. If omitted, it will be assigned to your default project.
     project-id: option<string>,
     /// The desired configuration of an application.
-    spec: apps-create-body-spec
+    spec: create-body-spec
   }
-  apps-create: func(params: apps-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve Multiple Apps' Daily Bandwidth Metrics
-  record apps-list-metrics-bandwidth-daily-params {
+  record list-metrics-bandwidth-daily-params {
     /// A list of app IDs to query bandwidth metrics for.
     app-ids: list<string>,
     /// Optional day to query. Only the date component of the timestamp will be considered. Default: yesterday.
     date: option<string>
   }
-  apps-list-metrics-bandwidth-daily: func(params: apps-list-metrics-bandwidth-daily-params) -> result<string, string>;
+  list-metrics-bandwidth-daily: func(params: list-metrics-bandwidth-daily-params) -> result<string, string>;
 
   /// Propose an App Spec
-  record apps-validate-app-spec-params {
+  record validate-app-spec-params {
     /// An optional ID of an existing app. If set, the spec will be treated as a proposed update to the specified app. The existing app is not modified using this method.
     app-id: option<string>,
     /// The desired configuration of an application.
-    spec: apps-validate-app-spec-body-spec
+    spec: validate-app-spec-body-spec
   }
-  apps-validate-app-spec: func(params: apps-validate-app-spec-params) -> result<string, string>;
+  validate-app-spec: func(params: validate-app-spec-params) -> result<string, string>;
 
   /// List App Regions
-  apps-list-regions: func() -> result<string, string>;
+  list-regions: func() -> result<string, string>;
 
   /// List App Tiers
-  apps-list-tiers: func() -> result<string, string>;
+  list-tiers: func() -> result<string, string>;
 
   /// List Instance Sizes
-  apps-list-instance-sizes: func() -> result<string, string>;
+  list-instance-sizes: func() -> result<string, string>;
 
   /// Retrieve an Instance Size
-  record apps-get-instance-size-params {
+  record get-instance-size-params {
     /// The slug of the instance size
     slug: string
   }
-  apps-get-instance-size: func(params: apps-get-instance-size-params) -> result<string, string>;
+  get-instance-size: func(params: get-instance-size-params) -> result<string, string>;
 
   /// Retrieve an App Tier
-  record apps-get-tier-params {
+  record get-tier-params {
     /// The slug of the tier
     slug: string
   }
-  apps-get-tier: func(params: apps-get-tier-params) -> result<string, string>;
+  get-tier: func(params: get-tier-params) -> result<string, string>;
 
   /// List all app alerts
-  record apps-list-alerts-params {
+  record list-alerts-params {
     /// The app ID
     app-id: string
   }
-  apps-list-alerts: func(params: apps-list-alerts-params) -> result<string, string>;
+  list-alerts: func(params: list-alerts-params) -> result<string, string>;
 
   /// Update destinations for alerts
-  record apps-assign-alert-destinations-params {
+  record assign-alert-destinations-params {
     /// The app ID
     app-id: string,
     /// The alert ID
     alert-id: string,
     emails: option<list<string>>,
-    slack-webhooks: option<list<apps-assign-alert-destinations-body-slack-webhooks-item>>
+    slack-webhooks: option<list<assign-alert-destinations-body-slack-webhooks-item>>
   }
-  apps-assign-alert-destinations: func(params: apps-assign-alert-destinations-params) -> result<string, string>;
+  assign-alert-destinations: func(params: assign-alert-destinations-params) -> result<string, string>;
 
   /// Retrieve Active Deployment Logs
-  record apps-get-logs-active-deployment-params {
+  record get-logs-active-deployment-params {
     /// The app ID
     app-id: string,
     /// An optional component name. If set, logs will be limited to this component only.
@@ -1071,14 +1071,14 @@ interface apps {
     follow: option<bool>,
     /// The type of logs to retrieve
     /// - BUILD: Build-time logs
-    type-op: apps-get-logs-active-deployment-type-op-enum,
+    type-op: get-logs-active-deployment-type-op-enum,
     /// An optional time duration to wait if the underlying component instance is not immediately available. Default: `3m`.
     pod-connection-timeout: option<string>
   }
-  apps-get-logs-active-deployment: func(params: apps-get-logs-active-deployment-params) -> result<string, string>;
+  get-logs-active-deployment: func(params: get-logs-active-deployment-params) -> result<string, string>;
 
   /// List App Deployments
-  record apps-list-deployments-params {
+  record list-deployments-params {
     /// The app ID
     app-id: string,
     /// Which 'page' of paginated results to return.
@@ -1086,36 +1086,36 @@ interface apps {
     /// Number of items returned per page
     per-page: option<s32>
   }
-  apps-list-deployments: func(params: apps-list-deployments-params) -> result<string, string>;
+  list-deployments: func(params: list-deployments-params) -> result<string, string>;
 
   /// Create an App Deployment
-  record apps-create-deployment-params {
+  record create-deployment-params {
     /// The app ID
     app-id: string,
     force-build: option<bool>
   }
-  apps-create-deployment: func(params: apps-create-deployment-params) -> result<string, string>;
+  create-deployment: func(params: create-deployment-params) -> result<string, string>;
 
   /// Retrieve an App Deployment
-  record apps-get-deployment-params {
+  record get-deployment-params {
     /// The app ID
     app-id: string,
     /// The deployment ID
     deployment-id: string
   }
-  apps-get-deployment: func(params: apps-get-deployment-params) -> result<string, string>;
+  get-deployment: func(params: get-deployment-params) -> result<string, string>;
 
   /// Cancel a Deployment
-  record apps-cancel-deployment-params {
+  record cancel-deployment-params {
     /// The app ID
     app-id: string,
     /// The deployment ID
     deployment-id: string
   }
-  apps-cancel-deployment: func(params: apps-cancel-deployment-params) -> result<string, string>;
+  cancel-deployment: func(params: cancel-deployment-params) -> result<string, string>;
 
   /// Retrieve Deployment Logs
-  record apps-get-logs-params {
+  record get-logs-params {
     /// The app ID
     app-id: string,
     /// The deployment ID
@@ -1126,14 +1126,14 @@ interface apps {
     follow: option<bool>,
     /// The type of logs to retrieve
     /// - BUILD: Build-time logs
-    type-op: apps-get-logs-active-deployment-type-op-enum,
+    type-op: get-logs-active-deployment-type-op-enum,
     /// An optional time duration to wait if the underlying component instance is not immediately available. Default: `3m`.
     pod-connection-timeout: option<string>
   }
-  apps-get-logs: func(params: apps-get-logs-params) -> result<string, string>;
+  get-logs: func(params: get-logs-params) -> result<string, string>;
 
   /// Retrieve Aggregate Deployment Logs
-  record apps-get-logs-aggregate-params {
+  record get-logs-aggregate-params {
     /// The app ID
     app-id: string,
     /// The deployment ID
@@ -1142,37 +1142,37 @@ interface apps {
     follow: option<bool>,
     /// The type of logs to retrieve
     /// - BUILD: Build-time logs
-    type-op: apps-get-logs-active-deployment-type-op-enum,
+    type-op: get-logs-active-deployment-type-op-enum,
     /// An optional time duration to wait if the underlying component instance is not immediately available. Default: `3m`.
     pod-connection-timeout: option<string>
   }
-  apps-get-logs-aggregate: func(params: apps-get-logs-aggregate-params) -> result<string, string>;
+  get-logs-aggregate: func(params: get-logs-aggregate-params) -> result<string, string>;
 
   /// Retrieve Active Deployment Aggregate Logs
-  record apps-get-logs-active-deployment-aggregate-params {
+  record get-logs-active-deployment-aggregate-params {
     /// The app ID
     app-id: string,
     /// Whether the logs should follow live updates.
     follow: option<bool>,
     /// The type of logs to retrieve
     /// - BUILD: Build-time logs
-    type-op: apps-get-logs-active-deployment-type-op-enum,
+    type-op: get-logs-active-deployment-type-op-enum,
     /// An optional time duration to wait if the underlying component instance is not immediately available. Default: `3m`.
     pod-connection-timeout: option<string>
   }
-  apps-get-logs-active-deployment-aggregate: func(params: apps-get-logs-active-deployment-aggregate-params) -> result<string, string>;
+  get-logs-active-deployment-aggregate: func(params: get-logs-active-deployment-aggregate-params) -> result<string, string>;
 
   /// Retrieve App Daily Bandwidth Metrics
-  record apps-get-metrics-bandwidth-daily-params {
+  record get-metrics-bandwidth-daily-params {
     /// The app ID
     app-id: string,
     /// Optional day to query. Only the date component of the timestamp will be considered. Default: yesterday.
     date: option<string>
   }
-  apps-get-metrics-bandwidth-daily: func(params: apps-get-metrics-bandwidth-daily-params) -> result<string, string>;
+  get-metrics-bandwidth-daily: func(params: get-metrics-bandwidth-daily-params) -> result<string, string>;
 
   /// Rollback App
-  record apps-create-rollback-params {
+  record create-rollback-params {
     /// The app ID
     app-id: string,
     /// The ID of the deployment to rollback to.
@@ -1180,24 +1180,24 @@ interface apps {
     /// Whether to skip pinning the rollback deployment. If false, the rollback deployment will be pinned and any new deployments including Auto Deploy on Push hooks will be disabled until the rollback is either manually committed or reverted via the CommitAppRollback or RevertAppRollback endpoints respectively. If true, the rollback will be immediately committed and the app will remain unpinned.
     skip-pin: option<bool>
   }
-  apps-create-rollback: func(params: apps-create-rollback-params) -> result<string, string>;
+  create-rollback: func(params: create-rollback-params) -> result<string, string>;
 
   /// Commit App Rollback
-  record apps-commit-rollback-params {
+  record commit-rollback-params {
     /// The app ID
     app-id: string
   }
-  apps-commit-rollback: func(params: apps-commit-rollback-params) -> result<string, string>;
+  commit-rollback: func(params: commit-rollback-params) -> result<string, string>;
 
   /// Revert App Rollback
-  record apps-revert-rollback-params {
+  record revert-rollback-params {
     /// The app ID
     app-id: string
   }
-  apps-revert-rollback: func(params: apps-revert-rollback-params) -> result<string, string>;
+  revert-rollback: func(params: revert-rollback-params) -> result<string, string>;
 
   /// Validate App Rollback
-  record apps-validate-rollback-params {
+  record validate-rollback-params {
     /// The app ID
     app-id: string,
     /// The ID of the deployment to rollback to.
@@ -1205,32 +1205,32 @@ interface apps {
     /// Whether to skip pinning the rollback deployment. If false, the rollback deployment will be pinned and any new deployments including Auto Deploy on Push hooks will be disabled until the rollback is either manually committed or reverted via the CommitAppRollback or RevertAppRollback endpoints respectively. If true, the rollback will be immediately committed and the app will remain unpinned.
     skip-pin: option<bool>
   }
-  apps-validate-rollback: func(params: apps-validate-rollback-params) -> result<string, string>;
+  validate-rollback: func(params: validate-rollback-params) -> result<string, string>;
 
   /// Retrieve an Existing App
-  record apps-get-params {
+  record get-params {
     /// The ID of the app
     id: string,
     /// The name of the app to retrieve.
     name: option<string>
   }
-  apps-get: func(params: apps-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Update an App
-  record apps-update-params {
+  record update-params {
     /// The ID of the app
     id: string,
     /// The desired configuration of an application.
-    spec: apps-update-body-spec
+    spec: update-body-spec
   }
-  apps-update: func(params: apps-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
   /// Delete an App
-  record apps-delete-params {
+  record delete-params {
     /// The ID of the app
     id: string
   }
-  apps-delete: func(params: apps-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
@@ -1303,33 +1303,33 @@ interface cdn-endpoints {
 
 interface certificates {
   /// List All Certificates
-  record certificates-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  certificates-list: func(params: certificates-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Certificate
-  record certificates-create-params {
+  record create-params {
     body: string
   }
-  certificates-create: func(params: certificates-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve an Existing Certificate
-  record certificates-get-params {
+  record get-params {
     /// A unique identifier for a certificate.
     certificate-id: string
   }
-  certificates-get: func(params: certificates-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete a Certificate
-  record certificates-delete-params {
+  record delete-params {
     /// A unique identifier for a certificate.
     certificate-id: string
   }
-  certificates-delete: func(params: certificates-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
@@ -1338,7 +1338,7 @@ interface billing {
   balance-get: func() -> result<string, string>;
 
   /// List Billing History
-  billing-history-list: func() -> result<string, string>;
+  history-list: func() -> result<string, string>;
 
   /// List All Invoices
   record invoices-list-params {
@@ -1380,7 +1380,7 @@ interface billing {
 }
 
 interface databases {
-  enum databases-update-eviction-policy-body-eviction-policy-enum {
+  enum update-eviction-policy-body-eviction-policy-enum {
     noeviction,
     allkeys-lru,
     allkeys-random,
@@ -1389,7 +1389,7 @@ interface databases {
     volatile-ttl,
   }
 
-  enum databases-update-firewall-rules-body-rules-item-type-op-enum {
+  enum update-firewall-rules-body-rules-item-type-op-enum {
     droplet,
     k8s,
     ip-addr,
@@ -1397,168 +1397,168 @@ interface databases {
     app,
   }
 
-  enum databases-add-user-body-mysql-settings-auth-plugin-enum {
+  enum add-user-body-mysql-settings-auth-plugin-enum {
     mysql-native-password,
     caching-sha2-password,
   }
 
-  enum databases-add-user-body-role-enum {
+  enum add-user-body-role-enum {
     primary,
     normal,
   }
 
-  record databases-update-firewall-rules-body-rules-item {
+  record update-firewall-rules-body-rules-item {
     /// A unique ID for the database cluster to which the rule is applied.
     cluster-uuid: option<string>,
     /// A time value given in ISO8601 combined date and time format that represents when the firewall rule was created.
     created-at: option<string>,
     /// The type of resource that the firewall rule allows to access the database cluster.
-    type-op: databases-update-firewall-rules-body-rules-item-type-op-enum,
+    type-op: update-firewall-rules-body-rules-item-type-op-enum,
     /// A unique ID for the firewall rule itself.
     uuid: option<string>,
     /// The ID of the specific resource, the name of a tag applied to a group of resources, or the IP address that the firewall rule allows to access the database cluster.
     value: string
   }
 
-  record databases-add-user-body-mysql-settings {
+  record add-user-body-mysql-settings {
     /// A string specifying the authentication method to be used for connections
     /// to the MySQL user account. The valid values are `mysql_native_password`
-    auth-plugin: databases-add-user-body-mysql-settings-auth-plugin-enum
+    auth-plugin: add-user-body-mysql-settings-auth-plugin-enum
   }
 
-  record databases-reset-auth-body-mysql-settings {
+  record reset-auth-body-mysql-settings {
     /// A string specifying the authentication method to be used for connections
     /// to the MySQL user account. The valid values are `mysql_native_password`
-    auth-plugin: databases-add-user-body-mysql-settings-auth-plugin-enum
+    auth-plugin: add-user-body-mysql-settings-auth-plugin-enum
   }
 
   /// List All Database Clusters
-  record databases-list-clusters-params {
+  record list-clusters-params {
     /// Limits the results to database clusters with a specific tag.
     tag-name: option<string>
   }
-  databases-list-clusters: func(params: databases-list-clusters-params) -> result<string, string>;
+  list-clusters: func(params: list-clusters-params) -> result<string, string>;
 
   /// Create a New Database Cluster
-  record databases-create-cluster-params {
+  record create-cluster-params {
     body: string
   }
-  databases-create-cluster: func(params: databases-create-cluster-params) -> result<string, string>;
+  create-cluster: func(params: create-cluster-params) -> result<string, string>;
 
   /// List Database Options
-  databases-list-options: func() -> result<string, string>;
+  list-options: func() -> result<string, string>;
 
   /// Retrieve an Existing Database Cluster
-  record databases-get-cluster-params {
+  record get-cluster-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-get-cluster: func(params: databases-get-cluster-params) -> result<string, string>;
+  get-cluster: func(params: get-cluster-params) -> result<string, string>;
 
   /// Destroy a Database Cluster
-  record databases-destroy-cluster-params {
+  record destroy-cluster-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-destroy-cluster: func(params: databases-destroy-cluster-params) -> result<string, string>;
+  destroy-cluster: func(params: destroy-cluster-params) -> result<string, string>;
 
   /// List Backups for a Database Cluster
-  record databases-list-backups-params {
+  record list-backups-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-list-backups: func(params: databases-list-backups-params) -> result<string, string>;
+  list-backups: func(params: list-backups-params) -> result<string, string>;
 
   /// Retrieve the Public Certificate
-  record databases-get-ca-params {
+  record get-ca-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-get-ca: func(params: databases-get-ca-params) -> result<string, string>;
+  get-ca: func(params: get-ca-params) -> result<string, string>;
 
   /// Retrieve an Existing Database Cluster Configuration
-  record databases-get-config-params {
+  record get-config-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-get-config: func(params: databases-get-config-params) -> result<string, string>;
+  get-config: func(params: get-config-params) -> result<string, string>;
 
   /// Update the Database Configuration for an Existing Database
-  record databases-patch-config-params {
+  record patch-config-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     config: option<string>
   }
-  databases-patch-config: func(params: databases-patch-config-params) -> result<string, string>;
+  patch-config: func(params: patch-config-params) -> result<string, string>;
 
   /// List All Databases
-  record databases-list-params {
+  record list-op-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-list: func(params: databases-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Add a New Database
-  record databases-add-params {
+  record add-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database.
     name: string
   }
-  databases-add: func(params: databases-add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<string, string>;
 
   /// Retrieve an Existing Database
-  record databases-get-params {
+  record get-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database.
     database-name: string
   }
-  databases-get: func(params: databases-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete a Database
-  record databases-delete-params {
+  record delete-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database.
     database-name: string
   }
-  databases-delete: func(params: databases-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
   /// Retrieve the Eviction Policy for a Redis Cluster
-  record databases-get-eviction-policy-params {
+  record get-eviction-policy-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-get-eviction-policy: func(params: databases-get-eviction-policy-params) -> result<string, string>;
+  get-eviction-policy: func(params: get-eviction-policy-params) -> result<string, string>;
 
   /// Configure the Eviction Policy for a Redis Cluster
-  record databases-update-eviction-policy-params {
+  record update-eviction-policy-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// A string specifying the desired eviction policy for the Redis cluster.
     /// 
-    eviction-policy: databases-update-eviction-policy-body-eviction-policy-enum
+    eviction-policy: update-eviction-policy-body-eviction-policy-enum
   }
-  databases-update-eviction-policy: func(params: databases-update-eviction-policy-params) -> result<string, string>;
+  update-eviction-policy: func(params: update-eviction-policy-params) -> result<string, string>;
 
   /// List Firewall Rules (Trusted Sources) for a Database Cluster
-  record databases-list-firewall-rules-params {
+  record list-firewall-rules-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-list-firewall-rules: func(params: databases-list-firewall-rules-params) -> result<string, string>;
+  list-firewall-rules: func(params: list-firewall-rules-params) -> result<string, string>;
 
   /// Update Firewall Rules (Trusted Sources) for a Database
-  record databases-update-firewall-rules-params {
+  record update-firewall-rules-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
-    rules: option<list<databases-update-firewall-rules-body-rules-item>>
+    rules: option<list<update-firewall-rules-body-rules-item>>
   }
-  databases-update-firewall-rules: func(params: databases-update-firewall-rules-params) -> result<string, string>;
+  update-firewall-rules: func(params: update-firewall-rules-params) -> result<string, string>;
 
   /// Configure a Database Cluster's Maintenance Window
-  record databases-update-maintenance-window-params {
+  record update-maintenance-window-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The day of the week on which to apply maintenance updates.
@@ -1570,52 +1570,52 @@ interface databases {
     /// A boolean value indicating whether any maintenance is scheduled to be performed in the next window.
     pending: option<bool>
   }
-  databases-update-maintenance-window: func(params: databases-update-maintenance-window-params) -> result<string, string>;
+  update-maintenance-window: func(params: update-maintenance-window-params) -> result<string, string>;
 
   /// Migrate a Database Cluster to a New Region
-  record databases-update-region-params {
+  record update-region-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// A slug identifier for the region to which the database cluster will be migrated.
     region: string
   }
-  databases-update-region: func(params: databases-update-region-params) -> result<string, string>;
+  update-region: func(params: update-region-params) -> result<string, string>;
 
   /// Retrieve the Status of an Online Migration
-  record databases-get-migration-status-params {
+  record get-migration-status-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-get-migration-status: func(params: databases-get-migration-status-params) -> result<string, string>;
+  get-migration-status: func(params: get-migration-status-params) -> result<string, string>;
 
   /// Start an Online Migration
-  record databases-update-online-migration-params {
+  record update-online-migration-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// Enables SSL encryption when connecting to the source database.
     disable-ssl: option<bool>,
     source: option<string>
   }
-  databases-update-online-migration: func(params: databases-update-online-migration-params) -> result<string, string>;
+  update-online-migration: func(params: update-online-migration-params) -> result<string, string>;
 
   /// Stop an Online Migration
-  record databases-delete-online-migration-params {
+  record delete-online-migration-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// A unique identifier assigned to the online migration.
     migration-id: string
   }
-  databases-delete-online-migration: func(params: databases-delete-online-migration-params) -> result<string, string>;
+  delete-online-migration: func(params: delete-online-migration-params) -> result<string, string>;
 
   /// List Connection Pools (PostgreSQL)
-  record databases-list-connection-pools-params {
+  record list-connection-pools-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-list-connection-pools: func(params: databases-list-connection-pools-params) -> result<string, string>;
+  list-connection-pools: func(params: list-connection-pools-params) -> result<string, string>;
 
   /// Add a New Connection Pool (PostgreSQL)
-  record databases-add-connection-pool-params {
+  record add-connection-pool-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     connection: option<string>,
@@ -1631,19 +1631,19 @@ interface databases {
     /// The name of the user for use with the connection pool. When excluded, all sessions connect to the database as the inbound user.
     user: option<string>
   }
-  databases-add-connection-pool: func(params: databases-add-connection-pool-params) -> result<string, string>;
+  add-connection-pool: func(params: add-connection-pool-params) -> result<string, string>;
 
   /// Retrieve Existing Connection Pool (PostgreSQL)
-  record databases-get-connection-pool-params {
+  record get-connection-pool-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name used to identify the connection pool.
     pool-name: string
   }
-  databases-get-connection-pool: func(params: databases-get-connection-pool-params) -> result<string, string>;
+  get-connection-pool: func(params: get-connection-pool-params) -> result<string, string>;
 
   /// Update Connection Pools (PostgreSQL)
-  record databases-update-connection-pool-params {
+  record update-connection-pool-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name used to identify the connection pool.
@@ -1657,61 +1657,61 @@ interface databases {
     /// The name of the user for use with the connection pool. When excluded, all sessions connect to the database as the inbound user.
     user: option<string>
   }
-  databases-update-connection-pool: func(params: databases-update-connection-pool-params) -> result<string, string>;
+  update-connection-pool: func(params: update-connection-pool-params) -> result<string, string>;
 
   /// Delete a Connection Pool (PostgreSQL)
-  record databases-delete-connection-pool-params {
+  record delete-connection-pool-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name used to identify the connection pool.
     pool-name: string
   }
-  databases-delete-connection-pool: func(params: databases-delete-connection-pool-params) -> result<string, string>;
+  delete-connection-pool: func(params: delete-connection-pool-params) -> result<string, string>;
 
   /// List All Read-only Replicas
-  record databases-list-replicas-params {
+  record list-replicas-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-list-replicas: func(params: databases-list-replicas-params) -> result<string, string>;
+  list-replicas: func(params: list-replicas-params) -> result<string, string>;
 
   /// Create a Read-only Replica
-  record databases-create-replica-params {
+  record create-replica-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     body: option<string>
   }
-  databases-create-replica: func(params: databases-create-replica-params) -> result<string, string>;
+  create-replica: func(params: create-replica-params) -> result<string, string>;
 
   /// Retrieve an Existing Read-only Replica
-  record databases-get-replica-params {
+  record get-replica-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database replica.
     replica-name: string
   }
-  databases-get-replica: func(params: databases-get-replica-params) -> result<string, string>;
+  get-replica: func(params: get-replica-params) -> result<string, string>;
 
   /// Destroy a Read-only Replica
-  record databases-destroy-replica-params {
+  record destroy-replica-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database replica.
     replica-name: string
   }
-  databases-destroy-replica: func(params: databases-destroy-replica-params) -> result<string, string>;
+  destroy-replica: func(params: destroy-replica-params) -> result<string, string>;
 
   /// Promote a Read-only Replica to become a Primary Cluster
-  record databases-promote-replica-params {
+  record promote-replica-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database replica.
     replica-name: string
   }
-  databases-promote-replica: func(params: databases-promote-replica-params) -> result<string, string>;
+  promote-replica: func(params: promote-replica-params) -> result<string, string>;
 
   /// Resize a Database Cluster
-  record databases-update-cluster-size-params {
+  record update-cluster-size-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The number of nodes in the database cluster. Valid values are are 1-3. In addition to the primary node, up to two standby nodes may be added for highly available configurations.
@@ -1719,97 +1719,97 @@ interface databases {
     /// A slug identifier representing desired the size of the nodes in the database cluster.
     size: string
   }
-  databases-update-cluster-size: func(params: databases-update-cluster-size-params) -> result<string, string>;
+  update-cluster-size: func(params: update-cluster-size-params) -> result<string, string>;
 
   /// Retrieve the SQL Modes for a MySQL Cluster
-  record databases-get-sql-mode-params {
+  record get-sql-mode-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-get-sql-mode: func(params: databases-get-sql-mode-params) -> result<string, string>;
+  get-sql-mode: func(params: get-sql-mode-params) -> result<string, string>;
 
   /// Update SQL Mode for a Cluster
-  record databases-update-sql-mode-params {
+  record update-sql-mode-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// A string specifying the configured SQL modes for the MySQL cluster.
     sql-mode: string
   }
-  databases-update-sql-mode: func(params: databases-update-sql-mode-params) -> result<string, string>;
+  update-sql-mode: func(params: update-sql-mode-params) -> result<string, string>;
 
   /// Upgrade Major Version for a Database
-  record databases-update-major-version-params {
+  record update-major-version-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// A string representing the version of the database engine in use for the cluster.
     version: option<string>
   }
-  databases-update-major-version: func(params: databases-update-major-version-params) -> result<string, string>;
+  update-major-version: func(params: update-major-version-params) -> result<string, string>;
 
   /// List all Database Users
-  record databases-list-users-params {
+  record list-users-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string
   }
-  databases-list-users: func(params: databases-list-users-params) -> result<string, string>;
+  list-users: func(params: list-users-params) -> result<string, string>;
 
   /// Add a Database User
-  record databases-add-user-params {
+  record add-user-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
-    mysql-settings: option<databases-add-user-body-mysql-settings>,
+    mysql-settings: option<add-user-body-mysql-settings>,
     /// The name of a database user.
     name: string,
     /// A randomly generated password for the database user.
     password: option<string>,
     /// A string representing the database user's role. The value will be either
     /// "primary" or "normal".
-    role: option<databases-add-user-body-role-enum>
+    role: option<add-user-body-role-enum>
   }
-  databases-add-user: func(params: databases-add-user-params) -> result<string, string>;
+  add-user: func(params: add-user-params) -> result<string, string>;
 
   /// Retrieve an Existing Database User
-  record databases-get-user-params {
+  record get-user-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database user.
     username: string
   }
-  databases-get-user: func(params: databases-get-user-params) -> result<string, string>;
+  get-user: func(params: get-user-params) -> result<string, string>;
 
   /// Remove a Database User
-  record databases-delete-user-params {
+  record delete-user-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database user.
     username: string
   }
-  databases-delete-user: func(params: databases-delete-user-params) -> result<string, string>;
+  delete-user: func(params: delete-user-params) -> result<string, string>;
 
   /// Reset a Database User's Password or Authentication Method
-  record databases-reset-auth-params {
+  record reset-auth-params {
     /// A unique identifier for a database cluster.
     database-cluster-uuid: string,
     /// The name of the database user.
     username: string,
-    mysql-settings: option<databases-reset-auth-body-mysql-settings>
+    mysql-settings: option<reset-auth-body-mysql-settings>
   }
-  databases-reset-auth: func(params: databases-reset-auth-params) -> result<string, string>;
+  reset-auth: func(params: reset-auth-params) -> result<string, string>;
 
 }
 
 interface domains {
   /// List All Domains
-  record domains-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  domains-list: func(params: domains-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Domain
-  record domains-create-params {
+  record create-params {
     /// This optional attribute may contain an IP address. When provided, an A record will be automatically created pointing to the apex domain.
     ip-address: option<string>,
     /// The name of the domain itself. This should follow the standard domain format of domain.TLD. For instance, `example.com` is a valid domain name.
@@ -1819,21 +1819,21 @@ interface domains {
     /// This attribute contains the complete contents of the zone file for the selected domain. Individual domain record resources should be used to get more granular control over records. However, this attribute can also be used to get information about the SOA record, which is created automatically and is not accessible as an individual record resource.
     zone-file: option<string>
   }
-  domains-create: func(params: domains-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve an Existing Domain
-  record domains-get-params {
+  record get-params {
     /// The name of the domain itself.
     domain-name: string
   }
-  domains-get: func(params: domains-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete a Domain
-  record domains-delete-params {
+  record delete-params {
     /// The name of the domain itself.
     domain-name: string
   }
-  domains-delete: func(params: domains-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
@@ -1953,7 +1953,7 @@ interface domain-records {
 
 interface droplets {
   /// List All Droplets
-  record droplets-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
@@ -1963,37 +1963,37 @@ interface droplets {
     /// Used to filter list response by Droplet name returning only exact matches. It is case-insensitive and can not be combined with `tag_name`.
     name: option<string>
   }
-  droplets-list: func(params: droplets-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Droplet
-  record droplets-create-params {
+  record create-params {
     body: option<string>
   }
-  droplets-create: func(params: droplets-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Deleting Droplets by Tag
-  record droplets-destroy-by-tag-params {
+  record destroy-by-tag-params {
     /// Specifies Droplets to be deleted by tag.
     tag-name: string
   }
-  droplets-destroy-by-tag: func(params: droplets-destroy-by-tag-params) -> result<string, string>;
+  destroy-by-tag: func(params: destroy-by-tag-params) -> result<string, string>;
 
   /// Retrieve an Existing Droplet
-  record droplets-get-params {
+  record get-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string
   }
-  droplets-get: func(params: droplets-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete an Existing Droplet
-  record droplets-destroy-params {
+  record destroy-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string
   }
-  droplets-destroy: func(params: droplets-destroy-params) -> result<string, string>;
+  destroy: func(params: destroy-params) -> result<string, string>;
 
   /// List Backups for a Droplet
-  record droplets-list-backups-params {
+  record list-backups-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// Number of items returned per page
@@ -2001,33 +2001,33 @@ interface droplets {
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  droplets-list-backups: func(params: droplets-list-backups-params) -> result<string, string>;
+  list-backups: func(params: list-backups-params) -> result<string, string>;
 
   /// List Associated Resources for a Droplet
-  record droplets-list-associated-resources-params {
+  record list-associated-resources-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string
   }
-  droplets-list-associated-resources: func(params: droplets-list-associated-resources-params) -> result<string, string>;
+  list-associated-resources: func(params: list-associated-resources-params) -> result<string, string>;
 
   /// Destroy a Droplet and All of its Associated Resources (Dangerous)
-  record droplets-destroy-with-associated-resources-dangerous-params {
+  record destroy-with-associated-resources-dangerous-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// Acknowledge this action will destroy the Droplet and all associated resources and _can not_ be reversed.
     x-dangerous: bool
   }
-  droplets-destroy-with-associated-resources-dangerous: func(params: droplets-destroy-with-associated-resources-dangerous-params) -> result<string, string>;
+  destroy-with-associated-resources-dangerous: func(params: destroy-with-associated-resources-dangerous-params) -> result<string, string>;
 
   /// Retry a Droplet Destroy with Associated Resources Request
-  record droplets-destroy-retry-with-associated-resources-params {
+  record destroy-retry-with-associated-resources-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string
   }
-  droplets-destroy-retry-with-associated-resources: func(params: droplets-destroy-retry-with-associated-resources-params) -> result<string, string>;
+  destroy-retry-with-associated-resources: func(params: destroy-retry-with-associated-resources-params) -> result<string, string>;
 
   /// Selectively Destroy a Droplet and its Associated Resources
-  record droplets-destroy-with-associated-resources-selective-params {
+  record destroy-with-associated-resources-selective-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// An array of unique identifiers for the floating IPs to be scheduled for deletion.
@@ -2041,17 +2041,17 @@ interface droplets {
     /// An array of unique identifiers for the volumes to be scheduled for deletion.
     volumes: option<list<string>>
   }
-  droplets-destroy-with-associated-resources-selective: func(params: droplets-destroy-with-associated-resources-selective-params) -> result<string, string>;
+  destroy-with-associated-resources-selective: func(params: destroy-with-associated-resources-selective-params) -> result<string, string>;
 
   /// Check Status of a Droplet Destroy with Associated Resources Request
-  record droplets-get-destroy-associated-resources-status-params {
+  record get-destroy-associated-resources-status-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string
   }
-  droplets-get-destroy-associated-resources-status: func(params: droplets-get-destroy-associated-resources-status-params) -> result<string, string>;
+  get-destroy-associated-resources-status: func(params: get-destroy-associated-resources-status-params) -> result<string, string>;
 
   /// List all Firewalls Applied to a Droplet
-  record droplets-list-firewalls-params {
+  record list-firewalls-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// Number of items returned per page
@@ -2059,10 +2059,10 @@ interface droplets {
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  droplets-list-firewalls: func(params: droplets-list-firewalls-params) -> result<string, string>;
+  list-firewalls: func(params: list-firewalls-params) -> result<string, string>;
 
   /// List All Available Kernels for a Droplet
-  record droplets-list-kernels-params {
+  record list-kernels-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// Number of items returned per page
@@ -2070,17 +2070,17 @@ interface droplets {
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  droplets-list-kernels: func(params: droplets-list-kernels-params) -> result<string, string>;
+  list-kernels: func(params: list-kernels-params) -> result<string, string>;
 
   /// List Neighbors for a Droplet
-  record droplets-list-neighbors-params {
+  record list-neighbors-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string
   }
-  droplets-list-neighbors: func(params: droplets-list-neighbors-params) -> result<string, string>;
+  list-neighbors: func(params: list-neighbors-params) -> result<string, string>;
 
   /// List Snapshots for a Droplet
-  record droplets-list-snapshots-params {
+  record list-snapshots-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// Number of items returned per page
@@ -2088,24 +2088,24 @@ interface droplets {
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  droplets-list-snapshots: func(params: droplets-list-snapshots-params) -> result<string, string>;
+  list-snapshots: func(params: list-snapshots-params) -> result<string, string>;
 
   /// List All Droplet Neighbors
-  droplets-list-neighbors-ids: func() -> result<string, string>;
+  list-neighbors-ids: func() -> result<string, string>;
 
 }
 
 interface droplet-actions {
   /// Acting on Tagged Droplets
-  record droplet-actions-post-by-tag-params {
+  record post-by-tag-params {
     /// Used to filter Droplets by a specific tag. Can not be combined with `name`.
     tag-name: option<string>,
     body: option<string>
   }
-  droplet-actions-post-by-tag: func(params: droplet-actions-post-by-tag-params) -> result<string, string>;
+  post-by-tag: func(params: post-by-tag-params) -> result<string, string>;
 
   /// List Actions for a Droplet
-  record droplet-actions-list-params {
+  record list-op-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// Number of items returned per page
@@ -2113,146 +2113,146 @@ interface droplet-actions {
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  droplet-actions-list: func(params: droplet-actions-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Initiate a Droplet Action
-  record droplet-actions-post-params {
+  record post-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     body: option<string>
   }
-  droplet-actions-post: func(params: droplet-actions-post-params) -> result<string, string>;
+  post: func(params: post-params) -> result<string, string>;
 
   /// Retrieve a Droplet Action
-  record droplet-actions-get-params {
+  record get-params {
     /// A unique identifier for a Droplet instance.
     droplet-id: string,
     /// A unique numeric ID that can be used to identify and reference an action.
     action-id: string
   }
-  droplet-actions-get: func(params: droplet-actions-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 
 interface firewalls {
   /// List All Firewalls
-  record firewalls-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  firewalls-list: func(params: firewalls-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Firewall
-  record firewalls-create-params {
+  record create-params {
     body: option<string>
   }
-  firewalls-create: func(params: firewalls-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve an Existing Firewall
-  record firewalls-get-params {
+  record get-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string
   }
-  firewalls-get: func(params: firewalls-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Update a Firewall
-  record firewalls-update-params {
+  record update-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string,
     body: option<string>
   }
-  firewalls-update: func(params: firewalls-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
   /// Delete a Firewall
-  record firewalls-delete-params {
+  record delete-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string
   }
-  firewalls-delete: func(params: firewalls-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
   /// Add Droplets to a Firewall
-  record firewalls-assign-droplets-params {
+  record assign-droplets-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string,
     /// An array containing the IDs of the Droplets to be assigned to the firewall.
     droplet-ids: list<s32>
   }
-  firewalls-assign-droplets: func(params: firewalls-assign-droplets-params) -> result<string, string>;
+  assign-droplets: func(params: assign-droplets-params) -> result<string, string>;
 
   /// Remove Droplets from a Firewall
-  record firewalls-delete-droplets-params {
+  record delete-droplets-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string,
     /// An array containing the IDs of the Droplets to be removed from the firewall.
     droplet-ids: list<s32>
   }
-  firewalls-delete-droplets: func(params: firewalls-delete-droplets-params) -> result<string, string>;
+  delete-droplets: func(params: delete-droplets-params) -> result<string, string>;
 
   /// Add Rules to a Firewall
-  record firewalls-add-rules-params {
+  record add-rules-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string,
     body: option<string>
   }
-  firewalls-add-rules: func(params: firewalls-add-rules-params) -> result<string, string>;
+  add-rules: func(params: add-rules-params) -> result<string, string>;
 
   /// Remove Rules from a Firewall
-  record firewalls-delete-rules-params {
+  record delete-rules-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string,
     body: option<string>
   }
-  firewalls-delete-rules: func(params: firewalls-delete-rules-params) -> result<string, string>;
+  delete-rules: func(params: delete-rules-params) -> result<string, string>;
 
   /// Add Tags to a Firewall
-  record firewalls-add-tags-params {
+  record add-tags-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string,
     tags: string
   }
-  firewalls-add-tags: func(params: firewalls-add-tags-params) -> result<string, string>;
+  add-tags: func(params: add-tags-params) -> result<string, string>;
 
   /// Remove Tags from a Firewall
-  record firewalls-delete-tags-params {
+  record delete-tags-params {
     /// A unique ID that can be used to identify and reference a firewall.
     firewall-id: string,
     tags: string
   }
-  firewalls-delete-tags: func(params: firewalls-delete-tags-params) -> result<string, string>;
+  delete-tags: func(params: delete-tags-params) -> result<string, string>;
 
 }
 
 interface floating-i-ps {
   /// List All Floating IPs
-  record floating-i-ps-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  floating-i-ps-list: func(params: floating-i-ps-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Floating IP
-  record floating-i-ps-create-params {
+  record create-params {
     body: string
   }
-  floating-i-ps-create: func(params: floating-i-ps-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve an Existing Floating IP
-  record floating-i-ps-get-params {
+  record get-params {
     /// A floating IP address.
     floating-ip: string
   }
-  floating-i-ps-get: func(params: floating-i-ps-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete a Floating IP
-  record floating-i-ps-delete-params {
+  record delete-params {
     /// A floating IP address.
     floating-ip: string
   }
-  floating-i-ps-delete: func(params: floating-i-ps-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
@@ -2285,66 +2285,66 @@ interface floating-ip-actions {
 
 interface functions {
   /// Trigger details for SCHEDULED type, where body is optional.
-  record functions-create-trigger-body-scheduled-details {
+  record create-trigger-body-scheduled-details {
     /// Optional data to be sent to function while triggering the function.
-    body: option<functions-create-trigger-body-scheduled-details-body>,
+    body: option<create-trigger-body-scheduled-details-body>,
     /// valid cron expression string which is required for SCHEDULED type triggers.
     cron: string
   }
 
   /// Optional data to be sent to function while triggering the function.
-  record functions-create-trigger-body-scheduled-details-body {
+  record create-trigger-body-scheduled-details-body {
     name: option<string>
   }
 
   /// Trigger details for SCHEDULED type, where body is optional.
-  record functions-update-trigger-body-scheduled-details {
+  record update-trigger-body-scheduled-details {
     /// Optional data to be sent to function while triggering the function.
-    body: option<functions-update-trigger-body-scheduled-details-body>,
+    body: option<update-trigger-body-scheduled-details-body>,
     /// valid cron expression string which is required for SCHEDULED type triggers.
     cron: string
   }
 
   /// Optional data to be sent to function while triggering the function.
-  record functions-update-trigger-body-scheduled-details-body {
+  record update-trigger-body-scheduled-details-body {
     name: option<string>
   }
 
   /// List Namespaces
-  functions-list-namespaces: func() -> result<string, string>;
+  list-namespaces: func() -> result<string, string>;
 
   /// Create Namespace
-  record functions-create-namespace-params {
+  record create-namespace-params {
     /// The namespace's unique name.
     label: string,
     /// The [datacenter region](https://docs.digitalocean.com/products/platform/availability-matrix/#available-datacenters) in which to create the namespace.
     region: string
   }
-  functions-create-namespace: func(params: functions-create-namespace-params) -> result<string, string>;
+  create-namespace: func(params: create-namespace-params) -> result<string, string>;
 
   /// Get Namespace
-  record functions-get-namespace-params {
+  record get-namespace-params {
     /// The ID of the namespace to be managed.
     namespace-id: string
   }
-  functions-get-namespace: func(params: functions-get-namespace-params) -> result<string, string>;
+  get-namespace: func(params: get-namespace-params) -> result<string, string>;
 
   /// Delete Namespace
-  record functions-delete-namespace-params {
+  record delete-namespace-params {
     /// The ID of the namespace to be managed.
     namespace-id: string
   }
-  functions-delete-namespace: func(params: functions-delete-namespace-params) -> result<string, string>;
+  delete-namespace: func(params: delete-namespace-params) -> result<string, string>;
 
   /// List Triggers
-  record functions-list-triggers-params {
+  record list-triggers-params {
     /// The ID of the namespace to be managed.
     namespace-id: string
   }
-  functions-list-triggers: func(params: functions-list-triggers-params) -> result<string, string>;
+  list-triggers: func(params: list-triggers-params) -> result<string, string>;
 
   /// Create Trigger
-  record functions-create-trigger-params {
+  record create-trigger-params {
     /// The ID of the namespace to be managed.
     namespace-id: string,
     /// Name of function(action) that exists in the given namespace.
@@ -2354,23 +2354,23 @@ interface functions {
     /// The trigger's unique name within the namespace.
     name: string,
     /// Trigger details for SCHEDULED type, where body is optional.
-    scheduled-details: functions-create-trigger-body-scheduled-details,
+    scheduled-details: create-trigger-body-scheduled-details,
     /// One of different type of triggers. Currently only SCHEDULED is supported.
     type-op: string
   }
-  functions-create-trigger: func(params: functions-create-trigger-params) -> result<string, string>;
+  create-trigger: func(params: create-trigger-params) -> result<string, string>;
 
   /// Get Trigger
-  record functions-get-trigger-params {
+  record get-trigger-params {
     /// The ID of the namespace to be managed.
     namespace-id: string,
     /// The name of the trigger to be managed.
     trigger-name: string
   }
-  functions-get-trigger: func(params: functions-get-trigger-params) -> result<string, string>;
+  get-trigger: func(params: get-trigger-params) -> result<string, string>;
 
   /// Update Trigger
-  record functions-update-trigger-params {
+  record update-trigger-params {
     /// The ID of the namespace to be managed.
     namespace-id: string,
     /// The name of the trigger to be managed.
@@ -2378,28 +2378,28 @@ interface functions {
     /// Indicates weather the trigger is paused or unpaused.
     is-enabled: option<bool>,
     /// Trigger details for SCHEDULED type, where body is optional.
-    scheduled-details: option<functions-update-trigger-body-scheduled-details>
+    scheduled-details: option<update-trigger-body-scheduled-details>
   }
-  functions-update-trigger: func(params: functions-update-trigger-params) -> result<string, string>;
+  update-trigger: func(params: update-trigger-params) -> result<string, string>;
 
   /// Delete Trigger
-  record functions-delete-trigger-params {
+  record delete-trigger-params {
     /// The ID of the namespace to be managed.
     namespace-id: string,
     /// The name of the trigger to be managed.
     trigger-name: string
   }
-  functions-delete-trigger: func(params: functions-delete-trigger-params) -> result<string, string>;
+  delete-trigger: func(params: delete-trigger-params) -> result<string, string>;
 
 }
 
 interface images {
-  enum images-list-type-op-enum {
+  enum list-op-type-op-enum {
     application,
     distribution,
   }
 
-  enum images-update-body-distribution-enum {
+  enum update-body-distribution-enum {
     arch-linux,
     cent-os,
     core-os,
@@ -2416,9 +2416,9 @@ interface images {
   }
 
   /// List All Images
-  record images-list-params {
+  record list-op-params {
     /// Filters results based on image type which can be either `application` or `distribution`.
-    type-op: option<images-list-type-op-enum>,
+    type-op: option<list-op-type-op-enum>,
     /// Used to filter only user images.
     private: option<bool>,
     /// Used to filter images by a specific tag.
@@ -2428,73 +2428,73 @@ interface images {
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  images-list: func(params: images-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a Custom Image
-  record images-create-custom-params {
+  record create-custom-params {
     body: string
   }
-  images-create-custom: func(params: images-create-custom-params) -> result<string, string>;
+  create-custom: func(params: create-custom-params) -> result<string, string>;
 
   /// Retrieve an Existing Image
-  record images-get-params {
+  record get-params {
     /// A unique number (id) or string (slug) used to identify and reference a
     /// specific image.
     image-id: string
   }
-  images-get: func(params: images-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Update an Image
-  record images-update-params {
+  record update-params {
     /// A unique number that can be used to identify and reference a specific image.
     image-id: string,
     /// An optional free-form text field to describe an image.
     description: option<string>,
     /// The name of a custom image's distribution. Currently, the valid values are  `Arch Linux`, `CentOS`, `CoreOS`, `Debian`, `Fedora`, `Fedora Atomic`,  `FreeBSD`, `Gentoo`, `openSUSE`, `RancherOS`, `Rocky Linux`, `Ubuntu`, and `Unknown`.  Any other value will be accepted but ignored, and `Unknown` will be used in its place.
-    distribution: option<images-update-body-distribution-enum>,
+    distribution: option<update-body-distribution-enum>,
     /// The display name that has been given to an image.  This is what is shown in the control panel and is generally a descriptive title for the image in question.
     name: option<string>
   }
-  images-update: func(params: images-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
   /// Delete an Image
-  record images-delete-params {
+  record delete-params {
     /// A unique number that can be used to identify and reference a specific image.
     image-id: string
   }
-  images-delete: func(params: images-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
 interface image-actions {
   /// List All Actions for an Image
-  record image-actions-list-params {
+  record list-op-params {
     /// A unique number that can be used to identify and reference a specific image.
     image-id: string
   }
-  image-actions-list: func(params: image-actions-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Initiate an Image Action
-  record image-actions-post-params {
+  record post-params {
     /// A unique number that can be used to identify and reference a specific image.
     image-id: string,
     body: option<string>
   }
-  image-actions-post: func(params: image-actions-post-params) -> result<string, string>;
+  post: func(params: post-params) -> result<string, string>;
 
   /// Retrieve an Existing Action
-  record image-actions-get-params {
+  record get-params {
     /// A unique number that can be used to identify and reference a specific image.
     image-id: string,
     /// A unique numeric ID that can be used to identify and reference an action.
     action-id: string
   }
-  image-actions-get: func(params: image-actions-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 
 interface kubernetes {
-  enum kubernetes-create-cluster-body-maintenance-policy-day-enum {
+  enum create-cluster-body-maintenance-policy-day-enum {
     any,
     monday,
     tuesday,
@@ -2505,7 +2505,7 @@ interface kubernetes {
     sunday,
   }
 
-  enum kubernetes-create-cluster-body-status-state-enum {
+  enum create-cluster-body-status-state-enum {
     running,
     provisioning,
     degraded,
@@ -2516,9 +2516,9 @@ interface kubernetes {
   }
 
   /// An object specifying the maintenance window policy for the Kubernetes cluster.
-  record kubernetes-create-cluster-body-maintenance-policy {
+  record create-cluster-body-maintenance-policy {
     /// The day of the maintenance window policy. May be one of `monday` through `sunday`, or `any` to indicate an arbitrary week day.
-    day: option<kubernetes-create-cluster-body-maintenance-policy-day-enum>,
+    day: option<create-cluster-body-maintenance-policy-day-enum>,
     /// The duration of the maintenance window policy in human-readable format.
     duration: option<string>,
     /// The start time in UTC of the maintenance window policy in 24-hour clock format / HH:MM notation (e.g., `15:00`).
@@ -2526,17 +2526,17 @@ interface kubernetes {
   }
 
   /// An object containing a `state` attribute whose value is set to a string indicating the current status of the cluster.
-  record kubernetes-create-cluster-body-status {
+  record create-cluster-body-status {
     /// An optional message providing additional information about the current cluster state.
     message: option<string>,
     /// A string indicating the current status of the cluster.
-    state: option<kubernetes-create-cluster-body-status-state-enum>
+    state: option<create-cluster-body-status-state-enum>
   }
 
   /// An object specifying the maintenance window policy for the Kubernetes cluster.
-  record kubernetes-update-cluster-body-maintenance-policy {
+  record update-cluster-body-maintenance-policy {
     /// The day of the maintenance window policy. May be one of `monday` through `sunday`, or `any` to indicate an arbitrary week day.
-    day: option<kubernetes-create-cluster-body-maintenance-policy-day-enum>,
+    day: option<create-cluster-body-maintenance-policy-day-enum>,
     /// The duration of the maintenance window policy in human-readable format.
     duration: option<string>,
     /// The start time in UTC of the maintenance window policy in 24-hour clock format / HH:MM notation (e.g., `15:00`).
@@ -2544,16 +2544,16 @@ interface kubernetes {
   }
 
   /// List All Kubernetes Clusters
-  record kubernetes-list-clusters-params {
+  record list-clusters-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  kubernetes-list-clusters: func(params: kubernetes-list-clusters-params) -> result<string, string>;
+  list-clusters: func(params: list-clusters-params) -> result<string, string>;
 
   /// Create a New Kubernetes Cluster
-  record kubernetes-create-cluster-params {
+  record create-cluster-params {
     /// A boolean value indicating whether the cluster will be automatically upgraded to new patch releases during its maintenance window.
     auto-upgrade: option<bool>,
     /// The range of IP addresses in the overlay network of the Kubernetes cluster in CIDR notation.
@@ -2569,7 +2569,7 @@ interface kubernetes {
     /// The public IPv4 address of the Kubernetes master node. This will not be set if high availability is configured on the cluster (v1.21+)
     ipv4: option<string>,
     /// An object specifying the maintenance window policy for the Kubernetes cluster.
-    maintenance-policy: option<kubernetes-create-cluster-body-maintenance-policy>,
+    maintenance-policy: option<create-cluster-body-maintenance-policy>,
     /// A human-readable name for a Kubernetes cluster.
     name: string,
     /// An object specifying the details of the worker nodes available to the Kubernetes cluster.
@@ -2581,7 +2581,7 @@ interface kubernetes {
     /// The range of assignable IP addresses for services running in the Kubernetes cluster in CIDR notation.
     service-subnet: option<string>,
     /// An object containing a `state` attribute whose value is set to a string indicating the current status of the cluster.
-    status: option<kubernetes-create-cluster-body-status>,
+    status: option<create-cluster-body-status>,
     /// A boolean value indicating whether surge upgrade is enabled/disabled for the cluster. Surge upgrade makes cluster upgrades fast and reliable by bringing up new nodes before destroying the outdated nodes.
     surge-upgrade: option<bool>,
     /// An array of tags applied to the Kubernetes cluster. All clusters are automatically tagged `k8s` and `k8s:$K8S_CLUSTER_ID`.
@@ -2593,17 +2593,17 @@ interface kubernetes {
     /// A string specifying the UUID of the VPC to which the Kubernetes cluster is assigned.
     vpc-uuid: option<string>
   }
-  kubernetes-create-cluster: func(params: kubernetes-create-cluster-params) -> result<string, string>;
+  create-cluster: func(params: create-cluster-params) -> result<string, string>;
 
   /// Retrieve an Existing Kubernetes Cluster
-  record kubernetes-get-cluster-params {
+  record get-cluster-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string
   }
-  kubernetes-get-cluster: func(params: kubernetes-get-cluster-params) -> result<string, string>;
+  get-cluster: func(params: get-cluster-params) -> result<string, string>;
 
   /// Update a Kubernetes Cluster
-  record kubernetes-update-cluster-params {
+  record update-cluster-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// A boolean value indicating whether the cluster will be automatically upgraded to new patch releases during its maintenance window.
@@ -2611,7 +2611,7 @@ interface kubernetes {
     /// A boolean value indicating whether the control plane is run in a highly available configuration in the cluster. Highly available control planes incur less downtime. The property cannot be disabled.
     ha: option<bool>,
     /// An object specifying the maintenance window policy for the Kubernetes cluster.
-    maintenance-policy: option<kubernetes-update-cluster-body-maintenance-policy>,
+    maintenance-policy: option<update-cluster-body-maintenance-policy>,
     /// A human-readable name for a Kubernetes cluster.
     name: string,
     /// A boolean value indicating whether surge upgrade is enabled/disabled for the cluster. Surge upgrade makes cluster upgrades fast and reliable by bringing up new nodes before destroying the outdated nodes.
@@ -2619,26 +2619,26 @@ interface kubernetes {
     /// An array of tags applied to the Kubernetes cluster. All clusters are automatically tagged `k8s` and `k8s:$K8S_CLUSTER_ID`.
     tags: option<list<string>>
   }
-  kubernetes-update-cluster: func(params: kubernetes-update-cluster-params) -> result<string, string>;
+  update-cluster: func(params: update-cluster-params) -> result<string, string>;
 
   /// Delete a Kubernetes Cluster
-  record kubernetes-delete-cluster-params {
+  record delete-cluster-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string
   }
-  kubernetes-delete-cluster: func(params: kubernetes-delete-cluster-params) -> result<string, string>;
+  delete-cluster: func(params: delete-cluster-params) -> result<string, string>;
 
   /// Fetch Clusterlint Diagnostics for a Kubernetes Cluster
-  record kubernetes-get-cluster-lint-results-params {
+  record get-cluster-lint-results-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// Specifies the clusterlint run whose results will be retrieved.
     run-id: option<string>
   }
-  kubernetes-get-cluster-lint-results: func(params: kubernetes-get-cluster-lint-results-params) -> result<string, string>;
+  get-cluster-lint-results: func(params: get-cluster-lint-results-params) -> result<string, string>;
 
   /// Run Clusterlint Checks on a Kubernetes Cluster
-  record kubernetes-run-cluster-lint-params {
+  record run-cluster-lint-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// An array of checks that will be run when clusterlint executes checks.
@@ -2650,33 +2650,33 @@ interface kubernetes {
     /// An array of check groups that will be run when clusterlint executes checks.
     include-groups: option<list<string>>
   }
-  kubernetes-run-cluster-lint: func(params: kubernetes-run-cluster-lint-params) -> result<string, string>;
+  run-cluster-lint: func(params: run-cluster-lint-params) -> result<string, string>;
 
   /// Retrieve Credentials for a Kubernetes Cluster
-  record kubernetes-get-credentials-params {
+  record get-credentials-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// The duration in seconds that the returned Kubernetes credentials will be valid. If not set or 0, the credentials will have a 7 day expiry.
     expiry-seconds: option<s32>
   }
-  kubernetes-get-credentials: func(params: kubernetes-get-credentials-params) -> result<string, string>;
+  get-credentials: func(params: get-credentials-params) -> result<string, string>;
 
   /// List Associated Resources for Cluster Deletion
-  record kubernetes-list-associated-resources-params {
+  record list-associated-resources-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string
   }
-  kubernetes-list-associated-resources: func(params: kubernetes-list-associated-resources-params) -> result<string, string>;
+  list-associated-resources: func(params: list-associated-resources-params) -> result<string, string>;
 
   /// Delete a Cluster and All of its Associated Resources (Dangerous)
-  record kubernetes-destroy-associated-resources-dangerous-params {
+  record destroy-associated-resources-dangerous-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string
   }
-  kubernetes-destroy-associated-resources-dangerous: func(params: kubernetes-destroy-associated-resources-dangerous-params) -> result<string, string>;
+  destroy-associated-resources-dangerous: func(params: destroy-associated-resources-dangerous-params) -> result<string, string>;
 
   /// Selectively Delete a Cluster and its Associated Resources
-  record kubernetes-destroy-associated-resources-selective-params {
+  record destroy-associated-resources-selective-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// A list of IDs for associated load balancers to destroy along with the cluster.
@@ -2686,62 +2686,62 @@ interface kubernetes {
     /// A list of IDs for associated volumes to destroy along with the cluster.
     volumes: option<list<string>>
   }
-  kubernetes-destroy-associated-resources-selective: func(params: kubernetes-destroy-associated-resources-selective-params) -> result<string, string>;
+  destroy-associated-resources-selective: func(params: destroy-associated-resources-selective-params) -> result<string, string>;
 
   /// Retrieve the kubeconfig for a Kubernetes Cluster
-  record kubernetes-get-kubeconfig-params {
+  record get-kubeconfig-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// The duration in seconds that the returned Kubernetes credentials will be valid. If not set or 0, the credentials will have a 7 day expiry.
     expiry-seconds: option<s32>
   }
-  kubernetes-get-kubeconfig: func(params: kubernetes-get-kubeconfig-params) -> result<string, string>;
+  get-kubeconfig: func(params: get-kubeconfig-params) -> result<string, string>;
 
   /// List All Node Pools in a Kubernetes Clusters
-  record kubernetes-list-node-pools-params {
+  record list-node-pools-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string
   }
-  kubernetes-list-node-pools: func(params: kubernetes-list-node-pools-params) -> result<string, string>;
+  list-node-pools: func(params: list-node-pools-params) -> result<string, string>;
 
   /// Add a Node Pool to a Kubernetes Cluster
-  record kubernetes-add-node-pool-params {
+  record add-node-pool-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     body: string
   }
-  kubernetes-add-node-pool: func(params: kubernetes-add-node-pool-params) -> result<string, string>;
+  add-node-pool: func(params: add-node-pool-params) -> result<string, string>;
 
   /// Retrieve a Node Pool for a Kubernetes Cluster
-  record kubernetes-get-node-pool-params {
+  record get-node-pool-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// A unique ID that can be used to reference a Kubernetes node pool.
     node-pool-id: string
   }
-  kubernetes-get-node-pool: func(params: kubernetes-get-node-pool-params) -> result<string, string>;
+  get-node-pool: func(params: get-node-pool-params) -> result<string, string>;
 
   /// Update a Node Pool in a Kubernetes Cluster
-  record kubernetes-update-node-pool-params {
+  record update-node-pool-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// A unique ID that can be used to reference a Kubernetes node pool.
     node-pool-id: string,
     body: string
   }
-  kubernetes-update-node-pool: func(params: kubernetes-update-node-pool-params) -> result<string, string>;
+  update-node-pool: func(params: update-node-pool-params) -> result<string, string>;
 
   /// Delete a Node Pool in a Kubernetes Cluster
-  record kubernetes-delete-node-pool-params {
+  record delete-node-pool-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// A unique ID that can be used to reference a Kubernetes node pool.
     node-pool-id: string
   }
-  kubernetes-delete-node-pool: func(params: kubernetes-delete-node-pool-params) -> result<string, string>;
+  delete-node-pool: func(params: delete-node-pool-params) -> result<string, string>;
 
   /// Delete a Node in a Kubernetes Cluster
-  record kubernetes-delete-node-params {
+  record delete-node-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// A unique ID that can be used to reference a Kubernetes node pool.
@@ -2753,62 +2753,62 @@ interface kubernetes {
     /// Specifies whether or not to replace a node after it has been deleted. Setting it to `1` causes the node to be replaced by a new one after deletion. Omitting the query parameter or setting its value to `0` deletes without replacement.
     replace: option<s32>
   }
-  kubernetes-delete-node: func(params: kubernetes-delete-node-params) -> result<string, string>;
+  delete-node: func(params: delete-node-params) -> result<string, string>;
 
   /// Recycle a Kubernetes Node Pool
-  record kubernetes-recycle-node-pool-params {
+  record recycle-node-pool-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// A unique ID that can be used to reference a Kubernetes node pool.
     node-pool-id: string,
     nodes: option<list<string>>
   }
-  kubernetes-recycle-node-pool: func(params: kubernetes-recycle-node-pool-params) -> result<string, string>;
+  recycle-node-pool: func(params: recycle-node-pool-params) -> result<string, string>;
 
   /// Upgrade a Kubernetes Cluster
-  record kubernetes-upgrade-cluster-params {
+  record upgrade-cluster-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string,
     /// The slug identifier for the version of Kubernetes that the cluster will be upgraded to.
     version: option<string>
   }
-  kubernetes-upgrade-cluster: func(params: kubernetes-upgrade-cluster-params) -> result<string, string>;
+  upgrade-cluster: func(params: upgrade-cluster-params) -> result<string, string>;
 
   /// Retrieve Available Upgrades for an Existing Kubernetes Cluster
-  record kubernetes-get-available-upgrades-params {
+  record get-available-upgrades-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string
   }
-  kubernetes-get-available-upgrades: func(params: kubernetes-get-available-upgrades-params) -> result<string, string>;
+  get-available-upgrades: func(params: get-available-upgrades-params) -> result<string, string>;
 
   /// Retrieve User Information for a Kubernetes Cluster
-  record kubernetes-get-cluster-user-params {
+  record get-cluster-user-params {
     /// A unique ID that can be used to reference a Kubernetes cluster.
     cluster-id: string
   }
-  kubernetes-get-cluster-user: func(params: kubernetes-get-cluster-user-params) -> result<string, string>;
+  get-cluster-user: func(params: get-cluster-user-params) -> result<string, string>;
 
   /// List Available Regions, Node Sizes, and Versions of Kubernetes
-  kubernetes-list-options: func() -> result<string, string>;
+  list-options: func() -> result<string, string>;
 
   /// Add Container Registry to Kubernetes Clusters
-  record kubernetes-add-registry-params {
+  record add-registry-params {
     /// An array containing the UUIDs of Kubernetes clusters.
     cluster-uuids: option<list<string>>
   }
-  kubernetes-add-registry: func(params: kubernetes-add-registry-params) -> result<string, string>;
+  add-registry: func(params: add-registry-params) -> result<string, string>;
 
   /// Remove Container Registry from Kubernetes Clusters
-  record kubernetes-remove-registry-params {
+  record remove-registry-params {
     /// An array containing the UUIDs of Kubernetes clusters.
     cluster-uuids: option<list<string>>
   }
-  kubernetes-remove-registry: func(params: kubernetes-remove-registry-params) -> result<string, string>;
+  remove-registry: func(params: remove-registry-params) -> result<string, string>;
 
 }
 
 interface load-balancers {
-  enum load-balancers-add-forwarding-rules-body-forwarding-rules-item-entry-protocol-enum {
+  enum add-forwarding-rules-body-forwarding-rules-item-entry-protocol-enum {
     http,
     https,
     http2,
@@ -2817,7 +2817,7 @@ interface load-balancers {
     udp,
   }
 
-  enum load-balancers-add-forwarding-rules-body-forwarding-rules-item-target-protocol-enum {
+  enum add-forwarding-rules-body-forwarding-rules-item-target-protocol-enum {
     http,
     https,
     http2,
@@ -2826,117 +2826,117 @@ interface load-balancers {
   }
 
   /// An object specifying a forwarding rule for a load balancer.
-  record load-balancers-add-forwarding-rules-body-forwarding-rules-item {
+  record add-forwarding-rules-body-forwarding-rules-item {
     /// The ID of the TLS certificate used for SSL termination if enabled.
     certificate-id: option<string>,
     /// An integer representing the port on which the load balancer instance will listen.
     entry-port: s32,
     /// The protocol used for traffic to the load balancer. The possible values are: `http`, `https`, `http2`, `http3`, `tcp`, or `udp`. If you set the  `entry_protocol` to `udp`, the `target_protocol` must be set to `udp`.  When using UDP, the load balancer requires that you set up a health  check with a port that uses TCP, HTTP, or HTTPS to work properly.
-    entry-protocol: load-balancers-add-forwarding-rules-body-forwarding-rules-item-entry-protocol-enum,
+    entry-protocol: add-forwarding-rules-body-forwarding-rules-item-entry-protocol-enum,
     /// An integer representing the port on the backend Droplets to which the load balancer will send traffic.
     target-port: s32,
     /// The protocol used for traffic from the load balancer to the backend Droplets. The possible values are: `http`, `https`, `http2`, `tcp`, or `udp`. If you set the `target_protocol` to `udp`, the `entry_protocol` must be set to  `udp`. When using UDP, the load balancer requires that you set up a health  check with a port that uses TCP, HTTP, or HTTPS to work properly.
-    target-protocol: load-balancers-add-forwarding-rules-body-forwarding-rules-item-target-protocol-enum,
+    target-protocol: add-forwarding-rules-body-forwarding-rules-item-target-protocol-enum,
     /// A boolean value indicating whether SSL encrypted traffic will be passed through to the backend Droplets.
     tls-passthrough: option<bool>
   }
 
   /// An object specifying a forwarding rule for a load balancer.
-  record load-balancers-remove-forwarding-rules-body-forwarding-rules-item {
+  record remove-forwarding-rules-body-forwarding-rules-item {
     /// The ID of the TLS certificate used for SSL termination if enabled.
     certificate-id: option<string>,
     /// An integer representing the port on which the load balancer instance will listen.
     entry-port: s32,
     /// The protocol used for traffic to the load balancer. The possible values are: `http`, `https`, `http2`, `http3`, `tcp`, or `udp`. If you set the  `entry_protocol` to `udp`, the `target_protocol` must be set to `udp`.  When using UDP, the load balancer requires that you set up a health  check with a port that uses TCP, HTTP, or HTTPS to work properly.
-    entry-protocol: load-balancers-add-forwarding-rules-body-forwarding-rules-item-entry-protocol-enum,
+    entry-protocol: add-forwarding-rules-body-forwarding-rules-item-entry-protocol-enum,
     /// An integer representing the port on the backend Droplets to which the load balancer will send traffic.
     target-port: s32,
     /// The protocol used for traffic from the load balancer to the backend Droplets. The possible values are: `http`, `https`, `http2`, `tcp`, or `udp`. If you set the `target_protocol` to `udp`, the `entry_protocol` must be set to  `udp`. When using UDP, the load balancer requires that you set up a health  check with a port that uses TCP, HTTP, or HTTPS to work properly.
-    target-protocol: load-balancers-add-forwarding-rules-body-forwarding-rules-item-target-protocol-enum,
+    target-protocol: add-forwarding-rules-body-forwarding-rules-item-target-protocol-enum,
     /// A boolean value indicating whether SSL encrypted traffic will be passed through to the backend Droplets.
     tls-passthrough: option<bool>
   }
 
   /// List All Load Balancers
-  record load-balancers-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  load-balancers-list: func(params: load-balancers-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Load Balancer
-  record load-balancers-create-params {
+  record create-params {
     body: string
   }
-  load-balancers-create: func(params: load-balancers-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve an Existing Load Balancer
-  record load-balancers-get-params {
+  record get-params {
     /// A unique identifier for a load balancer.
     lb-id: string
   }
-  load-balancers-get: func(params: load-balancers-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Update a Load Balancer
-  record load-balancers-update-params {
+  record update-params {
     /// A unique identifier for a load balancer.
     lb-id: string,
     body: string
   }
-  load-balancers-update: func(params: load-balancers-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
   /// Delete a Load Balancer
-  record load-balancers-delete-params {
+  record delete-params {
     /// A unique identifier for a load balancer.
     lb-id: string
   }
-  load-balancers-delete: func(params: load-balancers-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
   /// Add Droplets to a Load Balancer
-  record load-balancers-add-droplets-params {
+  record add-droplets-params {
     /// A unique identifier for a load balancer.
     lb-id: string,
     /// An array containing the IDs of the Droplets assigned to the load balancer.
     droplet-ids: option<list<s32>>
   }
-  load-balancers-add-droplets: func(params: load-balancers-add-droplets-params) -> result<string, string>;
+  add-droplets: func(params: add-droplets-params) -> result<string, string>;
 
   /// Remove Droplets from a Load Balancer
-  record load-balancers-remove-droplets-params {
+  record remove-droplets-params {
     /// A unique identifier for a load balancer.
     lb-id: string,
     /// An array containing the IDs of the Droplets assigned to the load balancer.
     droplet-ids: option<list<s32>>
   }
-  load-balancers-remove-droplets: func(params: load-balancers-remove-droplets-params) -> result<string, string>;
+  remove-droplets: func(params: remove-droplets-params) -> result<string, string>;
 
   /// Add Forwarding Rules to a Load Balancer
-  record load-balancers-add-forwarding-rules-params {
+  record add-forwarding-rules-params {
     /// A unique identifier for a load balancer.
     lb-id: string,
-    forwarding-rules: list<load-balancers-add-forwarding-rules-body-forwarding-rules-item>
+    forwarding-rules: list<add-forwarding-rules-body-forwarding-rules-item>
   }
-  load-balancers-add-forwarding-rules: func(params: load-balancers-add-forwarding-rules-params) -> result<string, string>;
+  add-forwarding-rules: func(params: add-forwarding-rules-params) -> result<string, string>;
 
   /// Remove Forwarding Rules from a Load Balancer
-  record load-balancers-remove-forwarding-rules-params {
+  record remove-forwarding-rules-params {
     /// A unique identifier for a load balancer.
     lb-id: string,
-    forwarding-rules: list<load-balancers-remove-forwarding-rules-body-forwarding-rules-item>
+    forwarding-rules: list<remove-forwarding-rules-body-forwarding-rules-item>
   }
-  load-balancers-remove-forwarding-rules: func(params: load-balancers-remove-forwarding-rules-params) -> result<string, string>;
+  remove-forwarding-rules: func(params: remove-forwarding-rules-params) -> result<string, string>;
 
 }
 
 interface monitoring {
-  enum monitoring-create-alert-policy-body-compare-enum {
+  enum create-alert-policy-body-compare-enum {
     greater-than,
     less-than,
   }
 
-  enum monitoring-create-alert-policy-body-type-op-enum {
+  enum create-alert-policy-body-type-op-enum {
     v1-insights-droplet-load-v1,
     v1-insights-droplet-load-v5,
     v1-insights-droplet-load-v15,
@@ -2967,45 +2967,45 @@ interface monitoring {
     v1-dbaas-alerts-cpu-alerts,
   }
 
-  enum monitoring-create-alert-policy-body-window-enum {
+  enum create-alert-policy-body-window-enum {
     v5m,
     v10m,
     v30m,
     v1h,
   }
 
-  enum monitoring-get-droplet-bandwidth-metrics-interface-op-enum {
+  enum get-droplet-bandwidth-metrics-interface-op-enum {
     private,
     public,
   }
 
-  enum monitoring-get-droplet-bandwidth-metrics-direction-enum {
+  enum get-droplet-bandwidth-metrics-direction-enum {
     inbound,
     outbound,
   }
 
-  record monitoring-create-alert-policy-body-alerts {
+  record create-alert-policy-body-alerts {
     /// An email to notify on an alert trigger.
     email: list<string>,
     /// Slack integration details.
-    slack: list<monitoring-create-alert-policy-body-alerts-slack-item>
+    slack: list<create-alert-policy-body-alerts-slack-item>
   }
 
-  record monitoring-create-alert-policy-body-alerts-slack-item {
+  record create-alert-policy-body-alerts-slack-item {
     /// Slack channel to notify of an alert trigger.
     channel: string,
     /// Slack Webhook URL.
     url: string
   }
 
-  record monitoring-update-alert-policy-body-alerts {
+  record update-alert-policy-body-alerts {
     /// An email to notify on an alert trigger.
     email: list<string>,
     /// Slack integration details.
-    slack: list<monitoring-update-alert-policy-body-alerts-slack-item>
+    slack: list<update-alert-policy-body-alerts-slack-item>
   }
 
-  record monitoring-update-alert-policy-body-alerts-slack-item {
+  record update-alert-policy-body-alerts-slack-item {
     /// Slack channel to notify of an alert trigger.
     channel: string,
     /// Slack Webhook URL.
@@ -3013,75 +3013,75 @@ interface monitoring {
   }
 
   /// List Alert Policies
-  record monitoring-list-alert-policy-params {
+  record list-alert-policy-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  monitoring-list-alert-policy: func(params: monitoring-list-alert-policy-params) -> result<string, string>;
+  list-alert-policy: func(params: list-alert-policy-params) -> result<string, string>;
 
   /// Create Alert Policy
-  record monitoring-create-alert-policy-params {
-    alerts: monitoring-create-alert-policy-body-alerts,
-    compare: monitoring-create-alert-policy-body-compare-enum,
+  record create-alert-policy-params {
+    alerts: create-alert-policy-body-alerts,
+    compare: create-alert-policy-body-compare-enum,
     description: string,
     enabled: bool,
     entities: list<string>,
     tags: list<string>,
-    type-op: monitoring-create-alert-policy-body-type-op-enum,
+    type-op: create-alert-policy-body-type-op-enum,
     value: f64,
-    window: monitoring-create-alert-policy-body-window-enum
+    window: create-alert-policy-body-window-enum
   }
-  monitoring-create-alert-policy: func(params: monitoring-create-alert-policy-params) -> result<string, string>;
+  create-alert-policy: func(params: create-alert-policy-params) -> result<string, string>;
 
   /// Retrieve an Existing Alert Policy
-  record monitoring-get-alert-policy-params {
+  record get-alert-policy-params {
     /// A unique identifier for an alert policy.
     alert-uuid: string
   }
-  monitoring-get-alert-policy: func(params: monitoring-get-alert-policy-params) -> result<string, string>;
+  get-alert-policy: func(params: get-alert-policy-params) -> result<string, string>;
 
   /// Update an Alert Policy
-  record monitoring-update-alert-policy-params {
+  record update-alert-policy-params {
     /// A unique identifier for an alert policy.
     alert-uuid: string,
-    alerts: monitoring-update-alert-policy-body-alerts,
-    compare: monitoring-create-alert-policy-body-compare-enum,
+    alerts: update-alert-policy-body-alerts,
+    compare: create-alert-policy-body-compare-enum,
     description: string,
     enabled: bool,
     entities: list<string>,
     tags: list<string>,
-    type-op: monitoring-create-alert-policy-body-type-op-enum,
+    type-op: create-alert-policy-body-type-op-enum,
     value: f64,
-    window: monitoring-create-alert-policy-body-window-enum
+    window: create-alert-policy-body-window-enum
   }
-  monitoring-update-alert-policy: func(params: monitoring-update-alert-policy-params) -> result<string, string>;
+  update-alert-policy: func(params: update-alert-policy-params) -> result<string, string>;
 
   /// Delete an Alert Policy
-  record monitoring-delete-alert-policy-params {
+  record delete-alert-policy-params {
     /// A unique identifier for an alert policy.
     alert-uuid: string
   }
-  monitoring-delete-alert-policy: func(params: monitoring-delete-alert-policy-params) -> result<string, string>;
+  delete-alert-policy: func(params: delete-alert-policy-params) -> result<string, string>;
 
   /// Get Droplet Bandwidth Metrics
-  record monitoring-get-droplet-bandwidth-metrics-params {
+  record get-droplet-bandwidth-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// The network interface.
-    interface-op: monitoring-get-droplet-bandwidth-metrics-interface-op-enum,
+    interface-op: get-droplet-bandwidth-metrics-interface-op-enum,
     /// The traffic direction.
-    direction: monitoring-get-droplet-bandwidth-metrics-direction-enum,
+    direction: get-droplet-bandwidth-metrics-direction-enum,
     /// Timestamp to start metric window.
     start: string,
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-bandwidth-metrics: func(params: monitoring-get-droplet-bandwidth-metrics-params) -> result<string, string>;
+  get-droplet-bandwidth-metrics: func(params: get-droplet-bandwidth-metrics-params) -> result<string, string>;
 
   /// Get Droplet CPU Metrics
-  record monitoring-get-droplet-cpu-metrics-params {
+  record get-droplet-cpu-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3089,10 +3089,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-cpu-metrics: func(params: monitoring-get-droplet-cpu-metrics-params) -> result<string, string>;
+  get-droplet-cpu-metrics: func(params: get-droplet-cpu-metrics-params) -> result<string, string>;
 
   /// Get Droplet Filesystem Free Metrics
-  record monitoring-get-droplet-filesystem-free-metrics-params {
+  record get-droplet-filesystem-free-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3100,10 +3100,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-filesystem-free-metrics: func(params: monitoring-get-droplet-filesystem-free-metrics-params) -> result<string, string>;
+  get-droplet-filesystem-free-metrics: func(params: get-droplet-filesystem-free-metrics-params) -> result<string, string>;
 
   /// Get Droplet Filesystem Size Metrics
-  record monitoring-get-droplet-filesystem-size-metrics-params {
+  record get-droplet-filesystem-size-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3111,10 +3111,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-filesystem-size-metrics: func(params: monitoring-get-droplet-filesystem-size-metrics-params) -> result<string, string>;
+  get-droplet-filesystem-size-metrics: func(params: get-droplet-filesystem-size-metrics-params) -> result<string, string>;
 
   /// Get Droplet Load1 Metrics
-  record monitoring-get-droplet-load1-metrics-params {
+  record get-droplet-load1-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3122,10 +3122,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-load1-metrics: func(params: monitoring-get-droplet-load1-metrics-params) -> result<string, string>;
+  get-droplet-load1-metrics: func(params: get-droplet-load1-metrics-params) -> result<string, string>;
 
   /// Get Droplet Load15 Metrics
-  record monitoring-get-droplet-load15-metrics-params {
+  record get-droplet-load15-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3133,10 +3133,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-load15-metrics: func(params: monitoring-get-droplet-load15-metrics-params) -> result<string, string>;
+  get-droplet-load15-metrics: func(params: get-droplet-load15-metrics-params) -> result<string, string>;
 
   /// Get Droplet Load5 Metrics
-  record monitoring-get-droplet-load5-metrics-params {
+  record get-droplet-load5-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3144,10 +3144,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-load5-metrics: func(params: monitoring-get-droplet-load5-metrics-params) -> result<string, string>;
+  get-droplet-load5-metrics: func(params: get-droplet-load5-metrics-params) -> result<string, string>;
 
   /// Get Droplet Available Memory Metrics
-  record monitoring-get-droplet-memory-available-metrics-params {
+  record get-droplet-memory-available-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3155,10 +3155,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-memory-available-metrics: func(params: monitoring-get-droplet-memory-available-metrics-params) -> result<string, string>;
+  get-droplet-memory-available-metrics: func(params: get-droplet-memory-available-metrics-params) -> result<string, string>;
 
   /// Get Droplet Cached Memory Metrics
-  record monitoring-get-droplet-memory-cached-metrics-params {
+  record get-droplet-memory-cached-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3166,10 +3166,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-memory-cached-metrics: func(params: monitoring-get-droplet-memory-cached-metrics-params) -> result<string, string>;
+  get-droplet-memory-cached-metrics: func(params: get-droplet-memory-cached-metrics-params) -> result<string, string>;
 
   /// Get Droplet Free Memory Metrics
-  record monitoring-get-droplet-memory-free-metrics-params {
+  record get-droplet-memory-free-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3177,10 +3177,10 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-memory-free-metrics: func(params: monitoring-get-droplet-memory-free-metrics-params) -> result<string, string>;
+  get-droplet-memory-free-metrics: func(params: get-droplet-memory-free-metrics-params) -> result<string, string>;
 
   /// Get Droplet Total Memory Metrics
-  record monitoring-get-droplet-memory-total-metrics-params {
+  record get-droplet-memory-total-metrics-params {
     /// The droplet ID.
     host-id: string,
     /// Timestamp to start metric window.
@@ -3188,70 +3188,70 @@ interface monitoring {
     /// Timestamp to end metric window.
     end: string
   }
-  monitoring-get-droplet-memory-total-metrics: func(params: monitoring-get-droplet-memory-total-metrics-params) -> result<string, string>;
+  get-droplet-memory-total-metrics: func(params: get-droplet-memory-total-metrics-params) -> result<string, string>;
 
 }
 
 interface projects {
   /// List All Projects
-  record projects-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  projects-list: func(params: projects-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a Project
-  record projects-create-params {
+  record create-params {
     body: string
   }
-  projects-create: func(params: projects-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve the Default Project
-  projects-get-default: func() -> result<string, string>;
+  get-default: func() -> result<string, string>;
 
   /// Update the Default Project
-  record projects-update-default-params {
+  record update-default-params {
     body: string
   }
-  projects-update-default: func(params: projects-update-default-params) -> result<string, string>;
+  update-default: func(params: update-default-params) -> result<string, string>;
 
   /// Patch the Default Project
-  record projects-patch-default-params {
+  record patch-default-params {
     body: string
   }
-  projects-patch-default: func(params: projects-patch-default-params) -> result<string, string>;
+  patch-default: func(params: patch-default-params) -> result<string, string>;
 
   /// Retrieve an Existing Project
-  record projects-get-params {
+  record get-params {
     /// A unique identifier for a project.
     project-id: string
   }
-  projects-get: func(params: projects-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Update a Project
-  record projects-update-params {
+  record update-params {
     /// A unique identifier for a project.
     project-id: string,
     body: string
   }
-  projects-update: func(params: projects-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
   /// Patch a Project
-  record projects-patch-params {
+  record patch-params {
     /// A unique identifier for a project.
     project-id: string,
     body: string
   }
-  projects-patch: func(params: projects-patch-params) -> result<string, string>;
+  patch: func(params: patch-params) -> result<string, string>;
 
   /// Delete an Existing Project
-  record projects-delete-params {
+  record delete-params {
     /// A unique identifier for a project.
     project-id: string
   }
-  projects-delete: func(params: projects-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
@@ -3290,13 +3290,13 @@ interface project-resources {
 
 interface regions {
   /// List All Data Center Regions
-  record regions-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  regions-list: func(params: regions-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
@@ -3473,33 +3473,33 @@ interface container-registry {
 
 interface reserved-i-ps {
   /// List All Reserved IPs
-  record reserved-i-ps-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  reserved-i-ps-list: func(params: reserved-i-ps-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Reserved IP
-  record reserved-i-ps-create-params {
+  record create-params {
     body: string
   }
-  reserved-i-ps-create: func(params: reserved-i-ps-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve an Existing Reserved IP
-  record reserved-i-ps-get-params {
+  record get-params {
     /// A reserved IP address.
     reserved-ip: string
   }
-  reserved-i-ps-get: func(params: reserved-i-ps-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete a Reserved IP
-  record reserved-i-ps-delete-params {
+  record delete-params {
     /// A reserved IP address.
     reserved-ip: string
   }
-  reserved-i-ps-delete: func(params: reserved-i-ps-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
@@ -3532,164 +3532,164 @@ interface reserved-ip-actions {
 
 interface sizes {
   /// List All Droplet Sizes
-  record sizes-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  sizes-list: func(params: sizes-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface snapshots {
-  enum snapshots-list-resource-type-enum {
+  enum list-op-resource-type-enum {
     droplet,
     volume,
   }
 
   /// List All Snapshots
-  record snapshots-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>,
     /// Used to filter snapshots by a resource type.
-    resource-type: option<snapshots-list-resource-type-enum>
+    resource-type: option<list-op-resource-type-enum>
   }
-  snapshots-list: func(params: snapshots-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Retrieve an Existing Snapshot
-  record snapshots-get-params {
+  record get-params {
     /// Either the ID of an existing snapshot. This will be an integer for a Droplet snapshot or a string for a volume snapshot.
     snapshot-id: string
   }
-  snapshots-get: func(params: snapshots-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete a Snapshot
-  record snapshots-delete-params {
+  record delete-params {
     /// Either the ID of an existing snapshot. This will be an integer for a Droplet snapshot or a string for a volume snapshot.
     snapshot-id: string
   }
-  snapshots-delete: func(params: snapshots-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
 interface tags {
-  enum tags-assign-resources-body-resources-item-resource-type-enum {
+  enum assign-resources-body-resources-item-resource-type-enum {
     droplet,
     image,
     volume,
     volume-snapshot,
   }
 
-  record tags-assign-resources-body-resources-item {
+  record assign-resources-body-resources-item {
     /// The identifier of a resource.
     resource-id: option<string>,
     /// The type of the resource.
-    resource-type: option<tags-assign-resources-body-resources-item-resource-type-enum>
+    resource-type: option<assign-resources-body-resources-item-resource-type-enum>
   }
 
-  record tags-unassign-resources-body-resources-item {
+  record unassign-resources-body-resources-item {
     /// The identifier of a resource.
     resource-id: option<string>,
     /// The type of the resource.
-    resource-type: option<tags-assign-resources-body-resources-item-resource-type-enum>
+    resource-type: option<assign-resources-body-resources-item-resource-type-enum>
   }
 
   /// List All Tags
-  record tags-list-params {
+  record list-op-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  tags-list: func(params: tags-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
   /// Create a New Tag
-  record tags-create-params {
+  record create-params {
     /// The name of the tag. Tags may contain letters, numbers, colons, dashes, and underscores.
     /// There is a limit of 255 characters per tag.
     name: option<string>,
     /// An embedded object containing key value pairs of resource type and resource statistics. It also includes a count of the total number of resources tagged with the current tag as well as a `last_tagged_uri` attribute set to the last resource tagged with the current tag.
     resources: option<string>
   }
-  tags-create: func(params: tags-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
   /// Retrieve a Tag
-  record tags-get-params {
+  record get-params {
     /// The name of the tag. Tags may contain letters, numbers, colons, dashes, and underscores. There is a limit of 255 characters per tag.
     tag-id: string
   }
-  tags-get: func(params: tags-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Delete a Tag
-  record tags-delete-params {
+  record delete-params {
     /// The name of the tag. Tags may contain letters, numbers, colons, dashes, and underscores. There is a limit of 255 characters per tag.
     tag-id: string
   }
-  tags-delete: func(params: tags-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
   /// Tag a Resource
-  record tags-assign-resources-params {
+  record assign-resources-params {
     /// The name of the tag. Tags may contain letters, numbers, colons, dashes, and underscores. There is a limit of 255 characters per tag.
     tag-id: string,
     /// An array of objects containing resource_id and resource_type  attributes.
-    resources: list<tags-assign-resources-body-resources-item>
+    resources: list<assign-resources-body-resources-item>
   }
-  tags-assign-resources: func(params: tags-assign-resources-params) -> result<string, string>;
+  assign-resources: func(params: assign-resources-params) -> result<string, string>;
 
   /// Untag a Resource
-  record tags-unassign-resources-params {
+  record unassign-resources-params {
     /// The name of the tag. Tags may contain letters, numbers, colons, dashes, and underscores. There is a limit of 255 characters per tag.
     tag-id: string,
     /// An array of objects containing resource_id and resource_type  attributes.
-    resources: list<tags-unassign-resources-body-resources-item>
+    resources: list<unassign-resources-body-resources-item>
   }
-  tags-unassign-resources: func(params: tags-unassign-resources-params) -> result<string, string>;
+  unassign-resources: func(params: unassign-resources-params) -> result<string, string>;
 
 }
 
 interface uptime {
   /// List All Checks
-  record uptime-checks-list-params {
+  record checks-list-params {
     /// Number of items returned per page
     per-page: option<s32>,
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  uptime-checks-list: func(params: uptime-checks-list-params) -> result<string, string>;
+  checks-list: func(params: checks-list-params) -> result<string, string>;
 
   /// Create a New Check
-  record uptime-check-create-params {
+  record check-create-params {
     body: string
   }
-  uptime-check-create: func(params: uptime-check-create-params) -> result<string, string>;
+  check-create: func(params: check-create-params) -> result<string, string>;
 
   /// Retrieve an Existing Check
-  record uptime-check-get-params {
+  record check-get-params {
     /// A unique identifier for a check.
     check-id: string
   }
-  uptime-check-get: func(params: uptime-check-get-params) -> result<string, string>;
+  check-get: func(params: check-get-params) -> result<string, string>;
 
   /// Update a Check
-  record uptime-check-update-params {
+  record check-update-params {
     /// A unique identifier for a check.
     check-id: string,
     body: string
   }
-  uptime-check-update: func(params: uptime-check-update-params) -> result<string, string>;
+  check-update: func(params: check-update-params) -> result<string, string>;
 
   /// Delete a Check
-  record uptime-check-delete-params {
+  record check-delete-params {
     /// A unique identifier for a check.
     check-id: string
   }
-  uptime-check-delete: func(params: uptime-check-delete-params) -> result<string, string>;
+  check-delete: func(params: check-delete-params) -> result<string, string>;
 
   /// List All Alerts
-  record uptime-check-alerts-list-params {
+  record check-alerts-list-params {
     /// A unique identifier for a check.
     check-id: string,
     /// Number of items returned per page
@@ -3697,50 +3697,50 @@ interface uptime {
     /// Which 'page' of paginated results to return.
     page: option<s32>
   }
-  uptime-check-alerts-list: func(params: uptime-check-alerts-list-params) -> result<string, string>;
+  check-alerts-list: func(params: check-alerts-list-params) -> result<string, string>;
 
   /// Create a New Alert
-  record uptime-alert-create-params {
+  record alert-create-params {
     /// A unique identifier for a check.
     check-id: string,
     body: string
   }
-  uptime-alert-create: func(params: uptime-alert-create-params) -> result<string, string>;
+  alert-create: func(params: alert-create-params) -> result<string, string>;
 
   /// Retrieve an Existing Alert
-  record uptime-alert-get-params {
+  record alert-get-params {
     /// A unique identifier for a check.
     check-id: string,
     /// A unique identifier for an alert.
     alert-id: string
   }
-  uptime-alert-get: func(params: uptime-alert-get-params) -> result<string, string>;
+  alert-get: func(params: alert-get-params) -> result<string, string>;
 
   /// Update an Alert
-  record uptime-alert-update-params {
+  record alert-update-params {
     /// A unique identifier for a check.
     check-id: string,
     /// A unique identifier for an alert.
     alert-id: string,
     body: string
   }
-  uptime-alert-update: func(params: uptime-alert-update-params) -> result<string, string>;
+  alert-update: func(params: alert-update-params) -> result<string, string>;
 
   /// Delete an Alert
-  record uptime-alert-delete-params {
+  record alert-delete-params {
     /// A unique identifier for a check.
     check-id: string,
     /// A unique identifier for an alert.
     alert-id: string
   }
-  uptime-alert-delete: func(params: uptime-alert-delete-params) -> result<string, string>;
+  alert-delete: func(params: alert-delete-params) -> result<string, string>;
 
   /// Retrieve Check State
-  record uptime-check-state-get-params {
+  record check-state-get-params {
     /// A unique identifier for a check.
     check-id: string
   }
-  uptime-check-state-get: func(params: uptime-check-state-get-params) -> result<string, string>;
+  check-state-get: func(params: check-state-get-params) -> result<string, string>;
 
 }
 

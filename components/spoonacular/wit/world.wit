@@ -6,9 +6,15 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apiKeyScheme` | header `x-api-key` |
-package autostamp:spoonacular@0.2.1;
+package autostamp:spoonacular@0.3.0;
 
 interface misc {
+  enum detect-food-in-text-content-type-enum {
+    application-x-www-form-urlencoded,
+    application-json,
+    multipart-form-data,
+  }
+
   /// Talk to Chatbot
   record talk-to-chatbot-params {
     /// The request / question / answer from the user to the chatbot.
@@ -29,15 +35,25 @@ interface misc {
 
   /// Search Custom Foods
   record search-custom-foods-params {
+    /// The (natural language) search query.
+    query: option<string>,
     /// The username.
     username: string,
     /// The private hash for the username.
-    hash: string
+    hash: string,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>
   }
   search-custom-foods: func(params: search-custom-foods-params) -> result<string, string>;
 
   /// Detect Food in Text
-  detect-food-in-text: func() -> result<string, string>;
+  record detect-food-in-text-params {
+    /// The content type.
+    content-type: option<detect-food-in-text-content-type-enum>
+  }
+  detect-food-in-text: func(params: detect-food-in-text-params) -> result<string, string>;
 
   /// Image Analysis by URL
   record image-analysis-by-url-params {
@@ -59,7 +75,11 @@ interface misc {
   /// Search All Food
   record search-all-food-params {
     /// The search query.
-    query: string
+    query: string,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>
   }
   search-all-food: func(params: search-all-food-params) -> result<string, string>;
 
@@ -75,6 +95,8 @@ interface misc {
 
   /// Search Food Videos
   record search-food-videos-params {
+    /// The (natural language) search query.
+    query: option<string>,
     /// The type of the recipes. See a full list of supported meal types.
     type-op: option<string>,
     /// The cuisine(s) of the recipes. One or more, comma separated. See a full list of supported cuisines.
@@ -88,7 +110,11 @@ interface misc {
     /// Minimum video length in seconds.
     min-length: option<f64>,
     /// Maximum video length in seconds.
-    max-length: option<f64>
+    max-length: option<f64>,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>
   }
   search-food-videos: func(params: search-food-videos-params) -> result<string, string>;
 
@@ -96,17 +122,40 @@ interface misc {
 
 
 interface ingredients {
-  enum ingredients-by-id-image-measure-enum {
+  enum autocomplete-ingredient-search-language-enum {
+    en,
+    de,
+  }
+
+  enum visualize-ingredients-content-type-enum {
+    application-x-www-form-urlencoded,
+    application-json,
+    multipart-form-data,
+  }
+
+  enum visualize-ingredients-accept-enum {
+    application-json,
+    text-html,
+    media,
+  }
+
+  enum by-id-image-measure-enum {
     us,
     metric,
   }
 
   /// Autocomplete Ingredient Search
   record autocomplete-ingredient-search-params {
+    /// The (natural language) search query.
+    query: option<string>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>,
     /// Whether to return more meta information about the ingredients.
     meta-information: option<bool>,
     /// A comma-separated list of intolerances. All recipes returned must not contain ingredients that are not suitable for people with the intolerances entered. See a full list of supported intolerances.
-    intolerances: option<string>
+    intolerances: option<string>,
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<autocomplete-ingredient-search-language-enum>
   }
   autocomplete-ingredient-search: func(params: autocomplete-ingredient-search-params) -> result<string, string>;
 
@@ -119,6 +168,8 @@ interface ingredients {
 
   /// Ingredient Search
   record ingredient-search-params {
+    /// The (natural language) search query.
+    query: option<string>,
     /// Whether to add children of found foods.
     add-children: option<bool>,
     /// The minimum percentage of protein the food must have (between 0 and 100).
@@ -140,7 +191,13 @@ interface ingredients {
     /// The strategy to sort recipes by. See a full list of supported sorting options.
     sort: option<string>,
     /// The direction in which to sort. Must be either 'asc' (ascending) or 'desc' (descending).
-    sort-direction: option<string>
+    sort-direction: option<string>,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>,
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<autocomplete-ingredient-search-language-enum>
   }
   ingredient-search: func(params: ingredient-search-params) -> result<string, string>;
 
@@ -183,20 +240,45 @@ interface ingredients {
   get-ingredient-substitutes-by-id: func(params: get-ingredient-substitutes-by-id-params) -> result<string, string>;
 
   /// Ingredients Widget
-  visualize-ingredients: func() -> result<string, string>;
+  record visualize-ingredients-params {
+    /// The content type.
+    content-type: option<visualize-ingredients-content-type-enum>,
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<autocomplete-ingredient-search-language-enum>,
+    /// Accept header.
+    accept: option<visualize-ingredients-accept-enum>
+  }
+  visualize-ingredients: func(params: visualize-ingredients-params) -> result<string, string>;
 
   /// Ingredients by ID Image
-  record ingredients-by-id-image-params {
+  record by-id-image-params {
     /// The recipe id.
     id: string,
     /// Whether the the measures should be 'us' or 'metric'.
-    measure: option<ingredients-by-id-image-measure-enum>
+    measure: option<by-id-image-measure-enum>
   }
-  ingredients-by-id-image: func(params: ingredients-by-id-image-params) -> result<string, string>;
+  by-id-image: func(params: by-id-image-params) -> result<string, string>;
 
 }
 
 interface recipes {
+  enum compute-glycemic-load-language-enum {
+    en,
+    de,
+  }
+
+  enum analyze-recipe-instructions-content-type-enum {
+    application-x-www-form-urlencoded,
+    application-json,
+    multipart-form-data,
+  }
+
+  enum visualize-equipment-accept-enum {
+    application-json,
+    text-html,
+    media,
+  }
+
   enum visualize-recipe-ingredients-by-id-measure-enum {
     us,
     metric,
@@ -204,6 +286,8 @@ interface recipes {
 
   /// Compute Glycemic Load
   record compute-glycemic-load-params {
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<compute-glycemic-load-language-enum>,
     ingredients: list<string>
   }
   compute-glycemic-load: func(params: compute-glycemic-load-params) -> result<string, string>;
@@ -224,13 +308,25 @@ interface recipes {
   analyze-recipe: func(params: analyze-recipe-params) -> result<string, string>;
 
   /// Analyze Recipe Instructions
-  analyze-recipe-instructions: func() -> result<string, string>;
+  record analyze-recipe-instructions-params {
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>
+  }
+  analyze-recipe-instructions: func(params: analyze-recipe-instructions-params) -> result<string, string>;
 
   /// Autocomplete Recipe Search
-  autocomplete-recipe-search: func() -> result<string, string>;
+  record autocomplete-recipe-search-params {
+    /// The (natural language) search query.
+    query: option<string>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>
+  }
+  autocomplete-recipe-search: func(params: autocomplete-recipe-search-params) -> result<string, string>;
 
   /// Search Recipes
   record search-recipes-params {
+    /// The (natural language) search query.
+    query: option<string>,
     /// The cuisine(s) of the recipes. One or more, comma separated (will be interpreted as 'OR'). See a full list of supported cuisines.
     cuisine: option<string>,
     /// The cuisine(s) the recipes must not match. One or more, comma separated (will be interpreted as 'AND'). See a full list of supported cuisines.
@@ -257,12 +353,16 @@ interface recipes {
     add-recipe-nutrition: option<bool>,
     /// The username of the recipe author.
     author: option<string>,
+    /// The tags (can be diets, meal types, cuisines, or intolerances) that the recipe must have.
+    tags: option<string>,
     /// The id of the recipe box to which the search should be limited to.
     recipe-box-id: option<f64>,
     /// Enter text that must be found in the title of the recipes.
     title-match: option<string>,
     /// The maximum time in minutes it should take to prepare and cook the recipe.
     max-ready-time: option<f64>,
+    /// Whether to ignore typical pantry items, such as water, salt, flour, etc.
+    ignore-pantry: option<bool>,
     /// The strategy to sort recipes by. See a full list of supported sorting options.
     sort: option<string>,
     /// The direction in which to sort. Must be either 'asc' (ascending) or 'desc' (descending).
@@ -410,7 +510,13 @@ interface recipes {
     /// The minimum amount of zinc in milligrams the recipe must have.
     min-zinc: option<f64>,
     /// The maximum amount of zinc in milligrams the recipe can have.
-    max-zinc: option<f64>
+    max-zinc: option<f64>,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>,
+    /// Whether the recipes should have an open license that allows display with proper attribution.
+    limit-license: option<bool>
   }
   search-recipes: func(params: search-recipes-params) -> result<string, string>;
 
@@ -428,7 +534,11 @@ interface recipes {
   convert-amounts: func(params: convert-amounts-params) -> result<string, string>;
 
   /// Classify Cuisine
-  classify-cuisine: func() -> result<string, string>;
+  record classify-cuisine-params {
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>
+  }
+  classify-cuisine: func(params: classify-cuisine-params) -> result<string, string>;
 
   /// Extract Recipe from Website
   record extract-recipe-from-website-params {
@@ -437,14 +547,26 @@ interface recipes {
     /// If true, the extraction will be triggered whether we already know the recipe or not. Use this only if information is missing as this operation is slower.
     force-extraction: option<bool>,
     /// If true, the recipe will be analyzed and classified resolving in more data such as cuisines, dish types, and more.
-    analyze: option<bool>
+    analyze: option<bool>,
+    /// Include nutrition data in the recipe information. Nutrition data is per serving. If you want the nutrition data for the entire recipe, just multiply by the number of servings.
+    include-nutrition: option<bool>,
+    /// Whether taste data should be added to correctly parsed ingredients.
+    include-taste: option<bool>
   }
   extract-recipe-from-website: func(params: extract-recipe-from-website-params) -> result<string, string>;
 
   /// Search Recipes by Ingredients
   record search-recipes-by-ingredients-params {
+    /// A comma-separated list of ingredients that the recipes should contain.
+    ingredients: option<string>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>,
+    /// Whether the recipes should have an open license that allows display with proper attribution.
+    limit-license: option<bool>,
     /// Whether to maximize used ingredients (1) or minimize missing ingredients (2) first.
-    ranking: option<f64>
+    ranking: option<f64>,
+    /// Whether to ignore typical pantry items, such as water, salt, flour, etc.
+    ignore-pantry: option<bool>
   }
   search-recipes-by-ingredients: func(params: search-recipes-by-ingredients-params) -> result<string, string>;
 
@@ -594,8 +716,14 @@ interface recipes {
     min-zinc: option<f64>,
     /// The maximum amount of zinc in milligrams the recipe can have.
     max-zinc: option<f64>,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>,
     /// If true, every request will give you a random set of recipes within the requested limits.
-    random: option<bool>
+    random: option<bool>,
+    /// Whether the recipes should have an open license that allows display with proper attribution.
+    limit-license: option<bool>
   }
   search-recipes-by-nutrients: func(params: search-recipes-by-nutrients-params) -> result<string, string>;
 
@@ -609,12 +737,20 @@ interface recipes {
   /// Get Recipe Information Bulk
   record get-recipe-information-bulk-params {
     /// A comma-separated list of recipe ids.
-    ids: string
+    ids: string,
+    /// Include nutrition data in the recipe information. Nutrition data is per serving. If you want the nutrition data for the entire recipe, just multiply by the number of servings.
+    include-nutrition: option<bool>
   }
   get-recipe-information-bulk: func(params: get-recipe-information-bulk-params) -> result<string, string>;
 
   /// Parse Ingredients
-  parse-ingredients: func() -> result<string, string>;
+  record parse-ingredients-params {
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<compute-glycemic-load-language-enum>
+  }
+  parse-ingredients: func(params: parse-ingredients-params) -> result<string, string>;
 
   /// Analyze a Recipe Search Query
   record analyze-a-recipe-search-query-params {
@@ -631,24 +767,66 @@ interface recipes {
   quick-answer: func(params: quick-answer-params) -> result<string, string>;
 
   /// Get Random Recipes
-  get-random-recipes: func() -> result<string, string>;
+  record get-random-recipes-params {
+    /// Whether the recipes should have an open license that allows display with proper attribution.
+    limit-license: option<bool>,
+    /// The tags (can be diets, meal types, cuisines, or intolerances) that the recipe must have.
+    tags: option<string>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>
+  }
+  get-random-recipes: func(params: get-random-recipes-params) -> result<string, string>;
 
   /// Equipment Widget
-  visualize-equipment: func() -> result<string, string>;
+  record visualize-equipment-params {
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    /// Accept header.
+    accept: option<visualize-equipment-accept-enum>
+  }
+  visualize-equipment: func(params: visualize-equipment-params) -> result<string, string>;
 
   /// Recipe Nutrition Widget
-  visualize-recipe-nutrition: func() -> result<string, string>;
+  record visualize-recipe-nutrition-params {
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    /// Accept header.
+    accept: option<visualize-equipment-accept-enum>,
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<compute-glycemic-load-language-enum>
+  }
+  visualize-recipe-nutrition: func(params: visualize-recipe-nutrition-params) -> result<string, string>;
 
   /// Price Breakdown Widget
-  visualize-price-breakdown: func() -> result<string, string>;
+  record visualize-price-breakdown-params {
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    /// Accept header.
+    accept: option<visualize-equipment-accept-enum>,
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<compute-glycemic-load-language-enum>
+  }
+  visualize-price-breakdown: func(params: visualize-price-breakdown-params) -> result<string, string>;
 
   /// Create Recipe Card
-  create-recipe-card: func() -> result<string, string>;
+  record create-recipe-card-params {
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>
+  }
+  create-recipe-card: func(params: create-recipe-card-params) -> result<string, string>;
 
   /// Recipe Taste Widget
   record visualize-recipe-taste-params {
+    /// The language of the input. Either 'en' or 'de'.
+    language: option<compute-glycemic-load-language-enum>,
+    /// The content type.
+    content-type: option<analyze-recipe-instructions-content-type-enum>,
+    /// Accept header.
+    accept: option<visualize-equipment-accept-enum>,
     /// Whether to normalize to the strongest taste.
-    normalize: option<bool>
+    normalize: option<bool>,
+    /// Red, green, blue values for the chart color.
+    rgb: option<string>
   }
   visualize-recipe-taste: func(params: visualize-recipe-taste-params) -> result<string, string>;
 
@@ -679,7 +857,9 @@ interface recipes {
   /// Equipment by ID Widget
   record visualize-recipe-equipment-by-id-params {
     /// The recipe id.
-    id: string
+    id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>
   }
   visualize-recipe-equipment-by-id: func(params: visualize-recipe-equipment-by-id-params) -> result<string, string>;
 
@@ -700,7 +880,9 @@ interface recipes {
   /// Get Recipe Information
   record get-recipe-information-params {
     /// The id of the recipe.
-    id: string
+    id: string,
+    /// Include nutrition data in the recipe information. Nutrition data is per serving. If you want the nutrition data for the entire recipe, just multiply by the number of servings.
+    include-nutrition: option<bool>
   }
   get-recipe-information: func(params: get-recipe-information-params) -> result<string, string>;
 
@@ -708,6 +890,8 @@ interface recipes {
   record visualize-recipe-ingredients-by-id-params {
     /// The recipe id.
     id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>,
     /// Whether the the measures should be 'us' or 'metric'.
     measure: option<visualize-recipe-ingredients-by-id-measure-enum>
   }
@@ -724,6 +908,8 @@ interface recipes {
   record recipe-nutrition-label-widget-params {
     /// The recipe id.
     id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>,
     /// Whether to show optional nutrients.
     show-optional-nutrients: option<bool>,
     /// Whether to show zero values.
@@ -749,7 +935,11 @@ interface recipes {
   /// Recipe Nutrition by ID Widget
   record visualize-recipe-nutrition-by-id-params {
     /// The recipe id.
-    id: string
+    id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>,
+    /// Accept header.
+    accept: option<visualize-equipment-accept-enum>
   }
   visualize-recipe-nutrition-by-id: func(params: visualize-recipe-nutrition-by-id-params) -> result<string, string>;
 
@@ -770,7 +960,9 @@ interface recipes {
   /// Price Breakdown by ID Widget
   record visualize-recipe-price-breakdown-by-id-params {
     /// The recipe id.
-    id: string
+    id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>
   }
   visualize-recipe-price-breakdown-by-id: func(params: visualize-recipe-price-breakdown-by-id-params) -> result<string, string>;
 
@@ -791,7 +983,11 @@ interface recipes {
   /// Get Similar Recipes
   record get-similar-recipes-params {
     /// The id of the source recipe for which similar recipes should be found.
-    id: string
+    id: string,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>,
+    /// Whether the recipes should have an open license that allows display with proper attribution.
+    limit-license: option<bool>
   }
   get-similar-recipes: func(params: get-similar-recipes-params) -> result<string, string>;
 
@@ -807,7 +1003,9 @@ interface recipes {
     /// The recipe id.
     id: string,
     /// Whether to normalize to the strongest taste.
-    normalize: option<bool>
+    normalize: option<bool>,
+    /// Red, green, blue values for the chart color.
+    rgb: option<string>
   }
   visualize-recipe-taste-by-id: func(params: visualize-recipe-taste-by-id-params) -> result<string, string>;
 
@@ -825,15 +1023,25 @@ interface recipes {
     /// The recipe id.
     id: string,
     /// Normalize to the strongest taste.
-    normalize: option<bool>
+    normalize: option<bool>,
+    /// Red, green, blue values for the chart color.
+    rgb: option<string>
   }
   recipe-taste-by-id-image: func(params: recipe-taste-by-id-image-params) -> result<string, string>;
 
 }
 
 interface menu-items {
+  enum visualize-menu-item-nutrition-by-id-accept-enum {
+    application-json,
+    text-html,
+    media,
+  }
+
   /// Search Menu Items
   record search-menu-items-params {
+    /// The (natural language) search query.
+    query: option<string>,
     /// The minimum amount of calories the menu item must have.
     min-calories: option<f64>,
     /// The maximum amount of calories the menu item can have.
@@ -851,7 +1059,11 @@ interface menu-items {
     /// The maximum amount of fat in grams the menu item can have.
     max-fat: option<f64>,
     /// If set to true, you get more information about the menu items returned.
-    add-menu-item-information: option<bool>
+    add-menu-item-information: option<bool>,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>
   }
   search-menu-items: func(params: search-menu-items-params) -> result<string, string>;
 
@@ -875,6 +1087,8 @@ interface menu-items {
   record menu-item-nutrition-label-widget-params {
     /// The menu item id.
     id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>,
     /// Whether to show optional nutrients.
     show-optional-nutrients: option<bool>,
     /// Whether to show zero values.
@@ -900,7 +1114,11 @@ interface menu-items {
   /// Menu Item Nutrition by ID Widget
   record visualize-menu-item-nutrition-by-id-params {
     /// The menu item id.
-    id: string
+    id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>,
+    /// Accept header.
+    accept: option<visualize-menu-item-nutrition-by-id-accept-enum>
   }
   visualize-menu-item-nutrition-by-id: func(params: visualize-menu-item-nutrition-by-id-params) -> result<string, string>;
 
@@ -917,6 +1135,12 @@ interface products {
   enum classify-grocery-product-locale-enum {
     en-us,
     en-gb,
+  }
+
+  enum visualize-product-nutrition-by-id-accept-enum {
+    application-json,
+    text-html,
+    media,
   }
 
   record classify-grocery-product-bulk-body-item {
@@ -945,6 +1169,8 @@ interface products {
 
   /// Search Grocery Products
   record search-grocery-products-params {
+    /// The (natural language) search query.
+    query: option<string>,
     /// The minimum amount of calories the product must have.
     min-calories: option<f64>,
     /// The maximum amount of calories the product can have.
@@ -962,7 +1188,11 @@ interface products {
     /// The maximum amount of fat in grams the product can have.
     max-fat: option<f64>,
     /// If set to true, you get more information about the products returned.
-    add-product-information: option<bool>
+    add-product-information: option<bool>,
+    /// The number of results to skip (between 0 and 900).
+    offset: option<s32>,
+    /// The maximum number of items to return (between 1 and 100). Defaults to 10.
+    number: option<s32>
   }
   search-grocery-products: func(params: search-grocery-products-params) -> result<string, string>;
 
@@ -1000,6 +1230,8 @@ interface products {
   record product-nutrition-label-widget-params {
     /// The product id.
     id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>,
     /// Whether to show optional nutrients.
     show-optional-nutrients: option<bool>,
     /// Whether to show zero values.
@@ -1025,7 +1257,11 @@ interface products {
   /// Product Nutrition by ID Widget
   record visualize-product-nutrition-by-id-params {
     /// The id of the product.
-    id: string
+    id: string,
+    /// Whether the default CSS should be added to the response.
+    default-css: option<bool>,
+    /// Accept header.
+    accept: option<visualize-product-nutrition-by-id-accept-enum>
   }
   visualize-product-nutrition-by-id: func(params: visualize-product-nutrition-by-id-params) -> result<string, string>;
 
@@ -1132,7 +1368,9 @@ interface meal-planning {
     /// The username.
     username: string,
     /// The date in the format yyyy-mm-dd.
-    date: string
+    date: string,
+    /// The private hash for the username.
+    hash: string
   }
   clear-meal-plan-day: func(params: clear-meal-plan-day-params) -> result<string, string>;
 
@@ -1140,6 +1378,8 @@ interface meal-planning {
   record add-to-meal-plan-params {
     /// The username.
     username: string,
+    /// The private hash for the username.
+    hash: string,
     date: f64,
     position: s32,
     slot: s32,
@@ -1153,14 +1393,18 @@ interface meal-planning {
     /// The username.
     username: string,
     /// The shopping list item id.
-    id: string
+    id: string,
+    /// The private hash for the username.
+    hash: string
   }
   delete-from-meal-plan: func(params: delete-from-meal-plan-params) -> result<string, string>;
 
   /// Get Shopping List
   record get-shopping-list-params {
     /// The username.
-    username: string
+    username: string,
+    /// The private hash for the username.
+    hash: string
   }
   get-shopping-list: func(params: get-shopping-list-params) -> result<string, string>;
 
@@ -1168,6 +1412,8 @@ interface meal-planning {
   record add-to-shopping-list-params {
     /// The username.
     username: string,
+    /// The private hash for the username.
+    hash: string,
     aisle: string,
     item: string,
     parse: bool
@@ -1179,7 +1425,9 @@ interface meal-planning {
     /// The username.
     username: string,
     /// The shopping list item id.
-    id: string
+    id: string,
+    /// The private hash for the username.
+    hash: string
   }
   delete-from-shopping-list: func(params: delete-from-shopping-list-params) -> result<string, string>;
 
@@ -1190,14 +1438,18 @@ interface meal-planning {
     /// The start date in the format yyyy-mm-dd.
     start-date: string,
     /// The end date in the format yyyy-mm-dd.
-    end-date: string
+    end-date: string,
+    /// The private hash for the username.
+    hash: string
   }
   generate-shopping-list: func(params: generate-shopping-list-params) -> result<string, string>;
 
   /// Get Meal Plan Templates
   record get-meal-plan-templates-params {
     /// The username.
-    username: string
+    username: string,
+    /// The private hash for the username.
+    hash: string
   }
   get-meal-plan-templates: func(params: get-meal-plan-templates-params) -> result<string, string>;
 
@@ -1215,7 +1467,9 @@ interface meal-planning {
     /// The username.
     username: string,
     /// The shopping list item id.
-    id: string
+    id: string,
+    /// The private hash for the username.
+    hash: string
   }
   get-meal-plan-template: func(params: get-meal-plan-template-params) -> result<string, string>;
 
@@ -1235,7 +1489,9 @@ interface meal-planning {
     /// The username.
     username: string,
     /// The start date of the meal planned week in the format yyyy-mm-dd.
-    start-date: string
+    start-date: string,
+    /// The private hash for the username.
+    hash: string
   }
   get-meal-plan-week: func(params: get-meal-plan-week-params) -> result<string, string>;
 

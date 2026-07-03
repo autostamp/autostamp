@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:ip2location"
-version = "0.2.1+ip2location-1.0"
+version = "0.3.0+ip2location-1.0"
 registry = "ghcr.io/autostamp/ip2location"
 kind = "component"
 file = "build/ip2location.wasm"

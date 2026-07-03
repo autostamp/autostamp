@@ -1,4 +1,4 @@
-package autostamp:postmarkapp@0.2.1;
+package autostamp:postmarkapp@0.3.0;
 
 interface domains-api {
   /// List Domains

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:musixmatch"
-version = "0.2.1+musixmatch-1.1.0"
+version = "0.3.0+musixmatch-1.1.0"
 registry = "ghcr.io/autostamp/musixmatch"
 kind = "component"
 file = "build/musixmatch.wasm"

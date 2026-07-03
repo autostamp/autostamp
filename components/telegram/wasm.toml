@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:telegram"
-version = "0.2.1+telegram-5.0.0"
+version = "0.3.0+telegram-5.0.0"
 registry = "ghcr.io/autostamp/telegram"
 kind = "component"
 file = "build/telegram.wasm"

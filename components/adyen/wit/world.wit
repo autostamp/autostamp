@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `BasicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:adyen@0.2.1;
+package autostamp:adyen@0.3.0;
 
 interface accounts {
   enum create-account-request-payout-schedule-enum {

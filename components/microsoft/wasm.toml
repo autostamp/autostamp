@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:microsoft"
-version = "0.2.1+microsoft-2.0"
+version = "0.3.0+microsoft-2.0"
 registry = "ghcr.io/autostamp/microsoft"
 kind = "component"
 file = "build/microsoft.wasm"

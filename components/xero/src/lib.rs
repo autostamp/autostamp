@@ -288,6 +288,7 @@ const OP_ACCOUNTING_GET_ACCOUNTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Accounts",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
     ],
@@ -425,9 +426,11 @@ const OP_ACCOUNTING_GET_BANK_TRANSACTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BankTransactions",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -438,6 +441,8 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_BANK_TRANSACTIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/BankTransactions",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "bank_transactions", location: FieldLocation::Body },
     ],
     auth: &[
@@ -449,6 +454,8 @@ const OP_ACCOUNTING_CREATE_BANK_TRANSACTIONS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/BankTransactions",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "bank_transactions", location: FieldLocation::Body },
     ],
     auth: &[
@@ -461,6 +468,7 @@ const OP_ACCOUNTING_GET_BANK_TRANSACTION: OpSpec = OpSpec {
     path_template: "/BankTransactions/{bank_transaction_id}",
     fields: &[
         FieldSpec { snake: "bank_transaction_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -472,6 +480,7 @@ const OP_ACCOUNTING_UPDATE_BANK_TRANSACTION: OpSpec = OpSpec {
     path_template: "/BankTransactions/{bank_transaction_id}",
     fields: &[
         FieldSpec { snake: "bank_transaction_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "bank_transactions", location: FieldLocation::Body },
     ],
     auth: &[
@@ -567,6 +576,7 @@ const OP_ACCOUNTING_GET_BANK_TRANSFERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BankTransfers",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
     ],
@@ -685,6 +695,7 @@ const OP_ACCOUNTING_GET_BATCH_PAYMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BatchPayments",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
     ],
@@ -697,6 +708,7 @@ const OP_ACCOUNTING_CREATE_BATCH_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/BatchPayments",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "batch_payments", location: FieldLocation::Body },
     ],
     auth: &[
@@ -861,6 +873,7 @@ const OP_ACCOUNTING_GET_CONTACTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Contacts",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "i_ds", location: FieldLocation::Query },
@@ -876,6 +889,7 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_CONTACTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Contacts",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "contacts", location: FieldLocation::Body },
     ],
     auth: &[
@@ -887,6 +901,7 @@ const OP_ACCOUNTING_CREATE_CONTACTS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/Contacts",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "contacts", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1027,9 +1042,11 @@ const OP_ACCOUNTING_GET_CREDIT_NOTES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/CreditNotes",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1040,6 +1057,8 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_CREDIT_NOTES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/CreditNotes",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "credit_notes", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1051,6 +1070,8 @@ const OP_ACCOUNTING_CREATE_CREDIT_NOTES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/CreditNotes",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "credit_notes", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1063,6 +1084,7 @@ const OP_ACCOUNTING_GET_CREDIT_NOTE: OpSpec = OpSpec {
     path_template: "/CreditNotes/{credit_note_id}",
     fields: &[
         FieldSpec { snake: "credit_note_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1074,6 +1096,7 @@ const OP_ACCOUNTING_UPDATE_CREDIT_NOTE: OpSpec = OpSpec {
     path_template: "/CreditNotes/{credit_note_id}",
     fields: &[
         FieldSpec { snake: "credit_note_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "credit_notes", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1086,6 +1109,7 @@ const OP_ACCOUNTING_CREATE_CREDIT_NOTE_ALLOCATION: OpSpec = OpSpec {
     path_template: "/CreditNotes/{credit_note_id}/Allocations",
     fields: &[
         FieldSpec { snake: "credit_note_id", location: FieldLocation::Path },
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "allocations", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1148,6 +1172,7 @@ const OP_ACCOUNTING_CREATE_CREDIT_NOTE_ATTACHMENT_BY_FILE_NAME: OpSpec = OpSpec 
     fields: &[
         FieldSpec { snake: "credit_note_id", location: FieldLocation::Path },
         FieldSpec { snake: "file_name", location: FieldLocation::Path },
+        FieldSpec { snake: "include_online", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1216,6 +1241,7 @@ const OP_ACCOUNTING_GET_EMPLOYEES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Employees",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
     ],
@@ -1228,6 +1254,7 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_EMPLOYEES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Employees",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "employees", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1239,6 +1266,7 @@ const OP_ACCOUNTING_CREATE_EMPLOYEES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/Employees",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "employees", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1261,6 +1289,7 @@ const OP_ACCOUNTING_GET_EXPENSE_CLAIMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ExpenseClaims",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
     ],
@@ -1340,6 +1369,7 @@ const OP_ACCOUNTING_GET_INVOICES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Invoices",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "i_ds", location: FieldLocation::Query },
@@ -1349,6 +1379,7 @@ const OP_ACCOUNTING_GET_INVOICES: OpSpec = OpSpec {
         FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "include_archived", location: FieldLocation::Query },
         FieldSpec { snake: "created_by_my_app", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1359,6 +1390,8 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_INVOICES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Invoices",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "invoices", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1370,6 +1403,8 @@ const OP_ACCOUNTING_CREATE_INVOICES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/Invoices",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "invoices", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1382,6 +1417,7 @@ const OP_ACCOUNTING_GET_INVOICE: OpSpec = OpSpec {
     path_template: "/Invoices/{invoice_id}",
     fields: &[
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1393,6 +1429,7 @@ const OP_ACCOUNTING_UPDATE_INVOICE: OpSpec = OpSpec {
     path_template: "/Invoices/{invoice_id}",
     fields: &[
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "invoices", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1455,6 +1492,7 @@ const OP_ACCOUNTING_CREATE_INVOICE_ATTACHMENT_BY_FILE_NAME: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
         FieldSpec { snake: "file_name", location: FieldLocation::Path },
+        FieldSpec { snake: "include_online", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1522,8 +1560,10 @@ const OP_ACCOUNTING_GET_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Items",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1534,6 +1574,8 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Items",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "items", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1545,6 +1587,8 @@ const OP_ACCOUNTING_CREATE_ITEMS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/Items",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "items", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1557,6 +1601,7 @@ const OP_ACCOUNTING_GET_ITEM: OpSpec = OpSpec {
     path_template: "/Items/{item_id}",
     fields: &[
         FieldSpec { snake: "item_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1568,6 +1613,7 @@ const OP_ACCOUNTING_UPDATE_ITEM: OpSpec = OpSpec {
     path_template: "/Items/{item_id}",
     fields: &[
         FieldSpec { snake: "item_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "items", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1613,6 +1659,7 @@ const OP_ACCOUNTING_GET_JOURNALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Journals",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "payments_only", location: FieldLocation::Query },
     ],
@@ -1707,6 +1754,7 @@ const OP_ACCOUNTING_GET_MANUAL_JOURNALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ManualJournals",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "page", location: FieldLocation::Query },
@@ -1720,6 +1768,7 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_MANUAL_JOURNALS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/ManualJournals",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "manual_journals", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1731,6 +1780,7 @@ const OP_ACCOUNTING_CREATE_MANUAL_JOURNALS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/ManualJournals",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "manual_journals", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1880,9 +1930,11 @@ const OP_ACCOUNTING_GET_OVERPAYMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Overpayments",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -1905,6 +1957,7 @@ const OP_ACCOUNTING_CREATE_OVERPAYMENT_ALLOCATIONS: OpSpec = OpSpec {
     path_template: "/Overpayments/{overpayment_id}/Allocations",
     fields: &[
         FieldSpec { snake: "overpayment_id", location: FieldLocation::Path },
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "allocations", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1960,6 +2013,7 @@ const OP_ACCOUNTING_GET_PAYMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Payments",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "page", location: FieldLocation::Query },
@@ -2008,6 +2062,7 @@ const OP_ACCOUNTING_CREATE_PAYMENTS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/Payments",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "payments", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2065,9 +2120,11 @@ const OP_ACCOUNTING_GET_PREPAYMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Prepayments",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -2090,6 +2147,7 @@ const OP_ACCOUNTING_CREATE_PREPAYMENT_ALLOCATIONS: OpSpec = OpSpec {
     path_template: "/Prepayments/{prepayment_id}/Allocations",
     fields: &[
         FieldSpec { snake: "prepayment_id", location: FieldLocation::Path },
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "allocations", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2124,6 +2182,7 @@ const OP_ACCOUNTING_GET_PURCHASE_ORDERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/PurchaseOrders",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "status", location: FieldLocation::Query },
         FieldSpec { snake: "date_from", location: FieldLocation::Query },
         FieldSpec { snake: "date_to", location: FieldLocation::Query },
@@ -2139,6 +2198,7 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_PURCHASE_ORDERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/PurchaseOrders",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "purchase_orders", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2150,6 +2210,7 @@ const OP_ACCOUNTING_CREATE_PURCHASE_ORDERS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/PurchaseOrders",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "purchase_orders", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2290,6 +2351,7 @@ const OP_ACCOUNTING_GET_QUOTES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Quotes",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "date_from", location: FieldLocation::Query },
         FieldSpec { snake: "date_to", location: FieldLocation::Query },
         FieldSpec { snake: "expiry_date_from", location: FieldLocation::Query },
@@ -2309,6 +2371,7 @@ const OP_ACCOUNTING_UPDATE_OR_CREATE_QUOTES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Quotes",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "quotes", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2320,6 +2383,7 @@ const OP_ACCOUNTING_CREATE_QUOTES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/Quotes",
     fields: &[
+        FieldSpec { snake: "summarize_errors", location: FieldLocation::Query },
         FieldSpec { snake: "quotes", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2449,8 +2513,10 @@ const OP_ACCOUNTING_GET_RECEIPTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Receipts",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -2461,6 +2527,7 @@ const OP_ACCOUNTING_CREATE_RECEIPT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/Receipts",
     fields: &[
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "receipts", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2473,6 +2540,7 @@ const OP_ACCOUNTING_GET_RECEIPT: OpSpec = OpSpec {
     path_template: "/Receipts/{receipt_id}",
     fields: &[
         FieldSpec { snake: "receipt_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2", kind: AuthKind::Bearer },
@@ -2484,6 +2552,7 @@ const OP_ACCOUNTING_UPDATE_RECEIPT: OpSpec = OpSpec {
     path_template: "/Receipts/{receipt_id}",
     fields: &[
         FieldSpec { snake: "receipt_id", location: FieldLocation::Path },
+        FieldSpec { snake: "unitdp", location: FieldLocation::Query },
         FieldSpec { snake: "receipts", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2986,6 +3055,7 @@ const OP_ACCOUNTING_GET_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Users",
     fields: &[
+        FieldSpec { snake: "if_modified_since", location: FieldLocation::Header },
         FieldSpec { snake: "where", location: FieldLocation::Query },
         FieldSpec { snake: "order", location: FieldLocation::Query },
     ],
@@ -4184,6 +4254,7 @@ fn iface_accounting__tax_component__to_json(p: &iface_accounting::TaxComponent) 
 
 fn iface_accounting__get_accounts_params__to_json(p: &iface_accounting::GetAccountsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -4271,20 +4342,26 @@ fn iface_accounting__create_account_attachment_by_file_name_params__to_json(p: &
 
 fn iface_accounting__get_bank_transactions_params__to_json(p: &iface_accounting::GetBankTransactionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_or_create_bank_transactions_params__to_json(p: &iface_accounting::UpdateOrCreateBankTransactionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("bank_transactions".into(), match (&p.bank_transactions) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__bank_transaction__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_bank_transactions_params__to_json(p: &iface_accounting::CreateBankTransactionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("bank_transactions".into(), match (&p.bank_transactions) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__bank_transaction__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4292,12 +4369,14 @@ fn iface_accounting__create_bank_transactions_params__to_json(p: &iface_accounti
 fn iface_accounting__get_bank_transaction_params__to_json(p: &iface_accounting::GetBankTransactionParams) -> Value {
     let mut m = Map::new();
     m.insert("bank_transaction_id".into(), Value::String((&p.bank_transaction_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_bank_transaction_params__to_json(p: &iface_accounting::UpdateBankTransactionParams) -> Value {
     let mut m = Map::new();
     m.insert("bank_transaction_id".into(), Value::String((&p.bank_transaction_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("bank_transactions".into(), match (&p.bank_transactions) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__bank_transaction__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4353,6 +4432,7 @@ fn iface_accounting__create_bank_transaction_history_record_params__to_json(p: &
 
 fn iface_accounting__get_bank_transfers_params__to_json(p: &iface_accounting::GetBankTransfersParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -4421,6 +4501,7 @@ fn iface_accounting__create_bank_transfer_history_record_params__to_json(p: &ifa
 
 fn iface_accounting__get_batch_payments_params__to_json(p: &iface_accounting::GetBatchPaymentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -4428,6 +4509,7 @@ fn iface_accounting__get_batch_payments_params__to_json(p: &iface_accounting::Ge
 
 fn iface_accounting__create_batch_payment_params__to_json(p: &iface_accounting::CreateBatchPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("batch_payments".into(), match (&p.batch_payments) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__batch_payment__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4517,6 +4599,7 @@ fn iface_accounting__delete_contact_group_contact_params__to_json(p: &iface_acco
 
 fn iface_accounting__get_contacts_params__to_json(p: &iface_accounting::GetContactsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("i_ds".into(), match (&p.i_ds) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -4527,12 +4610,14 @@ fn iface_accounting__get_contacts_params__to_json(p: &iface_accounting::GetConta
 
 fn iface_accounting__update_or_create_contacts_params__to_json(p: &iface_accounting::UpdateOrCreateContactsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("contacts".into(), match (&p.contacts) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__contact__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_contacts_params__to_json(p: &iface_accounting::CreateContactsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("contacts".into(), match (&p.contacts) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__contact__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4613,20 +4698,26 @@ fn iface_accounting__get_contact_by_contact_number_params__to_json(p: &iface_acc
 
 fn iface_accounting__get_credit_notes_params__to_json(p: &iface_accounting::GetCreditNotesParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_or_create_credit_notes_params__to_json(p: &iface_accounting::UpdateOrCreateCreditNotesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("credit_notes".into(), match (&p.credit_notes) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__credit_note__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_credit_notes_params__to_json(p: &iface_accounting::CreateCreditNotesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("credit_notes".into(), match (&p.credit_notes) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__credit_note__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4634,12 +4725,14 @@ fn iface_accounting__create_credit_notes_params__to_json(p: &iface_accounting::C
 fn iface_accounting__get_credit_note_params__to_json(p: &iface_accounting::GetCreditNoteParams) -> Value {
     let mut m = Map::new();
     m.insert("credit_note_id".into(), Value::String((&p.credit_note_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_credit_note_params__to_json(p: &iface_accounting::UpdateCreditNoteParams) -> Value {
     let mut m = Map::new();
     m.insert("credit_note_id".into(), Value::String((&p.credit_note_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("credit_notes".into(), match (&p.credit_notes) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__credit_note__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4647,6 +4740,7 @@ fn iface_accounting__update_credit_note_params__to_json(p: &iface_accounting::Up
 fn iface_accounting__create_credit_note_allocation_params__to_json(p: &iface_accounting::CreateCreditNoteAllocationParams) -> Value {
     let mut m = Map::new();
     m.insert("credit_note_id".into(), Value::String((&p.credit_note_id).clone()));
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("allocations".into(), match (&p.allocations) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__allocation__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4684,6 +4778,7 @@ fn iface_accounting__create_credit_note_attachment_by_file_name_params__to_json(
     let mut m = Map::new();
     m.insert("credit_note_id".into(), Value::String((&p.credit_note_id).clone()));
     m.insert("file_name".into(), Value::String((&p.file_name).clone()));
+    m.insert("include_online".into(), match (&p.include_online) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4722,6 +4817,7 @@ fn iface_accounting__create_currency_params__to_json(p: &iface_accounting::Creat
 
 fn iface_accounting__get_employees_params__to_json(p: &iface_accounting::GetEmployeesParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -4729,12 +4825,14 @@ fn iface_accounting__get_employees_params__to_json(p: &iface_accounting::GetEmpl
 
 fn iface_accounting__update_or_create_employees_params__to_json(p: &iface_accounting::UpdateOrCreateEmployeesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("employees".into(), match (&p.employees) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__employee__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_employees_params__to_json(p: &iface_accounting::CreateEmployeesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("employees".into(), match (&p.employees) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__employee__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4747,6 +4845,7 @@ fn iface_accounting__get_employee_params__to_json(p: &iface_accounting::GetEmplo
 
 fn iface_accounting__get_expense_claims_params__to_json(p: &iface_accounting::GetExpenseClaimsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -4786,6 +4885,7 @@ fn iface_accounting__create_expense_claim_history_params__to_json(p: &iface_acco
 
 fn iface_accounting__get_invoices_params__to_json(p: &iface_accounting::GetInvoicesParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("i_ds".into(), match (&p.i_ds) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -4795,17 +4895,22 @@ fn iface_accounting__get_invoices_params__to_json(p: &iface_accounting::GetInvoi
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("include_archived".into(), match (&p.include_archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("created_by_my_app".into(), match (&p.created_by_my_app) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_or_create_invoices_params__to_json(p: &iface_accounting::UpdateOrCreateInvoicesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("invoices".into(), match (&p.invoices) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__invoice__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_invoices_params__to_json(p: &iface_accounting::CreateInvoicesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("invoices".into(), match (&p.invoices) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__invoice__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4813,12 +4918,14 @@ fn iface_accounting__create_invoices_params__to_json(p: &iface_accounting::Creat
 fn iface_accounting__get_invoice_params__to_json(p: &iface_accounting::GetInvoiceParams) -> Value {
     let mut m = Map::new();
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_invoice_params__to_json(p: &iface_accounting::UpdateInvoiceParams) -> Value {
     let mut m = Map::new();
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("invoices".into(), match (&p.invoices) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__invoice__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4856,6 +4963,7 @@ fn iface_accounting__create_invoice_attachment_by_file_name_params__to_json(p: &
     let mut m = Map::new();
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     m.insert("file_name".into(), Value::String((&p.file_name).clone()));
+    m.insert("include_online".into(), match (&p.include_online) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4893,19 +5001,25 @@ fn iface_accounting__get_invoice_as_pdf_params__to_json(p: &iface_accounting::Ge
 
 fn iface_accounting__get_items_params__to_json(p: &iface_accounting::GetItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_or_create_items_params__to_json(p: &iface_accounting::UpdateOrCreateItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_items_params__to_json(p: &iface_accounting::CreateItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4913,12 +5027,14 @@ fn iface_accounting__create_items_params__to_json(p: &iface_accounting::CreateIt
 fn iface_accounting__get_item_params__to_json(p: &iface_accounting::GetItemParams) -> Value {
     let mut m = Map::new();
     m.insert("item_id".into(), Value::String((&p.item_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_item_params__to_json(p: &iface_accounting::UpdateItemParams) -> Value {
     let mut m = Map::new();
     m.insert("item_id".into(), Value::String((&p.item_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -4944,6 +5060,7 @@ fn iface_accounting__create_item_history_params__to_json(p: &iface_accounting::C
 
 fn iface_accounting__get_journals_params__to_json(p: &iface_accounting::GetJournalsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("payments_only".into(), match (&p.payments_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
@@ -5003,6 +5120,7 @@ fn iface_accounting__delete_linked_transaction_params__to_json(p: &iface_account
 
 fn iface_accounting__get_manual_journals_params__to_json(p: &iface_accounting::GetManualJournalsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -5011,12 +5129,14 @@ fn iface_accounting__get_manual_journals_params__to_json(p: &iface_accounting::G
 
 fn iface_accounting__update_or_create_manual_journals_params__to_json(p: &iface_accounting::UpdateOrCreateManualJournalsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("manual_journals".into(), match (&p.manual_journals) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__manual_journal__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_manual_journals_params__to_json(p: &iface_accounting::CreateManualJournalsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("manual_journals".into(), match (&p.manual_journals) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__manual_journal__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5091,9 +5211,11 @@ fn iface_accounting__get_organisation_cis_settings_params__to_json(p: &iface_acc
 
 fn iface_accounting__get_overpayments_params__to_json(p: &iface_accounting::GetOverpaymentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5106,6 +5228,7 @@ fn iface_accounting__get_overpayment_params__to_json(p: &iface_accounting::GetOv
 fn iface_accounting__create_overpayment_allocations_params__to_json(p: &iface_accounting::CreateOverpaymentAllocationsParams) -> Value {
     let mut m = Map::new();
     m.insert("overpayment_id".into(), Value::String((&p.overpayment_id).clone()));
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("allocations".into(), match (&p.allocations) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__allocation__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5131,6 +5254,7 @@ fn iface_accounting__create_payment_service_params__to_json(p: &iface_accounting
 
 fn iface_accounting__get_payments_params__to_json(p: &iface_accounting::GetPaymentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -5169,6 +5293,7 @@ fn iface_accounting__create_payment_params__to_json(p: &iface_accounting::Create
 
 fn iface_accounting__create_payments_params__to_json(p: &iface_accounting::CreatePaymentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("payments".into(), match (&p.payments) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__payment__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5201,9 +5326,11 @@ fn iface_accounting__create_payment_history_params__to_json(p: &iface_accounting
 
 fn iface_accounting__get_prepayments_params__to_json(p: &iface_accounting::GetPrepaymentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5216,6 +5343,7 @@ fn iface_accounting__get_prepayment_params__to_json(p: &iface_accounting::GetPre
 fn iface_accounting__create_prepayment_allocations_params__to_json(p: &iface_accounting::CreatePrepaymentAllocationsParams) -> Value {
     let mut m = Map::new();
     m.insert("prepayment_id".into(), Value::String((&p.prepayment_id).clone()));
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("allocations".into(), match (&p.allocations) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__allocation__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5235,6 +5363,7 @@ fn iface_accounting__create_prepayment_history_params__to_json(p: &iface_account
 
 fn iface_accounting__get_purchase_orders_params__to_json(p: &iface_accounting::GetPurchaseOrdersParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_accounting__get_purchase_orders_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("date_from".into(), match (&p.date_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_to".into(), match (&p.date_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5245,12 +5374,14 @@ fn iface_accounting__get_purchase_orders_params__to_json(p: &iface_accounting::G
 
 fn iface_accounting__update_or_create_purchase_orders_params__to_json(p: &iface_accounting::UpdateOrCreatePurchaseOrdersParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("purchase_orders".into(), match (&p.purchase_orders) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__purchase_order__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_purchase_orders_params__to_json(p: &iface_accounting::CreatePurchaseOrdersParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("purchase_orders".into(), match (&p.purchase_orders) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__purchase_order__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5331,6 +5462,7 @@ fn iface_accounting__get_purchase_order_by_number_params__to_json(p: &iface_acco
 
 fn iface_accounting__get_quotes_params__to_json(p: &iface_accounting::GetQuotesParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_from".into(), match (&p.date_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_to".into(), match (&p.date_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("expiry_date_from".into(), match (&p.expiry_date_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5345,12 +5477,14 @@ fn iface_accounting__get_quotes_params__to_json(p: &iface_accounting::GetQuotesP
 
 fn iface_accounting__update_or_create_quotes_params__to_json(p: &iface_accounting::UpdateOrCreateQuotesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("quotes".into(), match (&p.quotes) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__quote__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_quotes_params__to_json(p: &iface_accounting::CreateQuotesParams) -> Value {
     let mut m = Map::new();
+    m.insert("summarize_errors".into(), match (&p.summarize_errors) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("quotes".into(), match (&p.quotes) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__quote__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5425,13 +5559,16 @@ fn iface_accounting__get_quote_as_pdf_params__to_json(p: &iface_accounting::GetQ
 
 fn iface_accounting__get_receipts_params__to_json(p: &iface_accounting::GetReceiptsParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__create_receipt_params__to_json(p: &iface_accounting::CreateReceiptParams) -> Value {
     let mut m = Map::new();
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("receipts".into(), match (&p.receipts) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__receipt__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5439,12 +5576,14 @@ fn iface_accounting__create_receipt_params__to_json(p: &iface_accounting::Create
 fn iface_accounting__get_receipt_params__to_json(p: &iface_accounting::GetReceiptParams) -> Value {
     let mut m = Map::new();
     m.insert("receipt_id".into(), Value::String((&p.receipt_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounting__update_receipt_params__to_json(p: &iface_accounting::UpdateReceiptParams) -> Value {
     let mut m = Map::new();
     m.insert("receipt_id".into(), Value::String((&p.receipt_id).clone()));
+    m.insert("unitdp".into(), match (&p.unitdp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("receipts".into(), match (&p.receipts) { Some(v) => Value::Array((v).iter().map(|v| iface_accounting__receipt__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -5742,6 +5881,7 @@ fn iface_accounting__delete_tracking_options_params__to_json(p: &iface_accountin
 
 fn iface_accounting__get_users_params__to_json(p: &iface_accounting::GetUsersParams) -> Value {
     let mut m = Map::new();
+    m.insert("if_modified_since".into(), match (&p.if_modified_since) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("where".into(), match (&p.where_) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order".into(), match (&p.order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)

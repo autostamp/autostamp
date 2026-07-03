@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:meilisearch"
-version = "0.2.1+meilisearch-1.0.0"
+version = "0.3.0+meilisearch-1.0.0"
 registry = "ghcr.io/autostamp/meilisearch"
 kind = "component"
 file = "build/meilisearch.wasm"

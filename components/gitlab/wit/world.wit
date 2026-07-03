@@ -1,4 +1,4 @@
-package autostamp:gitlab@0.2.1;
+package autostamp:gitlab@0.3.0;
 
 interface application {
   enum put-v3-application-settings-body-enabled-git-access-protocol-enum {

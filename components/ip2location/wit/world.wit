@@ -1,4 +1,12 @@
-package autostamp:ip2location@0.2.1;
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `key` | query `key` |
+package autostamp:ip2location@0.3.0;
 
 interface ip2-location-ip-geolocation {
   enum get-package-op-enum {
@@ -79,9 +87,7 @@ interface ip2-location-ip-geolocation {
     /// Format of the response message.
     format: option<get-format-enum>,
     /// Translation information. The translation only applicable for continent, country, region and city name for the addon package.
-    lang: option<get-lang-enum>,
-    /// API Key. Please sign up free trial license key at ip2location.com
-    key: string
+    lang: option<get-lang-enum>
   }
   get: func(params: get-params) -> result<string, string>;
 

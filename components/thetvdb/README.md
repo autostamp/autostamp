@@ -11,8 +11,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:thetvdb@0.2.1` |
-| Published version | `0.2.1+thetvdb-3.0.0` |
+| Package | `autostamp:thetvdb@0.3.0` |
+| Published version | `0.3.0+thetvdb-3.0.0` |
 | Tag filter | all tags |
 | Operations generated | 31 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

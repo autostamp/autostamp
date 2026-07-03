@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:digitalocean"
-version = "0.2.1+digitalocean-2.0"
+version = "0.3.0+digitalocean-2.0"
 registry = "ghcr.io/autostamp/digitalocean"
 kind = "component"
 file = "build/digitalocean.wasm"

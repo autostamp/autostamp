@@ -665,7 +665,7 @@ impl iface_groups::Guest for crate::Component {
 }
 use crate::exports::autostamp::snyk::monitor as iface_monitor;
 
-const OP_MONITOR_MONITOR_DEP_GRAPH: OpSpec = OpSpec {
+const OP_MONITOR_DEP_GRAPH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/monitor/dep-graph",
     fields: &[
@@ -677,47 +677,47 @@ const OP_MONITOR_MONITOR_DEP_GRAPH: OpSpec = OpSpec {
     ],
 };
 
-fn iface_monitor__monitor_dep_graph_body_dep_graph__to_json(p: &iface_monitor::MonitorDepGraphBodyDepGraph) -> Value {
+fn iface_monitor__dep_graph_body_dep_graph__to_json(p: &iface_monitor::DepGraphBodyDepGraph) -> Value {
     let mut m = Map::new();
-    m.insert("graph".into(), iface_monitor__monitor_dep_graph_body_dep_graph_graph__to_json(&p.graph));
-    m.insert("pkg_manager".into(), iface_monitor__monitor_dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
+    m.insert("graph".into(), iface_monitor__dep_graph_body_dep_graph_graph__to_json(&p.graph));
+    m.insert("pkg_manager".into(), iface_monitor__dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
     m.insert("pkgs".into(), Value::Array((&p.pkgs).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("schema_version".into(), Value::String((&p.schema_version).clone()));
     Value::Object(m)
 }
 
-fn iface_monitor__monitor_dep_graph_body_dep_graph_graph__to_json(p: &iface_monitor::MonitorDepGraphBodyDepGraphGraph) -> Value {
+fn iface_monitor__dep_graph_body_dep_graph_graph__to_json(p: &iface_monitor::DepGraphBodyDepGraphGraph) -> Value {
     let mut m = Map::new();
     m.insert("nodes".into(), Value::Array((&p.nodes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("root_node_id".into(), Value::String((&p.root_node_id).clone()));
     Value::Object(m)
 }
 
-fn iface_monitor__monitor_dep_graph_body_dep_graph_pkg_manager__to_json(p: &iface_monitor::MonitorDepGraphBodyDepGraphPkgManager) -> Value {
+fn iface_monitor__dep_graph_body_dep_graph_pkg_manager__to_json(p: &iface_monitor::DepGraphBodyDepGraphPkgManager) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("repositories".into(), match (&p.repositories) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_monitor__monitor_dep_graph_body_meta__to_json(p: &iface_monitor::MonitorDepGraphBodyMeta) -> Value {
+fn iface_monitor__dep_graph_body_meta__to_json(p: &iface_monitor::DepGraphBodyMeta) -> Value {
     let mut m = Map::new();
     m.insert("target_framework".into(), match (&p.target_framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_monitor__monitor_dep_graph_params__to_json(p: &iface_monitor::MonitorDepGraphParams) -> Value {
+fn iface_monitor__dep_graph_params__to_json(p: &iface_monitor::DepGraphParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), match (&p.org) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dep_graph".into(), iface_monitor__monitor_dep_graph_body_dep_graph__to_json(&p.dep_graph));
-    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_monitor__monitor_dep_graph_body_meta__to_json(v), None => Value::Null });
+    m.insert("dep_graph".into(), iface_monitor__dep_graph_body_dep_graph__to_json(&p.dep_graph));
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_monitor__dep_graph_body_meta__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_monitor::Guest for crate::Component {
-    fn monitor_dep_graph(params: iface_monitor::MonitorDepGraphParams) -> Result<String, String> {
-        let json = iface_monitor__monitor_dep_graph_params__to_json(&params);
-        dispatch(&OP_MONITOR_MONITOR_DEP_GRAPH, json)
+    fn dep_graph(params: iface_monitor::DepGraphParams) -> Result<String, String> {
+        let json = iface_monitor__dep_graph_params__to_json(&params);
+        dispatch(&OP_MONITOR_DEP_GRAPH, json)
     }
 }
 use crate::exports::autostamp::snyk::organizations as iface_organizations;
@@ -2867,7 +2867,7 @@ impl iface_reporting_api::Guest for crate::Component {
 }
 use crate::exports::autostamp::snyk::test as iface_test;
 
-const OP_TEST_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE: OpSpec = OpSpec {
+const OP_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/composer",
     fields: &[
@@ -2878,7 +2878,7 @@ const OP_TEST_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_DEP_GRAPH: OpSpec = OpSpec {
+const OP_TEST_DEP_GRAPH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/dep-graph",
     fields: &[
@@ -2889,7 +2889,7 @@ const OP_TEST_TEST_DEP_GRAPH: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_GOPKG_TOML_GOPKG_LOCK_FILE: OpSpec = OpSpec {
+const OP_TEST_GOPKG_TOML_GOPKG_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/golangdep",
     fields: &[
@@ -2901,7 +2901,7 @@ const OP_TEST_TEST_GOPKG_TOML_GOPKG_LOCK_FILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_VENDOR_JSON_FILE: OpSpec = OpSpec {
+const OP_TEST_VENDOR_JSON_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/govendor",
     fields: &[
@@ -2912,7 +2912,7 @@ const OP_TEST_TEST_VENDOR_JSON_FILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_GRADLE_FILE: OpSpec = OpSpec {
+const OP_TEST_GRADLE_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/gradle",
     fields: &[
@@ -2923,7 +2923,7 @@ const OP_TEST_TEST_GRADLE_FILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION: OpSpec = OpSpec {
+const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/test/gradle/{group}/{name}/{version}",
     fields: &[
@@ -2937,7 +2937,7 @@ const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION: OpS
     ],
 };
 
-const OP_TEST_TEST_MAVEN_FILE: OpSpec = OpSpec {
+const OP_TEST_MAVEN_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/maven",
     fields: &[
@@ -2950,7 +2950,7 @@ const OP_TEST_TEST_MAVEN_FILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VERSION: OpSpec = OpSpec {
+const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/test/maven/{group_id}/{artifact_id}/{version}",
     fields: &[
@@ -2964,7 +2964,7 @@ const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VE
     ],
 };
 
-const OP_TEST_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE: OpSpec = OpSpec {
+const OP_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/npm",
     fields: &[
@@ -2975,7 +2975,7 @@ const OP_TEST_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION: OpSpec = OpSpec {
+const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/test/npm/{package_name}/{version}",
     fields: &[
@@ -2987,7 +2987,7 @@ const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION: OpSpec = 
     ],
 };
 
-const OP_TEST_TEST_REQUIREMENTS_TXT_FILE: OpSpec = OpSpec {
+const OP_TEST_REQUIREMENTS_TXT_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/pip",
     fields: &[
@@ -3010,7 +3010,7 @@ const OP_TEST_GET_TEST_PIP_PACKAGE_NAME_VERSION: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_GEMFILE_LOCK_FILE: OpSpec = OpSpec {
+const OP_TEST_GEMFILE_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/rubygems",
     fields: &[
@@ -3021,7 +3021,7 @@ const OP_TEST_TEST_GEMFILE_LOCK_FILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION: OpSpec = OpSpec {
+const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/test/rubygems/{gem_name}/{version}",
     fields: &[
@@ -3033,7 +3033,7 @@ const OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION: OpSpec = OpSp
     ],
 };
 
-const OP_TEST_TEST_SBT_FILE: OpSpec = OpSpec {
+const OP_TEST_SBT_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/sbt",
     fields: &[
@@ -3058,7 +3058,7 @@ const OP_TEST_GET_TEST_SBT_GROUP_ID_ARTIFACT_ID_VERSION: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEST_TEST_PACKAGE_JSON_YARN_LOCK_FILE: OpSpec = OpSpec {
+const OP_TEST_PACKAGE_JSON_YARN_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/yarn",
     fields: &[
@@ -3069,198 +3069,198 @@ const OP_TEST_TEST_PACKAGE_JSON_YARN_LOCK_FILE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(e: &iface_test::TestComposerJsonComposerLockFileBodyEncodingEnum) -> &'static str {
+fn iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(e: &iface_test::ComposerJsonComposerLockFileBodyEncodingEnum) -> &'static str {
     match e {
-        iface_test::TestComposerJsonComposerLockFileBodyEncodingEnum::Plain => "plain",
-        iface_test::TestComposerJsonComposerLockFileBodyEncodingEnum::Base64 => "base64",
+        iface_test::ComposerJsonComposerLockFileBodyEncodingEnum::Plain => "plain",
+        iface_test::ComposerJsonComposerLockFileBodyEncodingEnum::Base64 => "base64",
     }
 }
 
-fn iface_test__test_composer_json_composer_lock_file_body_files__to_json(p: &iface_test::TestComposerJsonComposerLockFileBodyFiles) -> Value {
+fn iface_test__composer_json_composer_lock_file_body_files__to_json(p: &iface_test::ComposerJsonComposerLockFileBodyFiles) -> Value {
     let mut m = Map::new();
     m.insert("additional".into(), Value::Array((&p.additional).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("target".into(), iface_test__test_composer_json_composer_lock_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__composer_json_composer_lock_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_composer_json_composer_lock_file_body_files_target__to_json(p: &iface_test::TestComposerJsonComposerLockFileBodyFilesTarget) -> Value {
+fn iface_test__composer_json_composer_lock_file_body_files_target__to_json(p: &iface_test::ComposerJsonComposerLockFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_test__test_dep_graph_body_dep_graph__to_json(p: &iface_test::TestDepGraphBodyDepGraph) -> Value {
+fn iface_test__dep_graph_body_dep_graph__to_json(p: &iface_test::DepGraphBodyDepGraph) -> Value {
     let mut m = Map::new();
-    m.insert("graph".into(), iface_test__test_dep_graph_body_dep_graph_graph__to_json(&p.graph));
-    m.insert("pkg_manager".into(), iface_test__test_dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
+    m.insert("graph".into(), iface_test__dep_graph_body_dep_graph_graph__to_json(&p.graph));
+    m.insert("pkg_manager".into(), iface_test__dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
     m.insert("pkgs".into(), Value::Array((&p.pkgs).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("schema_version".into(), Value::String((&p.schema_version).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_dep_graph_body_dep_graph_graph__to_json(p: &iface_test::TestDepGraphBodyDepGraphGraph) -> Value {
+fn iface_test__dep_graph_body_dep_graph_graph__to_json(p: &iface_test::DepGraphBodyDepGraphGraph) -> Value {
     let mut m = Map::new();
     m.insert("nodes".into(), Value::Array((&p.nodes).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("root_node_id".into(), Value::String((&p.root_node_id).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_dep_graph_body_dep_graph_pkg_manager__to_json(p: &iface_test::TestDepGraphBodyDepGraphPkgManager) -> Value {
+fn iface_test__dep_graph_body_dep_graph_pkg_manager__to_json(p: &iface_test::DepGraphBodyDepGraphPkgManager) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("repositories".into(), match (&p.repositories) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_test__test_gopkg_toml_gopkg_lock_file_body_files__to_json(p: &iface_test::TestGopkgTomlGopkgLockFileBodyFiles) -> Value {
+fn iface_test__gopkg_toml_gopkg_lock_file_body_files__to_json(p: &iface_test::GopkgTomlGopkgLockFileBodyFiles) -> Value {
     let mut m = Map::new();
     m.insert("additional".into(), Value::Array((&p.additional).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("target".into(), iface_test__test_gopkg_toml_gopkg_lock_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__gopkg_toml_gopkg_lock_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_gopkg_toml_gopkg_lock_file_body_files_target__to_json(p: &iface_test::TestGopkgTomlGopkgLockFileBodyFilesTarget) -> Value {
+fn iface_test__gopkg_toml_gopkg_lock_file_body_files_target__to_json(p: &iface_test::GopkgTomlGopkgLockFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_test__test_vendor_json_file_body_files__to_json(p: &iface_test::TestVendorJsonFileBodyFiles) -> Value {
+fn iface_test__vendor_json_file_body_files__to_json(p: &iface_test::VendorJsonFileBodyFiles) -> Value {
     let mut m = Map::new();
-    m.insert("target".into(), iface_test__test_vendor_json_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__vendor_json_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_vendor_json_file_body_files_target__to_json(p: &iface_test::TestVendorJsonFileBodyFilesTarget) -> Value {
+fn iface_test__vendor_json_file_body_files_target__to_json(p: &iface_test::VendorJsonFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_test__test_gradle_file_body_files__to_json(p: &iface_test::TestGradleFileBodyFiles) -> Value {
+fn iface_test__gradle_file_body_files__to_json(p: &iface_test::GradleFileBodyFiles) -> Value {
     let mut m = Map::new();
-    m.insert("target".into(), iface_test__test_gradle_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__gradle_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_gradle_file_body_files_target__to_json(p: &iface_test::TestGradleFileBodyFilesTarget) -> Value {
+fn iface_test__gradle_file_body_files_target__to_json(p: &iface_test::GradleFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), Value::String((&p.contents).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_maven_file_body_files__to_json(p: &iface_test::TestMavenFileBodyFiles) -> Value {
+fn iface_test__maven_file_body_files__to_json(p: &iface_test::MavenFileBodyFiles) -> Value {
     let mut m = Map::new();
     m.insert("additional".into(), match (&p.additional) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("target".into(), iface_test__test_maven_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__maven_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_maven_file_body_files_target__to_json(p: &iface_test::TestMavenFileBodyFilesTarget) -> Value {
+fn iface_test__maven_file_body_files_target__to_json(p: &iface_test::MavenFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), Value::String((&p.contents).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_package_json_package_lock_json_file_body_files__to_json(p: &iface_test::TestPackageJsonPackageLockJsonFileBodyFiles) -> Value {
+fn iface_test__package_json_package_lock_json_file_body_files__to_json(p: &iface_test::PackageJsonPackageLockJsonFileBodyFiles) -> Value {
     let mut m = Map::new();
     m.insert("additional".into(), match (&p.additional) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("target".into(), iface_test__test_package_json_package_lock_json_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__package_json_package_lock_json_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_package_json_package_lock_json_file_body_files_target__to_json(p: &iface_test::TestPackageJsonPackageLockJsonFileBodyFilesTarget) -> Value {
+fn iface_test__package_json_package_lock_json_file_body_files_target__to_json(p: &iface_test::PackageJsonPackageLockJsonFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), Value::String((&p.contents).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_requirements_txt_file_body_files__to_json(p: &iface_test::TestRequirementsTxtFileBodyFiles) -> Value {
+fn iface_test__requirements_txt_file_body_files__to_json(p: &iface_test::RequirementsTxtFileBodyFiles) -> Value {
     let mut m = Map::new();
-    m.insert("target".into(), iface_test__test_requirements_txt_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__requirements_txt_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_requirements_txt_file_body_files_target__to_json(p: &iface_test::TestRequirementsTxtFileBodyFilesTarget) -> Value {
-    let mut m = Map::new();
-    m.insert("contents".into(), Value::String((&p.contents).clone()));
-    Value::Object(m)
-}
-
-fn iface_test__test_gemfile_lock_file_body_files__to_json(p: &iface_test::TestGemfileLockFileBodyFiles) -> Value {
-    let mut m = Map::new();
-    m.insert("target".into(), iface_test__test_gemfile_lock_file_body_files_target__to_json(&p.target));
-    Value::Object(m)
-}
-
-fn iface_test__test_gemfile_lock_file_body_files_target__to_json(p: &iface_test::TestGemfileLockFileBodyFilesTarget) -> Value {
+fn iface_test__requirements_txt_file_body_files_target__to_json(p: &iface_test::RequirementsTxtFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), Value::String((&p.contents).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_sbt_file_body_files__to_json(p: &iface_test::TestSbtFileBodyFiles) -> Value {
+fn iface_test__gemfile_lock_file_body_files__to_json(p: &iface_test::GemfileLockFileBodyFiles) -> Value {
     let mut m = Map::new();
-    m.insert("target".into(), iface_test__test_sbt_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__gemfile_lock_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_sbt_file_body_files_target__to_json(p: &iface_test::TestSbtFileBodyFilesTarget) -> Value {
+fn iface_test__gemfile_lock_file_body_files_target__to_json(p: &iface_test::GemfileLockFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), Value::String((&p.contents).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_package_json_yarn_lock_file_body_files__to_json(p: &iface_test::TestPackageJsonYarnLockFileBodyFiles) -> Value {
+fn iface_test__sbt_file_body_files__to_json(p: &iface_test::SbtFileBodyFiles) -> Value {
+    let mut m = Map::new();
+    m.insert("target".into(), iface_test__sbt_file_body_files_target__to_json(&p.target));
+    Value::Object(m)
+}
+
+fn iface_test__sbt_file_body_files_target__to_json(p: &iface_test::SbtFileBodyFilesTarget) -> Value {
+    let mut m = Map::new();
+    m.insert("contents".into(), Value::String((&p.contents).clone()));
+    Value::Object(m)
+}
+
+fn iface_test__package_json_yarn_lock_file_body_files__to_json(p: &iface_test::PackageJsonYarnLockFileBodyFiles) -> Value {
     let mut m = Map::new();
     m.insert("additional".into(), match (&p.additional) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("target".into(), iface_test__test_package_json_yarn_lock_file_body_files_target__to_json(&p.target));
+    m.insert("target".into(), iface_test__package_json_yarn_lock_file_body_files_target__to_json(&p.target));
     Value::Object(m)
 }
 
-fn iface_test__test_package_json_yarn_lock_file_body_files_target__to_json(p: &iface_test::TestPackageJsonYarnLockFileBodyFilesTarget) -> Value {
+fn iface_test__package_json_yarn_lock_file_body_files_target__to_json(p: &iface_test::PackageJsonYarnLockFileBodyFilesTarget) -> Value {
     let mut m = Map::new();
     m.insert("contents".into(), Value::String((&p.contents).clone()));
     Value::Object(m)
 }
 
-fn iface_test__test_composer_json_composer_lock_file_params__to_json(p: &iface_test::TestComposerJsonComposerLockFileParams) -> Value {
+fn iface_test__composer_json_composer_lock_file_params__to_json(p: &iface_test::ComposerJsonComposerLockFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_composer_json_composer_lock_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__composer_json_composer_lock_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
-fn iface_test__test_dep_graph_params__to_json(p: &iface_test::TestDepGraphParams) -> Value {
+fn iface_test__dep_graph_params__to_json(p: &iface_test::DepGraphParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), match (&p.org) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("dep_graph".into(), iface_test__test_dep_graph_body_dep_graph__to_json(&p.dep_graph));
+    m.insert("dep_graph".into(), iface_test__dep_graph_body_dep_graph__to_json(&p.dep_graph));
     Value::Object(m)
 }
 
-fn iface_test__test_gopkg_toml_gopkg_lock_file_params__to_json(p: &iface_test::TestGopkgTomlGopkgLockFileParams) -> Value {
+fn iface_test__gopkg_toml_gopkg_lock_file_params__to_json(p: &iface_test::GopkgTomlGopkgLockFileParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), match (&p.org) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_gopkg_toml_gopkg_lock_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__gopkg_toml_gopkg_lock_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
-fn iface_test__test_vendor_json_file_params__to_json(p: &iface_test::TestVendorJsonFileParams) -> Value {
+fn iface_test__vendor_json_file_params__to_json(p: &iface_test::VendorJsonFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_vendor_json_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__vendor_json_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
-fn iface_test__test_gradle_file_params__to_json(p: &iface_test::TestGradleFileParams) -> Value {
+fn iface_test__gradle_file_params__to_json(p: &iface_test::GradleFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_gradle_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__gradle_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
-fn iface_test__test_for_issues_in_a_public_package_by_group_name_and_version_params__to_json(p: &iface_test::TestForIssuesInAPublicPackageByGroupNameAndVersionParams) -> Value {
+fn iface_test__for_issues_in_a_public_package_by_group_name_and_version_params__to_json(p: &iface_test::ForIssuesInAPublicPackageByGroupNameAndVersionParams) -> Value {
     let mut m = Map::new();
     m.insert("group".into(), Value::String((&p.group).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
@@ -3270,16 +3270,16 @@ fn iface_test__test_for_issues_in_a_public_package_by_group_name_and_version_par
     Value::Object(m)
 }
 
-fn iface_test__test_maven_file_params__to_json(p: &iface_test::TestMavenFileParams) -> Value {
+fn iface_test__maven_file_params__to_json(p: &iface_test::MavenFileParams) -> Value {
     let mut m = Map::new();
     m.insert("org".into(), match (&p.org) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("repository".into(), match (&p.repository) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_maven_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__maven_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
-fn iface_test__test_for_issues_in_a_public_package_by_group_id_artifact_id_and_version_params__to_json(p: &iface_test::TestForIssuesInAPublicPackageByGroupIdArtifactIdAndVersionParams) -> Value {
+fn iface_test__for_issues_in_a_public_package_by_group_id_artifact_id_and_version_params__to_json(p: &iface_test::ForIssuesInAPublicPackageByGroupIdArtifactIdAndVersionParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("artifact_id".into(), Value::String((&p.artifact_id).clone()));
@@ -3289,14 +3289,14 @@ fn iface_test__test_for_issues_in_a_public_package_by_group_id_artifact_id_and_v
     Value::Object(m)
 }
 
-fn iface_test__test_package_json_package_lock_json_file_params__to_json(p: &iface_test::TestPackageJsonPackageLockJsonFileParams) -> Value {
+fn iface_test__package_json_package_lock_json_file_params__to_json(p: &iface_test::PackageJsonPackageLockJsonFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_package_json_package_lock_json_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__package_json_package_lock_json_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
-fn iface_test__test_for_issues_in_a_public_package_by_name_and_version_params__to_json(p: &iface_test::TestForIssuesInAPublicPackageByNameAndVersionParams) -> Value {
+fn iface_test__for_issues_in_a_public_package_by_name_and_version_params__to_json(p: &iface_test::ForIssuesInAPublicPackageByNameAndVersionParams) -> Value {
     let mut m = Map::new();
     m.insert("package_name".into(), Value::String((&p.package_name).clone()));
     m.insert("version".into(), Value::String((&p.version).clone()));
@@ -3304,10 +3304,10 @@ fn iface_test__test_for_issues_in_a_public_package_by_name_and_version_params__t
     Value::Object(m)
 }
 
-fn iface_test__test_requirements_txt_file_params__to_json(p: &iface_test::TestRequirementsTxtFileParams) -> Value {
+fn iface_test__requirements_txt_file_params__to_json(p: &iface_test::RequirementsTxtFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_requirements_txt_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__requirements_txt_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
@@ -3319,14 +3319,14 @@ fn iface_test__get_test_pip_package_name_version_params__to_json(p: &iface_test:
     Value::Object(m)
 }
 
-fn iface_test__test_gemfile_lock_file_params__to_json(p: &iface_test::TestGemfileLockFileParams) -> Value {
+fn iface_test__gemfile_lock_file_params__to_json(p: &iface_test::GemfileLockFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_gemfile_lock_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__gemfile_lock_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
-fn iface_test__test_for_issues_in_a_public_gem_by_name_and_version_params__to_json(p: &iface_test::TestForIssuesInAPublicGemByNameAndVersionParams) -> Value {
+fn iface_test__for_issues_in_a_public_gem_by_name_and_version_params__to_json(p: &iface_test::ForIssuesInAPublicGemByNameAndVersionParams) -> Value {
     let mut m = Map::new();
     m.insert("gem_name".into(), Value::String((&p.gem_name).clone()));
     m.insert("version".into(), Value::String((&p.version).clone()));
@@ -3334,10 +3334,10 @@ fn iface_test__test_for_issues_in_a_public_gem_by_name_and_version_params__to_js
     Value::Object(m)
 }
 
-fn iface_test__test_sbt_file_params__to_json(p: &iface_test::TestSbtFileParams) -> Value {
+fn iface_test__sbt_file_params__to_json(p: &iface_test::SbtFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_sbt_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__sbt_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
@@ -3351,81 +3351,81 @@ fn iface_test__get_test_sbt_group_id_artifact_id_version_params__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_test__test_package_json_yarn_lock_file_params__to_json(p: &iface_test::TestPackageJsonYarnLockFileParams) -> Value {
+fn iface_test__package_json_yarn_lock_file_params__to_json(p: &iface_test::PackageJsonYarnLockFileParams) -> Value {
     let mut m = Map::new();
-    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__test_composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
-    m.insert("files".into(), iface_test__test_package_json_yarn_lock_file_body_files__to_json(&p.files));
+    m.insert("encoding".into(), match (&p.encoding) { Some(v) => Value::String(iface_test__composer_json_composer_lock_file_body_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("files".into(), iface_test__package_json_yarn_lock_file_body_files__to_json(&p.files));
     Value::Object(m)
 }
 
 impl iface_test::Guest for crate::Component {
-    fn test_composer_json_composer_lock_file(params: iface_test::TestComposerJsonComposerLockFileParams) -> Result<String, String> {
-        let json = iface_test__test_composer_json_composer_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE, json)
+    fn composer_json_composer_lock_file(params: iface_test::ComposerJsonComposerLockFileParams) -> Result<String, String> {
+        let json = iface_test__composer_json_composer_lock_file_params__to_json(&params);
+        dispatch(&OP_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE, json)
     }
-    fn test_dep_graph(params: iface_test::TestDepGraphParams) -> Result<String, String> {
-        let json = iface_test__test_dep_graph_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_DEP_GRAPH, json)
+    fn dep_graph(params: iface_test::DepGraphParams) -> Result<String, String> {
+        let json = iface_test__dep_graph_params__to_json(&params);
+        dispatch(&OP_TEST_DEP_GRAPH, json)
     }
-    fn test_gopkg_toml_gopkg_lock_file(params: iface_test::TestGopkgTomlGopkgLockFileParams) -> Result<String, String> {
-        let json = iface_test__test_gopkg_toml_gopkg_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_GOPKG_TOML_GOPKG_LOCK_FILE, json)
+    fn gopkg_toml_gopkg_lock_file(params: iface_test::GopkgTomlGopkgLockFileParams) -> Result<String, String> {
+        let json = iface_test__gopkg_toml_gopkg_lock_file_params__to_json(&params);
+        dispatch(&OP_TEST_GOPKG_TOML_GOPKG_LOCK_FILE, json)
     }
-    fn test_vendor_json_file(params: iface_test::TestVendorJsonFileParams) -> Result<String, String> {
-        let json = iface_test__test_vendor_json_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_VENDOR_JSON_FILE, json)
+    fn vendor_json_file(params: iface_test::VendorJsonFileParams) -> Result<String, String> {
+        let json = iface_test__vendor_json_file_params__to_json(&params);
+        dispatch(&OP_TEST_VENDOR_JSON_FILE, json)
     }
-    fn test_gradle_file(params: iface_test::TestGradleFileParams) -> Result<String, String> {
-        let json = iface_test__test_gradle_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_GRADLE_FILE, json)
+    fn gradle_file(params: iface_test::GradleFileParams) -> Result<String, String> {
+        let json = iface_test__gradle_file_params__to_json(&params);
+        dispatch(&OP_TEST_GRADLE_FILE, json)
     }
-    fn test_for_issues_in_a_public_package_by_group_name_and_version(params: iface_test::TestForIssuesInAPublicPackageByGroupNameAndVersionParams) -> Result<String, String> {
-        let json = iface_test__test_for_issues_in_a_public_package_by_group_name_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION, json)
+    fn for_issues_in_a_public_package_by_group_name_and_version(params: iface_test::ForIssuesInAPublicPackageByGroupNameAndVersionParams) -> Result<String, String> {
+        let json = iface_test__for_issues_in_a_public_package_by_group_name_and_version_params__to_json(&params);
+        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION, json)
     }
-    fn test_maven_file(params: iface_test::TestMavenFileParams) -> Result<String, String> {
-        let json = iface_test__test_maven_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_MAVEN_FILE, json)
+    fn maven_file(params: iface_test::MavenFileParams) -> Result<String, String> {
+        let json = iface_test__maven_file_params__to_json(&params);
+        dispatch(&OP_TEST_MAVEN_FILE, json)
     }
-    fn test_for_issues_in_a_public_package_by_group_id_artifact_id_and_version(params: iface_test::TestForIssuesInAPublicPackageByGroupIdArtifactIdAndVersionParams) -> Result<String, String> {
-        let json = iface_test__test_for_issues_in_a_public_package_by_group_id_artifact_id_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VERSION, json)
+    fn for_issues_in_a_public_package_by_group_id_artifact_id_and_version(params: iface_test::ForIssuesInAPublicPackageByGroupIdArtifactIdAndVersionParams) -> Result<String, String> {
+        let json = iface_test__for_issues_in_a_public_package_by_group_id_artifact_id_and_version_params__to_json(&params);
+        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VERSION, json)
     }
-    fn test_package_json_package_lock_json_file(params: iface_test::TestPackageJsonPackageLockJsonFileParams) -> Result<String, String> {
-        let json = iface_test__test_package_json_package_lock_json_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE, json)
+    fn package_json_package_lock_json_file(params: iface_test::PackageJsonPackageLockJsonFileParams) -> Result<String, String> {
+        let json = iface_test__package_json_package_lock_json_file_params__to_json(&params);
+        dispatch(&OP_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE, json)
     }
-    fn test_for_issues_in_a_public_package_by_name_and_version(params: iface_test::TestForIssuesInAPublicPackageByNameAndVersionParams) -> Result<String, String> {
-        let json = iface_test__test_for_issues_in_a_public_package_by_name_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION, json)
+    fn for_issues_in_a_public_package_by_name_and_version(params: iface_test::ForIssuesInAPublicPackageByNameAndVersionParams) -> Result<String, String> {
+        let json = iface_test__for_issues_in_a_public_package_by_name_and_version_params__to_json(&params);
+        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION, json)
     }
-    fn test_requirements_txt_file(params: iface_test::TestRequirementsTxtFileParams) -> Result<String, String> {
-        let json = iface_test__test_requirements_txt_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_REQUIREMENTS_TXT_FILE, json)
+    fn requirements_txt_file(params: iface_test::RequirementsTxtFileParams) -> Result<String, String> {
+        let json = iface_test__requirements_txt_file_params__to_json(&params);
+        dispatch(&OP_TEST_REQUIREMENTS_TXT_FILE, json)
     }
     fn get_test_pip_package_name_version(params: iface_test::GetTestPipPackageNameVersionParams) -> Result<String, String> {
         let json = iface_test__get_test_pip_package_name_version_params__to_json(&params);
         dispatch(&OP_TEST_GET_TEST_PIP_PACKAGE_NAME_VERSION, json)
     }
-    fn test_gemfile_lock_file(params: iface_test::TestGemfileLockFileParams) -> Result<String, String> {
-        let json = iface_test__test_gemfile_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_GEMFILE_LOCK_FILE, json)
+    fn gemfile_lock_file(params: iface_test::GemfileLockFileParams) -> Result<String, String> {
+        let json = iface_test__gemfile_lock_file_params__to_json(&params);
+        dispatch(&OP_TEST_GEMFILE_LOCK_FILE, json)
     }
-    fn test_for_issues_in_a_public_gem_by_name_and_version(params: iface_test::TestForIssuesInAPublicGemByNameAndVersionParams) -> Result<String, String> {
-        let json = iface_test__test_for_issues_in_a_public_gem_by_name_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION, json)
+    fn for_issues_in_a_public_gem_by_name_and_version(params: iface_test::ForIssuesInAPublicGemByNameAndVersionParams) -> Result<String, String> {
+        let json = iface_test__for_issues_in_a_public_gem_by_name_and_version_params__to_json(&params);
+        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION, json)
     }
-    fn test_sbt_file(params: iface_test::TestSbtFileParams) -> Result<String, String> {
-        let json = iface_test__test_sbt_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_SBT_FILE, json)
+    fn sbt_file(params: iface_test::SbtFileParams) -> Result<String, String> {
+        let json = iface_test__sbt_file_params__to_json(&params);
+        dispatch(&OP_TEST_SBT_FILE, json)
     }
     fn get_test_sbt_group_id_artifact_id_version(params: iface_test::GetTestSbtGroupIdArtifactIdVersionParams) -> Result<String, String> {
         let json = iface_test__get_test_sbt_group_id_artifact_id_version_params__to_json(&params);
         dispatch(&OP_TEST_GET_TEST_SBT_GROUP_ID_ARTIFACT_ID_VERSION, json)
     }
-    fn test_package_json_yarn_lock_file(params: iface_test::TestPackageJsonYarnLockFileParams) -> Result<String, String> {
-        let json = iface_test__test_package_json_yarn_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_TEST_PACKAGE_JSON_YARN_LOCK_FILE, json)
+    fn package_json_yarn_lock_file(params: iface_test::PackageJsonYarnLockFileParams) -> Result<String, String> {
+        let json = iface_test__package_json_yarn_lock_file_params__to_json(&params);
+        dispatch(&OP_TEST_PACKAGE_JSON_YARN_LOCK_FILE, json)
     }
 }
 use crate::exports::autostamp::snyk::users as iface_users;

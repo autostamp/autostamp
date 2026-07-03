@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:google"
-version = "0.2.1+google-v3"
+version = "0.3.0+google-v3"
 registry = "ghcr.io/autostamp/google"
 kind = "component"
 file = "build/google.wasm"

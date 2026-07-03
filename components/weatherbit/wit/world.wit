@@ -1,4 +1,12 @@
-package autostamp:weatherbit@0.2.1;
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `key` | query `key` |
+package autostamp:weatherbit@0.3.0;
 
 interface alerts {
   /// Returns severe weather alerts issued by meteorological agencies - Given a lat/lon.
@@ -8,9 +16,7 @@ interface alerts {
     /// Longitude component of location.
     lon: string,
     /// Wraps return in jsonp callback - Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-alerts-lat-lat-lon-lon: func(params: get-alerts-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -21,9 +27,7 @@ interface bulk-downloads {
   /// Download pre-generated bulk datasets
   record get-bulk-files-file-params {
     /// Filename (ie. current.csv.gz)
-    file: string,
-    /// Your registered API key.
-    key: string
+    file: string
   }
   get-bulk-files-file: func(params: get-bulk-files-file-params) -> result<string, string>;
 
@@ -39,9 +43,7 @@ interface current-air-quality {
     /// Country Code (2 letter).
     country: string,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-airquality-city-city-country-country: func(params: get-current-airquality-city-city-country-country-params) -> result<string, string>;
 
@@ -50,9 +52,7 @@ interface current-air-quality {
     /// City ID. Example: 4487042
     city-id: string,
     /// Wraps return in jsonp callback. Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-airquality-city-id-city-id: func(params: get-current-airquality-city-id-city-id-params) -> result<string, string>;
 
@@ -63,9 +63,7 @@ interface current-air-quality {
     /// Longitude component of location.
     lon: string,
     /// Wraps return in jsonp callback. Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-airquality-lat-lat-lon-lon: func(params: get-current-airquality-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -76,9 +74,7 @@ interface current-air-quality {
     /// Country Code (2 letter).
     country: option<string>,
     /// Wraps return in jsonp callback. Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-airquality-postal-code-postal-code: func(params: get-current-airquality-postal-code-postal-code-params) -> result<string, string>;
 
@@ -145,9 +141,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback - Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-cities-cities: func(params: get-current-cities-cities-params) -> result<string, string>;
 
@@ -168,9 +162,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback - Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-city-city-country-country: func(params: get-current-city-city-country-country-params) -> result<string, string>;
 
@@ -187,9 +179,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback - Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-city-id-city-id: func(params: get-current-city-id-city-id-params) -> result<string, string>;
 
@@ -208,9 +198,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback - Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-lat-lat-lon-lon: func(params: get-current-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -223,9 +211,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-points-points: func(params: get-current-points-points-params) -> result<string, string>;
 
@@ -244,9 +230,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback - Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-postal-code-postal-code: func(params: get-current-postal-code-postal-code-params) -> result<string, string>;
 
@@ -261,9 +245,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-station-station: func(params: get-current-station-station-params) -> result<string, string>;
 
@@ -276,9 +258,7 @@ interface current-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-current-cities-cities-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-current-stations-stations: func(params: get-current-stations-stations-params) -> result<string, string>;
 
@@ -296,9 +276,7 @@ interface air-quality-forecast {
     /// Wraps return in jsonp callback. Example: callback=func
     callback: option<string>,
     /// Number of hours to return.
-    hours: option<s32>,
-    /// Your registered API key.
-    key: string
+    hours: option<s32>
   }
   get-forecast-airquality-city-city-country-country: func(params: get-forecast-airquality-city-city-country-country-params) -> result<string, string>;
 
@@ -309,9 +287,7 @@ interface air-quality-forecast {
     /// Wraps return in jsonp callback. Example - callback=func
     callback: option<string>,
     /// Number of hours to return.
-    hours: option<s32>,
-    /// Your registered API key.
-    key: string
+    hours: option<s32>
   }
   get-forecast-airquality-city-id-city-id: func(params: get-forecast-airquality-city-id-city-id-params) -> result<string, string>;
 
@@ -323,8 +299,6 @@ interface air-quality-forecast {
     lon: string,
     /// Wraps return in jsonp callback. Example - callback=func
     callback: option<string>,
-    /// Your registered API key.
-    key: string,
     /// Number of hours to return.
     hours: option<s32>
   }
@@ -339,9 +313,7 @@ interface air-quality-forecast {
     /// Wraps return in jsonp callback. Example - callback=func
     callback: option<string>,
     /// Number of hours to return.
-    hours: option<s32>,
-    /// Your registered API key.
-    key: string
+    hours: option<s32>
   }
   get-forecast-airquality-postal-code-postal-code: func(params: get-forecast-airquality-postal-code-postal-code-params) -> result<string, string>;
 
@@ -404,9 +376,7 @@ interface v16-day-daily-forecast {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-forecast-daily-city-city-country-country: func(params: get-forecast-daily-city-city-country-country-params) -> result<string, string>;
 
@@ -421,9 +391,7 @@ interface v16-day-daily-forecast {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-forecast-daily-city-id-city-id: func(params: get-forecast-daily-city-id-city-id-params) -> result<string, string>;
 
@@ -440,9 +408,7 @@ interface v16-day-daily-forecast {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-forecast-daily-lat-lat-lon-lon: func(params: get-forecast-daily-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -459,9 +425,7 @@ interface v16-day-daily-forecast {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-forecast-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-forecast-daily-postal-code-postal-code: func(params: get-forecast-daily-postal-code-postal-code-params) -> result<string, string>;
 
@@ -491,9 +455,7 @@ interface forecast-degree-day-api {
     /// Time period (default: daily)
     tp: option<get-forecast-energy-lat-lat-lon-lon-tp-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-forecast-energy-lat-lat-lon-lon: func(params: get-forecast-energy-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -556,9 +518,7 @@ interface v240-hour-hourly-forecast {
     /// Wraps return in jsonp callback. Example: callback=func
     callback: option<string>,
     /// Number of hours to return.
-    hours: option<s32>,
-    /// Your registered API key.
-    key: string
+    hours: option<s32>
   }
   get-forecast-hourly-city-city-country-country: func(params: get-forecast-hourly-city-city-country-country-params) -> result<string, string>;
 
@@ -573,9 +533,7 @@ interface v240-hour-hourly-forecast {
     /// Wraps return in jsonp callback. Example - callback=func
     callback: option<string>,
     /// Number of hours to return.
-    hours: option<s32>,
-    /// Your registered API key.
-    key: string
+    hours: option<s32>
   }
   get-forecast-hourly-city-id-city-id: func(params: get-forecast-hourly-city-id-city-id-params) -> result<string, string>;
 
@@ -591,8 +549,6 @@ interface v240-hour-hourly-forecast {
     lang: option<get-forecast-hourly-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example - callback=func
     callback: option<string>,
-    /// Your registered API key.
-    key: string,
     /// Number of hours to return.
     hours: option<s32>
   }
@@ -611,9 +567,7 @@ interface v240-hour-hourly-forecast {
     /// Wraps return in jsonp callback. Example - callback=func
     callback: option<string>,
     /// Number of hours to return.
-    hours: option<s32>,
-    /// Your registered API key.
-    key: string
+    hours: option<s32>
   }
   get-forecast-hourly-postal-code-postal-code: func(params: get-forecast-hourly-postal-code-postal-code-params) -> result<string, string>;
 
@@ -629,9 +583,7 @@ interface historical-air-quality {
     /// Country Code (2 letter).
     country: string,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-airquality-city-city-country-country: func(params: get-history-airquality-city-city-country-country-params) -> result<string, string>;
 
@@ -640,9 +592,7 @@ interface historical-air-quality {
     /// City ID.
     city-id: string,
     /// Wraps return in jsonp callback. Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-airquality-city-id-city-id: func(params: get-history-airquality-city-id-city-id-params) -> result<string, string>;
 
@@ -653,9 +603,7 @@ interface historical-air-quality {
     /// Longitude component of location.
     lon: string,
     /// Wraps return in jsonp callback. Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-airquality-lat-lat-lon-lon: func(params: get-history-airquality-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -666,9 +614,7 @@ interface historical-air-quality {
     /// Country Code (2 letter).
     country: option<string>,
     /// Wraps return in jsonp callback. Example - callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-airquality-postal-code-postal-code: func(params: get-history-airquality-postal-code-postal-code-params) -> result<string, string>;
 
@@ -733,9 +679,7 @@ interface daily-historical-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-history-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-daily-city-city-country-country: func(params: get-history-daily-city-city-country-country-params) -> result<string, string>;
 
@@ -752,9 +696,7 @@ interface daily-historical-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-history-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-daily-city-id-city-id: func(params: get-history-daily-city-id-city-id-params) -> result<string, string>;
 
@@ -773,9 +715,7 @@ interface daily-historical-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-history-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-daily-lat-lat-lon-lon: func(params: get-history-daily-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -794,9 +734,7 @@ interface daily-historical-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-history-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-daily-postal-code-postal-code: func(params: get-history-daily-postal-code-postal-code-params) -> result<string, string>;
 
@@ -813,9 +751,7 @@ interface daily-historical-weather-data {
     /// Language (Default: English) See <a target='blank' href='/api/requests'>language field description</a>
     lang: option<get-history-daily-city-city-country-country-lang-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-daily-station-station: func(params: get-history-daily-station-station-params) -> result<string, string>;
 
@@ -850,9 +786,7 @@ interface historical-degree-day-api {
     /// Convert to units. Default Metric See <a target='blank' href='/api/requests'>units field description</a>
     units: option<get-history-energy-lat-lat-lon-lon-units-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-energy-lat-lat-lon-lon: func(params: get-history-energy-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -924,9 +858,7 @@ interface hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-hourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-hourly-city-city-country-country: func(params: get-history-hourly-city-city-country-country-params) -> result<string, string>;
 
@@ -945,9 +877,7 @@ interface hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-hourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-hourly-city-id-city-id: func(params: get-history-hourly-city-id-city-id-params) -> result<string, string>;
 
@@ -968,9 +898,7 @@ interface hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-hourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-hourly-lat-lat-lon-lon: func(params: get-history-hourly-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -991,9 +919,7 @@ interface hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-hourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-hourly-postal-code-postal-code: func(params: get-history-hourly-postal-code-postal-code-params) -> result<string, string>;
 
@@ -1012,9 +938,7 @@ interface hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-hourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-hourly-station-station: func(params: get-history-hourly-station-station-params) -> result<string, string>;
 
@@ -1086,9 +1010,7 @@ interface sub-hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-subhourly-city-city-country-country: func(params: get-history-subhourly-city-city-country-country-params) -> result<string, string>;
 
@@ -1107,9 +1029,7 @@ interface sub-hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-subhourly-city-id-city-id: func(params: get-history-subhourly-city-id-city-id-params) -> result<string, string>;
 
@@ -1130,9 +1050,7 @@ interface sub-hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-subhourly-lat-lat-lon-lon: func(params: get-history-subhourly-lat-lat-lon-lon-params) -> result<string, string>;
 
@@ -1153,9 +1071,7 @@ interface sub-hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-subhourly-postal-code-postal-code: func(params: get-history-subhourly-postal-code-postal-code-params) -> result<string, string>;
 
@@ -1174,9 +1090,7 @@ interface sub-hourly-historical-weather-data {
     /// Assume utc (default) or local time for start_date, end_date
     tz: option<get-history-subhourly-city-city-country-country-tz-enum>,
     /// Wraps return in jsonp callback. Example: callback=func
-    callback: option<string>,
-    /// Your registered API key.
-    key: string
+    callback: option<string>
   }
   get-history-subhourly-station-station: func(params: get-history-subhourly-station-station-params) -> result<string, string>;
 

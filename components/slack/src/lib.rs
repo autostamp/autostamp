@@ -284,7 +284,7 @@ use serde_json::{Map, Value};
 
 use crate::exports::autostamp::slack::admin_apps as iface_admin_apps;
 
-const OP_ADMIN_APPS_ADMIN_APPS_APPROVE: OpSpec = OpSpec {
+const OP_ADMIN_APPS_APPROVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.apps.approve",
     fields: &[
@@ -295,7 +295,7 @@ const OP_ADMIN_APPS_ADMIN_APPS_APPROVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_APPS_ADMIN_APPS_RESTRICT: OpSpec = OpSpec {
+const OP_ADMIN_APPS_RESTRICT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.apps.restrict",
     fields: &[
@@ -306,31 +306,31 @@ const OP_ADMIN_APPS_ADMIN_APPS_RESTRICT: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_apps__admin_apps_approve_params__to_json(p: &iface_admin_apps::AdminAppsApproveParams) -> Value {
+fn iface_admin_apps__approve_params__to_json(p: &iface_admin_apps::ApproveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_apps__admin_apps_restrict_params__to_json(p: &iface_admin_apps::AdminAppsRestrictParams) -> Value {
+fn iface_admin_apps__restrict_params__to_json(p: &iface_admin_apps::RestrictParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_admin_apps::Guest for crate::Component {
-    fn admin_apps_approve(params: iface_admin_apps::AdminAppsApproveParams) -> Result<String, String> {
-        let json = iface_admin_apps__admin_apps_approve_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_ADMIN_APPS_APPROVE, json)
+    fn approve(params: iface_admin_apps::ApproveParams) -> Result<String, String> {
+        let json = iface_admin_apps__approve_params__to_json(&params);
+        dispatch(&OP_ADMIN_APPS_APPROVE, json)
     }
-    fn admin_apps_restrict(params: iface_admin_apps::AdminAppsRestrictParams) -> Result<String, String> {
-        let json = iface_admin_apps__admin_apps_restrict_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_ADMIN_APPS_RESTRICT, json)
+    fn restrict(params: iface_admin_apps::RestrictParams) -> Result<String, String> {
+        let json = iface_admin_apps__restrict_params__to_json(&params);
+        dispatch(&OP_ADMIN_APPS_RESTRICT, json)
     }
 }
 use crate::exports::autostamp::slack::admin_apps_approved as iface_admin_apps_approved;
 
-const OP_ADMIN_APPS_APPROVED_ADMIN_APPS_APPROVED_LIST: OpSpec = OpSpec {
+const OP_ADMIN_APPS_APPROVED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.apps.approved.list",
     fields: &[
@@ -345,7 +345,7 @@ const OP_ADMIN_APPS_APPROVED_ADMIN_APPS_APPROVED_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_apps_approved__admin_apps_approved_list_params__to_json(p: &iface_admin_apps_approved::AdminAppsApprovedListParams) -> Value {
+fn iface_admin_apps_approved__list_op_params__to_json(p: &iface_admin_apps_approved::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -356,14 +356,14 @@ fn iface_admin_apps_approved__admin_apps_approved_list_params__to_json(p: &iface
 }
 
 impl iface_admin_apps_approved::Guest for crate::Component {
-    fn admin_apps_approved_list(params: iface_admin_apps_approved::AdminAppsApprovedListParams) -> Result<String, String> {
-        let json = iface_admin_apps_approved__admin_apps_approved_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_APPROVED_ADMIN_APPS_APPROVED_LIST, json)
+    fn list_op(params: iface_admin_apps_approved::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_apps_approved__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_APPS_APPROVED_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_apps_requests as iface_admin_apps_requests;
 
-const OP_ADMIN_APPS_REQUESTS_ADMIN_APPS_REQUESTS_LIST: OpSpec = OpSpec {
+const OP_ADMIN_APPS_REQUESTS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.apps.requests.list",
     fields: &[
@@ -377,7 +377,7 @@ const OP_ADMIN_APPS_REQUESTS_ADMIN_APPS_REQUESTS_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_apps_requests__admin_apps_requests_list_params__to_json(p: &iface_admin_apps_requests::AdminAppsRequestsListParams) -> Value {
+fn iface_admin_apps_requests__list_op_params__to_json(p: &iface_admin_apps_requests::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -387,14 +387,14 @@ fn iface_admin_apps_requests__admin_apps_requests_list_params__to_json(p: &iface
 }
 
 impl iface_admin_apps_requests::Guest for crate::Component {
-    fn admin_apps_requests_list(params: iface_admin_apps_requests::AdminAppsRequestsListParams) -> Result<String, String> {
-        let json = iface_admin_apps_requests__admin_apps_requests_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_REQUESTS_ADMIN_APPS_REQUESTS_LIST, json)
+    fn list_op(params: iface_admin_apps_requests::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_apps_requests__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_APPS_REQUESTS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_apps_restricted as iface_admin_apps_restricted;
 
-const OP_ADMIN_APPS_RESTRICTED_ADMIN_APPS_RESTRICTED_LIST: OpSpec = OpSpec {
+const OP_ADMIN_APPS_RESTRICTED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.apps.restricted.list",
     fields: &[
@@ -409,7 +409,7 @@ const OP_ADMIN_APPS_RESTRICTED_ADMIN_APPS_RESTRICTED_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_apps_restricted__admin_apps_restricted_list_params__to_json(p: &iface_admin_apps_restricted::AdminAppsRestrictedListParams) -> Value {
+fn iface_admin_apps_restricted__list_op_params__to_json(p: &iface_admin_apps_restricted::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -420,14 +420,14 @@ fn iface_admin_apps_restricted__admin_apps_restricted_list_params__to_json(p: &i
 }
 
 impl iface_admin_apps_restricted::Guest for crate::Component {
-    fn admin_apps_restricted_list(params: iface_admin_apps_restricted::AdminAppsRestrictedListParams) -> Result<String, String> {
-        let json = iface_admin_apps_restricted__admin_apps_restricted_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_RESTRICTED_ADMIN_APPS_RESTRICTED_LIST, json)
+    fn list_op(params: iface_admin_apps_restricted::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_apps_restricted__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_APPS_RESTRICTED_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_conversations as iface_admin_conversations;
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.archive",
     fields: &[
@@ -438,7 +438,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.convertToPrivate",
     fields: &[
@@ -449,7 +449,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE: OpSpec = Op
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_CREATE: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.create",
     fields: &[
@@ -460,7 +460,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_CREATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_DELETE: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.delete",
     fields: &[
@@ -471,7 +471,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_DELETE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_DISCONNECT_SHARED: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_DISCONNECT_SHARED: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.disconnectShared",
     fields: &[
@@ -482,7 +482,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_DISCONNECT_SHARED: OpSpec = OpS
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.getConversationPrefs",
     fields: &[
@@ -494,7 +494,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS: OpSpec 
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_GET_TEAMS: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_GET_TEAMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.getTeams",
     fields: &[
@@ -508,7 +508,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_GET_TEAMS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_INVITE: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_INVITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.invite",
     fields: &[
@@ -519,7 +519,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_INVITE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_RENAME: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_RENAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.rename",
     fields: &[
@@ -530,7 +530,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_RENAME: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SEARCH: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.search",
     fields: &[
@@ -548,7 +548,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.setConversationPrefs",
     fields: &[
@@ -559,7 +559,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS: OpSpec 
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SET_TEAMS: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_SET_TEAMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.setTeams",
     fields: &[
@@ -570,7 +570,7 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SET_TEAMS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.unarchive",
     fields: &[
@@ -581,44 +581,44 @@ const OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_conversations__admin_conversations_archive_params__to_json(p: &iface_admin_conversations::AdminConversationsArchiveParams) -> Value {
+fn iface_admin_conversations__archive_params__to_json(p: &iface_admin_conversations::ArchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_convert_to_private_params__to_json(p: &iface_admin_conversations::AdminConversationsConvertToPrivateParams) -> Value {
+fn iface_admin_conversations__convert_to_private_params__to_json(p: &iface_admin_conversations::ConvertToPrivateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_create_params__to_json(p: &iface_admin_conversations::AdminConversationsCreateParams) -> Value {
+fn iface_admin_conversations__create_params__to_json(p: &iface_admin_conversations::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_delete_params__to_json(p: &iface_admin_conversations::AdminConversationsDeleteParams) -> Value {
+fn iface_admin_conversations__delete_params__to_json(p: &iface_admin_conversations::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_disconnect_shared_params__to_json(p: &iface_admin_conversations::AdminConversationsDisconnectSharedParams) -> Value {
+fn iface_admin_conversations__disconnect_shared_params__to_json(p: &iface_admin_conversations::DisconnectSharedParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_get_conversation_prefs_params__to_json(p: &iface_admin_conversations::AdminConversationsGetConversationPrefsParams) -> Value {
+fn iface_admin_conversations__get_conversation_prefs_params__to_json(p: &iface_admin_conversations::GetConversationPrefsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_get_teams_params__to_json(p: &iface_admin_conversations::AdminConversationsGetTeamsParams) -> Value {
+fn iface_admin_conversations__get_teams_params__to_json(p: &iface_admin_conversations::GetTeamsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
@@ -627,19 +627,19 @@ fn iface_admin_conversations__admin_conversations_get_teams_params__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_invite_params__to_json(p: &iface_admin_conversations::AdminConversationsInviteParams) -> Value {
+fn iface_admin_conversations__invite_params__to_json(p: &iface_admin_conversations::InviteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_rename_params__to_json(p: &iface_admin_conversations::AdminConversationsRenameParams) -> Value {
+fn iface_admin_conversations__rename_params__to_json(p: &iface_admin_conversations::RenameParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_search_params__to_json(p: &iface_admin_conversations::AdminConversationsSearchParams) -> Value {
+fn iface_admin_conversations__search_params__to_json(p: &iface_admin_conversations::SearchParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team_ids".into(), match (&p.team_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -652,81 +652,81 @@ fn iface_admin_conversations__admin_conversations_search_params__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_set_conversation_prefs_params__to_json(p: &iface_admin_conversations::AdminConversationsSetConversationPrefsParams) -> Value {
+fn iface_admin_conversations__set_conversation_prefs_params__to_json(p: &iface_admin_conversations::SetConversationPrefsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_set_teams_params__to_json(p: &iface_admin_conversations::AdminConversationsSetTeamsParams) -> Value {
+fn iface_admin_conversations__set_teams_params__to_json(p: &iface_admin_conversations::SetTeamsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_conversations__admin_conversations_unarchive_params__to_json(p: &iface_admin_conversations::AdminConversationsUnarchiveParams) -> Value {
+fn iface_admin_conversations__unarchive_params__to_json(p: &iface_admin_conversations::UnarchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_admin_conversations::Guest for crate::Component {
-    fn admin_conversations_archive(params: iface_admin_conversations::AdminConversationsArchiveParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_archive_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_ARCHIVE, json)
+    fn archive(params: iface_admin_conversations::ArchiveParams) -> Result<String, String> {
+        let json = iface_admin_conversations__archive_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_ARCHIVE, json)
     }
-    fn admin_conversations_convert_to_private(params: iface_admin_conversations::AdminConversationsConvertToPrivateParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_convert_to_private_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE, json)
+    fn convert_to_private(params: iface_admin_conversations::ConvertToPrivateParams) -> Result<String, String> {
+        let json = iface_admin_conversations__convert_to_private_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE, json)
     }
-    fn admin_conversations_create(params: iface_admin_conversations::AdminConversationsCreateParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_create_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_CREATE, json)
+    fn create(params: iface_admin_conversations::CreateParams) -> Result<String, String> {
+        let json = iface_admin_conversations__create_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_CREATE, json)
     }
-    fn admin_conversations_delete(params: iface_admin_conversations::AdminConversationsDeleteParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_delete_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_DELETE, json)
+    fn delete(params: iface_admin_conversations::DeleteParams) -> Result<String, String> {
+        let json = iface_admin_conversations__delete_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_DELETE, json)
     }
-    fn admin_conversations_disconnect_shared(params: iface_admin_conversations::AdminConversationsDisconnectSharedParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_disconnect_shared_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_DISCONNECT_SHARED, json)
+    fn disconnect_shared(params: iface_admin_conversations::DisconnectSharedParams) -> Result<String, String> {
+        let json = iface_admin_conversations__disconnect_shared_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_DISCONNECT_SHARED, json)
     }
-    fn admin_conversations_get_conversation_prefs(params: iface_admin_conversations::AdminConversationsGetConversationPrefsParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_get_conversation_prefs_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS, json)
+    fn get_conversation_prefs(params: iface_admin_conversations::GetConversationPrefsParams) -> Result<String, String> {
+        let json = iface_admin_conversations__get_conversation_prefs_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS, json)
     }
-    fn admin_conversations_get_teams(params: iface_admin_conversations::AdminConversationsGetTeamsParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_get_teams_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_GET_TEAMS, json)
+    fn get_teams(params: iface_admin_conversations::GetTeamsParams) -> Result<String, String> {
+        let json = iface_admin_conversations__get_teams_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_GET_TEAMS, json)
     }
-    fn admin_conversations_invite(params: iface_admin_conversations::AdminConversationsInviteParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_invite_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_INVITE, json)
+    fn invite(params: iface_admin_conversations::InviteParams) -> Result<String, String> {
+        let json = iface_admin_conversations__invite_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_INVITE, json)
     }
-    fn admin_conversations_rename(params: iface_admin_conversations::AdminConversationsRenameParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_rename_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_RENAME, json)
+    fn rename(params: iface_admin_conversations::RenameParams) -> Result<String, String> {
+        let json = iface_admin_conversations__rename_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_RENAME, json)
     }
-    fn admin_conversations_search(params: iface_admin_conversations::AdminConversationsSearchParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_search_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SEARCH, json)
+    fn search(params: iface_admin_conversations::SearchParams) -> Result<String, String> {
+        let json = iface_admin_conversations__search_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_SEARCH, json)
     }
-    fn admin_conversations_set_conversation_prefs(params: iface_admin_conversations::AdminConversationsSetConversationPrefsParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_set_conversation_prefs_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS, json)
+    fn set_conversation_prefs(params: iface_admin_conversations::SetConversationPrefsParams) -> Result<String, String> {
+        let json = iface_admin_conversations__set_conversation_prefs_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS, json)
     }
-    fn admin_conversations_set_teams(params: iface_admin_conversations::AdminConversationsSetTeamsParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_set_teams_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_SET_TEAMS, json)
+    fn set_teams(params: iface_admin_conversations::SetTeamsParams) -> Result<String, String> {
+        let json = iface_admin_conversations__set_teams_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_SET_TEAMS, json)
     }
-    fn admin_conversations_unarchive(params: iface_admin_conversations::AdminConversationsUnarchiveParams) -> Result<String, String> {
-        let json = iface_admin_conversations__admin_conversations_unarchive_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ADMIN_CONVERSATIONS_UNARCHIVE, json)
+    fn unarchive(params: iface_admin_conversations::UnarchiveParams) -> Result<String, String> {
+        let json = iface_admin_conversations__unarchive_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_UNARCHIVE, json)
     }
 }
 use crate::exports::autostamp::slack::admin_conversations_ekm as iface_admin_conversations_ekm;
 
-const OP_ADMIN_CONVERSATIONS_EKM_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.ekm.listOriginalConnectedChannelInfo",
     fields: &[
@@ -741,7 +741,7 @@ const OP_ADMIN_CONVERSATIONS_EKM_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED
     ],
 };
 
-fn iface_admin_conversations_ekm__admin_conversations_ekm_list_original_connected_channel_info_params__to_json(p: &iface_admin_conversations_ekm::AdminConversationsEkmListOriginalConnectedChannelInfoParams) -> Value {
+fn iface_admin_conversations_ekm__list_original_connected_channel_info_params__to_json(p: &iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("channel_ids".into(), match (&p.channel_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -752,14 +752,14 @@ fn iface_admin_conversations_ekm__admin_conversations_ekm_list_original_connecte
 }
 
 impl iface_admin_conversations_ekm::Guest for crate::Component {
-    fn admin_conversations_ekm_list_original_connected_channel_info(params: iface_admin_conversations_ekm::AdminConversationsEkmListOriginalConnectedChannelInfoParams) -> Result<String, String> {
-        let json = iface_admin_conversations_ekm__admin_conversations_ekm_list_original_connected_channel_info_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_EKM_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO, json)
+    fn list_original_connected_channel_info(params: iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoParams) -> Result<String, String> {
+        let json = iface_admin_conversations_ekm__list_original_connected_channel_info_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO, json)
     }
 }
 use crate::exports::autostamp::slack::admin_conversations_restrict_access as iface_admin_conversations_restrict_access;
 
-const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADD_GROUP: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADD_GROUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.restrictAccess.addGroup",
     fields: &[
@@ -769,7 +769,7 @@ const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_LIST_GROUPS: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_LIST_GROUPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.restrictAccess.listGroups",
     fields: &[
@@ -782,7 +782,7 @@ const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS
     ],
 };
 
-const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP: OpSpec = OpSpec {
+const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.restrictAccess.removeGroup",
     fields: &[
@@ -792,7 +792,7 @@ const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS
     ],
 };
 
-fn iface_admin_conversations_restrict_access__admin_conversations_restrict_access_list_groups_params__to_json(p: &iface_admin_conversations_restrict_access::AdminConversationsRestrictAccessListGroupsParams) -> Value {
+fn iface_admin_conversations_restrict_access__list_groups_params__to_json(p: &iface_admin_conversations_restrict_access::ListGroupsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
@@ -801,20 +801,20 @@ fn iface_admin_conversations_restrict_access__admin_conversations_restrict_acces
 }
 
 impl iface_admin_conversations_restrict_access::Guest for crate::Component {
-    fn admin_conversations_restrict_access_add_group() -> Result<String, String> {
-        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADD_GROUP, Value::Object(Map::new()))
+    fn add_group() -> Result<String, String> {
+        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADD_GROUP, Value::Object(Map::new()))
     }
-    fn admin_conversations_restrict_access_list_groups(params: iface_admin_conversations_restrict_access::AdminConversationsRestrictAccessListGroupsParams) -> Result<String, String> {
-        let json = iface_admin_conversations_restrict_access__admin_conversations_restrict_access_list_groups_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_LIST_GROUPS, json)
+    fn list_groups(params: iface_admin_conversations_restrict_access::ListGroupsParams) -> Result<String, String> {
+        let json = iface_admin_conversations_restrict_access__list_groups_params__to_json(&params);
+        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_LIST_GROUPS, json)
     }
-    fn admin_conversations_restrict_access_remove_group() -> Result<String, String> {
-        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP, Value::Object(Map::new()))
+    fn remove_group() -> Result<String, String> {
+        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::slack::admin_emoji as iface_admin_emoji;
 
-const OP_ADMIN_EMOJI_ADMIN_EMOJI_ADD: OpSpec = OpSpec {
+const OP_ADMIN_EMOJI_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.add",
     fields: &[
@@ -824,7 +824,7 @@ const OP_ADMIN_EMOJI_ADMIN_EMOJI_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_EMOJI_ADMIN_EMOJI_ADD_ALIAS: OpSpec = OpSpec {
+const OP_ADMIN_EMOJI_ADD_ALIAS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.addAlias",
     fields: &[
@@ -834,7 +834,7 @@ const OP_ADMIN_EMOJI_ADMIN_EMOJI_ADD_ALIAS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_EMOJI_ADMIN_EMOJI_LIST: OpSpec = OpSpec {
+const OP_ADMIN_EMOJI_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.emoji.list",
     fields: &[
@@ -847,7 +847,7 @@ const OP_ADMIN_EMOJI_ADMIN_EMOJI_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_EMOJI_ADMIN_EMOJI_REMOVE: OpSpec = OpSpec {
+const OP_ADMIN_EMOJI_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.remove",
     fields: &[
@@ -857,7 +857,7 @@ const OP_ADMIN_EMOJI_ADMIN_EMOJI_REMOVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_EMOJI_ADMIN_EMOJI_RENAME: OpSpec = OpSpec {
+const OP_ADMIN_EMOJI_RENAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.rename",
     fields: &[
@@ -867,7 +867,7 @@ const OP_ADMIN_EMOJI_ADMIN_EMOJI_RENAME: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_emoji__admin_emoji_list_params__to_json(p: &iface_admin_emoji::AdminEmojiListParams) -> Value {
+fn iface_admin_emoji__list_op_params__to_json(p: &iface_admin_emoji::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -876,26 +876,26 @@ fn iface_admin_emoji__admin_emoji_list_params__to_json(p: &iface_admin_emoji::Ad
 }
 
 impl iface_admin_emoji::Guest for crate::Component {
-    fn admin_emoji_add() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_ADMIN_EMOJI_ADD, Value::Object(Map::new()))
+    fn add() -> Result<String, String> {
+        dispatch(&OP_ADMIN_EMOJI_ADD, Value::Object(Map::new()))
     }
-    fn admin_emoji_add_alias() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_ADMIN_EMOJI_ADD_ALIAS, Value::Object(Map::new()))
+    fn add_alias() -> Result<String, String> {
+        dispatch(&OP_ADMIN_EMOJI_ADD_ALIAS, Value::Object(Map::new()))
     }
-    fn admin_emoji_list(params: iface_admin_emoji::AdminEmojiListParams) -> Result<String, String> {
-        let json = iface_admin_emoji__admin_emoji_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_EMOJI_ADMIN_EMOJI_LIST, json)
+    fn list_op(params: iface_admin_emoji::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_emoji__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_EMOJI_LIST_OP, json)
     }
-    fn admin_emoji_remove() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_ADMIN_EMOJI_REMOVE, Value::Object(Map::new()))
+    fn remove() -> Result<String, String> {
+        dispatch(&OP_ADMIN_EMOJI_REMOVE, Value::Object(Map::new()))
     }
-    fn admin_emoji_rename() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_ADMIN_EMOJI_RENAME, Value::Object(Map::new()))
+    fn rename() -> Result<String, String> {
+        dispatch(&OP_ADMIN_EMOJI_RENAME, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::slack::admin_invite_requests as iface_admin_invite_requests;
 
-const OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_APPROVE: OpSpec = OpSpec {
+const OP_ADMIN_INVITE_REQUESTS_APPROVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.inviteRequests.approve",
     fields: &[
@@ -906,7 +906,7 @@ const OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_APPROVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_DENY: OpSpec = OpSpec {
+const OP_ADMIN_INVITE_REQUESTS_DENY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.inviteRequests.deny",
     fields: &[
@@ -917,7 +917,7 @@ const OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_DENY: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_LIST: OpSpec = OpSpec {
+const OP_ADMIN_INVITE_REQUESTS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.inviteRequests.list",
     fields: &[
@@ -931,19 +931,19 @@ const OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_invite_requests__admin_invite_requests_approve_params__to_json(p: &iface_admin_invite_requests::AdminInviteRequestsApproveParams) -> Value {
+fn iface_admin_invite_requests__approve_params__to_json(p: &iface_admin_invite_requests::ApproveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_invite_requests__admin_invite_requests_deny_params__to_json(p: &iface_admin_invite_requests::AdminInviteRequestsDenyParams) -> Value {
+fn iface_admin_invite_requests__deny_params__to_json(p: &iface_admin_invite_requests::DenyParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_invite_requests__admin_invite_requests_list_params__to_json(p: &iface_admin_invite_requests::AdminInviteRequestsListParams) -> Value {
+fn iface_admin_invite_requests__list_op_params__to_json(p: &iface_admin_invite_requests::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -953,22 +953,22 @@ fn iface_admin_invite_requests__admin_invite_requests_list_params__to_json(p: &i
 }
 
 impl iface_admin_invite_requests::Guest for crate::Component {
-    fn admin_invite_requests_approve(params: iface_admin_invite_requests::AdminInviteRequestsApproveParams) -> Result<String, String> {
-        let json = iface_admin_invite_requests__admin_invite_requests_approve_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_APPROVE, json)
+    fn approve(params: iface_admin_invite_requests::ApproveParams) -> Result<String, String> {
+        let json = iface_admin_invite_requests__approve_params__to_json(&params);
+        dispatch(&OP_ADMIN_INVITE_REQUESTS_APPROVE, json)
     }
-    fn admin_invite_requests_deny(params: iface_admin_invite_requests::AdminInviteRequestsDenyParams) -> Result<String, String> {
-        let json = iface_admin_invite_requests__admin_invite_requests_deny_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_DENY, json)
+    fn deny(params: iface_admin_invite_requests::DenyParams) -> Result<String, String> {
+        let json = iface_admin_invite_requests__deny_params__to_json(&params);
+        dispatch(&OP_ADMIN_INVITE_REQUESTS_DENY, json)
     }
-    fn admin_invite_requests_list(params: iface_admin_invite_requests::AdminInviteRequestsListParams) -> Result<String, String> {
-        let json = iface_admin_invite_requests__admin_invite_requests_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_ADMIN_INVITE_REQUESTS_LIST, json)
+    fn list_op(params: iface_admin_invite_requests::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_invite_requests__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_INVITE_REQUESTS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_invite_requests_approved as iface_admin_invite_requests_approved;
 
-const OP_ADMIN_INVITE_REQUESTS_APPROVED_ADMIN_INVITE_REQUESTS_APPROVED_LIST: OpSpec = OpSpec {
+const OP_ADMIN_INVITE_REQUESTS_APPROVED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.inviteRequests.approved.list",
     fields: &[
@@ -982,7 +982,7 @@ const OP_ADMIN_INVITE_REQUESTS_APPROVED_ADMIN_INVITE_REQUESTS_APPROVED_LIST: OpS
     ],
 };
 
-fn iface_admin_invite_requests_approved__admin_invite_requests_approved_list_params__to_json(p: &iface_admin_invite_requests_approved::AdminInviteRequestsApprovedListParams) -> Value {
+fn iface_admin_invite_requests_approved__list_op_params__to_json(p: &iface_admin_invite_requests_approved::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -992,14 +992,14 @@ fn iface_admin_invite_requests_approved__admin_invite_requests_approved_list_par
 }
 
 impl iface_admin_invite_requests_approved::Guest for crate::Component {
-    fn admin_invite_requests_approved_list(params: iface_admin_invite_requests_approved::AdminInviteRequestsApprovedListParams) -> Result<String, String> {
-        let json = iface_admin_invite_requests_approved__admin_invite_requests_approved_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_APPROVED_ADMIN_INVITE_REQUESTS_APPROVED_LIST, json)
+    fn list_op(params: iface_admin_invite_requests_approved::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_invite_requests_approved__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_INVITE_REQUESTS_APPROVED_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_invite_requests_denied as iface_admin_invite_requests_denied;
 
-const OP_ADMIN_INVITE_REQUESTS_DENIED_ADMIN_INVITE_REQUESTS_DENIED_LIST: OpSpec = OpSpec {
+const OP_ADMIN_INVITE_REQUESTS_DENIED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.inviteRequests.denied.list",
     fields: &[
@@ -1013,7 +1013,7 @@ const OP_ADMIN_INVITE_REQUESTS_DENIED_ADMIN_INVITE_REQUESTS_DENIED_LIST: OpSpec 
     ],
 };
 
-fn iface_admin_invite_requests_denied__admin_invite_requests_denied_list_params__to_json(p: &iface_admin_invite_requests_denied::AdminInviteRequestsDeniedListParams) -> Value {
+fn iface_admin_invite_requests_denied__list_op_params__to_json(p: &iface_admin_invite_requests_denied::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1023,14 +1023,14 @@ fn iface_admin_invite_requests_denied__admin_invite_requests_denied_list_params_
 }
 
 impl iface_admin_invite_requests_denied::Guest for crate::Component {
-    fn admin_invite_requests_denied_list(params: iface_admin_invite_requests_denied::AdminInviteRequestsDeniedListParams) -> Result<String, String> {
-        let json = iface_admin_invite_requests_denied__admin_invite_requests_denied_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_DENIED_ADMIN_INVITE_REQUESTS_DENIED_LIST, json)
+    fn list_op(params: iface_admin_invite_requests_denied::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_invite_requests_denied__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_INVITE_REQUESTS_DENIED_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_teams_admins as iface_admin_teams_admins;
 
-const OP_ADMIN_TEAMS_ADMINS_ADMIN_TEAMS_ADMINS_LIST: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_ADMINS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.admins.list",
     fields: &[
@@ -1044,7 +1044,7 @@ const OP_ADMIN_TEAMS_ADMINS_ADMIN_TEAMS_ADMINS_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_teams_admins__admin_teams_admins_list_params__to_json(p: &iface_admin_teams_admins::AdminTeamsAdminsListParams) -> Value {
+fn iface_admin_teams_admins__list_op_params__to_json(p: &iface_admin_teams_admins::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1054,14 +1054,14 @@ fn iface_admin_teams_admins__admin_teams_admins_list_params__to_json(p: &iface_a
 }
 
 impl iface_admin_teams_admins::Guest for crate::Component {
-    fn admin_teams_admins_list(params: iface_admin_teams_admins::AdminTeamsAdminsListParams) -> Result<String, String> {
-        let json = iface_admin_teams_admins__admin_teams_admins_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_ADMINS_ADMIN_TEAMS_ADMINS_LIST, json)
+    fn list_op(params: iface_admin_teams_admins::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_teams_admins__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_ADMINS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_teams as iface_admin_teams;
 
-const OP_ADMIN_TEAMS_ADMIN_TEAMS_CREATE: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.create",
     fields: &[
@@ -1072,7 +1072,7 @@ const OP_ADMIN_TEAMS_ADMIN_TEAMS_CREATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_TEAMS_ADMIN_TEAMS_LIST: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.list",
     fields: &[
@@ -1085,13 +1085,13 @@ const OP_ADMIN_TEAMS_ADMIN_TEAMS_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_teams__admin_teams_create_params__to_json(p: &iface_admin_teams::AdminTeamsCreateParams) -> Value {
+fn iface_admin_teams__create_params__to_json(p: &iface_admin_teams::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_teams__admin_teams_list_params__to_json(p: &iface_admin_teams::AdminTeamsListParams) -> Value {
+fn iface_admin_teams__list_op_params__to_json(p: &iface_admin_teams::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1100,18 +1100,18 @@ fn iface_admin_teams__admin_teams_list_params__to_json(p: &iface_admin_teams::Ad
 }
 
 impl iface_admin_teams::Guest for crate::Component {
-    fn admin_teams_create(params: iface_admin_teams::AdminTeamsCreateParams) -> Result<String, String> {
-        let json = iface_admin_teams__admin_teams_create_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_ADMIN_TEAMS_CREATE, json)
+    fn create(params: iface_admin_teams::CreateParams) -> Result<String, String> {
+        let json = iface_admin_teams__create_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_CREATE, json)
     }
-    fn admin_teams_list(params: iface_admin_teams::AdminTeamsListParams) -> Result<String, String> {
-        let json = iface_admin_teams__admin_teams_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_ADMIN_TEAMS_LIST, json)
+    fn list_op(params: iface_admin_teams::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_teams__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_teams_owners as iface_admin_teams_owners;
 
-const OP_ADMIN_TEAMS_OWNERS_ADMIN_TEAMS_OWNERS_LIST: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_OWNERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.owners.list",
     fields: &[
@@ -1125,7 +1125,7 @@ const OP_ADMIN_TEAMS_OWNERS_ADMIN_TEAMS_OWNERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_teams_owners__admin_teams_owners_list_params__to_json(p: &iface_admin_teams_owners::AdminTeamsOwnersListParams) -> Value {
+fn iface_admin_teams_owners__list_op_params__to_json(p: &iface_admin_teams_owners::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team_id".into(), Value::String((&p.team_id).clone()));
@@ -1135,14 +1135,14 @@ fn iface_admin_teams_owners__admin_teams_owners_list_params__to_json(p: &iface_a
 }
 
 impl iface_admin_teams_owners::Guest for crate::Component {
-    fn admin_teams_owners_list(params: iface_admin_teams_owners::AdminTeamsOwnersListParams) -> Result<String, String> {
-        let json = iface_admin_teams_owners__admin_teams_owners_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_OWNERS_ADMIN_TEAMS_OWNERS_LIST, json)
+    fn list_op(params: iface_admin_teams_owners::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_teams_owners__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_OWNERS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::admin_teams_settings as iface_admin_teams_settings;
 
-const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_INFO: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_SETTINGS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.settings.info",
     fields: &[
@@ -1154,7 +1154,7 @@ const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setDefaultChannels",
     fields: &[
@@ -1164,7 +1164,7 @@ const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS: OpSpec 
     ],
 };
 
-const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setDescription",
     fields: &[
@@ -1175,7 +1175,7 @@ const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION: OpSpec = OpS
     ],
 };
 
-const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setDiscoverability",
     fields: &[
@@ -1186,7 +1186,7 @@ const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY: OpSpec =
     ],
 };
 
-const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_ICON: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_SETTINGS_SET_ICON: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setIcon",
     fields: &[
@@ -1196,7 +1196,7 @@ const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_ICON: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_NAME: OpSpec = OpSpec {
+const OP_ADMIN_TEAMS_SETTINGS_SET_NAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setName",
     fields: &[
@@ -1207,58 +1207,58 @@ const OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_NAME: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_teams_settings__admin_teams_settings_info_params__to_json(p: &iface_admin_teams_settings::AdminTeamsSettingsInfoParams) -> Value {
+fn iface_admin_teams_settings__info_params__to_json(p: &iface_admin_teams_settings::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team_id".into(), Value::String((&p.team_id).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_teams_settings__admin_teams_settings_set_description_params__to_json(p: &iface_admin_teams_settings::AdminTeamsSettingsSetDescriptionParams) -> Value {
+fn iface_admin_teams_settings__set_description_params__to_json(p: &iface_admin_teams_settings::SetDescriptionParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_teams_settings__admin_teams_settings_set_discoverability_params__to_json(p: &iface_admin_teams_settings::AdminTeamsSettingsSetDiscoverabilityParams) -> Value {
+fn iface_admin_teams_settings__set_discoverability_params__to_json(p: &iface_admin_teams_settings::SetDiscoverabilityParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_teams_settings__admin_teams_settings_set_name_params__to_json(p: &iface_admin_teams_settings::AdminTeamsSettingsSetNameParams) -> Value {
+fn iface_admin_teams_settings__set_name_params__to_json(p: &iface_admin_teams_settings::SetNameParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_admin_teams_settings::Guest for crate::Component {
-    fn admin_teams_settings_info(params: iface_admin_teams_settings::AdminTeamsSettingsInfoParams) -> Result<String, String> {
-        let json = iface_admin_teams_settings__admin_teams_settings_info_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_INFO, json)
+    fn info(params: iface_admin_teams_settings::InfoParams) -> Result<String, String> {
+        let json = iface_admin_teams_settings__info_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_SETTINGS_INFO, json)
     }
-    fn admin_teams_settings_set_default_channels() -> Result<String, String> {
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS, Value::Object(Map::new()))
+    fn set_default_channels() -> Result<String, String> {
+        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS, Value::Object(Map::new()))
     }
-    fn admin_teams_settings_set_description(params: iface_admin_teams_settings::AdminTeamsSettingsSetDescriptionParams) -> Result<String, String> {
-        let json = iface_admin_teams_settings__admin_teams_settings_set_description_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION, json)
+    fn set_description(params: iface_admin_teams_settings::SetDescriptionParams) -> Result<String, String> {
+        let json = iface_admin_teams_settings__set_description_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION, json)
     }
-    fn admin_teams_settings_set_discoverability(params: iface_admin_teams_settings::AdminTeamsSettingsSetDiscoverabilityParams) -> Result<String, String> {
-        let json = iface_admin_teams_settings__admin_teams_settings_set_discoverability_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY, json)
+    fn set_discoverability(params: iface_admin_teams_settings::SetDiscoverabilityParams) -> Result<String, String> {
+        let json = iface_admin_teams_settings__set_discoverability_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY, json)
     }
-    fn admin_teams_settings_set_icon() -> Result<String, String> {
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_ICON, Value::Object(Map::new()))
+    fn set_icon() -> Result<String, String> {
+        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_ICON, Value::Object(Map::new()))
     }
-    fn admin_teams_settings_set_name(params: iface_admin_teams_settings::AdminTeamsSettingsSetNameParams) -> Result<String, String> {
-        let json = iface_admin_teams_settings__admin_teams_settings_set_name_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_ADMIN_TEAMS_SETTINGS_SET_NAME, json)
+    fn set_name(params: iface_admin_teams_settings::SetNameParams) -> Result<String, String> {
+        let json = iface_admin_teams_settings__set_name_params__to_json(&params);
+        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_NAME, json)
     }
 }
 use crate::exports::autostamp::slack::admin_usergroups as iface_admin_usergroups;
 
-const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_ADD_CHANNELS: OpSpec = OpSpec {
+const OP_ADMIN_USERGROUPS_ADD_CHANNELS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.usergroups.addChannels",
     fields: &[
@@ -1269,7 +1269,7 @@ const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_ADD_CHANNELS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_ADD_TEAMS: OpSpec = OpSpec {
+const OP_ADMIN_USERGROUPS_ADD_TEAMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.usergroups.addTeams",
     fields: &[
@@ -1280,7 +1280,7 @@ const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_ADD_TEAMS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_LIST_CHANNELS: OpSpec = OpSpec {
+const OP_ADMIN_USERGROUPS_LIST_CHANNELS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.usergroups.listChannels",
     fields: &[
@@ -1294,7 +1294,7 @@ const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_LIST_CHANNELS: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_REMOVE_CHANNELS: OpSpec = OpSpec {
+const OP_ADMIN_USERGROUPS_REMOVE_CHANNELS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.usergroups.removeChannels",
     fields: &[
@@ -1305,19 +1305,19 @@ const OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_REMOVE_CHANNELS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_usergroups__admin_usergroups_add_channels_params__to_json(p: &iface_admin_usergroups::AdminUsergroupsAddChannelsParams) -> Value {
+fn iface_admin_usergroups__add_channels_params__to_json(p: &iface_admin_usergroups::AddChannelsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_usergroups__admin_usergroups_add_teams_params__to_json(p: &iface_admin_usergroups::AdminUsergroupsAddTeamsParams) -> Value {
+fn iface_admin_usergroups__add_teams_params__to_json(p: &iface_admin_usergroups::AddTeamsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_usergroups__admin_usergroups_list_channels_params__to_json(p: &iface_admin_usergroups::AdminUsergroupsListChannelsParams) -> Value {
+fn iface_admin_usergroups__list_channels_params__to_json(p: &iface_admin_usergroups::ListChannelsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("usergroup_id".into(), Value::String((&p.usergroup_id).clone()));
@@ -1326,33 +1326,33 @@ fn iface_admin_usergroups__admin_usergroups_list_channels_params__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_admin_usergroups__admin_usergroups_remove_channels_params__to_json(p: &iface_admin_usergroups::AdminUsergroupsRemoveChannelsParams) -> Value {
+fn iface_admin_usergroups__remove_channels_params__to_json(p: &iface_admin_usergroups::RemoveChannelsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_admin_usergroups::Guest for crate::Component {
-    fn admin_usergroups_add_channels(params: iface_admin_usergroups::AdminUsergroupsAddChannelsParams) -> Result<String, String> {
-        let json = iface_admin_usergroups__admin_usergroups_add_channels_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_ADD_CHANNELS, json)
+    fn add_channels(params: iface_admin_usergroups::AddChannelsParams) -> Result<String, String> {
+        let json = iface_admin_usergroups__add_channels_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERGROUPS_ADD_CHANNELS, json)
     }
-    fn admin_usergroups_add_teams(params: iface_admin_usergroups::AdminUsergroupsAddTeamsParams) -> Result<String, String> {
-        let json = iface_admin_usergroups__admin_usergroups_add_teams_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_ADD_TEAMS, json)
+    fn add_teams(params: iface_admin_usergroups::AddTeamsParams) -> Result<String, String> {
+        let json = iface_admin_usergroups__add_teams_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERGROUPS_ADD_TEAMS, json)
     }
-    fn admin_usergroups_list_channels(params: iface_admin_usergroups::AdminUsergroupsListChannelsParams) -> Result<String, String> {
-        let json = iface_admin_usergroups__admin_usergroups_list_channels_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_LIST_CHANNELS, json)
+    fn list_channels(params: iface_admin_usergroups::ListChannelsParams) -> Result<String, String> {
+        let json = iface_admin_usergroups__list_channels_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERGROUPS_LIST_CHANNELS, json)
     }
-    fn admin_usergroups_remove_channels(params: iface_admin_usergroups::AdminUsergroupsRemoveChannelsParams) -> Result<String, String> {
-        let json = iface_admin_usergroups__admin_usergroups_remove_channels_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_ADMIN_USERGROUPS_REMOVE_CHANNELS, json)
+    fn remove_channels(params: iface_admin_usergroups::RemoveChannelsParams) -> Result<String, String> {
+        let json = iface_admin_usergroups__remove_channels_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERGROUPS_REMOVE_CHANNELS, json)
     }
 }
 use crate::exports::autostamp::slack::admin_users as iface_admin_users;
 
-const OP_ADMIN_USERS_ADMIN_USERS_ASSIGN: OpSpec = OpSpec {
+const OP_ADMIN_USERS_ASSIGN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.assign",
     fields: &[
@@ -1363,7 +1363,7 @@ const OP_ADMIN_USERS_ADMIN_USERS_ASSIGN: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_ADMIN_USERS_INVITE: OpSpec = OpSpec {
+const OP_ADMIN_USERS_INVITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.invite",
     fields: &[
@@ -1374,7 +1374,7 @@ const OP_ADMIN_USERS_ADMIN_USERS_INVITE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_ADMIN_USERS_LIST: OpSpec = OpSpec {
+const OP_ADMIN_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.users.list",
     fields: &[
@@ -1388,7 +1388,7 @@ const OP_ADMIN_USERS_ADMIN_USERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_ADMIN_USERS_REMOVE: OpSpec = OpSpec {
+const OP_ADMIN_USERS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.remove",
     fields: &[
@@ -1399,7 +1399,7 @@ const OP_ADMIN_USERS_ADMIN_USERS_REMOVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_ADMIN_USERS_SET_ADMIN: OpSpec = OpSpec {
+const OP_ADMIN_USERS_SET_ADMIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setAdmin",
     fields: &[
@@ -1410,7 +1410,7 @@ const OP_ADMIN_USERS_ADMIN_USERS_SET_ADMIN: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_ADMIN_USERS_SET_EXPIRATION: OpSpec = OpSpec {
+const OP_ADMIN_USERS_SET_EXPIRATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setExpiration",
     fields: &[
@@ -1421,7 +1421,7 @@ const OP_ADMIN_USERS_ADMIN_USERS_SET_EXPIRATION: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_ADMIN_USERS_SET_OWNER: OpSpec = OpSpec {
+const OP_ADMIN_USERS_SET_OWNER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setOwner",
     fields: &[
@@ -1432,7 +1432,7 @@ const OP_ADMIN_USERS_ADMIN_USERS_SET_OWNER: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_ADMIN_USERS_SET_REGULAR: OpSpec = OpSpec {
+const OP_ADMIN_USERS_SET_REGULAR: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setRegular",
     fields: &[
@@ -1443,19 +1443,19 @@ const OP_ADMIN_USERS_ADMIN_USERS_SET_REGULAR: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_users__admin_users_assign_params__to_json(p: &iface_admin_users::AdminUsersAssignParams) -> Value {
+fn iface_admin_users__assign_params__to_json(p: &iface_admin_users::AssignParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_users__admin_users_invite_params__to_json(p: &iface_admin_users::AdminUsersInviteParams) -> Value {
+fn iface_admin_users__invite_params__to_json(p: &iface_admin_users::InviteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_users__admin_users_list_params__to_json(p: &iface_admin_users::AdminUsersListParams) -> Value {
+fn iface_admin_users__list_op_params__to_json(p: &iface_admin_users::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team_id".into(), Value::String((&p.team_id).clone()));
@@ -1464,73 +1464,73 @@ fn iface_admin_users__admin_users_list_params__to_json(p: &iface_admin_users::Ad
     Value::Object(m)
 }
 
-fn iface_admin_users__admin_users_remove_params__to_json(p: &iface_admin_users::AdminUsersRemoveParams) -> Value {
+fn iface_admin_users__remove_params__to_json(p: &iface_admin_users::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_users__admin_users_set_admin_params__to_json(p: &iface_admin_users::AdminUsersSetAdminParams) -> Value {
+fn iface_admin_users__set_admin_params__to_json(p: &iface_admin_users::SetAdminParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_users__admin_users_set_expiration_params__to_json(p: &iface_admin_users::AdminUsersSetExpirationParams) -> Value {
+fn iface_admin_users__set_expiration_params__to_json(p: &iface_admin_users::SetExpirationParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_users__admin_users_set_owner_params__to_json(p: &iface_admin_users::AdminUsersSetOwnerParams) -> Value {
+fn iface_admin_users__set_owner_params__to_json(p: &iface_admin_users::SetOwnerParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_users__admin_users_set_regular_params__to_json(p: &iface_admin_users::AdminUsersSetRegularParams) -> Value {
+fn iface_admin_users__set_regular_params__to_json(p: &iface_admin_users::SetRegularParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_admin_users::Guest for crate::Component {
-    fn admin_users_assign(params: iface_admin_users::AdminUsersAssignParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_assign_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_ASSIGN, json)
+    fn assign(params: iface_admin_users::AssignParams) -> Result<String, String> {
+        let json = iface_admin_users__assign_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_ASSIGN, json)
     }
-    fn admin_users_invite(params: iface_admin_users::AdminUsersInviteParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_invite_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_INVITE, json)
+    fn invite(params: iface_admin_users::InviteParams) -> Result<String, String> {
+        let json = iface_admin_users__invite_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_INVITE, json)
     }
-    fn admin_users_list(params: iface_admin_users::AdminUsersListParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_list_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_LIST, json)
+    fn list_op(params: iface_admin_users::ListOpParams) -> Result<String, String> {
+        let json = iface_admin_users__list_op_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_LIST_OP, json)
     }
-    fn admin_users_remove(params: iface_admin_users::AdminUsersRemoveParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_remove_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_REMOVE, json)
+    fn remove(params: iface_admin_users::RemoveParams) -> Result<String, String> {
+        let json = iface_admin_users__remove_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_REMOVE, json)
     }
-    fn admin_users_set_admin(params: iface_admin_users::AdminUsersSetAdminParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_set_admin_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_SET_ADMIN, json)
+    fn set_admin(params: iface_admin_users::SetAdminParams) -> Result<String, String> {
+        let json = iface_admin_users__set_admin_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_SET_ADMIN, json)
     }
-    fn admin_users_set_expiration(params: iface_admin_users::AdminUsersSetExpirationParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_set_expiration_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_SET_EXPIRATION, json)
+    fn set_expiration(params: iface_admin_users::SetExpirationParams) -> Result<String, String> {
+        let json = iface_admin_users__set_expiration_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_SET_EXPIRATION, json)
     }
-    fn admin_users_set_owner(params: iface_admin_users::AdminUsersSetOwnerParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_set_owner_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_SET_OWNER, json)
+    fn set_owner(params: iface_admin_users::SetOwnerParams) -> Result<String, String> {
+        let json = iface_admin_users__set_owner_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_SET_OWNER, json)
     }
-    fn admin_users_set_regular(params: iface_admin_users::AdminUsersSetRegularParams) -> Result<String, String> {
-        let json = iface_admin_users__admin_users_set_regular_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ADMIN_USERS_SET_REGULAR, json)
+    fn set_regular(params: iface_admin_users::SetRegularParams) -> Result<String, String> {
+        let json = iface_admin_users__set_regular_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_SET_REGULAR, json)
     }
 }
 use crate::exports::autostamp::slack::admin_users_session as iface_admin_users_session;
 
-const OP_ADMIN_USERS_SESSION_ADMIN_USERS_SESSION_INVALIDATE: OpSpec = OpSpec {
+const OP_ADMIN_USERS_SESSION_INVALIDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.session.invalidate",
     fields: &[
@@ -1541,7 +1541,7 @@ const OP_ADMIN_USERS_SESSION_ADMIN_USERS_SESSION_INVALIDATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_ADMIN_USERS_SESSION_ADMIN_USERS_SESSION_RESET: OpSpec = OpSpec {
+const OP_ADMIN_USERS_SESSION_RESET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.session.reset",
     fields: &[
@@ -1552,31 +1552,31 @@ const OP_ADMIN_USERS_SESSION_ADMIN_USERS_SESSION_RESET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_admin_users_session__admin_users_session_invalidate_params__to_json(p: &iface_admin_users_session::AdminUsersSessionInvalidateParams) -> Value {
+fn iface_admin_users_session__invalidate_params__to_json(p: &iface_admin_users_session::InvalidateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_admin_users_session__admin_users_session_reset_params__to_json(p: &iface_admin_users_session::AdminUsersSessionResetParams) -> Value {
+fn iface_admin_users_session__reset_params__to_json(p: &iface_admin_users_session::ResetParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_admin_users_session::Guest for crate::Component {
-    fn admin_users_session_invalidate(params: iface_admin_users_session::AdminUsersSessionInvalidateParams) -> Result<String, String> {
-        let json = iface_admin_users_session__admin_users_session_invalidate_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SESSION_ADMIN_USERS_SESSION_INVALIDATE, json)
+    fn invalidate(params: iface_admin_users_session::InvalidateParams) -> Result<String, String> {
+        let json = iface_admin_users_session__invalidate_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_SESSION_INVALIDATE, json)
     }
-    fn admin_users_session_reset(params: iface_admin_users_session::AdminUsersSessionResetParams) -> Result<String, String> {
-        let json = iface_admin_users_session__admin_users_session_reset_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SESSION_ADMIN_USERS_SESSION_RESET, json)
+    fn reset(params: iface_admin_users_session::ResetParams) -> Result<String, String> {
+        let json = iface_admin_users_session__reset_params__to_json(&params);
+        dispatch(&OP_ADMIN_USERS_SESSION_RESET, json)
     }
 }
 use crate::exports::autostamp::slack::api as iface_api;
 
-const OP_API_API_TEST: OpSpec = OpSpec {
+const OP_API_TEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api.test",
     fields: &[
@@ -1588,7 +1588,7 @@ const OP_API_API_TEST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_api__api_test_params__to_json(p: &iface_api::ApiTestParams) -> Value {
+fn iface_api__test_params__to_json(p: &iface_api::TestParams) -> Value {
     let mut m = Map::new();
     m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("foo".into(), match (&p.foo) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1596,14 +1596,14 @@ fn iface_api__api_test_params__to_json(p: &iface_api::ApiTestParams) -> Value {
 }
 
 impl iface_api::Guest for crate::Component {
-    fn api_test(params: iface_api::ApiTestParams) -> Result<String, String> {
-        let json = iface_api__api_test_params__to_json(&params);
-        dispatch(&OP_API_API_TEST, json)
+    fn test(params: iface_api::TestParams) -> Result<String, String> {
+        let json = iface_api__test_params__to_json(&params);
+        dispatch(&OP_API_TEST, json)
     }
 }
 use crate::exports::autostamp::slack::apps_event_authorizations as iface_apps_event_authorizations;
 
-const OP_APPS_EVENT_AUTHORIZATIONS_APPS_EVENT_AUTHORIZATIONS_LIST: OpSpec = OpSpec {
+const OP_APPS_EVENT_AUTHORIZATIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.event.authorizations.list",
     fields: &[
@@ -1617,7 +1617,7 @@ const OP_APPS_EVENT_AUTHORIZATIONS_APPS_EVENT_AUTHORIZATIONS_LIST: OpSpec = OpSp
     ],
 };
 
-fn iface_apps_event_authorizations__apps_event_authorizations_list_params__to_json(p: &iface_apps_event_authorizations::AppsEventAuthorizationsListParams) -> Value {
+fn iface_apps_event_authorizations__list_op_params__to_json(p: &iface_apps_event_authorizations::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("event_context".into(), Value::String((&p.event_context).clone()));
@@ -1627,14 +1627,14 @@ fn iface_apps_event_authorizations__apps_event_authorizations_list_params__to_js
 }
 
 impl iface_apps_event_authorizations::Guest for crate::Component {
-    fn apps_event_authorizations_list(params: iface_apps_event_authorizations::AppsEventAuthorizationsListParams) -> Result<String, String> {
-        let json = iface_apps_event_authorizations__apps_event_authorizations_list_params__to_json(&params);
-        dispatch(&OP_APPS_EVENT_AUTHORIZATIONS_APPS_EVENT_AUTHORIZATIONS_LIST, json)
+    fn list_op(params: iface_apps_event_authorizations::ListOpParams) -> Result<String, String> {
+        let json = iface_apps_event_authorizations__list_op_params__to_json(&params);
+        dispatch(&OP_APPS_EVENT_AUTHORIZATIONS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::apps_permissions as iface_apps_permissions;
 
-const OP_APPS_PERMISSIONS_APPS_PERMISSIONS_INFO: OpSpec = OpSpec {
+const OP_APPS_PERMISSIONS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.info",
     fields: &[
@@ -1645,7 +1645,7 @@ const OP_APPS_PERMISSIONS_APPS_PERMISSIONS_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_APPS_PERMISSIONS_APPS_PERMISSIONS_REQUEST: OpSpec = OpSpec {
+const OP_APPS_PERMISSIONS_REQUEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.request",
     fields: &[
@@ -1658,13 +1658,13 @@ const OP_APPS_PERMISSIONS_APPS_PERMISSIONS_REQUEST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_apps_permissions__apps_permissions_info_params__to_json(p: &iface_apps_permissions::AppsPermissionsInfoParams) -> Value {
+fn iface_apps_permissions__info_params__to_json(p: &iface_apps_permissions::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_apps_permissions__apps_permissions_request_params__to_json(p: &iface_apps_permissions::AppsPermissionsRequestParams) -> Value {
+fn iface_apps_permissions__request_params__to_json(p: &iface_apps_permissions::RequestParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("scopes".into(), Value::String((&p.scopes).clone()));
@@ -1673,18 +1673,18 @@ fn iface_apps_permissions__apps_permissions_request_params__to_json(p: &iface_ap
 }
 
 impl iface_apps_permissions::Guest for crate::Component {
-    fn apps_permissions_info(params: iface_apps_permissions::AppsPermissionsInfoParams) -> Result<String, String> {
-        let json = iface_apps_permissions__apps_permissions_info_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_APPS_PERMISSIONS_INFO, json)
+    fn info(params: iface_apps_permissions::InfoParams) -> Result<String, String> {
+        let json = iface_apps_permissions__info_params__to_json(&params);
+        dispatch(&OP_APPS_PERMISSIONS_INFO, json)
     }
-    fn apps_permissions_request(params: iface_apps_permissions::AppsPermissionsRequestParams) -> Result<String, String> {
-        let json = iface_apps_permissions__apps_permissions_request_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_APPS_PERMISSIONS_REQUEST, json)
+    fn request(params: iface_apps_permissions::RequestParams) -> Result<String, String> {
+        let json = iface_apps_permissions__request_params__to_json(&params);
+        dispatch(&OP_APPS_PERMISSIONS_REQUEST, json)
     }
 }
 use crate::exports::autostamp::slack::apps_permissions_resources as iface_apps_permissions_resources;
 
-const OP_APPS_PERMISSIONS_RESOURCES_APPS_PERMISSIONS_RESOURCES_LIST: OpSpec = OpSpec {
+const OP_APPS_PERMISSIONS_RESOURCES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.resources.list",
     fields: &[
@@ -1697,7 +1697,7 @@ const OP_APPS_PERMISSIONS_RESOURCES_APPS_PERMISSIONS_RESOURCES_LIST: OpSpec = Op
     ],
 };
 
-fn iface_apps_permissions_resources__apps_permissions_resources_list_params__to_json(p: &iface_apps_permissions_resources::AppsPermissionsResourcesListParams) -> Value {
+fn iface_apps_permissions_resources__list_op_params__to_json(p: &iface_apps_permissions_resources::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1706,14 +1706,14 @@ fn iface_apps_permissions_resources__apps_permissions_resources_list_params__to_
 }
 
 impl iface_apps_permissions_resources::Guest for crate::Component {
-    fn apps_permissions_resources_list(params: iface_apps_permissions_resources::AppsPermissionsResourcesListParams) -> Result<String, String> {
-        let json = iface_apps_permissions_resources__apps_permissions_resources_list_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_RESOURCES_APPS_PERMISSIONS_RESOURCES_LIST, json)
+    fn list_op(params: iface_apps_permissions_resources::ListOpParams) -> Result<String, String> {
+        let json = iface_apps_permissions_resources__list_op_params__to_json(&params);
+        dispatch(&OP_APPS_PERMISSIONS_RESOURCES_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::apps_permissions_scopes as iface_apps_permissions_scopes;
 
-const OP_APPS_PERMISSIONS_SCOPES_APPS_PERMISSIONS_SCOPES_LIST: OpSpec = OpSpec {
+const OP_APPS_PERMISSIONS_SCOPES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.scopes.list",
     fields: &[
@@ -1724,21 +1724,21 @@ const OP_APPS_PERMISSIONS_SCOPES_APPS_PERMISSIONS_SCOPES_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_apps_permissions_scopes__apps_permissions_scopes_list_params__to_json(p: &iface_apps_permissions_scopes::AppsPermissionsScopesListParams) -> Value {
+fn iface_apps_permissions_scopes__list_op_params__to_json(p: &iface_apps_permissions_scopes::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_apps_permissions_scopes::Guest for crate::Component {
-    fn apps_permissions_scopes_list(params: iface_apps_permissions_scopes::AppsPermissionsScopesListParams) -> Result<String, String> {
-        let json = iface_apps_permissions_scopes__apps_permissions_scopes_list_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_SCOPES_APPS_PERMISSIONS_SCOPES_LIST, json)
+    fn list_op(params: iface_apps_permissions_scopes::ListOpParams) -> Result<String, String> {
+        let json = iface_apps_permissions_scopes__list_op_params__to_json(&params);
+        dispatch(&OP_APPS_PERMISSIONS_SCOPES_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::apps_permissions_users as iface_apps_permissions_users;
 
-const OP_APPS_PERMISSIONS_USERS_APPS_PERMISSIONS_USERS_LIST: OpSpec = OpSpec {
+const OP_APPS_PERMISSIONS_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.users.list",
     fields: &[
@@ -1751,7 +1751,7 @@ const OP_APPS_PERMISSIONS_USERS_APPS_PERMISSIONS_USERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_APPS_PERMISSIONS_USERS_APPS_PERMISSIONS_USERS_REQUEST: OpSpec = OpSpec {
+const OP_APPS_PERMISSIONS_USERS_REQUEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.users.request",
     fields: &[
@@ -1765,7 +1765,7 @@ const OP_APPS_PERMISSIONS_USERS_APPS_PERMISSIONS_USERS_REQUEST: OpSpec = OpSpec 
     ],
 };
 
-fn iface_apps_permissions_users__apps_permissions_users_list_params__to_json(p: &iface_apps_permissions_users::AppsPermissionsUsersListParams) -> Value {
+fn iface_apps_permissions_users__list_op_params__to_json(p: &iface_apps_permissions_users::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1773,7 +1773,7 @@ fn iface_apps_permissions_users__apps_permissions_users_list_params__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_apps_permissions_users__apps_permissions_users_request_params__to_json(p: &iface_apps_permissions_users::AppsPermissionsUsersRequestParams) -> Value {
+fn iface_apps_permissions_users__request_params__to_json(p: &iface_apps_permissions_users::RequestParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("scopes".into(), Value::String((&p.scopes).clone()));
@@ -1783,18 +1783,18 @@ fn iface_apps_permissions_users__apps_permissions_users_request_params__to_json(
 }
 
 impl iface_apps_permissions_users::Guest for crate::Component {
-    fn apps_permissions_users_list(params: iface_apps_permissions_users::AppsPermissionsUsersListParams) -> Result<String, String> {
-        let json = iface_apps_permissions_users__apps_permissions_users_list_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_USERS_APPS_PERMISSIONS_USERS_LIST, json)
+    fn list_op(params: iface_apps_permissions_users::ListOpParams) -> Result<String, String> {
+        let json = iface_apps_permissions_users__list_op_params__to_json(&params);
+        dispatch(&OP_APPS_PERMISSIONS_USERS_LIST_OP, json)
     }
-    fn apps_permissions_users_request(params: iface_apps_permissions_users::AppsPermissionsUsersRequestParams) -> Result<String, String> {
-        let json = iface_apps_permissions_users__apps_permissions_users_request_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_USERS_APPS_PERMISSIONS_USERS_REQUEST, json)
+    fn request(params: iface_apps_permissions_users::RequestParams) -> Result<String, String> {
+        let json = iface_apps_permissions_users__request_params__to_json(&params);
+        dispatch(&OP_APPS_PERMISSIONS_USERS_REQUEST, json)
     }
 }
 use crate::exports::autostamp::slack::apps as iface_apps;
 
-const OP_APPS_APPS_UNINSTALL: OpSpec = OpSpec {
+const OP_APPS_UNINSTALL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.uninstall",
     fields: &[
@@ -1807,7 +1807,7 @@ const OP_APPS_APPS_UNINSTALL: OpSpec = OpSpec {
     ],
 };
 
-fn iface_apps__apps_uninstall_params__to_json(p: &iface_apps::AppsUninstallParams) -> Value {
+fn iface_apps__uninstall_params__to_json(p: &iface_apps::UninstallParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_id".into(), match (&p.client_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1816,14 +1816,14 @@ fn iface_apps__apps_uninstall_params__to_json(p: &iface_apps::AppsUninstallParam
 }
 
 impl iface_apps::Guest for crate::Component {
-    fn apps_uninstall(params: iface_apps::AppsUninstallParams) -> Result<String, String> {
-        let json = iface_apps__apps_uninstall_params__to_json(&params);
-        dispatch(&OP_APPS_APPS_UNINSTALL, json)
+    fn uninstall(params: iface_apps::UninstallParams) -> Result<String, String> {
+        let json = iface_apps__uninstall_params__to_json(&params);
+        dispatch(&OP_APPS_UNINSTALL, json)
     }
 }
 use crate::exports::autostamp::slack::auth as iface_auth;
 
-const OP_AUTH_AUTH_REVOKE: OpSpec = OpSpec {
+const OP_AUTH_REVOKE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auth.revoke",
     fields: &[
@@ -1835,7 +1835,7 @@ const OP_AUTH_AUTH_REVOKE: OpSpec = OpSpec {
     ],
 };
 
-const OP_AUTH_AUTH_TEST: OpSpec = OpSpec {
+const OP_AUTH_TEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auth.test",
     fields: &[
@@ -1846,32 +1846,32 @@ const OP_AUTH_AUTH_TEST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_auth__auth_revoke_params__to_json(p: &iface_auth::AuthRevokeParams) -> Value {
+fn iface_auth__revoke_params__to_json(p: &iface_auth::RevokeParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("test".into(), match (&p.test) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_auth__auth_test_params__to_json(p: &iface_auth::AuthTestParams) -> Value {
+fn iface_auth__test_params__to_json(p: &iface_auth::TestParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_auth::Guest for crate::Component {
-    fn auth_revoke(params: iface_auth::AuthRevokeParams) -> Result<String, String> {
-        let json = iface_auth__auth_revoke_params__to_json(&params);
-        dispatch(&OP_AUTH_AUTH_REVOKE, json)
+    fn revoke(params: iface_auth::RevokeParams) -> Result<String, String> {
+        let json = iface_auth__revoke_params__to_json(&params);
+        dispatch(&OP_AUTH_REVOKE, json)
     }
-    fn auth_test(params: iface_auth::AuthTestParams) -> Result<String, String> {
-        let json = iface_auth__auth_test_params__to_json(&params);
-        dispatch(&OP_AUTH_AUTH_TEST, json)
+    fn test(params: iface_auth::TestParams) -> Result<String, String> {
+        let json = iface_auth__test_params__to_json(&params);
+        dispatch(&OP_AUTH_TEST, json)
     }
 }
 use crate::exports::autostamp::slack::bots as iface_bots;
 
-const OP_BOTS_BOTS_INFO: OpSpec = OpSpec {
+const OP_BOTS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/bots.info",
     fields: &[
@@ -1883,7 +1883,7 @@ const OP_BOTS_BOTS_INFO: OpSpec = OpSpec {
     ],
 };
 
-fn iface_bots__bots_info_params__to_json(p: &iface_bots::BotsInfoParams) -> Value {
+fn iface_bots__info_params__to_json(p: &iface_bots::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("bot".into(), match (&p.bot) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1891,14 +1891,14 @@ fn iface_bots__bots_info_params__to_json(p: &iface_bots::BotsInfoParams) -> Valu
 }
 
 impl iface_bots::Guest for crate::Component {
-    fn bots_info(params: iface_bots::BotsInfoParams) -> Result<String, String> {
-        let json = iface_bots__bots_info_params__to_json(&params);
-        dispatch(&OP_BOTS_BOTS_INFO, json)
+    fn info(params: iface_bots::InfoParams) -> Result<String, String> {
+        let json = iface_bots__info_params__to_json(&params);
+        dispatch(&OP_BOTS_INFO, json)
     }
 }
 use crate::exports::autostamp::slack::calls as iface_calls;
 
-const OP_CALLS_CALLS_ADD: OpSpec = OpSpec {
+const OP_CALLS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.add",
     fields: &[
@@ -1909,7 +1909,7 @@ const OP_CALLS_CALLS_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_CALLS_CALLS_END: OpSpec = OpSpec {
+const OP_CALLS_END: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.end",
     fields: &[
@@ -1920,7 +1920,7 @@ const OP_CALLS_CALLS_END: OpSpec = OpSpec {
     ],
 };
 
-const OP_CALLS_CALLS_INFO: OpSpec = OpSpec {
+const OP_CALLS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calls.info",
     fields: &[
@@ -1932,7 +1932,7 @@ const OP_CALLS_CALLS_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_CALLS_CALLS_UPDATE: OpSpec = OpSpec {
+const OP_CALLS_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.update",
     fields: &[
@@ -1943,52 +1943,52 @@ const OP_CALLS_CALLS_UPDATE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_calls__calls_add_params__to_json(p: &iface_calls::CallsAddParams) -> Value {
+fn iface_calls__add_params__to_json(p: &iface_calls::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_calls__calls_end_params__to_json(p: &iface_calls::CallsEndParams) -> Value {
+fn iface_calls__end_params__to_json(p: &iface_calls::EndParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_calls__calls_info_params__to_json(p: &iface_calls::CallsInfoParams) -> Value {
+fn iface_calls__info_params__to_json(p: &iface_calls::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_calls__calls_update_params__to_json(p: &iface_calls::CallsUpdateParams) -> Value {
+fn iface_calls__update_params__to_json(p: &iface_calls::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_calls::Guest for crate::Component {
-    fn calls_add(params: iface_calls::CallsAddParams) -> Result<String, String> {
-        let json = iface_calls__calls_add_params__to_json(&params);
-        dispatch(&OP_CALLS_CALLS_ADD, json)
+    fn add(params: iface_calls::AddParams) -> Result<String, String> {
+        let json = iface_calls__add_params__to_json(&params);
+        dispatch(&OP_CALLS_ADD, json)
     }
-    fn calls_end(params: iface_calls::CallsEndParams) -> Result<String, String> {
-        let json = iface_calls__calls_end_params__to_json(&params);
-        dispatch(&OP_CALLS_CALLS_END, json)
+    fn end(params: iface_calls::EndParams) -> Result<String, String> {
+        let json = iface_calls__end_params__to_json(&params);
+        dispatch(&OP_CALLS_END, json)
     }
-    fn calls_info(params: iface_calls::CallsInfoParams) -> Result<String, String> {
-        let json = iface_calls__calls_info_params__to_json(&params);
-        dispatch(&OP_CALLS_CALLS_INFO, json)
+    fn info(params: iface_calls::InfoParams) -> Result<String, String> {
+        let json = iface_calls__info_params__to_json(&params);
+        dispatch(&OP_CALLS_INFO, json)
     }
-    fn calls_update(params: iface_calls::CallsUpdateParams) -> Result<String, String> {
-        let json = iface_calls__calls_update_params__to_json(&params);
-        dispatch(&OP_CALLS_CALLS_UPDATE, json)
+    fn update(params: iface_calls::UpdateParams) -> Result<String, String> {
+        let json = iface_calls__update_params__to_json(&params);
+        dispatch(&OP_CALLS_UPDATE, json)
     }
 }
 use crate::exports::autostamp::slack::calls_participants as iface_calls_participants;
 
-const OP_CALLS_PARTICIPANTS_CALLS_PARTICIPANTS_ADD: OpSpec = OpSpec {
+const OP_CALLS_PARTICIPANTS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.participants.add",
     fields: &[
@@ -1999,7 +1999,7 @@ const OP_CALLS_PARTICIPANTS_CALLS_PARTICIPANTS_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_CALLS_PARTICIPANTS_CALLS_PARTICIPANTS_REMOVE: OpSpec = OpSpec {
+const OP_CALLS_PARTICIPANTS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.participants.remove",
     fields: &[
@@ -2010,31 +2010,31 @@ const OP_CALLS_PARTICIPANTS_CALLS_PARTICIPANTS_REMOVE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_calls_participants__calls_participants_add_params__to_json(p: &iface_calls_participants::CallsParticipantsAddParams) -> Value {
+fn iface_calls_participants__add_params__to_json(p: &iface_calls_participants::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_calls_participants__calls_participants_remove_params__to_json(p: &iface_calls_participants::CallsParticipantsRemoveParams) -> Value {
+fn iface_calls_participants__remove_params__to_json(p: &iface_calls_participants::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_calls_participants::Guest for crate::Component {
-    fn calls_participants_add(params: iface_calls_participants::CallsParticipantsAddParams) -> Result<String, String> {
-        let json = iface_calls_participants__calls_participants_add_params__to_json(&params);
-        dispatch(&OP_CALLS_PARTICIPANTS_CALLS_PARTICIPANTS_ADD, json)
+    fn add(params: iface_calls_participants::AddParams) -> Result<String, String> {
+        let json = iface_calls_participants__add_params__to_json(&params);
+        dispatch(&OP_CALLS_PARTICIPANTS_ADD, json)
     }
-    fn calls_participants_remove(params: iface_calls_participants::CallsParticipantsRemoveParams) -> Result<String, String> {
-        let json = iface_calls_participants__calls_participants_remove_params__to_json(&params);
-        dispatch(&OP_CALLS_PARTICIPANTS_CALLS_PARTICIPANTS_REMOVE, json)
+    fn remove(params: iface_calls_participants::RemoveParams) -> Result<String, String> {
+        let json = iface_calls_participants__remove_params__to_json(&params);
+        dispatch(&OP_CALLS_PARTICIPANTS_REMOVE, json)
     }
 }
 use crate::exports::autostamp::slack::chat as iface_chat;
 
-const OP_CHAT_CHAT_DELETE: OpSpec = OpSpec {
+const OP_CHAT_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.delete",
     fields: &[
@@ -2045,7 +2045,7 @@ const OP_CHAT_CHAT_DELETE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_DELETE_SCHEDULED_MESSAGE: OpSpec = OpSpec {
+const OP_CHAT_DELETE_SCHEDULED_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.deleteScheduledMessage",
     fields: &[
@@ -2056,7 +2056,7 @@ const OP_CHAT_CHAT_DELETE_SCHEDULED_MESSAGE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_GET_PERMALINK: OpSpec = OpSpec {
+const OP_CHAT_GET_PERMALINK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chat.getPermalink",
     fields: &[
@@ -2069,7 +2069,7 @@ const OP_CHAT_CHAT_GET_PERMALINK: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_ME_MESSAGE: OpSpec = OpSpec {
+const OP_CHAT_ME_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.meMessage",
     fields: &[
@@ -2080,7 +2080,7 @@ const OP_CHAT_CHAT_ME_MESSAGE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_POST_EPHEMERAL: OpSpec = OpSpec {
+const OP_CHAT_POST_EPHEMERAL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.postEphemeral",
     fields: &[
@@ -2091,7 +2091,7 @@ const OP_CHAT_CHAT_POST_EPHEMERAL: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_POST_MESSAGE: OpSpec = OpSpec {
+const OP_CHAT_POST_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.postMessage",
     fields: &[
@@ -2102,7 +2102,7 @@ const OP_CHAT_CHAT_POST_MESSAGE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_SCHEDULE_MESSAGE: OpSpec = OpSpec {
+const OP_CHAT_SCHEDULE_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.scheduleMessage",
     fields: &[
@@ -2113,7 +2113,7 @@ const OP_CHAT_CHAT_SCHEDULE_MESSAGE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_UNFURL: OpSpec = OpSpec {
+const OP_CHAT_UNFURL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.unfurl",
     fields: &[
@@ -2124,7 +2124,7 @@ const OP_CHAT_CHAT_UNFURL: OpSpec = OpSpec {
     ],
 };
 
-const OP_CHAT_CHAT_UPDATE: OpSpec = OpSpec {
+const OP_CHAT_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.update",
     fields: &[
@@ -2135,19 +2135,19 @@ const OP_CHAT_CHAT_UPDATE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_chat__chat_delete_params__to_json(p: &iface_chat::ChatDeleteParams) -> Value {
+fn iface_chat__delete_params__to_json(p: &iface_chat::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_chat__chat_delete_scheduled_message_params__to_json(p: &iface_chat::ChatDeleteScheduledMessageParams) -> Value {
+fn iface_chat__delete_scheduled_message_params__to_json(p: &iface_chat::DeleteScheduledMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_chat__chat_get_permalink_params__to_json(p: &iface_chat::ChatGetPermalinkParams) -> Value {
+fn iface_chat__get_permalink_params__to_json(p: &iface_chat::GetPermalinkParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("channel".into(), Value::String((&p.channel).clone()));
@@ -2155,83 +2155,83 @@ fn iface_chat__chat_get_permalink_params__to_json(p: &iface_chat::ChatGetPermali
     Value::Object(m)
 }
 
-fn iface_chat__chat_me_message_params__to_json(p: &iface_chat::ChatMeMessageParams) -> Value {
+fn iface_chat__me_message_params__to_json(p: &iface_chat::MeMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_chat__chat_post_ephemeral_params__to_json(p: &iface_chat::ChatPostEphemeralParams) -> Value {
+fn iface_chat__post_ephemeral_params__to_json(p: &iface_chat::PostEphemeralParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_chat__chat_post_message_params__to_json(p: &iface_chat::ChatPostMessageParams) -> Value {
+fn iface_chat__post_message_params__to_json(p: &iface_chat::PostMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_chat__chat_schedule_message_params__to_json(p: &iface_chat::ChatScheduleMessageParams) -> Value {
+fn iface_chat__schedule_message_params__to_json(p: &iface_chat::ScheduleMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_chat__chat_unfurl_params__to_json(p: &iface_chat::ChatUnfurlParams) -> Value {
+fn iface_chat__unfurl_params__to_json(p: &iface_chat::UnfurlParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_chat__chat_update_params__to_json(p: &iface_chat::ChatUpdateParams) -> Value {
+fn iface_chat__update_params__to_json(p: &iface_chat::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_chat::Guest for crate::Component {
-    fn chat_delete(params: iface_chat::ChatDeleteParams) -> Result<String, String> {
-        let json = iface_chat__chat_delete_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_DELETE, json)
+    fn delete(params: iface_chat::DeleteParams) -> Result<String, String> {
+        let json = iface_chat__delete_params__to_json(&params);
+        dispatch(&OP_CHAT_DELETE, json)
     }
-    fn chat_delete_scheduled_message(params: iface_chat::ChatDeleteScheduledMessageParams) -> Result<String, String> {
-        let json = iface_chat__chat_delete_scheduled_message_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_DELETE_SCHEDULED_MESSAGE, json)
+    fn delete_scheduled_message(params: iface_chat::DeleteScheduledMessageParams) -> Result<String, String> {
+        let json = iface_chat__delete_scheduled_message_params__to_json(&params);
+        dispatch(&OP_CHAT_DELETE_SCHEDULED_MESSAGE, json)
     }
-    fn chat_get_permalink(params: iface_chat::ChatGetPermalinkParams) -> Result<String, String> {
-        let json = iface_chat__chat_get_permalink_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_GET_PERMALINK, json)
+    fn get_permalink(params: iface_chat::GetPermalinkParams) -> Result<String, String> {
+        let json = iface_chat__get_permalink_params__to_json(&params);
+        dispatch(&OP_CHAT_GET_PERMALINK, json)
     }
-    fn chat_me_message(params: iface_chat::ChatMeMessageParams) -> Result<String, String> {
-        let json = iface_chat__chat_me_message_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_ME_MESSAGE, json)
+    fn me_message(params: iface_chat::MeMessageParams) -> Result<String, String> {
+        let json = iface_chat__me_message_params__to_json(&params);
+        dispatch(&OP_CHAT_ME_MESSAGE, json)
     }
-    fn chat_post_ephemeral(params: iface_chat::ChatPostEphemeralParams) -> Result<String, String> {
-        let json = iface_chat__chat_post_ephemeral_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_POST_EPHEMERAL, json)
+    fn post_ephemeral(params: iface_chat::PostEphemeralParams) -> Result<String, String> {
+        let json = iface_chat__post_ephemeral_params__to_json(&params);
+        dispatch(&OP_CHAT_POST_EPHEMERAL, json)
     }
-    fn chat_post_message(params: iface_chat::ChatPostMessageParams) -> Result<String, String> {
-        let json = iface_chat__chat_post_message_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_POST_MESSAGE, json)
+    fn post_message(params: iface_chat::PostMessageParams) -> Result<String, String> {
+        let json = iface_chat__post_message_params__to_json(&params);
+        dispatch(&OP_CHAT_POST_MESSAGE, json)
     }
-    fn chat_schedule_message(params: iface_chat::ChatScheduleMessageParams) -> Result<String, String> {
-        let json = iface_chat__chat_schedule_message_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_SCHEDULE_MESSAGE, json)
+    fn schedule_message(params: iface_chat::ScheduleMessageParams) -> Result<String, String> {
+        let json = iface_chat__schedule_message_params__to_json(&params);
+        dispatch(&OP_CHAT_SCHEDULE_MESSAGE, json)
     }
-    fn chat_unfurl(params: iface_chat::ChatUnfurlParams) -> Result<String, String> {
-        let json = iface_chat__chat_unfurl_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_UNFURL, json)
+    fn unfurl(params: iface_chat::UnfurlParams) -> Result<String, String> {
+        let json = iface_chat__unfurl_params__to_json(&params);
+        dispatch(&OP_CHAT_UNFURL, json)
     }
-    fn chat_update(params: iface_chat::ChatUpdateParams) -> Result<String, String> {
-        let json = iface_chat__chat_update_params__to_json(&params);
-        dispatch(&OP_CHAT_CHAT_UPDATE, json)
+    fn update(params: iface_chat::UpdateParams) -> Result<String, String> {
+        let json = iface_chat__update_params__to_json(&params);
+        dispatch(&OP_CHAT_UPDATE, json)
     }
 }
 use crate::exports::autostamp::slack::chat_scheduled_messages as iface_chat_scheduled_messages;
 
-const OP_CHAT_SCHEDULED_MESSAGES_CHAT_SCHEDULED_MESSAGES_LIST: OpSpec = OpSpec {
+const OP_CHAT_SCHEDULED_MESSAGES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chat.scheduledMessages.list",
     fields: &[
@@ -2247,7 +2247,7 @@ const OP_CHAT_SCHEDULED_MESSAGES_CHAT_SCHEDULED_MESSAGES_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_chat_scheduled_messages__chat_scheduled_messages_list_params__to_json(p: &iface_chat_scheduled_messages::ChatScheduledMessagesListParams) -> Value {
+fn iface_chat_scheduled_messages__list_op_params__to_json(p: &iface_chat_scheduled_messages::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2259,14 +2259,14 @@ fn iface_chat_scheduled_messages__chat_scheduled_messages_list_params__to_json(p
 }
 
 impl iface_chat_scheduled_messages::Guest for crate::Component {
-    fn chat_scheduled_messages_list(params: iface_chat_scheduled_messages::ChatScheduledMessagesListParams) -> Result<String, String> {
-        let json = iface_chat_scheduled_messages__chat_scheduled_messages_list_params__to_json(&params);
-        dispatch(&OP_CHAT_SCHEDULED_MESSAGES_CHAT_SCHEDULED_MESSAGES_LIST, json)
+    fn list_op(params: iface_chat_scheduled_messages::ListOpParams) -> Result<String, String> {
+        let json = iface_chat_scheduled_messages__list_op_params__to_json(&params);
+        dispatch(&OP_CHAT_SCHEDULED_MESSAGES_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::conversations as iface_conversations;
 
-const OP_CONVERSATIONS_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
+const OP_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.archive",
     fields: &[
@@ -2277,7 +2277,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_CLOSE: OpSpec = OpSpec {
+const OP_CONVERSATIONS_CLOSE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.close",
     fields: &[
@@ -2288,7 +2288,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_CLOSE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_CREATE: OpSpec = OpSpec {
+const OP_CONVERSATIONS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.create",
     fields: &[
@@ -2299,7 +2299,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_CREATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_HISTORY: OpSpec = OpSpec {
+const OP_CONVERSATIONS_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.history",
     fields: &[
@@ -2316,7 +2316,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_HISTORY: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_INFO: OpSpec = OpSpec {
+const OP_CONVERSATIONS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.info",
     fields: &[
@@ -2330,7 +2330,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_INVITE: OpSpec = OpSpec {
+const OP_CONVERSATIONS_INVITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.invite",
     fields: &[
@@ -2341,7 +2341,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_INVITE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_JOIN: OpSpec = OpSpec {
+const OP_CONVERSATIONS_JOIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.join",
     fields: &[
@@ -2352,7 +2352,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_JOIN: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_KICK: OpSpec = OpSpec {
+const OP_CONVERSATIONS_KICK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.kick",
     fields: &[
@@ -2363,7 +2363,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_KICK: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_LEAVE: OpSpec = OpSpec {
+const OP_CONVERSATIONS_LEAVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.leave",
     fields: &[
@@ -2374,7 +2374,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_LEAVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_LIST: OpSpec = OpSpec {
+const OP_CONVERSATIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.list",
     fields: &[
@@ -2389,7 +2389,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_MARK: OpSpec = OpSpec {
+const OP_CONVERSATIONS_MARK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.mark",
     fields: &[
@@ -2400,7 +2400,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_MARK: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_MEMBERS: OpSpec = OpSpec {
+const OP_CONVERSATIONS_MEMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.members",
     fields: &[
@@ -2414,7 +2414,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_MEMBERS: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_OPEN: OpSpec = OpSpec {
+const OP_CONVERSATIONS_OPEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.open",
     fields: &[
@@ -2425,7 +2425,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_OPEN: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_RENAME: OpSpec = OpSpec {
+const OP_CONVERSATIONS_RENAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.rename",
     fields: &[
@@ -2436,7 +2436,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_RENAME: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_REPLIES: OpSpec = OpSpec {
+const OP_CONVERSATIONS_REPLIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.replies",
     fields: &[
@@ -2454,7 +2454,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_REPLIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_SET_PURPOSE: OpSpec = OpSpec {
+const OP_CONVERSATIONS_SET_PURPOSE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.setPurpose",
     fields: &[
@@ -2465,7 +2465,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_SET_PURPOSE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_SET_TOPIC: OpSpec = OpSpec {
+const OP_CONVERSATIONS_SET_TOPIC: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.setTopic",
     fields: &[
@@ -2476,7 +2476,7 @@ const OP_CONVERSATIONS_CONVERSATIONS_SET_TOPIC: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONVERSATIONS_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
+const OP_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.unarchive",
     fields: &[
@@ -2487,25 +2487,25 @@ const OP_CONVERSATIONS_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_conversations__conversations_archive_params__to_json(p: &iface_conversations::ConversationsArchiveParams) -> Value {
+fn iface_conversations__archive_params__to_json(p: &iface_conversations::ArchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_close_params__to_json(p: &iface_conversations::ConversationsCloseParams) -> Value {
+fn iface_conversations__close_params__to_json(p: &iface_conversations::CloseParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_create_params__to_json(p: &iface_conversations::ConversationsCreateParams) -> Value {
+fn iface_conversations__create_params__to_json(p: &iface_conversations::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_history_params__to_json(p: &iface_conversations::ConversationsHistoryParams) -> Value {
+fn iface_conversations__history_params__to_json(p: &iface_conversations::HistoryParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2517,7 +2517,7 @@ fn iface_conversations__conversations_history_params__to_json(p: &iface_conversa
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_info_params__to_json(p: &iface_conversations::ConversationsInfoParams) -> Value {
+fn iface_conversations__info_params__to_json(p: &iface_conversations::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2526,31 +2526,31 @@ fn iface_conversations__conversations_info_params__to_json(p: &iface_conversatio
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_invite_params__to_json(p: &iface_conversations::ConversationsInviteParams) -> Value {
+fn iface_conversations__invite_params__to_json(p: &iface_conversations::InviteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_join_params__to_json(p: &iface_conversations::ConversationsJoinParams) -> Value {
+fn iface_conversations__join_params__to_json(p: &iface_conversations::JoinParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_kick_params__to_json(p: &iface_conversations::ConversationsKickParams) -> Value {
+fn iface_conversations__kick_params__to_json(p: &iface_conversations::KickParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_leave_params__to_json(p: &iface_conversations::ConversationsLeaveParams) -> Value {
+fn iface_conversations__leave_params__to_json(p: &iface_conversations::LeaveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_list_params__to_json(p: &iface_conversations::ConversationsListParams) -> Value {
+fn iface_conversations__list_op_params__to_json(p: &iface_conversations::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exclude_archived".into(), match (&p.exclude_archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -2560,13 +2560,13 @@ fn iface_conversations__conversations_list_params__to_json(p: &iface_conversatio
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_mark_params__to_json(p: &iface_conversations::ConversationsMarkParams) -> Value {
+fn iface_conversations__mark_params__to_json(p: &iface_conversations::MarkParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_members_params__to_json(p: &iface_conversations::ConversationsMembersParams) -> Value {
+fn iface_conversations__members_params__to_json(p: &iface_conversations::MembersParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2575,19 +2575,19 @@ fn iface_conversations__conversations_members_params__to_json(p: &iface_conversa
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_open_params__to_json(p: &iface_conversations::ConversationsOpenParams) -> Value {
+fn iface_conversations__open_params__to_json(p: &iface_conversations::OpenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_rename_params__to_json(p: &iface_conversations::ConversationsRenameParams) -> Value {
+fn iface_conversations__rename_params__to_json(p: &iface_conversations::RenameParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_replies_params__to_json(p: &iface_conversations::ConversationsRepliesParams) -> Value {
+fn iface_conversations__replies_params__to_json(p: &iface_conversations::RepliesParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2600,101 +2600,101 @@ fn iface_conversations__conversations_replies_params__to_json(p: &iface_conversa
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_set_purpose_params__to_json(p: &iface_conversations::ConversationsSetPurposeParams) -> Value {
+fn iface_conversations__set_purpose_params__to_json(p: &iface_conversations::SetPurposeParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_set_topic_params__to_json(p: &iface_conversations::ConversationsSetTopicParams) -> Value {
+fn iface_conversations__set_topic_params__to_json(p: &iface_conversations::SetTopicParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_conversations__conversations_unarchive_params__to_json(p: &iface_conversations::ConversationsUnarchiveParams) -> Value {
+fn iface_conversations__unarchive_params__to_json(p: &iface_conversations::UnarchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_conversations::Guest for crate::Component {
-    fn conversations_archive(params: iface_conversations::ConversationsArchiveParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_archive_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_ARCHIVE, json)
+    fn archive(params: iface_conversations::ArchiveParams) -> Result<String, String> {
+        let json = iface_conversations__archive_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_ARCHIVE, json)
     }
-    fn conversations_close(params: iface_conversations::ConversationsCloseParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_close_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_CLOSE, json)
+    fn close(params: iface_conversations::CloseParams) -> Result<String, String> {
+        let json = iface_conversations__close_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_CLOSE, json)
     }
-    fn conversations_create(params: iface_conversations::ConversationsCreateParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_create_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_CREATE, json)
+    fn create(params: iface_conversations::CreateParams) -> Result<String, String> {
+        let json = iface_conversations__create_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_CREATE, json)
     }
-    fn conversations_history(params: iface_conversations::ConversationsHistoryParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_history_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_HISTORY, json)
+    fn history(params: iface_conversations::HistoryParams) -> Result<String, String> {
+        let json = iface_conversations__history_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_HISTORY, json)
     }
-    fn conversations_info(params: iface_conversations::ConversationsInfoParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_info_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_INFO, json)
+    fn info(params: iface_conversations::InfoParams) -> Result<String, String> {
+        let json = iface_conversations__info_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_INFO, json)
     }
-    fn conversations_invite(params: iface_conversations::ConversationsInviteParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_invite_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_INVITE, json)
+    fn invite(params: iface_conversations::InviteParams) -> Result<String, String> {
+        let json = iface_conversations__invite_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_INVITE, json)
     }
-    fn conversations_join(params: iface_conversations::ConversationsJoinParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_join_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_JOIN, json)
+    fn join(params: iface_conversations::JoinParams) -> Result<String, String> {
+        let json = iface_conversations__join_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_JOIN, json)
     }
-    fn conversations_kick(params: iface_conversations::ConversationsKickParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_kick_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_KICK, json)
+    fn kick(params: iface_conversations::KickParams) -> Result<String, String> {
+        let json = iface_conversations__kick_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_KICK, json)
     }
-    fn conversations_leave(params: iface_conversations::ConversationsLeaveParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_leave_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_LEAVE, json)
+    fn leave(params: iface_conversations::LeaveParams) -> Result<String, String> {
+        let json = iface_conversations__leave_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_LEAVE, json)
     }
-    fn conversations_list(params: iface_conversations::ConversationsListParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_list_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_LIST, json)
+    fn list_op(params: iface_conversations::ListOpParams) -> Result<String, String> {
+        let json = iface_conversations__list_op_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_LIST_OP, json)
     }
-    fn conversations_mark(params: iface_conversations::ConversationsMarkParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_mark_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_MARK, json)
+    fn mark(params: iface_conversations::MarkParams) -> Result<String, String> {
+        let json = iface_conversations__mark_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_MARK, json)
     }
-    fn conversations_members(params: iface_conversations::ConversationsMembersParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_members_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_MEMBERS, json)
+    fn members(params: iface_conversations::MembersParams) -> Result<String, String> {
+        let json = iface_conversations__members_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_MEMBERS, json)
     }
-    fn conversations_open(params: iface_conversations::ConversationsOpenParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_open_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_OPEN, json)
+    fn open(params: iface_conversations::OpenParams) -> Result<String, String> {
+        let json = iface_conversations__open_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_OPEN, json)
     }
-    fn conversations_rename(params: iface_conversations::ConversationsRenameParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_rename_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_RENAME, json)
+    fn rename(params: iface_conversations::RenameParams) -> Result<String, String> {
+        let json = iface_conversations__rename_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_RENAME, json)
     }
-    fn conversations_replies(params: iface_conversations::ConversationsRepliesParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_replies_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_REPLIES, json)
+    fn replies(params: iface_conversations::RepliesParams) -> Result<String, String> {
+        let json = iface_conversations__replies_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_REPLIES, json)
     }
-    fn conversations_set_purpose(params: iface_conversations::ConversationsSetPurposeParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_set_purpose_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_SET_PURPOSE, json)
+    fn set_purpose(params: iface_conversations::SetPurposeParams) -> Result<String, String> {
+        let json = iface_conversations__set_purpose_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_SET_PURPOSE, json)
     }
-    fn conversations_set_topic(params: iface_conversations::ConversationsSetTopicParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_set_topic_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_SET_TOPIC, json)
+    fn set_topic(params: iface_conversations::SetTopicParams) -> Result<String, String> {
+        let json = iface_conversations__set_topic_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_SET_TOPIC, json)
     }
-    fn conversations_unarchive(params: iface_conversations::ConversationsUnarchiveParams) -> Result<String, String> {
-        let json = iface_conversations__conversations_unarchive_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CONVERSATIONS_UNARCHIVE, json)
+    fn unarchive(params: iface_conversations::UnarchiveParams) -> Result<String, String> {
+        let json = iface_conversations__unarchive_params__to_json(&params);
+        dispatch(&OP_CONVERSATIONS_UNARCHIVE, json)
     }
 }
 use crate::exports::autostamp::slack::dialog as iface_dialog;
 
-const OP_DIALOG_DIALOG_OPEN: OpSpec = OpSpec {
+const OP_DIALOG_OPEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dialog.open",
     fields: &[
@@ -2707,7 +2707,7 @@ const OP_DIALOG_DIALOG_OPEN: OpSpec = OpSpec {
     ],
 };
 
-fn iface_dialog__dialog_open_params__to_json(p: &iface_dialog::DialogOpenParams) -> Value {
+fn iface_dialog__open_params__to_json(p: &iface_dialog::OpenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("dialog".into(), Value::String((&p.dialog).clone()));
@@ -2716,14 +2716,14 @@ fn iface_dialog__dialog_open_params__to_json(p: &iface_dialog::DialogOpenParams)
 }
 
 impl iface_dialog::Guest for crate::Component {
-    fn dialog_open(params: iface_dialog::DialogOpenParams) -> Result<String, String> {
-        let json = iface_dialog__dialog_open_params__to_json(&params);
-        dispatch(&OP_DIALOG_DIALOG_OPEN, json)
+    fn open(params: iface_dialog::OpenParams) -> Result<String, String> {
+        let json = iface_dialog__open_params__to_json(&params);
+        dispatch(&OP_DIALOG_OPEN, json)
     }
 }
 use crate::exports::autostamp::slack::dnd as iface_dnd;
 
-const OP_DND_DND_END_DND: OpSpec = OpSpec {
+const OP_DND_END_DND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dnd.endDnd",
     fields: &[
@@ -2734,7 +2734,7 @@ const OP_DND_DND_END_DND: OpSpec = OpSpec {
     ],
 };
 
-const OP_DND_DND_END_SNOOZE: OpSpec = OpSpec {
+const OP_DND_END_SNOOZE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dnd.endSnooze",
     fields: &[
@@ -2745,7 +2745,7 @@ const OP_DND_DND_END_SNOOZE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DND_DND_INFO: OpSpec = OpSpec {
+const OP_DND_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dnd.info",
     fields: &[
@@ -2757,7 +2757,7 @@ const OP_DND_DND_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_DND_DND_SET_SNOOZE: OpSpec = OpSpec {
+const OP_DND_SET_SNOOZE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dnd.setSnooze",
     fields: &[
@@ -2767,7 +2767,7 @@ const OP_DND_DND_SET_SNOOZE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DND_DND_TEAM_INFO: OpSpec = OpSpec {
+const OP_DND_TEAM_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dnd.teamInfo",
     fields: &[
@@ -2779,26 +2779,26 @@ const OP_DND_DND_TEAM_INFO: OpSpec = OpSpec {
     ],
 };
 
-fn iface_dnd__dnd_end_dnd_params__to_json(p: &iface_dnd::DndEndDndParams) -> Value {
+fn iface_dnd__end_dnd_params__to_json(p: &iface_dnd::EndDndParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_dnd__dnd_end_snooze_params__to_json(p: &iface_dnd::DndEndSnoozeParams) -> Value {
+fn iface_dnd__end_snooze_params__to_json(p: &iface_dnd::EndSnoozeParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_dnd__dnd_info_params__to_json(p: &iface_dnd::DndInfoParams) -> Value {
+fn iface_dnd__info_params__to_json(p: &iface_dnd::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_dnd__dnd_team_info_params__to_json(p: &iface_dnd::DndTeamInfoParams) -> Value {
+fn iface_dnd__team_info_params__to_json(p: &iface_dnd::TeamInfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("users".into(), match (&p.users) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2806,29 +2806,29 @@ fn iface_dnd__dnd_team_info_params__to_json(p: &iface_dnd::DndTeamInfoParams) ->
 }
 
 impl iface_dnd::Guest for crate::Component {
-    fn dnd_end_dnd(params: iface_dnd::DndEndDndParams) -> Result<String, String> {
-        let json = iface_dnd__dnd_end_dnd_params__to_json(&params);
-        dispatch(&OP_DND_DND_END_DND, json)
+    fn end_dnd(params: iface_dnd::EndDndParams) -> Result<String, String> {
+        let json = iface_dnd__end_dnd_params__to_json(&params);
+        dispatch(&OP_DND_END_DND, json)
     }
-    fn dnd_end_snooze(params: iface_dnd::DndEndSnoozeParams) -> Result<String, String> {
-        let json = iface_dnd__dnd_end_snooze_params__to_json(&params);
-        dispatch(&OP_DND_DND_END_SNOOZE, json)
+    fn end_snooze(params: iface_dnd::EndSnoozeParams) -> Result<String, String> {
+        let json = iface_dnd__end_snooze_params__to_json(&params);
+        dispatch(&OP_DND_END_SNOOZE, json)
     }
-    fn dnd_info(params: iface_dnd::DndInfoParams) -> Result<String, String> {
-        let json = iface_dnd__dnd_info_params__to_json(&params);
-        dispatch(&OP_DND_DND_INFO, json)
+    fn info(params: iface_dnd::InfoParams) -> Result<String, String> {
+        let json = iface_dnd__info_params__to_json(&params);
+        dispatch(&OP_DND_INFO, json)
     }
-    fn dnd_set_snooze() -> Result<String, String> {
-        dispatch(&OP_DND_DND_SET_SNOOZE, Value::Object(Map::new()))
+    fn set_snooze() -> Result<String, String> {
+        dispatch(&OP_DND_SET_SNOOZE, Value::Object(Map::new()))
     }
-    fn dnd_team_info(params: iface_dnd::DndTeamInfoParams) -> Result<String, String> {
-        let json = iface_dnd__dnd_team_info_params__to_json(&params);
-        dispatch(&OP_DND_DND_TEAM_INFO, json)
+    fn team_info(params: iface_dnd::TeamInfoParams) -> Result<String, String> {
+        let json = iface_dnd__team_info_params__to_json(&params);
+        dispatch(&OP_DND_TEAM_INFO, json)
     }
 }
 use crate::exports::autostamp::slack::emoji as iface_emoji;
 
-const OP_EMOJI_EMOJI_LIST: OpSpec = OpSpec {
+const OP_EMOJI_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/emoji.list",
     fields: &[
@@ -2839,21 +2839,21 @@ const OP_EMOJI_EMOJI_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_emoji__emoji_list_params__to_json(p: &iface_emoji::EmojiListParams) -> Value {
+fn iface_emoji__list_op_params__to_json(p: &iface_emoji::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_emoji::Guest for crate::Component {
-    fn emoji_list(params: iface_emoji::EmojiListParams) -> Result<String, String> {
-        let json = iface_emoji__emoji_list_params__to_json(&params);
-        dispatch(&OP_EMOJI_EMOJI_LIST, json)
+    fn list_op(params: iface_emoji::ListOpParams) -> Result<String, String> {
+        let json = iface_emoji__list_op_params__to_json(&params);
+        dispatch(&OP_EMOJI_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::files_comments as iface_files_comments;
 
-const OP_FILES_COMMENTS_FILES_COMMENTS_DELETE: OpSpec = OpSpec {
+const OP_FILES_COMMENTS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.comments.delete",
     fields: &[
@@ -2864,21 +2864,21 @@ const OP_FILES_COMMENTS_FILES_COMMENTS_DELETE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_files_comments__files_comments_delete_params__to_json(p: &iface_files_comments::FilesCommentsDeleteParams) -> Value {
+fn iface_files_comments__delete_params__to_json(p: &iface_files_comments::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_files_comments::Guest for crate::Component {
-    fn files_comments_delete(params: iface_files_comments::FilesCommentsDeleteParams) -> Result<String, String> {
-        let json = iface_files_comments__files_comments_delete_params__to_json(&params);
-        dispatch(&OP_FILES_COMMENTS_FILES_COMMENTS_DELETE, json)
+    fn delete(params: iface_files_comments::DeleteParams) -> Result<String, String> {
+        let json = iface_files_comments__delete_params__to_json(&params);
+        dispatch(&OP_FILES_COMMENTS_DELETE, json)
     }
 }
 use crate::exports::autostamp::slack::files as iface_files;
 
-const OP_FILES_FILES_DELETE: OpSpec = OpSpec {
+const OP_FILES_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.delete",
     fields: &[
@@ -2889,7 +2889,7 @@ const OP_FILES_FILES_DELETE: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_FILES_INFO: OpSpec = OpSpec {
+const OP_FILES_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.info",
     fields: &[
@@ -2905,7 +2905,7 @@ const OP_FILES_FILES_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_FILES_LIST: OpSpec = OpSpec {
+const OP_FILES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.list",
     fields: &[
@@ -2924,7 +2924,7 @@ const OP_FILES_FILES_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_FILES_REVOKE_PUBLIC_URL: OpSpec = OpSpec {
+const OP_FILES_REVOKE_PUBLIC_URL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.revokePublicURL",
     fields: &[
@@ -2935,7 +2935,7 @@ const OP_FILES_FILES_REVOKE_PUBLIC_URL: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_FILES_SHARED_PUBLIC_URL: OpSpec = OpSpec {
+const OP_FILES_SHARED_PUBLIC_URL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.sharedPublicURL",
     fields: &[
@@ -2946,7 +2946,7 @@ const OP_FILES_FILES_SHARED_PUBLIC_URL: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_FILES_UPLOAD: OpSpec = OpSpec {
+const OP_FILES_UPLOAD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.upload",
     fields: &[
@@ -2956,13 +2956,13 @@ const OP_FILES_FILES_UPLOAD: OpSpec = OpSpec {
     ],
 };
 
-fn iface_files__files_delete_params__to_json(p: &iface_files::FilesDeleteParams) -> Value {
+fn iface_files__delete_params__to_json(p: &iface_files::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_files__files_info_params__to_json(p: &iface_files::FilesInfoParams) -> Value {
+fn iface_files__info_params__to_json(p: &iface_files::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2973,7 +2973,7 @@ fn iface_files__files_info_params__to_json(p: &iface_files::FilesInfoParams) -> 
     Value::Object(m)
 }
 
-fn iface_files__files_list_params__to_json(p: &iface_files::FilesListParams) -> Value {
+fn iface_files__list_op_params__to_json(p: &iface_files::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2987,46 +2987,46 @@ fn iface_files__files_list_params__to_json(p: &iface_files::FilesListParams) -> 
     Value::Object(m)
 }
 
-fn iface_files__files_revoke_public_url_params__to_json(p: &iface_files::FilesRevokePublicUrlParams) -> Value {
+fn iface_files__revoke_public_url_params__to_json(p: &iface_files::RevokePublicUrlParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_files__files_shared_public_url_params__to_json(p: &iface_files::FilesSharedPublicUrlParams) -> Value {
+fn iface_files__shared_public_url_params__to_json(p: &iface_files::SharedPublicUrlParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_files::Guest for crate::Component {
-    fn files_delete(params: iface_files::FilesDeleteParams) -> Result<String, String> {
-        let json = iface_files__files_delete_params__to_json(&params);
-        dispatch(&OP_FILES_FILES_DELETE, json)
+    fn delete(params: iface_files::DeleteParams) -> Result<String, String> {
+        let json = iface_files__delete_params__to_json(&params);
+        dispatch(&OP_FILES_DELETE, json)
     }
-    fn files_info(params: iface_files::FilesInfoParams) -> Result<String, String> {
-        let json = iface_files__files_info_params__to_json(&params);
-        dispatch(&OP_FILES_FILES_INFO, json)
+    fn info(params: iface_files::InfoParams) -> Result<String, String> {
+        let json = iface_files__info_params__to_json(&params);
+        dispatch(&OP_FILES_INFO, json)
     }
-    fn files_list(params: iface_files::FilesListParams) -> Result<String, String> {
-        let json = iface_files__files_list_params__to_json(&params);
-        dispatch(&OP_FILES_FILES_LIST, json)
+    fn list_op(params: iface_files::ListOpParams) -> Result<String, String> {
+        let json = iface_files__list_op_params__to_json(&params);
+        dispatch(&OP_FILES_LIST_OP, json)
     }
-    fn files_revoke_public_url(params: iface_files::FilesRevokePublicUrlParams) -> Result<String, String> {
-        let json = iface_files__files_revoke_public_url_params__to_json(&params);
-        dispatch(&OP_FILES_FILES_REVOKE_PUBLIC_URL, json)
+    fn revoke_public_url(params: iface_files::RevokePublicUrlParams) -> Result<String, String> {
+        let json = iface_files__revoke_public_url_params__to_json(&params);
+        dispatch(&OP_FILES_REVOKE_PUBLIC_URL, json)
     }
-    fn files_shared_public_url(params: iface_files::FilesSharedPublicUrlParams) -> Result<String, String> {
-        let json = iface_files__files_shared_public_url_params__to_json(&params);
-        dispatch(&OP_FILES_FILES_SHARED_PUBLIC_URL, json)
+    fn shared_public_url(params: iface_files::SharedPublicUrlParams) -> Result<String, String> {
+        let json = iface_files__shared_public_url_params__to_json(&params);
+        dispatch(&OP_FILES_SHARED_PUBLIC_URL, json)
     }
-    fn files_upload() -> Result<String, String> {
-        dispatch(&OP_FILES_FILES_UPLOAD, Value::Object(Map::new()))
+    fn upload() -> Result<String, String> {
+        dispatch(&OP_FILES_UPLOAD, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::slack::files_remote as iface_files_remote;
 
-const OP_FILES_REMOTE_FILES_REMOTE_ADD: OpSpec = OpSpec {
+const OP_FILES_REMOTE_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.remote.add",
     fields: &[
@@ -3036,7 +3036,7 @@ const OP_FILES_REMOTE_FILES_REMOTE_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_REMOTE_FILES_REMOTE_INFO: OpSpec = OpSpec {
+const OP_FILES_REMOTE_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.remote.info",
     fields: &[
@@ -3049,7 +3049,7 @@ const OP_FILES_REMOTE_FILES_REMOTE_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_REMOTE_FILES_REMOTE_LIST: OpSpec = OpSpec {
+const OP_FILES_REMOTE_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.remote.list",
     fields: &[
@@ -3065,7 +3065,7 @@ const OP_FILES_REMOTE_FILES_REMOTE_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_REMOTE_FILES_REMOTE_REMOVE: OpSpec = OpSpec {
+const OP_FILES_REMOTE_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.remote.remove",
     fields: &[
@@ -3075,7 +3075,7 @@ const OP_FILES_REMOTE_FILES_REMOTE_REMOVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_REMOTE_FILES_REMOTE_SHARE: OpSpec = OpSpec {
+const OP_FILES_REMOTE_SHARE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.remote.share",
     fields: &[
@@ -3089,7 +3089,7 @@ const OP_FILES_REMOTE_FILES_REMOTE_SHARE: OpSpec = OpSpec {
     ],
 };
 
-const OP_FILES_REMOTE_FILES_REMOTE_UPDATE: OpSpec = OpSpec {
+const OP_FILES_REMOTE_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.remote.update",
     fields: &[
@@ -3099,7 +3099,7 @@ const OP_FILES_REMOTE_FILES_REMOTE_UPDATE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_files_remote__files_remote_info_params__to_json(p: &iface_files_remote::FilesRemoteInfoParams) -> Value {
+fn iface_files_remote__info_params__to_json(p: &iface_files_remote::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3107,7 +3107,7 @@ fn iface_files_remote__files_remote_info_params__to_json(p: &iface_files_remote:
     Value::Object(m)
 }
 
-fn iface_files_remote__files_remote_list_params__to_json(p: &iface_files_remote::FilesRemoteListParams) -> Value {
+fn iface_files_remote__list_op_params__to_json(p: &iface_files_remote::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3118,7 +3118,7 @@ fn iface_files_remote__files_remote_list_params__to_json(p: &iface_files_remote:
     Value::Object(m)
 }
 
-fn iface_files_remote__files_remote_share_params__to_json(p: &iface_files_remote::FilesRemoteShareParams) -> Value {
+fn iface_files_remote__share_params__to_json(p: &iface_files_remote::ShareParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3128,31 +3128,31 @@ fn iface_files_remote__files_remote_share_params__to_json(p: &iface_files_remote
 }
 
 impl iface_files_remote::Guest for crate::Component {
-    fn files_remote_add() -> Result<String, String> {
-        dispatch(&OP_FILES_REMOTE_FILES_REMOTE_ADD, Value::Object(Map::new()))
+    fn add() -> Result<String, String> {
+        dispatch(&OP_FILES_REMOTE_ADD, Value::Object(Map::new()))
     }
-    fn files_remote_info(params: iface_files_remote::FilesRemoteInfoParams) -> Result<String, String> {
-        let json = iface_files_remote__files_remote_info_params__to_json(&params);
-        dispatch(&OP_FILES_REMOTE_FILES_REMOTE_INFO, json)
+    fn info(params: iface_files_remote::InfoParams) -> Result<String, String> {
+        let json = iface_files_remote__info_params__to_json(&params);
+        dispatch(&OP_FILES_REMOTE_INFO, json)
     }
-    fn files_remote_list(params: iface_files_remote::FilesRemoteListParams) -> Result<String, String> {
-        let json = iface_files_remote__files_remote_list_params__to_json(&params);
-        dispatch(&OP_FILES_REMOTE_FILES_REMOTE_LIST, json)
+    fn list_op(params: iface_files_remote::ListOpParams) -> Result<String, String> {
+        let json = iface_files_remote__list_op_params__to_json(&params);
+        dispatch(&OP_FILES_REMOTE_LIST_OP, json)
     }
-    fn files_remote_remove() -> Result<String, String> {
-        dispatch(&OP_FILES_REMOTE_FILES_REMOTE_REMOVE, Value::Object(Map::new()))
+    fn remove() -> Result<String, String> {
+        dispatch(&OP_FILES_REMOTE_REMOVE, Value::Object(Map::new()))
     }
-    fn files_remote_share(params: iface_files_remote::FilesRemoteShareParams) -> Result<String, String> {
-        let json = iface_files_remote__files_remote_share_params__to_json(&params);
-        dispatch(&OP_FILES_REMOTE_FILES_REMOTE_SHARE, json)
+    fn share(params: iface_files_remote::ShareParams) -> Result<String, String> {
+        let json = iface_files_remote__share_params__to_json(&params);
+        dispatch(&OP_FILES_REMOTE_SHARE, json)
     }
-    fn files_remote_update() -> Result<String, String> {
-        dispatch(&OP_FILES_REMOTE_FILES_REMOTE_UPDATE, Value::Object(Map::new()))
+    fn update() -> Result<String, String> {
+        dispatch(&OP_FILES_REMOTE_UPDATE, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::slack::migration as iface_migration;
 
-const OP_MIGRATION_MIGRATION_EXCHANGE: OpSpec = OpSpec {
+const OP_MIGRATION_EXCHANGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/migration.exchange",
     fields: &[
@@ -3166,7 +3166,7 @@ const OP_MIGRATION_MIGRATION_EXCHANGE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_migration__migration_exchange_params__to_json(p: &iface_migration::MigrationExchangeParams) -> Value {
+fn iface_migration__exchange_params__to_json(p: &iface_migration::ExchangeParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("users".into(), Value::String((&p.users).clone()));
@@ -3176,14 +3176,14 @@ fn iface_migration__migration_exchange_params__to_json(p: &iface_migration::Migr
 }
 
 impl iface_migration::Guest for crate::Component {
-    fn migration_exchange(params: iface_migration::MigrationExchangeParams) -> Result<String, String> {
-        let json = iface_migration__migration_exchange_params__to_json(&params);
-        dispatch(&OP_MIGRATION_MIGRATION_EXCHANGE, json)
+    fn exchange(params: iface_migration::ExchangeParams) -> Result<String, String> {
+        let json = iface_migration__exchange_params__to_json(&params);
+        dispatch(&OP_MIGRATION_EXCHANGE, json)
     }
 }
 use crate::exports::autostamp::slack::oauth as iface_oauth;
 
-const OP_OAUTH_OAUTH_ACCESS: OpSpec = OpSpec {
+const OP_OAUTH_ACCESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth.access",
     fields: &[
@@ -3198,7 +3198,7 @@ const OP_OAUTH_OAUTH_ACCESS: OpSpec = OpSpec {
     ],
 };
 
-const OP_OAUTH_OAUTH_TOKEN: OpSpec = OpSpec {
+const OP_OAUTH_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth.token",
     fields: &[
@@ -3213,7 +3213,7 @@ const OP_OAUTH_OAUTH_TOKEN: OpSpec = OpSpec {
     ],
 };
 
-fn iface_oauth__oauth_access_params__to_json(p: &iface_oauth::OauthAccessParams) -> Value {
+fn iface_oauth__access_params__to_json(p: &iface_oauth::AccessParams) -> Value {
     let mut m = Map::new();
     m.insert("client_id".into(), match (&p.client_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_secret".into(), match (&p.client_secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3223,7 +3223,7 @@ fn iface_oauth__oauth_access_params__to_json(p: &iface_oauth::OauthAccessParams)
     Value::Object(m)
 }
 
-fn iface_oauth__oauth_token_params__to_json(p: &iface_oauth::OauthTokenParams) -> Value {
+fn iface_oauth__token_params__to_json(p: &iface_oauth::TokenParams) -> Value {
     let mut m = Map::new();
     m.insert("client_id".into(), match (&p.client_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_secret".into(), match (&p.client_secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3234,18 +3234,18 @@ fn iface_oauth__oauth_token_params__to_json(p: &iface_oauth::OauthTokenParams) -
 }
 
 impl iface_oauth::Guest for crate::Component {
-    fn oauth_access(params: iface_oauth::OauthAccessParams) -> Result<String, String> {
-        let json = iface_oauth__oauth_access_params__to_json(&params);
-        dispatch(&OP_OAUTH_OAUTH_ACCESS, json)
+    fn access(params: iface_oauth::AccessParams) -> Result<String, String> {
+        let json = iface_oauth__access_params__to_json(&params);
+        dispatch(&OP_OAUTH_ACCESS, json)
     }
-    fn oauth_token(params: iface_oauth::OauthTokenParams) -> Result<String, String> {
-        let json = iface_oauth__oauth_token_params__to_json(&params);
-        dispatch(&OP_OAUTH_OAUTH_TOKEN, json)
+    fn token(params: iface_oauth::TokenParams) -> Result<String, String> {
+        let json = iface_oauth__token_params__to_json(&params);
+        dispatch(&OP_OAUTH_TOKEN, json)
     }
 }
 use crate::exports::autostamp::slack::oauth_v2 as iface_oauth_v2;
 
-const OP_OAUTH_V2_OAUTH_V2_ACCESS: OpSpec = OpSpec {
+const OP_OAUTH_V2_ACCESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth.v2.access",
     fields: &[
@@ -3259,7 +3259,7 @@ const OP_OAUTH_V2_OAUTH_V2_ACCESS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_oauth_v2__oauth_v2_access_params__to_json(p: &iface_oauth_v2::OauthV2AccessParams) -> Value {
+fn iface_oauth_v2__access_params__to_json(p: &iface_oauth_v2::AccessParams) -> Value {
     let mut m = Map::new();
     m.insert("client_id".into(), match (&p.client_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_secret".into(), match (&p.client_secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3269,14 +3269,14 @@ fn iface_oauth_v2__oauth_v2_access_params__to_json(p: &iface_oauth_v2::OauthV2Ac
 }
 
 impl iface_oauth_v2::Guest for crate::Component {
-    fn oauth_v2_access(params: iface_oauth_v2::OauthV2AccessParams) -> Result<String, String> {
-        let json = iface_oauth_v2__oauth_v2_access_params__to_json(&params);
-        dispatch(&OP_OAUTH_V2_OAUTH_V2_ACCESS, json)
+    fn access(params: iface_oauth_v2::AccessParams) -> Result<String, String> {
+        let json = iface_oauth_v2__access_params__to_json(&params);
+        dispatch(&OP_OAUTH_V2_ACCESS, json)
     }
 }
 use crate::exports::autostamp::slack::pins as iface_pins;
 
-const OP_PINS_PINS_ADD: OpSpec = OpSpec {
+const OP_PINS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/pins.add",
     fields: &[
@@ -3287,7 +3287,7 @@ const OP_PINS_PINS_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_PINS_PINS_LIST: OpSpec = OpSpec {
+const OP_PINS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/pins.list",
     fields: &[
@@ -3299,7 +3299,7 @@ const OP_PINS_PINS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_PINS_PINS_REMOVE: OpSpec = OpSpec {
+const OP_PINS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/pins.remove",
     fields: &[
@@ -3310,42 +3310,42 @@ const OP_PINS_PINS_REMOVE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_pins__pins_add_params__to_json(p: &iface_pins::PinsAddParams) -> Value {
+fn iface_pins__add_params__to_json(p: &iface_pins::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_pins__pins_list_params__to_json(p: &iface_pins::PinsListParams) -> Value {
+fn iface_pins__list_op_params__to_json(p: &iface_pins::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("channel".into(), Value::String((&p.channel).clone()));
     Value::Object(m)
 }
 
-fn iface_pins__pins_remove_params__to_json(p: &iface_pins::PinsRemoveParams) -> Value {
+fn iface_pins__remove_params__to_json(p: &iface_pins::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_pins::Guest for crate::Component {
-    fn pins_add(params: iface_pins::PinsAddParams) -> Result<String, String> {
-        let json = iface_pins__pins_add_params__to_json(&params);
-        dispatch(&OP_PINS_PINS_ADD, json)
+    fn add(params: iface_pins::AddParams) -> Result<String, String> {
+        let json = iface_pins__add_params__to_json(&params);
+        dispatch(&OP_PINS_ADD, json)
     }
-    fn pins_list(params: iface_pins::PinsListParams) -> Result<String, String> {
-        let json = iface_pins__pins_list_params__to_json(&params);
-        dispatch(&OP_PINS_PINS_LIST, json)
+    fn list_op(params: iface_pins::ListOpParams) -> Result<String, String> {
+        let json = iface_pins__list_op_params__to_json(&params);
+        dispatch(&OP_PINS_LIST_OP, json)
     }
-    fn pins_remove(params: iface_pins::PinsRemoveParams) -> Result<String, String> {
-        let json = iface_pins__pins_remove_params__to_json(&params);
-        dispatch(&OP_PINS_PINS_REMOVE, json)
+    fn remove(params: iface_pins::RemoveParams) -> Result<String, String> {
+        let json = iface_pins__remove_params__to_json(&params);
+        dispatch(&OP_PINS_REMOVE, json)
     }
 }
 use crate::exports::autostamp::slack::reactions as iface_reactions;
 
-const OP_REACTIONS_REACTIONS_ADD: OpSpec = OpSpec {
+const OP_REACTIONS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reactions.add",
     fields: &[
@@ -3356,7 +3356,7 @@ const OP_REACTIONS_REACTIONS_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_REACTIONS_REACTIONS_GET: OpSpec = OpSpec {
+const OP_REACTIONS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reactions.get",
     fields: &[
@@ -3372,7 +3372,7 @@ const OP_REACTIONS_REACTIONS_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_REACTIONS_REACTIONS_LIST: OpSpec = OpSpec {
+const OP_REACTIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reactions.list",
     fields: &[
@@ -3389,7 +3389,7 @@ const OP_REACTIONS_REACTIONS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_REACTIONS_REACTIONS_REMOVE: OpSpec = OpSpec {
+const OP_REACTIONS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reactions.remove",
     fields: &[
@@ -3400,13 +3400,13 @@ const OP_REACTIONS_REACTIONS_REMOVE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_reactions__reactions_add_params__to_json(p: &iface_reactions::ReactionsAddParams) -> Value {
+fn iface_reactions__add_params__to_json(p: &iface_reactions::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_reactions__reactions_get_params__to_json(p: &iface_reactions::ReactionsGetParams) -> Value {
+fn iface_reactions__get_params__to_json(p: &iface_reactions::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3417,7 +3417,7 @@ fn iface_reactions__reactions_get_params__to_json(p: &iface_reactions::Reactions
     Value::Object(m)
 }
 
-fn iface_reactions__reactions_list_params__to_json(p: &iface_reactions::ReactionsListParams) -> Value {
+fn iface_reactions__list_op_params__to_json(p: &iface_reactions::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3429,33 +3429,33 @@ fn iface_reactions__reactions_list_params__to_json(p: &iface_reactions::Reaction
     Value::Object(m)
 }
 
-fn iface_reactions__reactions_remove_params__to_json(p: &iface_reactions::ReactionsRemoveParams) -> Value {
+fn iface_reactions__remove_params__to_json(p: &iface_reactions::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_reactions::Guest for crate::Component {
-    fn reactions_add(params: iface_reactions::ReactionsAddParams) -> Result<String, String> {
-        let json = iface_reactions__reactions_add_params__to_json(&params);
-        dispatch(&OP_REACTIONS_REACTIONS_ADD, json)
+    fn add(params: iface_reactions::AddParams) -> Result<String, String> {
+        let json = iface_reactions__add_params__to_json(&params);
+        dispatch(&OP_REACTIONS_ADD, json)
     }
-    fn reactions_get(params: iface_reactions::ReactionsGetParams) -> Result<String, String> {
-        let json = iface_reactions__reactions_get_params__to_json(&params);
-        dispatch(&OP_REACTIONS_REACTIONS_GET, json)
+    fn get(params: iface_reactions::GetParams) -> Result<String, String> {
+        let json = iface_reactions__get_params__to_json(&params);
+        dispatch(&OP_REACTIONS_GET, json)
     }
-    fn reactions_list(params: iface_reactions::ReactionsListParams) -> Result<String, String> {
-        let json = iface_reactions__reactions_list_params__to_json(&params);
-        dispatch(&OP_REACTIONS_REACTIONS_LIST, json)
+    fn list_op(params: iface_reactions::ListOpParams) -> Result<String, String> {
+        let json = iface_reactions__list_op_params__to_json(&params);
+        dispatch(&OP_REACTIONS_LIST_OP, json)
     }
-    fn reactions_remove(params: iface_reactions::ReactionsRemoveParams) -> Result<String, String> {
-        let json = iface_reactions__reactions_remove_params__to_json(&params);
-        dispatch(&OP_REACTIONS_REACTIONS_REMOVE, json)
+    fn remove(params: iface_reactions::RemoveParams) -> Result<String, String> {
+        let json = iface_reactions__remove_params__to_json(&params);
+        dispatch(&OP_REACTIONS_REMOVE, json)
     }
 }
 use crate::exports::autostamp::slack::reminders as iface_reminders;
 
-const OP_REMINDERS_REMINDERS_ADD: OpSpec = OpSpec {
+const OP_REMINDERS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reminders.add",
     fields: &[
@@ -3466,7 +3466,7 @@ const OP_REMINDERS_REMINDERS_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_REMINDERS_REMINDERS_COMPLETE: OpSpec = OpSpec {
+const OP_REMINDERS_COMPLETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reminders.complete",
     fields: &[
@@ -3477,7 +3477,7 @@ const OP_REMINDERS_REMINDERS_COMPLETE: OpSpec = OpSpec {
     ],
 };
 
-const OP_REMINDERS_REMINDERS_DELETE: OpSpec = OpSpec {
+const OP_REMINDERS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reminders.delete",
     fields: &[
@@ -3488,7 +3488,7 @@ const OP_REMINDERS_REMINDERS_DELETE: OpSpec = OpSpec {
     ],
 };
 
-const OP_REMINDERS_REMINDERS_INFO: OpSpec = OpSpec {
+const OP_REMINDERS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reminders.info",
     fields: &[
@@ -3500,7 +3500,7 @@ const OP_REMINDERS_REMINDERS_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_REMINDERS_REMINDERS_LIST: OpSpec = OpSpec {
+const OP_REMINDERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reminders.list",
     fields: &[
@@ -3511,62 +3511,62 @@ const OP_REMINDERS_REMINDERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_reminders__reminders_add_params__to_json(p: &iface_reminders::RemindersAddParams) -> Value {
+fn iface_reminders__add_params__to_json(p: &iface_reminders::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_reminders__reminders_complete_params__to_json(p: &iface_reminders::RemindersCompleteParams) -> Value {
+fn iface_reminders__complete_params__to_json(p: &iface_reminders::CompleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_reminders__reminders_delete_params__to_json(p: &iface_reminders::RemindersDeleteParams) -> Value {
+fn iface_reminders__delete_params__to_json(p: &iface_reminders::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_reminders__reminders_info_params__to_json(p: &iface_reminders::RemindersInfoParams) -> Value {
+fn iface_reminders__info_params__to_json(p: &iface_reminders::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("reminder".into(), match (&p.reminder) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_reminders__reminders_list_params__to_json(p: &iface_reminders::RemindersListParams) -> Value {
+fn iface_reminders__list_op_params__to_json(p: &iface_reminders::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_reminders::Guest for crate::Component {
-    fn reminders_add(params: iface_reminders::RemindersAddParams) -> Result<String, String> {
-        let json = iface_reminders__reminders_add_params__to_json(&params);
-        dispatch(&OP_REMINDERS_REMINDERS_ADD, json)
+    fn add(params: iface_reminders::AddParams) -> Result<String, String> {
+        let json = iface_reminders__add_params__to_json(&params);
+        dispatch(&OP_REMINDERS_ADD, json)
     }
-    fn reminders_complete(params: iface_reminders::RemindersCompleteParams) -> Result<String, String> {
-        let json = iface_reminders__reminders_complete_params__to_json(&params);
-        dispatch(&OP_REMINDERS_REMINDERS_COMPLETE, json)
+    fn complete(params: iface_reminders::CompleteParams) -> Result<String, String> {
+        let json = iface_reminders__complete_params__to_json(&params);
+        dispatch(&OP_REMINDERS_COMPLETE, json)
     }
-    fn reminders_delete(params: iface_reminders::RemindersDeleteParams) -> Result<String, String> {
-        let json = iface_reminders__reminders_delete_params__to_json(&params);
-        dispatch(&OP_REMINDERS_REMINDERS_DELETE, json)
+    fn delete(params: iface_reminders::DeleteParams) -> Result<String, String> {
+        let json = iface_reminders__delete_params__to_json(&params);
+        dispatch(&OP_REMINDERS_DELETE, json)
     }
-    fn reminders_info(params: iface_reminders::RemindersInfoParams) -> Result<String, String> {
-        let json = iface_reminders__reminders_info_params__to_json(&params);
-        dispatch(&OP_REMINDERS_REMINDERS_INFO, json)
+    fn info(params: iface_reminders::InfoParams) -> Result<String, String> {
+        let json = iface_reminders__info_params__to_json(&params);
+        dispatch(&OP_REMINDERS_INFO, json)
     }
-    fn reminders_list(params: iface_reminders::RemindersListParams) -> Result<String, String> {
-        let json = iface_reminders__reminders_list_params__to_json(&params);
-        dispatch(&OP_REMINDERS_REMINDERS_LIST, json)
+    fn list_op(params: iface_reminders::ListOpParams) -> Result<String, String> {
+        let json = iface_reminders__list_op_params__to_json(&params);
+        dispatch(&OP_REMINDERS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::slack::rtm as iface_rtm;
 
-const OP_RTM_RTM_CONNECT: OpSpec = OpSpec {
+const OP_RTM_CONNECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/rtm.connect",
     fields: &[
@@ -3579,7 +3579,7 @@ const OP_RTM_RTM_CONNECT: OpSpec = OpSpec {
     ],
 };
 
-fn iface_rtm__rtm_connect_params__to_json(p: &iface_rtm::RtmConnectParams) -> Value {
+fn iface_rtm__connect_params__to_json(p: &iface_rtm::ConnectParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("batch_presence_aware".into(), match (&p.batch_presence_aware) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -3588,14 +3588,14 @@ fn iface_rtm__rtm_connect_params__to_json(p: &iface_rtm::RtmConnectParams) -> Va
 }
 
 impl iface_rtm::Guest for crate::Component {
-    fn rtm_connect(params: iface_rtm::RtmConnectParams) -> Result<String, String> {
-        let json = iface_rtm__rtm_connect_params__to_json(&params);
-        dispatch(&OP_RTM_RTM_CONNECT, json)
+    fn connect(params: iface_rtm::ConnectParams) -> Result<String, String> {
+        let json = iface_rtm__connect_params__to_json(&params);
+        dispatch(&OP_RTM_CONNECT, json)
     }
 }
 use crate::exports::autostamp::slack::search as iface_search;
 
-const OP_SEARCH_SEARCH_MESSAGES: OpSpec = OpSpec {
+const OP_SEARCH_MESSAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search.messages",
     fields: &[
@@ -3612,7 +3612,7 @@ const OP_SEARCH_SEARCH_MESSAGES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_search__search_messages_params__to_json(p: &iface_search::SearchMessagesParams) -> Value {
+fn iface_search__messages_params__to_json(p: &iface_search::MessagesParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -3625,14 +3625,14 @@ fn iface_search__search_messages_params__to_json(p: &iface_search::SearchMessage
 }
 
 impl iface_search::Guest for crate::Component {
-    fn search_messages(params: iface_search::SearchMessagesParams) -> Result<String, String> {
-        let json = iface_search__search_messages_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_MESSAGES, json)
+    fn messages(params: iface_search::MessagesParams) -> Result<String, String> {
+        let json = iface_search__messages_params__to_json(&params);
+        dispatch(&OP_SEARCH_MESSAGES, json)
     }
 }
 use crate::exports::autostamp::slack::stars as iface_stars;
 
-const OP_STARS_STARS_ADD: OpSpec = OpSpec {
+const OP_STARS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/stars.add",
     fields: &[
@@ -3643,7 +3643,7 @@ const OP_STARS_STARS_ADD: OpSpec = OpSpec {
     ],
 };
 
-const OP_STARS_STARS_LIST: OpSpec = OpSpec {
+const OP_STARS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stars.list",
     fields: &[
@@ -3658,7 +3658,7 @@ const OP_STARS_STARS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_STARS_STARS_REMOVE: OpSpec = OpSpec {
+const OP_STARS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/stars.remove",
     fields: &[
@@ -3669,13 +3669,13 @@ const OP_STARS_STARS_REMOVE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_stars__stars_add_params__to_json(p: &iface_stars::StarsAddParams) -> Value {
+fn iface_stars__add_params__to_json(p: &iface_stars::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_stars__stars_list_params__to_json(p: &iface_stars::StarsListParams) -> Value {
+fn iface_stars__list_op_params__to_json(p: &iface_stars::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("count".into(), match (&p.count) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3685,29 +3685,29 @@ fn iface_stars__stars_list_params__to_json(p: &iface_stars::StarsListParams) -> 
     Value::Object(m)
 }
 
-fn iface_stars__stars_remove_params__to_json(p: &iface_stars::StarsRemoveParams) -> Value {
+fn iface_stars__remove_params__to_json(p: &iface_stars::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_stars::Guest for crate::Component {
-    fn stars_add(params: iface_stars::StarsAddParams) -> Result<String, String> {
-        let json = iface_stars__stars_add_params__to_json(&params);
-        dispatch(&OP_STARS_STARS_ADD, json)
+    fn add(params: iface_stars::AddParams) -> Result<String, String> {
+        let json = iface_stars__add_params__to_json(&params);
+        dispatch(&OP_STARS_ADD, json)
     }
-    fn stars_list(params: iface_stars::StarsListParams) -> Result<String, String> {
-        let json = iface_stars__stars_list_params__to_json(&params);
-        dispatch(&OP_STARS_STARS_LIST, json)
+    fn list_op(params: iface_stars::ListOpParams) -> Result<String, String> {
+        let json = iface_stars__list_op_params__to_json(&params);
+        dispatch(&OP_STARS_LIST_OP, json)
     }
-    fn stars_remove(params: iface_stars::StarsRemoveParams) -> Result<String, String> {
-        let json = iface_stars__stars_remove_params__to_json(&params);
-        dispatch(&OP_STARS_STARS_REMOVE, json)
+    fn remove(params: iface_stars::RemoveParams) -> Result<String, String> {
+        let json = iface_stars__remove_params__to_json(&params);
+        dispatch(&OP_STARS_REMOVE, json)
     }
 }
 use crate::exports::autostamp::slack::team as iface_team;
 
-const OP_TEAM_TEAM_ACCESS_LOGS: OpSpec = OpSpec {
+const OP_TEAM_ACCESS_LOGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.accessLogs",
     fields: &[
@@ -3721,7 +3721,7 @@ const OP_TEAM_TEAM_ACCESS_LOGS: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEAM_TEAM_BILLABLE_INFO: OpSpec = OpSpec {
+const OP_TEAM_BILLABLE_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.billableInfo",
     fields: &[
@@ -3733,7 +3733,7 @@ const OP_TEAM_TEAM_BILLABLE_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEAM_TEAM_INFO: OpSpec = OpSpec {
+const OP_TEAM_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.info",
     fields: &[
@@ -3745,7 +3745,7 @@ const OP_TEAM_TEAM_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_TEAM_TEAM_INTEGRATION_LOGS: OpSpec = OpSpec {
+const OP_TEAM_INTEGRATION_LOGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.integrationLogs",
     fields: &[
@@ -3762,7 +3762,7 @@ const OP_TEAM_TEAM_INTEGRATION_LOGS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_team__team_access_logs_params__to_json(p: &iface_team::TeamAccessLogsParams) -> Value {
+fn iface_team__access_logs_params__to_json(p: &iface_team::AccessLogsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("before".into(), match (&p.before) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3771,21 +3771,21 @@ fn iface_team__team_access_logs_params__to_json(p: &iface_team::TeamAccessLogsPa
     Value::Object(m)
 }
 
-fn iface_team__team_billable_info_params__to_json(p: &iface_team::TeamBillableInfoParams) -> Value {
+fn iface_team__billable_info_params__to_json(p: &iface_team::BillableInfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_team__team_info_params__to_json(p: &iface_team::TeamInfoParams) -> Value {
+fn iface_team__info_params__to_json(p: &iface_team::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("team".into(), match (&p.team) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_team__team_integration_logs_params__to_json(p: &iface_team::TeamIntegrationLogsParams) -> Value {
+fn iface_team__integration_logs_params__to_json(p: &iface_team::IntegrationLogsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3798,26 +3798,26 @@ fn iface_team__team_integration_logs_params__to_json(p: &iface_team::TeamIntegra
 }
 
 impl iface_team::Guest for crate::Component {
-    fn team_access_logs(params: iface_team::TeamAccessLogsParams) -> Result<String, String> {
-        let json = iface_team__team_access_logs_params__to_json(&params);
-        dispatch(&OP_TEAM_TEAM_ACCESS_LOGS, json)
+    fn access_logs(params: iface_team::AccessLogsParams) -> Result<String, String> {
+        let json = iface_team__access_logs_params__to_json(&params);
+        dispatch(&OP_TEAM_ACCESS_LOGS, json)
     }
-    fn team_billable_info(params: iface_team::TeamBillableInfoParams) -> Result<String, String> {
-        let json = iface_team__team_billable_info_params__to_json(&params);
-        dispatch(&OP_TEAM_TEAM_BILLABLE_INFO, json)
+    fn billable_info(params: iface_team::BillableInfoParams) -> Result<String, String> {
+        let json = iface_team__billable_info_params__to_json(&params);
+        dispatch(&OP_TEAM_BILLABLE_INFO, json)
     }
-    fn team_info(params: iface_team::TeamInfoParams) -> Result<String, String> {
-        let json = iface_team__team_info_params__to_json(&params);
-        dispatch(&OP_TEAM_TEAM_INFO, json)
+    fn info(params: iface_team::InfoParams) -> Result<String, String> {
+        let json = iface_team__info_params__to_json(&params);
+        dispatch(&OP_TEAM_INFO, json)
     }
-    fn team_integration_logs(params: iface_team::TeamIntegrationLogsParams) -> Result<String, String> {
-        let json = iface_team__team_integration_logs_params__to_json(&params);
-        dispatch(&OP_TEAM_TEAM_INTEGRATION_LOGS, json)
+    fn integration_logs(params: iface_team::IntegrationLogsParams) -> Result<String, String> {
+        let json = iface_team__integration_logs_params__to_json(&params);
+        dispatch(&OP_TEAM_INTEGRATION_LOGS, json)
     }
 }
 use crate::exports::autostamp::slack::team_profile as iface_team_profile;
 
-const OP_TEAM_PROFILE_TEAM_PROFILE_GET: OpSpec = OpSpec {
+const OP_TEAM_PROFILE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.profile.get",
     fields: &[
@@ -3829,7 +3829,7 @@ const OP_TEAM_PROFILE_TEAM_PROFILE_GET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_team_profile__team_profile_get_params__to_json(p: &iface_team_profile::TeamProfileGetParams) -> Value {
+fn iface_team_profile__get_params__to_json(p: &iface_team_profile::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("visibility".into(), match (&p.visibility) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3837,14 +3837,14 @@ fn iface_team_profile__team_profile_get_params__to_json(p: &iface_team_profile::
 }
 
 impl iface_team_profile::Guest for crate::Component {
-    fn team_profile_get(params: iface_team_profile::TeamProfileGetParams) -> Result<String, String> {
-        let json = iface_team_profile__team_profile_get_params__to_json(&params);
-        dispatch(&OP_TEAM_PROFILE_TEAM_PROFILE_GET, json)
+    fn get(params: iface_team_profile::GetParams) -> Result<String, String> {
+        let json = iface_team_profile__get_params__to_json(&params);
+        dispatch(&OP_TEAM_PROFILE_GET, json)
     }
 }
 use crate::exports::autostamp::slack::usergroups as iface_usergroups;
 
-const OP_USERGROUPS_USERGROUPS_CREATE: OpSpec = OpSpec {
+const OP_USERGROUPS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.create",
     fields: &[
@@ -3855,7 +3855,7 @@ const OP_USERGROUPS_USERGROUPS_CREATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERGROUPS_USERGROUPS_DISABLE: OpSpec = OpSpec {
+const OP_USERGROUPS_DISABLE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.disable",
     fields: &[
@@ -3866,7 +3866,7 @@ const OP_USERGROUPS_USERGROUPS_DISABLE: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERGROUPS_USERGROUPS_ENABLE: OpSpec = OpSpec {
+const OP_USERGROUPS_ENABLE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.enable",
     fields: &[
@@ -3877,7 +3877,7 @@ const OP_USERGROUPS_USERGROUPS_ENABLE: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERGROUPS_USERGROUPS_LIST: OpSpec = OpSpec {
+const OP_USERGROUPS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usergroups.list",
     fields: &[
@@ -3891,7 +3891,7 @@ const OP_USERGROUPS_USERGROUPS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERGROUPS_USERGROUPS_UPDATE: OpSpec = OpSpec {
+const OP_USERGROUPS_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.update",
     fields: &[
@@ -3902,25 +3902,25 @@ const OP_USERGROUPS_USERGROUPS_UPDATE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_usergroups__usergroups_create_params__to_json(p: &iface_usergroups::UsergroupsCreateParams) -> Value {
+fn iface_usergroups__create_params__to_json(p: &iface_usergroups::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_usergroups__usergroups_disable_params__to_json(p: &iface_usergroups::UsergroupsDisableParams) -> Value {
+fn iface_usergroups__disable_params__to_json(p: &iface_usergroups::DisableParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_usergroups__usergroups_enable_params__to_json(p: &iface_usergroups::UsergroupsEnableParams) -> Value {
+fn iface_usergroups__enable_params__to_json(p: &iface_usergroups::EnableParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_usergroups__usergroups_list_params__to_json(p: &iface_usergroups::UsergroupsListParams) -> Value {
+fn iface_usergroups__list_op_params__to_json(p: &iface_usergroups::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("include_users".into(), match (&p.include_users) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("token".into(), Value::String((&p.token).clone()));
@@ -3929,37 +3929,37 @@ fn iface_usergroups__usergroups_list_params__to_json(p: &iface_usergroups::Userg
     Value::Object(m)
 }
 
-fn iface_usergroups__usergroups_update_params__to_json(p: &iface_usergroups::UsergroupsUpdateParams) -> Value {
+fn iface_usergroups__update_params__to_json(p: &iface_usergroups::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_usergroups::Guest for crate::Component {
-    fn usergroups_create(params: iface_usergroups::UsergroupsCreateParams) -> Result<String, String> {
-        let json = iface_usergroups__usergroups_create_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERGROUPS_CREATE, json)
+    fn create(params: iface_usergroups::CreateParams) -> Result<String, String> {
+        let json = iface_usergroups__create_params__to_json(&params);
+        dispatch(&OP_USERGROUPS_CREATE, json)
     }
-    fn usergroups_disable(params: iface_usergroups::UsergroupsDisableParams) -> Result<String, String> {
-        let json = iface_usergroups__usergroups_disable_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERGROUPS_DISABLE, json)
+    fn disable(params: iface_usergroups::DisableParams) -> Result<String, String> {
+        let json = iface_usergroups__disable_params__to_json(&params);
+        dispatch(&OP_USERGROUPS_DISABLE, json)
     }
-    fn usergroups_enable(params: iface_usergroups::UsergroupsEnableParams) -> Result<String, String> {
-        let json = iface_usergroups__usergroups_enable_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERGROUPS_ENABLE, json)
+    fn enable(params: iface_usergroups::EnableParams) -> Result<String, String> {
+        let json = iface_usergroups__enable_params__to_json(&params);
+        dispatch(&OP_USERGROUPS_ENABLE, json)
     }
-    fn usergroups_list(params: iface_usergroups::UsergroupsListParams) -> Result<String, String> {
-        let json = iface_usergroups__usergroups_list_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERGROUPS_LIST, json)
+    fn list_op(params: iface_usergroups::ListOpParams) -> Result<String, String> {
+        let json = iface_usergroups__list_op_params__to_json(&params);
+        dispatch(&OP_USERGROUPS_LIST_OP, json)
     }
-    fn usergroups_update(params: iface_usergroups::UsergroupsUpdateParams) -> Result<String, String> {
-        let json = iface_usergroups__usergroups_update_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERGROUPS_UPDATE, json)
+    fn update(params: iface_usergroups::UpdateParams) -> Result<String, String> {
+        let json = iface_usergroups__update_params__to_json(&params);
+        dispatch(&OP_USERGROUPS_UPDATE, json)
     }
 }
 use crate::exports::autostamp::slack::usergroups_users as iface_usergroups_users;
 
-const OP_USERGROUPS_USERS_USERGROUPS_USERS_LIST: OpSpec = OpSpec {
+const OP_USERGROUPS_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usergroups.users.list",
     fields: &[
@@ -3972,7 +3972,7 @@ const OP_USERGROUPS_USERS_USERGROUPS_USERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERGROUPS_USERS_USERGROUPS_USERS_UPDATE: OpSpec = OpSpec {
+const OP_USERGROUPS_USERS_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.users.update",
     fields: &[
@@ -3983,7 +3983,7 @@ const OP_USERGROUPS_USERS_USERGROUPS_USERS_UPDATE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_usergroups_users__usergroups_users_list_params__to_json(p: &iface_usergroups_users::UsergroupsUsersListParams) -> Value {
+fn iface_usergroups_users__list_op_params__to_json(p: &iface_usergroups_users::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("include_disabled".into(), match (&p.include_disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -3991,25 +3991,25 @@ fn iface_usergroups_users__usergroups_users_list_params__to_json(p: &iface_userg
     Value::Object(m)
 }
 
-fn iface_usergroups_users__usergroups_users_update_params__to_json(p: &iface_usergroups_users::UsergroupsUsersUpdateParams) -> Value {
+fn iface_usergroups_users__update_params__to_json(p: &iface_usergroups_users::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_usergroups_users::Guest for crate::Component {
-    fn usergroups_users_list(params: iface_usergroups_users::UsergroupsUsersListParams) -> Result<String, String> {
-        let json = iface_usergroups_users__usergroups_users_list_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERS_USERGROUPS_USERS_LIST, json)
+    fn list_op(params: iface_usergroups_users::ListOpParams) -> Result<String, String> {
+        let json = iface_usergroups_users__list_op_params__to_json(&params);
+        dispatch(&OP_USERGROUPS_USERS_LIST_OP, json)
     }
-    fn usergroups_users_update(params: iface_usergroups_users::UsergroupsUsersUpdateParams) -> Result<String, String> {
-        let json = iface_usergroups_users__usergroups_users_update_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERS_USERGROUPS_USERS_UPDATE, json)
+    fn update(params: iface_usergroups_users::UpdateParams) -> Result<String, String> {
+        let json = iface_usergroups_users__update_params__to_json(&params);
+        dispatch(&OP_USERGROUPS_USERS_UPDATE, json)
     }
 }
 use crate::exports::autostamp::slack::users as iface_users;
 
-const OP_USERS_USERS_CONVERSATIONS: OpSpec = OpSpec {
+const OP_USERS_CONVERSATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.conversations",
     fields: &[
@@ -4025,7 +4025,7 @@ const OP_USERS_USERS_CONVERSATIONS: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_DELETE_PHOTO: OpSpec = OpSpec {
+const OP_USERS_DELETE_PHOTO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.deletePhoto",
     fields: &[
@@ -4035,7 +4035,7 @@ const OP_USERS_USERS_DELETE_PHOTO: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_GET_PRESENCE: OpSpec = OpSpec {
+const OP_USERS_GET_PRESENCE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.getPresence",
     fields: &[
@@ -4047,7 +4047,7 @@ const OP_USERS_USERS_GET_PRESENCE: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_IDENTITY: OpSpec = OpSpec {
+const OP_USERS_IDENTITY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.identity",
     fields: &[
@@ -4058,7 +4058,7 @@ const OP_USERS_USERS_IDENTITY: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_INFO: OpSpec = OpSpec {
+const OP_USERS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.info",
     fields: &[
@@ -4071,7 +4071,7 @@ const OP_USERS_USERS_INFO: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_LIST: OpSpec = OpSpec {
+const OP_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.list",
     fields: &[
@@ -4085,7 +4085,7 @@ const OP_USERS_USERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_LOOKUP_BY_EMAIL: OpSpec = OpSpec {
+const OP_USERS_LOOKUP_BY_EMAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.lookupByEmail",
     fields: &[
@@ -4097,7 +4097,7 @@ const OP_USERS_USERS_LOOKUP_BY_EMAIL: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_SET_ACTIVE: OpSpec = OpSpec {
+const OP_USERS_SET_ACTIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.setActive",
     fields: &[
@@ -4108,7 +4108,7 @@ const OP_USERS_USERS_SET_ACTIVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_SET_PHOTO: OpSpec = OpSpec {
+const OP_USERS_SET_PHOTO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.setPhoto",
     fields: &[
@@ -4118,7 +4118,7 @@ const OP_USERS_USERS_SET_PHOTO: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_SET_PRESENCE: OpSpec = OpSpec {
+const OP_USERS_SET_PRESENCE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.setPresence",
     fields: &[
@@ -4129,7 +4129,7 @@ const OP_USERS_USERS_SET_PRESENCE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_users__users_conversations_params__to_json(p: &iface_users::UsersConversationsParams) -> Value {
+fn iface_users__conversations_params__to_json(p: &iface_users::ConversationsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -4140,20 +4140,20 @@ fn iface_users__users_conversations_params__to_json(p: &iface_users::UsersConver
     Value::Object(m)
 }
 
-fn iface_users__users_get_presence_params__to_json(p: &iface_users::UsersGetPresenceParams) -> Value {
+fn iface_users__get_presence_params__to_json(p: &iface_users::GetPresenceParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__users_identity_params__to_json(p: &iface_users::UsersIdentityParams) -> Value {
+fn iface_users__identity_params__to_json(p: &iface_users::IdentityParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__users_info_params__to_json(p: &iface_users::UsersInfoParams) -> Value {
+fn iface_users__info_params__to_json(p: &iface_users::InfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("include_locale".into(), match (&p.include_locale) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -4161,7 +4161,7 @@ fn iface_users__users_info_params__to_json(p: &iface_users::UsersInfoParams) -> 
     Value::Object(m)
 }
 
-fn iface_users__users_list_params__to_json(p: &iface_users::UsersListParams) -> Value {
+fn iface_users__list_op_params__to_json(p: &iface_users::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -4170,68 +4170,68 @@ fn iface_users__users_list_params__to_json(p: &iface_users::UsersListParams) -> 
     Value::Object(m)
 }
 
-fn iface_users__users_lookup_by_email_params__to_json(p: &iface_users::UsersLookupByEmailParams) -> Value {
+fn iface_users__lookup_by_email_params__to_json(p: &iface_users::LookupByEmailParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("email".into(), Value::String((&p.email).clone()));
     Value::Object(m)
 }
 
-fn iface_users__users_set_active_params__to_json(p: &iface_users::UsersSetActiveParams) -> Value {
+fn iface_users__set_active_params__to_json(p: &iface_users::SetActiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
-fn iface_users__users_set_presence_params__to_json(p: &iface_users::UsersSetPresenceParams) -> Value {
+fn iface_users__set_presence_params__to_json(p: &iface_users::SetPresenceParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_users::Guest for crate::Component {
-    fn users_conversations(params: iface_users::UsersConversationsParams) -> Result<String, String> {
-        let json = iface_users__users_conversations_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_CONVERSATIONS, json)
+    fn conversations(params: iface_users::ConversationsParams) -> Result<String, String> {
+        let json = iface_users__conversations_params__to_json(&params);
+        dispatch(&OP_USERS_CONVERSATIONS, json)
     }
-    fn users_delete_photo() -> Result<String, String> {
-        dispatch(&OP_USERS_USERS_DELETE_PHOTO, Value::Object(Map::new()))
+    fn delete_photo() -> Result<String, String> {
+        dispatch(&OP_USERS_DELETE_PHOTO, Value::Object(Map::new()))
     }
-    fn users_get_presence(params: iface_users::UsersGetPresenceParams) -> Result<String, String> {
-        let json = iface_users__users_get_presence_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_GET_PRESENCE, json)
+    fn get_presence(params: iface_users::GetPresenceParams) -> Result<String, String> {
+        let json = iface_users__get_presence_params__to_json(&params);
+        dispatch(&OP_USERS_GET_PRESENCE, json)
     }
-    fn users_identity(params: iface_users::UsersIdentityParams) -> Result<String, String> {
-        let json = iface_users__users_identity_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_IDENTITY, json)
+    fn identity(params: iface_users::IdentityParams) -> Result<String, String> {
+        let json = iface_users__identity_params__to_json(&params);
+        dispatch(&OP_USERS_IDENTITY, json)
     }
-    fn users_info(params: iface_users::UsersInfoParams) -> Result<String, String> {
-        let json = iface_users__users_info_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_INFO, json)
+    fn info(params: iface_users::InfoParams) -> Result<String, String> {
+        let json = iface_users__info_params__to_json(&params);
+        dispatch(&OP_USERS_INFO, json)
     }
-    fn users_list(params: iface_users::UsersListParams) -> Result<String, String> {
-        let json = iface_users__users_list_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_LIST, json)
+    fn list_op(params: iface_users::ListOpParams) -> Result<String, String> {
+        let json = iface_users__list_op_params__to_json(&params);
+        dispatch(&OP_USERS_LIST_OP, json)
     }
-    fn users_lookup_by_email(params: iface_users::UsersLookupByEmailParams) -> Result<String, String> {
-        let json = iface_users__users_lookup_by_email_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_LOOKUP_BY_EMAIL, json)
+    fn lookup_by_email(params: iface_users::LookupByEmailParams) -> Result<String, String> {
+        let json = iface_users__lookup_by_email_params__to_json(&params);
+        dispatch(&OP_USERS_LOOKUP_BY_EMAIL, json)
     }
-    fn users_set_active(params: iface_users::UsersSetActiveParams) -> Result<String, String> {
-        let json = iface_users__users_set_active_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_SET_ACTIVE, json)
+    fn set_active(params: iface_users::SetActiveParams) -> Result<String, String> {
+        let json = iface_users__set_active_params__to_json(&params);
+        dispatch(&OP_USERS_SET_ACTIVE, json)
     }
-    fn users_set_photo() -> Result<String, String> {
-        dispatch(&OP_USERS_USERS_SET_PHOTO, Value::Object(Map::new()))
+    fn set_photo() -> Result<String, String> {
+        dispatch(&OP_USERS_SET_PHOTO, Value::Object(Map::new()))
     }
-    fn users_set_presence(params: iface_users::UsersSetPresenceParams) -> Result<String, String> {
-        let json = iface_users__users_set_presence_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_SET_PRESENCE, json)
+    fn set_presence(params: iface_users::SetPresenceParams) -> Result<String, String> {
+        let json = iface_users__set_presence_params__to_json(&params);
+        dispatch(&OP_USERS_SET_PRESENCE, json)
     }
 }
 use crate::exports::autostamp::slack::users_profile as iface_users_profile;
 
-const OP_USERS_PROFILE_USERS_PROFILE_GET: OpSpec = OpSpec {
+const OP_USERS_PROFILE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.profile.get",
     fields: &[
@@ -4244,7 +4244,7 @@ const OP_USERS_PROFILE_USERS_PROFILE_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_PROFILE_USERS_PROFILE_SET: OpSpec = OpSpec {
+const OP_USERS_PROFILE_SET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.profile.set",
     fields: &[
@@ -4255,7 +4255,7 @@ const OP_USERS_PROFILE_USERS_PROFILE_SET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_users_profile__users_profile_get_params__to_json(p: &iface_users_profile::UsersProfileGetParams) -> Value {
+fn iface_users_profile__get_params__to_json(p: &iface_users_profile::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("include_labels".into(), match (&p.include_labels) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -4263,25 +4263,25 @@ fn iface_users_profile__users_profile_get_params__to_json(p: &iface_users_profil
     Value::Object(m)
 }
 
-fn iface_users_profile__users_profile_set_params__to_json(p: &iface_users_profile::UsersProfileSetParams) -> Value {
+fn iface_users_profile__set_params__to_json(p: &iface_users_profile::SetParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
 impl iface_users_profile::Guest for crate::Component {
-    fn users_profile_get(params: iface_users_profile::UsersProfileGetParams) -> Result<String, String> {
-        let json = iface_users_profile__users_profile_get_params__to_json(&params);
-        dispatch(&OP_USERS_PROFILE_USERS_PROFILE_GET, json)
+    fn get(params: iface_users_profile::GetParams) -> Result<String, String> {
+        let json = iface_users_profile__get_params__to_json(&params);
+        dispatch(&OP_USERS_PROFILE_GET, json)
     }
-    fn users_profile_set(params: iface_users_profile::UsersProfileSetParams) -> Result<String, String> {
-        let json = iface_users_profile__users_profile_set_params__to_json(&params);
-        dispatch(&OP_USERS_PROFILE_USERS_PROFILE_SET, json)
+    fn set(params: iface_users_profile::SetParams) -> Result<String, String> {
+        let json = iface_users_profile__set_params__to_json(&params);
+        dispatch(&OP_USERS_PROFILE_SET, json)
     }
 }
 use crate::exports::autostamp::slack::views as iface_views;
 
-const OP_VIEWS_VIEWS_OPEN: OpSpec = OpSpec {
+const OP_VIEWS_OPEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.open",
     fields: &[
@@ -4294,7 +4294,7 @@ const OP_VIEWS_VIEWS_OPEN: OpSpec = OpSpec {
     ],
 };
 
-const OP_VIEWS_VIEWS_PUBLISH: OpSpec = OpSpec {
+const OP_VIEWS_PUBLISH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.publish",
     fields: &[
@@ -4308,7 +4308,7 @@ const OP_VIEWS_VIEWS_PUBLISH: OpSpec = OpSpec {
     ],
 };
 
-const OP_VIEWS_VIEWS_PUSH: OpSpec = OpSpec {
+const OP_VIEWS_PUSH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.push",
     fields: &[
@@ -4321,7 +4321,7 @@ const OP_VIEWS_VIEWS_PUSH: OpSpec = OpSpec {
     ],
 };
 
-const OP_VIEWS_VIEWS_UPDATE: OpSpec = OpSpec {
+const OP_VIEWS_UPDATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.update",
     fields: &[
@@ -4336,7 +4336,7 @@ const OP_VIEWS_VIEWS_UPDATE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_views__views_open_params__to_json(p: &iface_views::ViewsOpenParams) -> Value {
+fn iface_views__open_params__to_json(p: &iface_views::OpenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("trigger_id".into(), Value::String((&p.trigger_id).clone()));
@@ -4344,7 +4344,7 @@ fn iface_views__views_open_params__to_json(p: &iface_views::ViewsOpenParams) -> 
     Value::Object(m)
 }
 
-fn iface_views__views_publish_params__to_json(p: &iface_views::ViewsPublishParams) -> Value {
+fn iface_views__publish_params__to_json(p: &iface_views::PublishParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("user_id".into(), Value::String((&p.user_id).clone()));
@@ -4353,7 +4353,7 @@ fn iface_views__views_publish_params__to_json(p: &iface_views::ViewsPublishParam
     Value::Object(m)
 }
 
-fn iface_views__views_push_params__to_json(p: &iface_views::ViewsPushParams) -> Value {
+fn iface_views__push_params__to_json(p: &iface_views::PushParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("trigger_id".into(), Value::String((&p.trigger_id).clone()));
@@ -4361,7 +4361,7 @@ fn iface_views__views_push_params__to_json(p: &iface_views::ViewsPushParams) -> 
     Value::Object(m)
 }
 
-fn iface_views__views_update_params__to_json(p: &iface_views::ViewsUpdateParams) -> Value {
+fn iface_views__update_params__to_json(p: &iface_views::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("view_id".into(), match (&p.view_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -4372,26 +4372,26 @@ fn iface_views__views_update_params__to_json(p: &iface_views::ViewsUpdateParams)
 }
 
 impl iface_views::Guest for crate::Component {
-    fn views_open(params: iface_views::ViewsOpenParams) -> Result<String, String> {
-        let json = iface_views__views_open_params__to_json(&params);
-        dispatch(&OP_VIEWS_VIEWS_OPEN, json)
+    fn open(params: iface_views::OpenParams) -> Result<String, String> {
+        let json = iface_views__open_params__to_json(&params);
+        dispatch(&OP_VIEWS_OPEN, json)
     }
-    fn views_publish(params: iface_views::ViewsPublishParams) -> Result<String, String> {
-        let json = iface_views__views_publish_params__to_json(&params);
-        dispatch(&OP_VIEWS_VIEWS_PUBLISH, json)
+    fn publish(params: iface_views::PublishParams) -> Result<String, String> {
+        let json = iface_views__publish_params__to_json(&params);
+        dispatch(&OP_VIEWS_PUBLISH, json)
     }
-    fn views_push(params: iface_views::ViewsPushParams) -> Result<String, String> {
-        let json = iface_views__views_push_params__to_json(&params);
-        dispatch(&OP_VIEWS_VIEWS_PUSH, json)
+    fn push(params: iface_views::PushParams) -> Result<String, String> {
+        let json = iface_views__push_params__to_json(&params);
+        dispatch(&OP_VIEWS_PUSH, json)
     }
-    fn views_update(params: iface_views::ViewsUpdateParams) -> Result<String, String> {
-        let json = iface_views__views_update_params__to_json(&params);
-        dispatch(&OP_VIEWS_VIEWS_UPDATE, json)
+    fn update(params: iface_views::UpdateParams) -> Result<String, String> {
+        let json = iface_views__update_params__to_json(&params);
+        dispatch(&OP_VIEWS_UPDATE, json)
     }
 }
 use crate::exports::autostamp::slack::workflows as iface_workflows;
 
-const OP_WORKFLOWS_WORKFLOWS_STEP_COMPLETED: OpSpec = OpSpec {
+const OP_WORKFLOWS_STEP_COMPLETED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows.stepCompleted",
     fields: &[
@@ -4404,7 +4404,7 @@ const OP_WORKFLOWS_WORKFLOWS_STEP_COMPLETED: OpSpec = OpSpec {
     ],
 };
 
-const OP_WORKFLOWS_WORKFLOWS_STEP_FAILED: OpSpec = OpSpec {
+const OP_WORKFLOWS_STEP_FAILED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows.stepFailed",
     fields: &[
@@ -4417,7 +4417,7 @@ const OP_WORKFLOWS_WORKFLOWS_STEP_FAILED: OpSpec = OpSpec {
     ],
 };
 
-const OP_WORKFLOWS_WORKFLOWS_UPDATE_STEP: OpSpec = OpSpec {
+const OP_WORKFLOWS_UPDATE_STEP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows.updateStep",
     fields: &[
@@ -4433,7 +4433,7 @@ const OP_WORKFLOWS_WORKFLOWS_UPDATE_STEP: OpSpec = OpSpec {
     ],
 };
 
-fn iface_workflows__workflows_step_completed_params__to_json(p: &iface_workflows::WorkflowsStepCompletedParams) -> Value {
+fn iface_workflows__step_completed_params__to_json(p: &iface_workflows::StepCompletedParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("workflow_step_execute_id".into(), Value::String((&p.workflow_step_execute_id).clone()));
@@ -4441,7 +4441,7 @@ fn iface_workflows__workflows_step_completed_params__to_json(p: &iface_workflows
     Value::Object(m)
 }
 
-fn iface_workflows__workflows_step_failed_params__to_json(p: &iface_workflows::WorkflowsStepFailedParams) -> Value {
+fn iface_workflows__step_failed_params__to_json(p: &iface_workflows::StepFailedParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("workflow_step_execute_id".into(), Value::String((&p.workflow_step_execute_id).clone()));
@@ -4449,7 +4449,7 @@ fn iface_workflows__workflows_step_failed_params__to_json(p: &iface_workflows::W
     Value::Object(m)
 }
 
-fn iface_workflows__workflows_update_step_params__to_json(p: &iface_workflows::WorkflowsUpdateStepParams) -> Value {
+fn iface_workflows__update_step_params__to_json(p: &iface_workflows::UpdateStepParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("workflow_step_edit_id".into(), Value::String((&p.workflow_step_edit_id).clone()));
@@ -4461,17 +4461,17 @@ fn iface_workflows__workflows_update_step_params__to_json(p: &iface_workflows::W
 }
 
 impl iface_workflows::Guest for crate::Component {
-    fn workflows_step_completed(params: iface_workflows::WorkflowsStepCompletedParams) -> Result<String, String> {
-        let json = iface_workflows__workflows_step_completed_params__to_json(&params);
-        dispatch(&OP_WORKFLOWS_WORKFLOWS_STEP_COMPLETED, json)
+    fn step_completed(params: iface_workflows::StepCompletedParams) -> Result<String, String> {
+        let json = iface_workflows__step_completed_params__to_json(&params);
+        dispatch(&OP_WORKFLOWS_STEP_COMPLETED, json)
     }
-    fn workflows_step_failed(params: iface_workflows::WorkflowsStepFailedParams) -> Result<String, String> {
-        let json = iface_workflows__workflows_step_failed_params__to_json(&params);
-        dispatch(&OP_WORKFLOWS_WORKFLOWS_STEP_FAILED, json)
+    fn step_failed(params: iface_workflows::StepFailedParams) -> Result<String, String> {
+        let json = iface_workflows__step_failed_params__to_json(&params);
+        dispatch(&OP_WORKFLOWS_STEP_FAILED, json)
     }
-    fn workflows_update_step(params: iface_workflows::WorkflowsUpdateStepParams) -> Result<String, String> {
-        let json = iface_workflows__workflows_update_step_params__to_json(&params);
-        dispatch(&OP_WORKFLOWS_WORKFLOWS_UPDATE_STEP, json)
+    fn update_step(params: iface_workflows::UpdateStepParams) -> Result<String, String> {
+        let json = iface_workflows__update_step_params__to_json(&params);
+        dispatch(&OP_WORKFLOWS_UPDATE_STEP, json)
     }
 }
 

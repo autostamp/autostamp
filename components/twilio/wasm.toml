@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:twilio"
-version = "0.2.1+twilio-1.55.0"
+version = "0.3.0+twilio-1.55.0"
 registry = "ghcr.io/autostamp/twilio"
 kind = "component"
 file = "build/twilio.wasm"

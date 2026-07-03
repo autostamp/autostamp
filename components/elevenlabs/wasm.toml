@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:elevenlabs"
-version = "0.2.1+elevenlabs-1.0"
+version = "0.3.0+elevenlabs-1.0"
 registry = "ghcr.io/autostamp/elevenlabs"
 kind = "component"
 file = "build/elevenlabs.wasm"

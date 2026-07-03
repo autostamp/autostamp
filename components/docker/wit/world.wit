@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `HubAuth` | `Authorization: Bearer <secret>` |
-package autostamp:docker@0.2.1;
+package autostamp:docker@0.3.0;
 
 interface discovery {
   /// Get namespaces and repos

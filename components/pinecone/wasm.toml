@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:pinecone"
-version = "0.2.1+pinecone-20230406.1"
+version = "0.3.0+pinecone-20230406.1"
 registry = "ghcr.io/autostamp/pinecone"
 kind = "component"
 file = "build/pinecone.wasm"

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:mailchimp"
-version = "0.2.1+mailchimp-3.0.55"
+version = "0.3.0+mailchimp-3.0.55"
 registry = "ghcr.io/autostamp/mailchimp"
 kind = "component"
 file = "build/mailchimp.wasm"

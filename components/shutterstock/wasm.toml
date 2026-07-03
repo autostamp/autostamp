@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:shutterstock"
-version = "0.2.1+shutterstock-1.1.32"
+version = "0.3.0+shutterstock-1.1.32"
 registry = "ghcr.io/autostamp/shutterstock"
 kind = "component"
 file = "build/shutterstock.wasm"

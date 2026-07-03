@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:snyk"
-version = "0.2.1+snyk-1.0.0"
+version = "0.3.0+snyk-1.0.0"
 registry = "ghcr.io/autostamp/snyk"
 kind = "component"
 file = "build/snyk.wasm"

@@ -284,7 +284,7 @@ use serde_json::{Map, Value};
 
 use crate::exports::autostamp::rawg::creator_roles as iface_creator_roles;
 
-const OP_CREATOR_ROLES_CREATOR_ROLES_LIST: OpSpec = OpSpec {
+const OP_CREATOR_ROLES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/creator-roles",
     fields: &[
@@ -295,7 +295,7 @@ const OP_CREATOR_ROLES_CREATOR_ROLES_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_creator_roles__creator_roles_list_params__to_json(p: &iface_creator_roles::CreatorRolesListParams) -> Value {
+fn iface_creator_roles__list_op_params__to_json(p: &iface_creator_roles::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -303,14 +303,14 @@ fn iface_creator_roles__creator_roles_list_params__to_json(p: &iface_creator_rol
 }
 
 impl iface_creator_roles::Guest for crate::Component {
-    fn creator_roles_list(params: iface_creator_roles::CreatorRolesListParams) -> Result<String, String> {
-        let json = iface_creator_roles__creator_roles_list_params__to_json(&params);
-        dispatch(&OP_CREATOR_ROLES_CREATOR_ROLES_LIST, json)
+    fn list_op(params: iface_creator_roles::ListOpParams) -> Result<String, String> {
+        let json = iface_creator_roles__list_op_params__to_json(&params);
+        dispatch(&OP_CREATOR_ROLES_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::rawg::creators as iface_creators;
 
-const OP_CREATORS_CREATORS_LIST: OpSpec = OpSpec {
+const OP_CREATORS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/creators",
     fields: &[
@@ -321,7 +321,7 @@ const OP_CREATORS_CREATORS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_CREATORS_CREATORS_READ: OpSpec = OpSpec {
+const OP_CREATORS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/creators/{id}",
     fields: &[
@@ -331,32 +331,32 @@ const OP_CREATORS_CREATORS_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_creators__creators_list_params__to_json(p: &iface_creators::CreatorsListParams) -> Value {
+fn iface_creators__list_op_params__to_json(p: &iface_creators::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_creators__creators_read_params__to_json(p: &iface_creators::CreatorsReadParams) -> Value {
+fn iface_creators__read_params__to_json(p: &iface_creators::ReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_creators::Guest for crate::Component {
-    fn creators_list(params: iface_creators::CreatorsListParams) -> Result<String, String> {
-        let json = iface_creators__creators_list_params__to_json(&params);
-        dispatch(&OP_CREATORS_CREATORS_LIST, json)
+    fn list_op(params: iface_creators::ListOpParams) -> Result<String, String> {
+        let json = iface_creators__list_op_params__to_json(&params);
+        dispatch(&OP_CREATORS_LIST_OP, json)
     }
-    fn creators_read(params: iface_creators::CreatorsReadParams) -> Result<String, String> {
-        let json = iface_creators__creators_read_params__to_json(&params);
-        dispatch(&OP_CREATORS_CREATORS_READ, json)
+    fn read(params: iface_creators::ReadParams) -> Result<String, String> {
+        let json = iface_creators__read_params__to_json(&params);
+        dispatch(&OP_CREATORS_READ, json)
     }
 }
 use crate::exports::autostamp::rawg::developers as iface_developers;
 
-const OP_DEVELOPERS_DEVELOPERS_LIST: OpSpec = OpSpec {
+const OP_DEVELOPERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/developers",
     fields: &[
@@ -367,7 +367,7 @@ const OP_DEVELOPERS_DEVELOPERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_DEVELOPERS_DEVELOPERS_READ: OpSpec = OpSpec {
+const OP_DEVELOPERS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/developers/{id}",
     fields: &[
@@ -376,7 +376,7 @@ const OP_DEVELOPERS_DEVELOPERS_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_developers__developers_list_params__to_json(p: &iface_developers::DevelopersListParams) -> Value {
+fn iface_developers__list_op_params__to_json(p: &iface_developers::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -384,17 +384,17 @@ fn iface_developers__developers_list_params__to_json(p: &iface_developers::Devel
 }
 
 impl iface_developers::Guest for crate::Component {
-    fn developers_list(params: iface_developers::DevelopersListParams) -> Result<String, String> {
-        let json = iface_developers__developers_list_params__to_json(&params);
-        dispatch(&OP_DEVELOPERS_DEVELOPERS_LIST, json)
+    fn list_op(params: iface_developers::ListOpParams) -> Result<String, String> {
+        let json = iface_developers__list_op_params__to_json(&params);
+        dispatch(&OP_DEVELOPERS_LIST_OP, json)
     }
-    fn developers_read() -> Result<String, String> {
-        dispatch(&OP_DEVELOPERS_DEVELOPERS_READ, Value::Object(Map::new()))
+    fn read() -> Result<String, String> {
+        dispatch(&OP_DEVELOPERS_READ, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::rawg::games as iface_games;
 
-const OP_GAMES_GAMES_LIST: OpSpec = OpSpec {
+const OP_GAMES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games",
     fields: &[
@@ -426,7 +426,7 @@ const OP_GAMES_GAMES_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_ADDITIONS_LIST: OpSpec = OpSpec {
+const OP_GAMES_ADDITIONS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/additions",
     fields: &[
@@ -437,7 +437,7 @@ const OP_GAMES_GAMES_ADDITIONS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_DEVELOPMENT_TEAM_LIST: OpSpec = OpSpec {
+const OP_GAMES_DEVELOPMENT_TEAM_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/development-team",
     fields: &[
@@ -449,7 +449,7 @@ const OP_GAMES_GAMES_DEVELOPMENT_TEAM_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_GAME_SERIES_LIST: OpSpec = OpSpec {
+const OP_GAMES_GAME_SERIES_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/game-series",
     fields: &[
@@ -460,7 +460,7 @@ const OP_GAMES_GAMES_GAME_SERIES_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_PARENT_GAMES_LIST: OpSpec = OpSpec {
+const OP_GAMES_PARENT_GAMES_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/parent-games",
     fields: &[
@@ -471,7 +471,7 @@ const OP_GAMES_GAMES_PARENT_GAMES_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_SCREENSHOTS_LIST: OpSpec = OpSpec {
+const OP_GAMES_SCREENSHOTS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/screenshots",
     fields: &[
@@ -483,7 +483,7 @@ const OP_GAMES_GAMES_SCREENSHOTS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_STORES_LIST: OpSpec = OpSpec {
+const OP_GAMES_STORES_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/stores",
     fields: &[
@@ -495,7 +495,7 @@ const OP_GAMES_GAMES_STORES_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_READ: OpSpec = OpSpec {
+const OP_GAMES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}",
     fields: &[
@@ -505,7 +505,7 @@ const OP_GAMES_GAMES_READ: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_ACHIEVEMENTS_READ: OpSpec = OpSpec {
+const OP_GAMES_ACHIEVEMENTS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/achievements",
     fields: &[
@@ -515,7 +515,7 @@ const OP_GAMES_GAMES_ACHIEVEMENTS_READ: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_MOVIES_READ: OpSpec = OpSpec {
+const OP_GAMES_MOVIES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/movies",
     fields: &[
@@ -525,7 +525,7 @@ const OP_GAMES_GAMES_MOVIES_READ: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_REDDIT_READ: OpSpec = OpSpec {
+const OP_GAMES_REDDIT_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/reddit",
     fields: &[
@@ -535,7 +535,7 @@ const OP_GAMES_GAMES_REDDIT_READ: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_SUGGESTED_READ: OpSpec = OpSpec {
+const OP_GAMES_SUGGESTED_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/suggested",
     fields: &[
@@ -545,7 +545,7 @@ const OP_GAMES_GAMES_SUGGESTED_READ: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_TWITCH_READ: OpSpec = OpSpec {
+const OP_GAMES_TWITCH_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/twitch",
     fields: &[
@@ -555,7 +555,7 @@ const OP_GAMES_GAMES_TWITCH_READ: OpSpec = OpSpec {
     ],
 };
 
-const OP_GAMES_GAMES_YOUTUBE_READ: OpSpec = OpSpec {
+const OP_GAMES_YOUTUBE_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/youtube",
     fields: &[
@@ -565,7 +565,7 @@ const OP_GAMES_GAMES_YOUTUBE_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_games__games_list_params__to_json(p: &iface_games::GamesListParams) -> Value {
+fn iface_games__list_op_params__to_json(p: &iface_games::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -593,14 +593,14 @@ fn iface_games__games_list_params__to_json(p: &iface_games::GamesListParams) -> 
     Value::Object(m)
 }
 
-fn iface_games__games_additions_list_params__to_json(p: &iface_games::GamesAdditionsListParams) -> Value {
+fn iface_games__additions_list_params__to_json(p: &iface_games::AdditionsListParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_games__games_development_team_list_params__to_json(p: &iface_games::GamesDevelopmentTeamListParams) -> Value {
+fn iface_games__development_team_list_params__to_json(p: &iface_games::DevelopmentTeamListParams) -> Value {
     let mut m = Map::new();
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -608,21 +608,21 @@ fn iface_games__games_development_team_list_params__to_json(p: &iface_games::Gam
     Value::Object(m)
 }
 
-fn iface_games__games_game_series_list_params__to_json(p: &iface_games::GamesGameSeriesListParams) -> Value {
+fn iface_games__game_series_list_params__to_json(p: &iface_games::GameSeriesListParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_games__games_parent_games_list_params__to_json(p: &iface_games::GamesParentGamesListParams) -> Value {
+fn iface_games__parent_games_list_params__to_json(p: &iface_games::ParentGamesListParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_games__games_screenshots_list_params__to_json(p: &iface_games::GamesScreenshotsListParams) -> Value {
+fn iface_games__screenshots_list_params__to_json(p: &iface_games::ScreenshotsListParams) -> Value {
     let mut m = Map::new();
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -630,7 +630,7 @@ fn iface_games__games_screenshots_list_params__to_json(p: &iface_games::GamesScr
     Value::Object(m)
 }
 
-fn iface_games__games_stores_list_params__to_json(p: &iface_games::GamesStoresListParams) -> Value {
+fn iface_games__stores_list_params__to_json(p: &iface_games::StoresListParams) -> Value {
     let mut m = Map::new();
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -638,109 +638,109 @@ fn iface_games__games_stores_list_params__to_json(p: &iface_games::GamesStoresLi
     Value::Object(m)
 }
 
-fn iface_games__games_read_params__to_json(p: &iface_games::GamesReadParams) -> Value {
+fn iface_games__read_params__to_json(p: &iface_games::ReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_games__games_achievements_read_params__to_json(p: &iface_games::GamesAchievementsReadParams) -> Value {
+fn iface_games__achievements_read_params__to_json(p: &iface_games::AchievementsReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_games__games_movies_read_params__to_json(p: &iface_games::GamesMoviesReadParams) -> Value {
+fn iface_games__movies_read_params__to_json(p: &iface_games::MoviesReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_games__games_reddit_read_params__to_json(p: &iface_games::GamesRedditReadParams) -> Value {
+fn iface_games__reddit_read_params__to_json(p: &iface_games::RedditReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_games__games_suggested_read_params__to_json(p: &iface_games::GamesSuggestedReadParams) -> Value {
+fn iface_games__suggested_read_params__to_json(p: &iface_games::SuggestedReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_games__games_twitch_read_params__to_json(p: &iface_games::GamesTwitchReadParams) -> Value {
+fn iface_games__twitch_read_params__to_json(p: &iface_games::TwitchReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_games__games_youtube_read_params__to_json(p: &iface_games::GamesYoutubeReadParams) -> Value {
+fn iface_games__youtube_read_params__to_json(p: &iface_games::YoutubeReadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_games::Guest for crate::Component {
-    fn games_list(params: iface_games::GamesListParams) -> Result<String, String> {
-        let json = iface_games__games_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_LIST, json)
+    fn list_op(params: iface_games::ListOpParams) -> Result<String, String> {
+        let json = iface_games__list_op_params__to_json(&params);
+        dispatch(&OP_GAMES_LIST_OP, json)
     }
-    fn games_additions_list(params: iface_games::GamesAdditionsListParams) -> Result<String, String> {
-        let json = iface_games__games_additions_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_ADDITIONS_LIST, json)
+    fn additions_list(params: iface_games::AdditionsListParams) -> Result<String, String> {
+        let json = iface_games__additions_list_params__to_json(&params);
+        dispatch(&OP_GAMES_ADDITIONS_LIST, json)
     }
-    fn games_development_team_list(params: iface_games::GamesDevelopmentTeamListParams) -> Result<String, String> {
-        let json = iface_games__games_development_team_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_DEVELOPMENT_TEAM_LIST, json)
+    fn development_team_list(params: iface_games::DevelopmentTeamListParams) -> Result<String, String> {
+        let json = iface_games__development_team_list_params__to_json(&params);
+        dispatch(&OP_GAMES_DEVELOPMENT_TEAM_LIST, json)
     }
-    fn games_game_series_list(params: iface_games::GamesGameSeriesListParams) -> Result<String, String> {
-        let json = iface_games__games_game_series_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_GAME_SERIES_LIST, json)
+    fn game_series_list(params: iface_games::GameSeriesListParams) -> Result<String, String> {
+        let json = iface_games__game_series_list_params__to_json(&params);
+        dispatch(&OP_GAMES_GAME_SERIES_LIST, json)
     }
-    fn games_parent_games_list(params: iface_games::GamesParentGamesListParams) -> Result<String, String> {
-        let json = iface_games__games_parent_games_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_PARENT_GAMES_LIST, json)
+    fn parent_games_list(params: iface_games::ParentGamesListParams) -> Result<String, String> {
+        let json = iface_games__parent_games_list_params__to_json(&params);
+        dispatch(&OP_GAMES_PARENT_GAMES_LIST, json)
     }
-    fn games_screenshots_list(params: iface_games::GamesScreenshotsListParams) -> Result<String, String> {
-        let json = iface_games__games_screenshots_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_SCREENSHOTS_LIST, json)
+    fn screenshots_list(params: iface_games::ScreenshotsListParams) -> Result<String, String> {
+        let json = iface_games__screenshots_list_params__to_json(&params);
+        dispatch(&OP_GAMES_SCREENSHOTS_LIST, json)
     }
-    fn games_stores_list(params: iface_games::GamesStoresListParams) -> Result<String, String> {
-        let json = iface_games__games_stores_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_STORES_LIST, json)
+    fn stores_list(params: iface_games::StoresListParams) -> Result<String, String> {
+        let json = iface_games__stores_list_params__to_json(&params);
+        dispatch(&OP_GAMES_STORES_LIST, json)
     }
-    fn games_read(params: iface_games::GamesReadParams) -> Result<String, String> {
-        let json = iface_games__games_read_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_READ, json)
+    fn read(params: iface_games::ReadParams) -> Result<String, String> {
+        let json = iface_games__read_params__to_json(&params);
+        dispatch(&OP_GAMES_READ, json)
     }
-    fn games_achievements_read(params: iface_games::GamesAchievementsReadParams) -> Result<String, String> {
-        let json = iface_games__games_achievements_read_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_ACHIEVEMENTS_READ, json)
+    fn achievements_read(params: iface_games::AchievementsReadParams) -> Result<String, String> {
+        let json = iface_games__achievements_read_params__to_json(&params);
+        dispatch(&OP_GAMES_ACHIEVEMENTS_READ, json)
     }
-    fn games_movies_read(params: iface_games::GamesMoviesReadParams) -> Result<String, String> {
-        let json = iface_games__games_movies_read_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_MOVIES_READ, json)
+    fn movies_read(params: iface_games::MoviesReadParams) -> Result<String, String> {
+        let json = iface_games__movies_read_params__to_json(&params);
+        dispatch(&OP_GAMES_MOVIES_READ, json)
     }
-    fn games_reddit_read(params: iface_games::GamesRedditReadParams) -> Result<String, String> {
-        let json = iface_games__games_reddit_read_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_REDDIT_READ, json)
+    fn reddit_read(params: iface_games::RedditReadParams) -> Result<String, String> {
+        let json = iface_games__reddit_read_params__to_json(&params);
+        dispatch(&OP_GAMES_REDDIT_READ, json)
     }
-    fn games_suggested_read(params: iface_games::GamesSuggestedReadParams) -> Result<String, String> {
-        let json = iface_games__games_suggested_read_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_SUGGESTED_READ, json)
+    fn suggested_read(params: iface_games::SuggestedReadParams) -> Result<String, String> {
+        let json = iface_games__suggested_read_params__to_json(&params);
+        dispatch(&OP_GAMES_SUGGESTED_READ, json)
     }
-    fn games_twitch_read(params: iface_games::GamesTwitchReadParams) -> Result<String, String> {
-        let json = iface_games__games_twitch_read_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_TWITCH_READ, json)
+    fn twitch_read(params: iface_games::TwitchReadParams) -> Result<String, String> {
+        let json = iface_games__twitch_read_params__to_json(&params);
+        dispatch(&OP_GAMES_TWITCH_READ, json)
     }
-    fn games_youtube_read(params: iface_games::GamesYoutubeReadParams) -> Result<String, String> {
-        let json = iface_games__games_youtube_read_params__to_json(&params);
-        dispatch(&OP_GAMES_GAMES_YOUTUBE_READ, json)
+    fn youtube_read(params: iface_games::YoutubeReadParams) -> Result<String, String> {
+        let json = iface_games__youtube_read_params__to_json(&params);
+        dispatch(&OP_GAMES_YOUTUBE_READ, json)
     }
 }
 use crate::exports::autostamp::rawg::genres as iface_genres;
 
-const OP_GENRES_GENRES_LIST: OpSpec = OpSpec {
+const OP_GENRES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/genres",
     fields: &[
@@ -752,7 +752,7 @@ const OP_GENRES_GENRES_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GENRES_GENRES_READ: OpSpec = OpSpec {
+const OP_GENRES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/genres/{id}",
     fields: &[
@@ -761,7 +761,7 @@ const OP_GENRES_GENRES_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_genres__genres_list_params__to_json(p: &iface_genres::GenresListParams) -> Value {
+fn iface_genres__list_op_params__to_json(p: &iface_genres::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -770,17 +770,17 @@ fn iface_genres__genres_list_params__to_json(p: &iface_genres::GenresListParams)
 }
 
 impl iface_genres::Guest for crate::Component {
-    fn genres_list(params: iface_genres::GenresListParams) -> Result<String, String> {
-        let json = iface_genres__genres_list_params__to_json(&params);
-        dispatch(&OP_GENRES_GENRES_LIST, json)
+    fn list_op(params: iface_genres::ListOpParams) -> Result<String, String> {
+        let json = iface_genres__list_op_params__to_json(&params);
+        dispatch(&OP_GENRES_LIST_OP, json)
     }
-    fn genres_read() -> Result<String, String> {
-        dispatch(&OP_GENRES_GENRES_READ, Value::Object(Map::new()))
+    fn read() -> Result<String, String> {
+        dispatch(&OP_GENRES_READ, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::rawg::platforms as iface_platforms;
 
-const OP_PLATFORMS_PLATFORMS_LIST: OpSpec = OpSpec {
+const OP_PLATFORMS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/platforms",
     fields: &[
@@ -792,7 +792,7 @@ const OP_PLATFORMS_PLATFORMS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLATFORMS_PLATFORMS_LISTS_PARENTS_LIST: OpSpec = OpSpec {
+const OP_PLATFORMS_LISTS_PARENTS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/platforms/lists/parents",
     fields: &[
@@ -804,7 +804,7 @@ const OP_PLATFORMS_PLATFORMS_LISTS_PARENTS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_PLATFORMS_PLATFORMS_READ: OpSpec = OpSpec {
+const OP_PLATFORMS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/platforms/{id}",
     fields: &[
@@ -813,7 +813,7 @@ const OP_PLATFORMS_PLATFORMS_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_platforms__platforms_list_params__to_json(p: &iface_platforms::PlatformsListParams) -> Value {
+fn iface_platforms__list_op_params__to_json(p: &iface_platforms::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -821,7 +821,7 @@ fn iface_platforms__platforms_list_params__to_json(p: &iface_platforms::Platform
     Value::Object(m)
 }
 
-fn iface_platforms__platforms_lists_parents_list_params__to_json(p: &iface_platforms::PlatformsListsParentsListParams) -> Value {
+fn iface_platforms__lists_parents_list_params__to_json(p: &iface_platforms::ListsParentsListParams) -> Value {
     let mut m = Map::new();
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -830,21 +830,21 @@ fn iface_platforms__platforms_lists_parents_list_params__to_json(p: &iface_platf
 }
 
 impl iface_platforms::Guest for crate::Component {
-    fn platforms_list(params: iface_platforms::PlatformsListParams) -> Result<String, String> {
-        let json = iface_platforms__platforms_list_params__to_json(&params);
-        dispatch(&OP_PLATFORMS_PLATFORMS_LIST, json)
+    fn list_op(params: iface_platforms::ListOpParams) -> Result<String, String> {
+        let json = iface_platforms__list_op_params__to_json(&params);
+        dispatch(&OP_PLATFORMS_LIST_OP, json)
     }
-    fn platforms_lists_parents_list(params: iface_platforms::PlatformsListsParentsListParams) -> Result<String, String> {
-        let json = iface_platforms__platforms_lists_parents_list_params__to_json(&params);
-        dispatch(&OP_PLATFORMS_PLATFORMS_LISTS_PARENTS_LIST, json)
+    fn lists_parents_list(params: iface_platforms::ListsParentsListParams) -> Result<String, String> {
+        let json = iface_platforms__lists_parents_list_params__to_json(&params);
+        dispatch(&OP_PLATFORMS_LISTS_PARENTS_LIST, json)
     }
-    fn platforms_read() -> Result<String, String> {
-        dispatch(&OP_PLATFORMS_PLATFORMS_READ, Value::Object(Map::new()))
+    fn read() -> Result<String, String> {
+        dispatch(&OP_PLATFORMS_READ, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::rawg::publishers as iface_publishers;
 
-const OP_PUBLISHERS_PUBLISHERS_LIST: OpSpec = OpSpec {
+const OP_PUBLISHERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/publishers",
     fields: &[
@@ -855,7 +855,7 @@ const OP_PUBLISHERS_PUBLISHERS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_PUBLISHERS_PUBLISHERS_READ: OpSpec = OpSpec {
+const OP_PUBLISHERS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/publishers/{id}",
     fields: &[
@@ -864,7 +864,7 @@ const OP_PUBLISHERS_PUBLISHERS_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_publishers__publishers_list_params__to_json(p: &iface_publishers::PublishersListParams) -> Value {
+fn iface_publishers__list_op_params__to_json(p: &iface_publishers::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -872,17 +872,17 @@ fn iface_publishers__publishers_list_params__to_json(p: &iface_publishers::Publi
 }
 
 impl iface_publishers::Guest for crate::Component {
-    fn publishers_list(params: iface_publishers::PublishersListParams) -> Result<String, String> {
-        let json = iface_publishers__publishers_list_params__to_json(&params);
-        dispatch(&OP_PUBLISHERS_PUBLISHERS_LIST, json)
+    fn list_op(params: iface_publishers::ListOpParams) -> Result<String, String> {
+        let json = iface_publishers__list_op_params__to_json(&params);
+        dispatch(&OP_PUBLISHERS_LIST_OP, json)
     }
-    fn publishers_read() -> Result<String, String> {
-        dispatch(&OP_PUBLISHERS_PUBLISHERS_READ, Value::Object(Map::new()))
+    fn read() -> Result<String, String> {
+        dispatch(&OP_PUBLISHERS_READ, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::rawg::stores as iface_stores;
 
-const OP_STORES_STORES_LIST: OpSpec = OpSpec {
+const OP_STORES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stores",
     fields: &[
@@ -894,7 +894,7 @@ const OP_STORES_STORES_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_STORES_STORES_READ: OpSpec = OpSpec {
+const OP_STORES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stores/{id}",
     fields: &[
@@ -903,7 +903,7 @@ const OP_STORES_STORES_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_stores__stores_list_params__to_json(p: &iface_stores::StoresListParams) -> Value {
+fn iface_stores__list_op_params__to_json(p: &iface_stores::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -912,17 +912,17 @@ fn iface_stores__stores_list_params__to_json(p: &iface_stores::StoresListParams)
 }
 
 impl iface_stores::Guest for crate::Component {
-    fn stores_list(params: iface_stores::StoresListParams) -> Result<String, String> {
-        let json = iface_stores__stores_list_params__to_json(&params);
-        dispatch(&OP_STORES_STORES_LIST, json)
+    fn list_op(params: iface_stores::ListOpParams) -> Result<String, String> {
+        let json = iface_stores__list_op_params__to_json(&params);
+        dispatch(&OP_STORES_LIST_OP, json)
     }
-    fn stores_read() -> Result<String, String> {
-        dispatch(&OP_STORES_STORES_READ, Value::Object(Map::new()))
+    fn read() -> Result<String, String> {
+        dispatch(&OP_STORES_READ, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::rawg::tags as iface_tags;
 
-const OP_TAGS_TAGS_LIST: OpSpec = OpSpec {
+const OP_TAGS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags",
     fields: &[
@@ -933,7 +933,7 @@ const OP_TAGS_TAGS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_TAGS_TAGS_READ: OpSpec = OpSpec {
+const OP_TAGS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{id}",
     fields: &[
@@ -942,7 +942,7 @@ const OP_TAGS_TAGS_READ: OpSpec = OpSpec {
     ],
 };
 
-fn iface_tags__tags_list_params__to_json(p: &iface_tags::TagsListParams) -> Value {
+fn iface_tags__list_op_params__to_json(p: &iface_tags::ListOpParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -950,12 +950,12 @@ fn iface_tags__tags_list_params__to_json(p: &iface_tags::TagsListParams) -> Valu
 }
 
 impl iface_tags::Guest for crate::Component {
-    fn tags_list(params: iface_tags::TagsListParams) -> Result<String, String> {
-        let json = iface_tags__tags_list_params__to_json(&params);
-        dispatch(&OP_TAGS_TAGS_LIST, json)
+    fn list_op(params: iface_tags::ListOpParams) -> Result<String, String> {
+        let json = iface_tags__list_op_params__to_json(&params);
+        dispatch(&OP_TAGS_LIST_OP, json)
     }
-    fn tags_read() -> Result<String, String> {
-        dispatch(&OP_TAGS_TAGS_READ, Value::Object(Map::new()))
+    fn read() -> Result<String, String> {
+        dispatch(&OP_TAGS_READ, Value::Object(Map::new()))
     }
 }
 

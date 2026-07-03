@@ -11,8 +11,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:googleapis@0.2.1` |
-| Published version | `0.2.1+googleapis-v1` |
+| Package | `autostamp:googleapis@0.3.0` |
+| Published version | `0.3.0+googleapis-v1` |
 | Tag filter | all tags |
 | Operations generated | 2 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

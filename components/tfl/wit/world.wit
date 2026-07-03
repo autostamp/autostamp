@@ -1,48 +1,48 @@
-package autostamp:tfl@0.2.1;
+package autostamp:tfl@0.3.0;
 
 interface accident-stats {
   /// Gets all accident details for accidents occuring in the specified year
-  record accident-stats-get-params {
+  record get-params {
     /// The year for which to filter the accidents on.
     year: string
   }
-  accident-stats-get: func(params: accident-stats-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 
 
 interface air-quality {
   /// Gets air quality data feed
-  air-quality-get: func() -> result<string, string>;
+  get: func() -> result<string, string>;
 
 }
 
 interface bike-point {
   /// Gets all bike point locations. The Place object has an addtionalProperties array which contains the nbBikes, nbDocks and nbSpaces
   ///             numbers which give the status of the BikePoint. A mismatch in these numbers i.e. nbDocks - (nbBikes + nbSpaces) != 0 indicates broken docks.
-  bike-point-get-all: func() -> result<string, string>;
+  get-all: func() -> result<string, string>;
 
   /// Search for bike stations by their name, a bike point's name often contains information about the name of the street
   ///             or nearby landmarks, for example. Note that the search result does not contain the PlaceProperties i.e. the status
   ///             or occupancy of the BikePoint, to get that information you should retrieve the BikePoint by its id on /BikePoint/id.
-  record bike-point-search-params {
+  record search-params {
     /// The search term e.g. "St. James"
     query: string
   }
-  bike-point-search: func(params: bike-point-search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<string, string>;
 
   /// Gets the bike point with the given id.
-  record bike-point-get-params {
+  record get-params {
     /// A bike point id (a list of ids can be obtained from the above BikePoint call)
     id: string
   }
-  bike-point-get: func(params: bike-point-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 
 interface cabwise {
   /// Gets taxis and minicabs contact information
-  record cabwise-get-params {
+  record get-params {
     /// Latitude
     lat: f64,
     /// Longitude
@@ -64,23 +64,23 @@ interface cabwise {
     /// Twenty Four Seven Only
     twenty-four-seven-only: option<bool>
   }
-  cabwise-get: func(params: cabwise-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 
 interface journey {
-  enum journey-journey-results-time-is-enum {
+  enum journey-results-time-is-enum {
     arriving,
     departing,
   }
 
-  enum journey-journey-results-journey-preference-enum {
+  enum journey-results-journey-preference-enum {
     least-interchange,
     least-time,
     least-walking,
   }
 
-  enum journey-journey-results-accessibility-preference-item-enum {
+  enum journey-results-accessibility-preference-item-enum {
     no-requirements,
     no-solid-stairs,
     no-escalators,
@@ -89,13 +89,13 @@ interface journey {
     step-free-to-platform,
   }
 
-  enum journey-journey-results-walking-speed-enum {
+  enum journey-results-walking-speed-enum {
     slow,
     average,
     fast,
   }
 
-  enum journey-journey-results-cycle-preference-enum {
+  enum journey-results-cycle-preference-enum {
     none,
     leave-at-station,
     take-on-transport,
@@ -103,14 +103,14 @@ interface journey {
     cycle-hire,
   }
 
-  enum journey-journey-results-bike-proficiency-item-enum {
+  enum journey-results-bike-proficiency-item-enum {
     easy,
     moderate,
     fast,
   }
 
   /// Perform a Journey Planner search from the parameters specified in simple types
-  record journey-journey-results-params {
+  record journey-results-params {
     /// Origin of the journey. Can be WGS84 coordinates expressed as "lat,long", a UK postcode, a Naptan (StopPoint) id, an ICS StopId, or a free-text string (will cause disambiguation unless it exactly matches a point of interest name).
     from-op: string,
     /// Destination of the journey. Can be WGS84 coordinates expressed as "lat,long", a UK postcode, a Naptan (StopPoint) id, an ICS StopId, or a free-text string (will cause disambiguation unless it exactly matches a point of interest name).
@@ -124,13 +124,13 @@ interface journey {
     /// The time must be in HHmm format
     time: option<string>,
     /// Does the time given relate to arrival or leaving time? Possible options: "departing" | "arriving"
-    time-is: option<journey-journey-results-time-is-enum>,
+    time-is: option<journey-results-time-is-enum>,
     /// The journey preference eg possible options: "leastinterchange" | "leasttime" | "leastwalking"
-    journey-preference: option<journey-journey-results-journey-preference-enum>,
+    journey-preference: option<journey-results-journey-preference-enum>,
     /// The mode must be a comma separated list of modes. eg possible options: "public-bus,overground,train,tube,coach,dlr,cablecar,tram,river,walking,cycle"
     mode: option<list<string>>,
     /// The accessibility preference must be a comma separated list eg. "noSolidStairs,noEscalators,noElevators,stepFreeToVehicle,stepFreeToPlatform"
-    accessibility-preference: option<list<journey-journey-results-accessibility-preference-item-enum>>,
+    accessibility-preference: option<list<journey-results-accessibility-preference-item-enum>>,
     /// An optional name to associate with the origin of the journey in the results.
     from-name: option<string>,
     /// An optional name to associate with the destination of the journey in the results.
@@ -142,13 +142,13 @@ interface journey {
     /// The max walking time in minutes for journeys eg. "120"
     max-walking-minutes: option<string>,
     /// The walking speed. eg possible options: "slow" | "average" | "fast".
-    walking-speed: option<journey-journey-results-walking-speed-enum>,
+    walking-speed: option<journey-results-walking-speed-enum>,
     /// The cycle preference. eg possible options: "allTheWay" | "leaveAtStation" | "takeOnTransport" | "cycleHire"
-    cycle-preference: option<journey-journey-results-cycle-preference-enum>,
+    cycle-preference: option<journey-results-cycle-preference-enum>,
     /// Time adjustment command. eg possible options: "TripFirst" | "TripLast"
     adjustment: option<string>,
     /// A comma separated list of cycling proficiency levels. eg possible options: "easy,moderate,fast"
-    bike-proficiency: option<list<journey-journey-results-bike-proficiency-item-enum>>,
+    bike-proficiency: option<list<journey-results-bike-proficiency-item-enum>>,
     /// Option to determine whether to return alternative cycling journey
     alternative-cycle: option<bool>,
     /// Option to determine whether to return alternative walking journey
@@ -168,62 +168,62 @@ interface journey {
     /// A boolean to make Journey Planner calculate journeys in one temporal direction only. In other words, only calculate journeys after the 'depart' time, or before the 'arrive' time. By default, the Journey Planner engine (EFA) calculates journeys in both temporal directions.
     calc-one-direction: option<bool>
   }
-  journey-journey-results: func(params: journey-journey-results-params) -> result<string, string>;
+  journey-results: func(params: journey-results-params) -> result<string, string>;
 
   /// Gets a list of all of the available journey planner modes
-  journey-meta: func() -> result<string, string>;
+  meta: func() -> result<string, string>;
 
 }
 
 interface line {
-  enum line-route-by-mode-service-types-item-enum {
+  enum route-by-mode-service-types-item-enum {
     regular,
     night,
   }
 
-  enum line-arrivals-direction-enum {
+  enum arrivals-direction-enum {
     inbound,
     outbound,
     all,
   }
 
   /// Gets a list of valid disruption categories
-  line-meta-disruption-categories: func() -> result<string, string>;
+  meta-disruption-categories: func() -> result<string, string>;
 
   /// Gets a list of valid modes
-  line-meta-modes: func() -> result<string, string>;
+  meta-modes: func() -> result<string, string>;
 
   /// Gets a list of valid ServiceTypes to filter on
-  line-meta-service-types: func() -> result<string, string>;
+  meta-service-types: func() -> result<string, string>;
 
   /// Gets a list of valid severity codes
-  line-meta-severity: func() -> result<string, string>;
+  meta-severity: func() -> result<string, string>;
 
   /// Gets lines that serve the given modes.
-  record line-get-by-mode-params {
+  record get-by-mode-params {
     /// A comma-separated list of modes e.g. tube,dlr
     modes: string
   }
-  line-get-by-mode: func(params: line-get-by-mode-params) -> result<string, string>;
+  get-by-mode: func(params: get-by-mode-params) -> result<string, string>;
 
   /// Get disruptions for all lines of the given modes.
-  record line-disruption-by-mode-params {
+  record disruption-by-mode-params {
     /// A comma-separated list of modes e.g. tube,dlr
     modes: string
   }
-  line-disruption-by-mode: func(params: line-disruption-by-mode-params) -> result<string, string>;
+  disruption-by-mode: func(params: disruption-by-mode-params) -> result<string, string>;
 
   /// Gets all lines and their valid routes for given modes, including the name and id of the originating and terminating stops for each route
-  record line-route-by-mode-params {
+  record route-by-mode-params {
     /// A comma-separated list of modes e.g. tube,dlr
     modes: string,
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
-    service-types: option<list<line-route-by-mode-service-types-item-enum>>
+    service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  line-route-by-mode: func(params: line-route-by-mode-params) -> result<string, string>;
+  route-by-mode: func(params: route-by-mode-params) -> result<string, string>;
 
   /// Gets the line status of for all lines for the given modes
-  record line-status-by-mode-params {
+  record status-by-mode-params {
     /// A comma-separated list of modes to filter by. e.g. tube,dlr
     modes: string,
     /// Include details of the disruptions that are causing the line status including the affected stops and routes
@@ -231,81 +231,81 @@ interface line {
     /// If specified, ensures that only those line status(es) are returned within the lines that have disruptions with the matching severity level.
     severity-level: option<string>
   }
-  line-status-by-mode: func(params: line-status-by-mode-params) -> result<string, string>;
+  status-by-mode: func(params: status-by-mode-params) -> result<string, string>;
 
   /// Get all valid routes for all lines, including the name and id of the originating and terminating stops for each route.
-  record line-route-params {
+  record route-params {
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
-    service-types: option<list<line-route-by-mode-service-types-item-enum>>
+    service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  line-route: func(params: line-route-params) -> result<string, string>;
+  route: func(params: route-params) -> result<string, string>;
 
   /// Search for lines or routes matching the query string
-  record line-search-params {
+  record search-params {
     /// Search term e.g victoria
     query: string,
     /// Optionally filter by the specified modes
     modes: option<list<string>>,
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
-    service-types: option<list<line-route-by-mode-service-types-item-enum>>
+    service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  line-search: func(params: line-search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<string, string>;
 
   /// Gets the line status for all lines with a given severity
   ///             A list of valid severity codes can be obtained from a call to Line/Meta/Severity
-  record line-status-by-severity-params {
+  record status-by-severity-params {
     /// The level of severity (eg: a number from 0 to 14)
     severity: string
   }
-  line-status-by-severity: func(params: line-status-by-severity-params) -> result<string, string>;
+  status-by-severity: func(params: status-by-severity-params) -> result<string, string>;
 
   /// Gets lines that match the specified line ids.
-  record line-get-params {
+  record get-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string
   }
-  line-get: func(params: line-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Get the list of arrival predictions for given line ids based at the given stop
-  record line-arrivals-params {
+  record arrivals-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string,
     /// Optional. Id of stop to get arrival predictions for (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     stop-point-id: string,
     /// Optional. The direction of travel. Can be inbound or outbound or all. If left blank, and destinationStopId is set, will default to all
-    direction: option<line-arrivals-direction-enum>,
+    direction: option<arrivals-direction-enum>,
     /// Optional. Id of destination stop
     destination-station-id: option<string>
   }
-  line-arrivals: func(params: line-arrivals-params) -> result<string, string>;
+  arrivals: func(params: arrivals-params) -> result<string, string>;
 
   /// Get disruptions for the given line ids
-  record line-disruption-params {
+  record disruption-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string
   }
-  line-disruption: func(params: line-disruption-params) -> result<string, string>;
+  disruption: func(params: disruption-params) -> result<string, string>;
 
   /// Get all valid routes for given line ids, including the name and id of the originating and terminating stops for each route.
-  record line-line-routes-by-ids-params {
+  record line-routes-by-ids-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string,
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
-    service-types: option<list<line-route-by-mode-service-types-item-enum>>
+    service-types: option<list<route-by-mode-service-types-item-enum>>
   }
-  line-line-routes-by-ids: func(params: line-line-routes-by-ids-params) -> result<string, string>;
+  line-routes-by-ids: func(params: line-routes-by-ids-params) -> result<string, string>;
 
   /// Gets the line status of for given line ids e.g Minor Delays
-  record line-status-by-ids-params {
+  record status-by-ids-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string,
     /// Include details of the disruptions that are causing the line status including the affected stops and routes
     detail: option<bool>
   }
-  line-status-by-ids: func(params: line-status-by-ids-params) -> result<string, string>;
+  status-by-ids: func(params: status-by-ids-params) -> result<string, string>;
 
   /// Gets the line status for given line ids during the provided dates e.g Minor Delays
-  record line-status-params {
+  record status-params {
     /// A comma-separated list of line ids e.g. victoria,circle,N133. Max. approx. 20 ids.
     ids: string,
     /// Include details of the disruptions that are causing the line status including the affected stops and routes
@@ -315,41 +315,41 @@ interface line {
     date-range-start-date: option<string>,
     date-range-end-date: option<string>
   }
-  line-status: func(params: line-status-params) -> result<string, string>;
+  status: func(params: status-params) -> result<string, string>;
 
   /// Gets all valid routes for given line id, including the sequence of stops on each route.
-  record line-route-sequence-params {
+  record route-sequence-params {
     /// A single line id e.g. victoria
     id: string,
     /// The direction of travel. Can be inbound or outbound.
     direction: string,
     /// A comma seperated list of service types to filter on. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
-    service-types: option<list<line-route-by-mode-service-types-item-enum>>,
+    service-types: option<list<route-by-mode-service-types-item-enum>>,
     /// That excludes crowding from line disruptions. Can be true or false.
     exclude-crowding: option<bool>
   }
-  line-route-sequence: func(params: line-route-sequence-params) -> result<string, string>;
+  route-sequence: func(params: route-sequence-params) -> result<string, string>;
 
   /// Gets a list of the stations that serve the given line id
-  record line-stop-points-params {
+  record stop-points-params {
     /// A single line id e.g. victoria
     id: string,
     /// If the national-rail line is requested, this flag will filter the national rail stations so that only those operated by TfL are returned
     tfl-operated-national-rail-stations-only: option<bool>
   }
-  line-stop-points: func(params: line-stop-points-params) -> result<string, string>;
+  stop-points: func(params: stop-points-params) -> result<string, string>;
 
   /// Gets the timetable for a specified station on the give line
-  record line-timetable-params {
+  record timetable-params {
     /// The originating station's stop point id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     from-stop-point-id: string,
     /// A single line id e.g. victoria
     id: string
   }
-  line-timetable: func(params: line-timetable-params) -> result<string, string>;
+  timetable: func(params: timetable-params) -> result<string, string>;
 
   /// Gets the timetable for a specified station on the give line with specified destination
-  record line-timetable-to-params {
+  record timetable-to-params {
     /// The originating station's stop point id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     from-stop-point-id: string,
     /// A single line id e.g. victoria
@@ -357,50 +357,50 @@ interface line {
     /// The destination stations's Naptan code
     to-stop-point-id: string
   }
-  line-timetable-to: func(params: line-timetable-to-params) -> result<string, string>;
+  timetable-to: func(params: timetable-to-params) -> result<string, string>;
 
 }
 
 interface mode {
   /// Returns the service type active for a mode.
   ///             Currently only supports tube
-  mode-get-active-service-types: func() -> result<string, string>;
+  get-active-service-types: func() -> result<string, string>;
 
   /// Gets the next arrival predictions for all stops of a given mode
-  record mode-arrivals-params {
+  record arrivals-params {
     /// A mode name e.g. tube, dlr
     mode: string,
     /// A number of arrivals to return for each stop, -1 to return all available.
     count: option<s32>
   }
-  mode-arrivals: func(params: mode-arrivals-params) -> result<string, string>;
+  arrivals: func(params: arrivals-params) -> result<string, string>;
 
 }
 
 interface occupancy {
   /// Get the occupancy for bike points.
-  record occupancy-get-bike-points-occupancies-params {
+  record get-bike-points-occupancies-params {
     ids: string
   }
-  occupancy-get-bike-points-occupancies: func(params: occupancy-get-bike-points-occupancies-params) -> result<string, string>;
+  get-bike-points-occupancies: func(params: get-bike-points-occupancies-params) -> result<string, string>;
 
   /// Gets the occupancy for all car parks that have occupancy data
   get-occupancy-car-park: func() -> result<string, string>;
 
   /// Gets the occupancy for a car park with a given id
-  record occupancy-get-params {
+  record get-params {
     id: string
   }
-  occupancy-get: func(params: occupancy-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Gets the occupancy for all charge connectors
-  occupancy-get-all-charge-connector-status: func() -> result<string, string>;
+  get-all-charge-connector-status: func() -> result<string, string>;
 
   /// Gets the occupancy for a charge connectors with a given id (sourceSystemPlaceId)
-  record occupancy-get-charge-connector-status-params {
+  record get-charge-connector-status-params {
     ids: string
   }
-  occupancy-get-charge-connector-status: func(params: occupancy-get-charge-connector-status-params) -> result<string, string>;
+  get-charge-connector-status: func(params: get-charge-connector-status-params) -> result<string, string>;
 
 }
 
@@ -409,7 +409,7 @@ interface place {
   ///             by using a lat/lon geo-point and a radius in metres to return places within the locus defined by the lat/lon of
   ///             its centre or alternatively, by the use of a bounding box defined by the lat/lon of its north-west and south-east corners.
   ///             Optionally filters on type and can strip properties for a smaller payload.
-  record place-get-by-geo-params {
+  record get-by-geo-params {
     /// The radius of the bounding circle in metres when only lat/lon are specified.
     radius: option<f64>,
     /// An optional list of comma separated property categories to return in the Place's property bag. If null or empty, all categories of property are returned. Pass the keyword "none" to return no properties (a valid list of categories can be obtained from the /Place/Meta/categories endpoint)
@@ -429,52 +429,52 @@ interface place {
     place-geo-lat: option<f64>,
     place-geo-lon: option<f64>
   }
-  place-get-by-geo: func(params: place-get-by-geo-params) -> result<string, string>;
+  get-by-geo: func(params: get-by-geo-params) -> result<string, string>;
 
   /// Gets the set of streets associated with a post code.
-  record place-get-streets-by-post-code-params {
+  record get-streets-by-post-code-params {
     postcode: string,
     postcode-input-postcode: option<string>
   }
-  place-get-streets-by-post-code: func(params: place-get-streets-by-post-code-params) -> result<string, string>;
+  get-streets-by-post-code: func(params: get-streets-by-post-code-params) -> result<string, string>;
 
   /// Gets a list of all of the available place property categories and keys.
-  place-meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<string, string>;
 
   /// Gets a list of the available types of Place.
-  place-meta-place-types: func() -> result<string, string>;
+  meta-place-types: func() -> result<string, string>;
 
   /// Gets all places that matches the given query
-  record place-search-params {
+  record search-params {
     /// The name of the place, you can use the /Place/Types/{types} endpoint to get a list of places for a given type including their names.
     name: string,
     /// A comma-separated list of the types to return. Max. approx 12 types.
     types: option<list<string>>
   }
-  place-search: func(params: place-search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<string, string>;
 
   /// Gets all places of a given type
-  record place-get-by-type-params {
+  record get-by-type-params {
     /// A comma-separated list of the types to return. Max. approx 12 types.
     ///             A valid list of place types can be obtained from the /Place/Meta/placeTypes endpoint.
     types: string,
     /// An optional parameter to limit the results to active records only (Currently only the 'VariableMessageSign' place type is supported)
     active-only: option<bool>
   }
-  place-get-by-type: func(params: place-get-by-type-params) -> result<string, string>;
+  get-by-type: func(params: get-by-type-params) -> result<string, string>;
 
   /// Gets the place with the given id.
-  record place-get-params {
+  record get-params {
     /// The id of the place, you can use the /Place/Types/{types} endpoint to get a list of places for a given type including their ids
     id: string,
     /// Defaults to false. If true child places e.g. individual charging stations at a charge point while be included, otherwise just the URLs of any child places will be returned
     include-children: option<bool>
   }
-  place-get: func(params: place-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Gets any places of the given type whose geography intersects the given latitude and longitude. In practice this means the Place
   ///             must be polygonal e.g. a BoroughBoundary.
-  record place-get-at-params {
+  record get-at-params {
     /// The place type (a valid list of place types can be obtained from the /Place/Meta/placeTypes endpoint)
     type-op: string,
     lat: string,
@@ -482,10 +482,10 @@ interface place {
     location-lat: f64,
     location-lon: f64
   }
-  place-get-at: func(params: place-get-at-params) -> result<string, string>;
+  get-at: func(params: get-at-params) -> result<string, string>;
 
   /// Gets the place overlay for a given set of co-ordinates and a given width/height.
-  record place-get-overlay-params {
+  record get-overlay-params {
     /// The zoom level
     z: string,
     /// The place type (a valid list of place types can be obtained from the /Place/Meta/placeTypes endpoint)
@@ -499,37 +499,37 @@ interface place {
     location-lat: f64,
     location-lon: f64
   }
-  place-get-overlay: func(params: place-get-overlay-params) -> result<string, string>;
+  get-overlay: func(params: get-overlay-params) -> result<string, string>;
 
 }
 
 interface road {
   /// Gets all roads managed by TfL
-  road-get: func() -> result<string, string>;
+  get: func() -> result<string, string>;
 
   /// Gets a list of valid RoadDisruption categories
-  road-meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<string, string>;
 
   /// Gets a list of valid RoadDisruption severity codes
-  road-meta-severities: func() -> result<string, string>;
+  meta-severities: func() -> result<string, string>;
 
   /// Gets a list of active disruptions filtered by disruption Ids.
-  record road-disruption-by-id-params {
+  record disruption-by-id-params {
     /// Comma-separated list of disruption identifiers to filter by.
     disruption-ids: string,
     /// Optional, defaults to false. When true, removes every property/node except for id, point, severity, severityDescription, startDate, endDate, corridor details, location and comments.
     strip-content: option<bool>
   }
-  road-disruption-by-id: func(params: road-disruption-by-id-params) -> result<string, string>;
+  disruption-by-id: func(params: disruption-by-id-params) -> result<string, string>;
 
   /// Gets a list of disrupted streets. If no date filters are provided, current disruptions are returned.
-  record road-disrupted-streets-params {
+  record disrupted-streets-params {
     /// Optional, the start time to filter on.
     start-date: string,
     /// Optional, The end time to filter on.
     end-date: string
   }
-  road-disrupted-streets: func(params: road-disrupted-streets-params) -> result<string, string>;
+  disrupted-streets: func(params: disrupted-streets-params) -> result<string, string>;
 
   /// Gets the road with the specified id (e.g. A1)
   record get-road-ids-params {
@@ -539,7 +539,7 @@ interface road {
   get-road-ids: func(params: get-road-ids-params) -> result<string, string>;
 
   /// Get active disruptions, filtered by road ids
-  record road-disruption-params {
+  record disruption-params {
     /// Comma-separated list of road identifiers e.g. "A406, A2" use all for all to ignore id filter (a full list of supported road identifiers can be found at the /Road/ endpoint)
     ids: string,
     /// Optional, defaults to false. When true, removes every property/node except for id, point, severity, severityDescription, startDate, endDate, corridor details, location, comments and streets
@@ -551,60 +551,60 @@ interface road {
     /// Optional, defaults to true. When true, always includes disruptions that have road closures, regardless of the severity filter. When false, the severity filter works as normal.
     closures: option<bool>
   }
-  road-disruption: func(params: road-disruption-params) -> result<string, string>;
+  disruption: func(params: disruption-params) -> result<string, string>;
 
   /// Gets the specified roads with the status aggregated over the date range specified, or now until the end of today if no dates are passed.
-  record road-status-params {
+  record status-params {
     /// Comma-separated list of road identifiers e.g. "A406, A2" or use "all" to ignore id filter (a full list of supported road identifiers can be found at the /Road/ endpoint)
     ids: string,
     date-range-nullable-start-date: option<string>,
     date-range-nullable-end-date: option<string>
   }
-  road-status: func(params: road-status-params) -> result<string, string>;
+  status: func(params: status-params) -> result<string, string>;
 
 }
 
 interface search {
   /// Search the site for occurrences of the query string. The maximum number of results returned is equal to the maximum page size
   ///             of 100. To return subsequent pages, use the paginated overload.
-  record search-get-params {
+  record get-params {
     /// The search query
     query: string
   }
-  search-get: func(params: search-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Searches the bus schedules folder on S3 for a given bus number.
-  record search-bus-schedules-params {
+  record bus-schedules-params {
     /// The search query
     query: string
   }
-  search-bus-schedules: func(params: search-bus-schedules-params) -> result<string, string>;
+  bus-schedules: func(params: bus-schedules-params) -> result<string, string>;
 
   /// Gets the available search categories.
-  search-meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<string, string>;
 
   /// Gets the available searchProvider names.
-  search-meta-search-providers: func() -> result<string, string>;
+  meta-search-providers: func() -> result<string, string>;
 
   /// Gets the available sorting options.
-  search-meta-sorts: func() -> result<string, string>;
+  meta-sorts: func() -> result<string, string>;
 
 }
 
 interface stop-point {
-  enum stop-point-reachable-from-service-types-item-enum {
+  enum reachable-from-service-types-item-enum {
     regular,
     night,
   }
 
-  enum stop-point-crowding-direction-enum {
+  enum crowding-direction-enum {
     inbound,
     outbound,
     all,
   }
 
   /// Gets a list of StopPoints within {radius} by the specified criteria
-  record stop-point-get-by-geo-point-params {
+  record get-by-geo-point-params {
     /// a list of stopTypes that should be returned (a list of valid stop types can be obtained from the StopPoint/meta/stoptypes endpoint)
     stop-types: list<string>,
     /// the radius of the bounding circle in metres (default : 200)
@@ -620,33 +620,33 @@ interface stop-point {
     location-lat: f64,
     location-lon: f64
   }
-  stop-point-get-by-geo-point: func(params: stop-point-get-by-geo-point-params) -> result<string, string>;
+  get-by-geo-point: func(params: get-by-geo-point-params) -> result<string, string>;
 
   /// Gets the list of available StopPoint additional information categories
-  stop-point-meta-categories: func() -> result<string, string>;
+  meta-categories: func() -> result<string, string>;
 
   /// Gets the list of available StopPoint modes
-  stop-point-meta-modes: func() -> result<string, string>;
+  meta-modes: func() -> result<string, string>;
 
   /// Gets the list of available StopPoint types
-  stop-point-meta-stop-types: func() -> result<string, string>;
+  meta-stop-types: func() -> result<string, string>;
 
   /// Gets a list of StopPoints filtered by the modes available at that StopPoint.
-  record stop-point-get-by-mode-params {
+  record get-by-mode-params {
     /// A comma-seperated list of modes e.g. tube,dlr
     modes: string,
     /// The data set page to return. Page 1 equates to the first 1000 stop points, page 2 equates to 1001-2000 etc. Must be entered for bus mode as data set is too large.
     page: option<s32>
   }
-  stop-point-get-by-mode: func(params: stop-point-get-by-mode-params) -> result<string, string>;
+  get-by-mode: func(params: get-by-mode-params) -> result<string, string>;
 
   /// Gets a distinct list of disrupted stop points for the given modes
-  record stop-point-disruption-by-mode-params {
+  record disruption-by-mode-params {
     /// A comma-seperated list of modes e.g. tube,dlr
     modes: string,
     include-route-blocked-stops: option<bool>
   }
-  stop-point-disruption-by-mode: func(params: stop-point-disruption-by-mode-params) -> result<string, string>;
+  disruption-by-mode: func(params: disruption-by-mode-params) -> result<string, string>;
 
   /// Search StopPoints by their common name, or their 5-digit Countdown Bus Stop Code.
   record get-stop-point-search-params {
@@ -669,7 +669,7 @@ interface stop-point {
   get-stop-point-search: func(params: get-stop-point-search-params) -> result<string, string>;
 
   /// Search StopPoints by their common name, or their 5-digit Countdown Bus Stop Code.
-  record stop-point-search-params {
+  record search-params {
     /// The query string, case-insensitive. Leading and trailing wildcards are applied automatically.
     query: string,
     /// An optional, parameter separated list of the modes to filter by
@@ -686,10 +686,10 @@ interface stop-point {
     /// If the national-rail mode is included, this flag will filter the national rail stations so that only those operated by TfL are returned
     tfl-operated-national-rail-stations-only: option<bool>
   }
-  stop-point-search: func(params: stop-point-search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<string, string>;
 
   /// Gets the service types for a given stoppoint
-  record stop-point-get-service-types-params {
+  record get-service-types-params {
     /// The Naptan id of the stop
     id: string,
     /// The lines which contain the given Naptan id (all lines relevant to the given stoppoint if empty)
@@ -697,44 +697,44 @@ interface stop-point {
     /// The modes which the lines are relevant to (all if empty)
     modes: option<list<string>>
   }
-  stop-point-get-service-types: func(params: stop-point-get-service-types-params) -> result<string, string>;
+  get-service-types: func(params: get-service-types-params) -> result<string, string>;
 
   /// Gets a StopPoint for a given sms code.
-  record stop-point-get-by-sms-params {
+  record get-by-sms-params {
     /// A 5-digit Countdown Bus Stop Code e.g. 73241, 50435, 56334.
     id: string,
     /// If set to "web", a 302 redirect to relevant website bus stop page is returned. Valid values are : web. All other values are ignored.
     output: option<string>
   }
-  stop-point-get-by-sms: func(params: stop-point-get-by-sms-params) -> result<string, string>;
+  get-by-sms: func(params: get-by-sms-params) -> result<string, string>;
 
   /// Gets all stop points of a given type
-  record stop-point-get-by-type-params {
+  record get-by-type-params {
     /// A comma-separated list of the types to return. Max. approx. 12 types. 
     ///             A list of valid stop types can be obtained from the StopPoint/meta/stoptypes endpoint.
     types: string
   }
-  stop-point-get-by-type: func(params: stop-point-get-by-type-params) -> result<string, string>;
+  get-by-type: func(params: get-by-type-params) -> result<string, string>;
 
   /// Gets all the stop points of given type(s) with a page number
-  record stop-point-get-by-type-with-pagination-params {
+  record get-by-type-with-pagination-params {
     types: string,
     page: string
   }
-  stop-point-get-by-type-with-pagination: func(params: stop-point-get-by-type-with-pagination-params) -> result<string, string>;
+  get-by-type-with-pagination: func(params: get-by-type-with-pagination-params) -> result<string, string>;
 
   /// Gets a list of StopPoints corresponding to the given list of stop ids.
-  record stop-point-get-params {
+  record get-params {
     /// A comma-separated list of stop point ids (station naptan code e.g. 940GZZLUASL). Max. approx. 20 ids.
     ///             You can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name.
     ids: string,
     /// Include the crowding data (static). To Filter further use: /StopPoint/{ids}/Crowding/{line}
     include-crowding-data: option<bool>
   }
-  stop-point-get: func(params: stop-point-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
   /// Gets all disruptions for the specified StopPointId, plus disruptions for any child Naptan records it may have.
-  record stop-point-disruption-params {
+  record disruption-params {
     /// A comma-seperated list of stop point ids. Max. approx. 20 ids.
     ///             You can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name.
     ids: string,
@@ -744,48 +744,48 @@ interface stop-point {
     /// Specify true to associate all disruptions with parent stop point. (Only applicable when getFamily is true).
     flatten-response: option<bool>
   }
-  stop-point-disruption: func(params: stop-point-disruption-params) -> result<string, string>;
+  disruption: func(params: disruption-params) -> result<string, string>;
 
   /// Gets the list of arrival and departure predictions for the given stop point id (overground, Elizabeth line and thameslink only)
-  record stop-point-arrival-departures-params {
+  record arrival-departures-params {
     /// A StopPoint id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     id: string,
     /// A comma-separated list of line ids e.g. elizabeth, london-overground, thameslink
     line-ids: list<string>
   }
-  stop-point-arrival-departures: func(params: stop-point-arrival-departures-params) -> result<string, string>;
+  arrival-departures: func(params: arrival-departures-params) -> result<string, string>;
 
   /// Gets the list of arrival predictions for the given stop point id
-  record stop-point-arrivals-params {
+  record arrivals-params {
     /// A StopPoint id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     id: string
   }
-  stop-point-arrivals: func(params: stop-point-arrivals-params) -> result<string, string>;
+  arrivals: func(params: arrivals-params) -> result<string, string>;
 
   /// Gets Stopoints that are reachable from a station/line combination.
-  record stop-point-reachable-from-params {
+  record reachable-from-params {
     /// The id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name) of the stop point to filter by
     id: string,
     /// Line id of the line to filter by (e.g. victoria)
     line-id: string,
     /// A comma-separated list of service types to filter on. If not specified. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
-    service-types: option<list<stop-point-reachable-from-service-types-item-enum>>
+    service-types: option<list<reachable-from-service-types-item-enum>>
   }
-  stop-point-reachable-from: func(params: stop-point-reachable-from-params) -> result<string, string>;
+  reachable-from: func(params: reachable-from-params) -> result<string, string>;
 
   /// Gets all the Crowding data (static) for the StopPointId, plus crowding data for a given line and optionally a particular direction.
-  record stop-point-crowding-params {
+  record crowding-params {
     /// The Naptan id of the stop
     id: string,
     /// A particular line e.g. victoria, circle, northern etc.
     line: string,
     /// The direction of travel. Can be inbound or outbound.
-    direction: stop-point-crowding-direction-enum
+    direction: crowding-direction-enum
   }
-  stop-point-crowding: func(params: stop-point-crowding-params) -> result<string, string>;
+  crowding: func(params: crowding-params) -> result<string, string>;
 
   /// Returns the canonical direction, "inbound" or "outbound", for a given pair of stop point Ids in the direction from -&gt; to.
-  record stop-point-direction-params {
+  record direction-params {
     /// Originating stop id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     id: string,
     /// Destination stop id (station naptan code e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
@@ -793,16 +793,16 @@ interface stop-point {
     /// Optional line id filter e.g. victoria
     line-id: option<string>
   }
-  stop-point-direction: func(params: stop-point-direction-params) -> result<string, string>;
+  direction: func(params: direction-params) -> result<string, string>;
 
   /// Returns the route sections for all the lines that service the given stop point ids
-  record stop-point-route-params {
+  record route-params {
     /// A stop point id (station naptan codes e.g. 940GZZLUASL, you can use /StopPoint/Search/{query} endpoint to find a stop point id from a station name)
     id: string,
     /// A comma-separated list of service types to filter on. If not specified. Supported values: Regular, Night. Defaulted to 'Regular' if not specified
-    service-types: option<list<stop-point-reachable-from-service-types-item-enum>>
+    service-types: option<list<reachable-from-service-types-item-enum>>
   }
-  stop-point-route: func(params: stop-point-route-params) -> result<string, string>;
+  route: func(params: route-params) -> result<string, string>;
 
   /// Get a list of places corresponding to a given id and place types.
   record get-stop-point-id-place-types-params {
@@ -814,30 +814,30 @@ interface stop-point {
   get-stop-point-id-place-types: func(params: get-stop-point-id-place-types-params) -> result<string, string>;
 
   /// Get car parks corresponding to the given stop point id.
-  record stop-point-get-car-parks-by-id-params {
+  record get-car-parks-by-id-params {
     /// stopPointId is required to get the car parks.
     stop-point-id: string
   }
-  stop-point-get-car-parks-by-id: func(params: stop-point-get-car-parks-by-id-params) -> result<string, string>;
+  get-car-parks-by-id: func(params: get-car-parks-by-id-params) -> result<string, string>;
 
   /// Gets a list of taxi ranks corresponding to the given stop point id.
-  record stop-point-get-taxi-ranks-by-ids-params {
+  record get-taxi-ranks-by-ids-params {
     /// stopPointId is required to get the taxi ranks.
     stop-point-id: string
   }
-  stop-point-get-taxi-ranks-by-ids: func(params: stop-point-get-taxi-ranks-by-ids-params) -> result<string, string>;
+  get-taxi-ranks-by-ids: func(params: get-taxi-ranks-by-ids-params) -> result<string, string>;
 
 }
 
 interface travel-time {
-  enum travel-time-get-compare-overlay-direction-enum {
+  enum get-compare-overlay-direction-enum {
     average,
     from-op,
     to,
   }
 
   /// Gets the TravelTime overlay.
-  record travel-time-get-compare-overlay-params {
+  record get-compare-overlay-params {
     /// The zoom level.
     z: string,
     /// The latitude of the pin.
@@ -859,16 +859,16 @@ interface travel-time {
     /// The height of the requested overlay.
     height: string,
     /// The direction of travel.
-    direction: travel-time-get-compare-overlay-direction-enum,
+    direction: get-compare-overlay-direction-enum,
     /// The total minutes between the travel time bands
     travel-time-interval: s32,
     compare-type: string,
     compare-value: string
   }
-  travel-time-get-compare-overlay: func(params: travel-time-get-compare-overlay-params) -> result<string, string>;
+  get-compare-overlay: func(params: get-compare-overlay-params) -> result<string, string>;
 
   /// Gets the TravelTime overlay.
-  record travel-time-get-overlay-params {
+  record get-overlay-params {
     /// The zoom level.
     z: string,
     /// The latitude of the pin.
@@ -890,21 +890,21 @@ interface travel-time {
     /// The height of the requested overlay.
     height: string,
     /// The direction of travel.
-    direction: travel-time-get-compare-overlay-direction-enum,
+    direction: get-compare-overlay-direction-enum,
     /// The total minutes between the travel time bands
     travel-time-interval: s32
   }
-  travel-time-get-overlay: func(params: travel-time-get-overlay-params) -> result<string, string>;
+  get-overlay: func(params: get-overlay-params) -> result<string, string>;
 
 }
 
 interface vehicle {
   /// Gets the predictions for a given list of vehicle Id's.
-  record vehicle-get-params {
+  record get-params {
     /// A comma-separated list of vehicle ids e.g. LX58CFV,LX11AZB,LX58CFE. Max approx. 25 ids.
     ids: string
   }
-  vehicle-get: func(params: vehicle-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

@@ -6,21 +6,45 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apim_key` | header `Ocp-Apim-Subscription-Key` |
-package autostamp:microsoft@0.2.1;
+package autostamp:microsoft@0.3.0;
 
 interface analyze {
-  enum analyze-image-details-item-enum {
+  enum image-visual-features-item-enum {
+    image-type,
+    faces,
+    adult,
+    categories,
+    color,
+    tags,
+    description,
+    objects,
+    brands,
+  }
+
+  enum image-details-item-enum {
     celebrities,
     landmarks,
   }
 
-  record analyze-image-params {
+  enum image-language-enum {
+    en,
+    es,
+    ja,
+    pt,
+    zh,
+  }
+
+  record image-params {
+    /// A string indicating what visual feature types to return. Multiple values should be comma-separated. Valid visual feature types include: Categories - categorizes image content according to a taxonomy defined in documentation. Tags - tags the image with a detailed list of words related to the image content. Description - describes the image content with a complete English sentence. Faces - detects if faces are present. If present, generate coordinates, gender and age. ImageType - detects if image is clipart or a line drawing. Color - determines the accent color, dominant color, and whether an image is black&white. Adult - detects if the image is pornographic in nature (depicts nudity or a sex act).  Sexually suggestive content is also detected. Objects - detects various objects within an image, including the approximate location. The Objects argument is only available in English. Brands - detects various brands within an image, including the approximate location. The Brands argument is only available in English.
+    visual-features: option<list<image-visual-features-item-enum>>,
     /// A string indicating which domain-specific details to return. Multiple values should be comma-separated. Valid visual feature types include: Celebrities - identifies celebrities if detected in the image, Landmarks - identifies notable landmarks in the image.
-    details: option<list<analyze-image-details-item-enum>>,
+    details: option<list<image-details-item-enum>>,
+    /// The desired language for output generation. If this parameter is not specified, the default value is &quot;en&quot;.Supported languages:en - English, Default. es - Spanish, ja - Japanese, pt - Portuguese, zh - Simplified Chinese.
+    language: option<image-language-enum>,
     /// Publicly reachable URL of an image.
     url: string
   }
-  analyze-image: func(params: analyze-image-params) -> result<string, string>;
+  image: func(params: image-params) -> result<string, string>;
 
 }
 
@@ -35,22 +59,32 @@ interface area-of-interest {
 }
 
 interface describe {
-  record describe-image-params {
+  enum image-language-enum {
+    en,
+    es,
+    ja,
+    pt,
+    zh,
+  }
+
+  record image-params {
     /// Maximum number of candidate descriptions to be returned.  The default is 1.
     max-candidates: option<s32>,
+    /// The desired language for output generation. If this parameter is not specified, the default value is &quot;en&quot;.Supported languages:en - English, Default. es - Spanish, ja - Japanese, pt - Portuguese, zh - Simplified Chinese.
+    language: option<image-language-enum>,
     /// Publicly reachable URL of an image.
     url: string
   }
-  describe-image: func(params: describe-image-params) -> result<string, string>;
+  image: func(params: image-params) -> result<string, string>;
 
 }
 
 interface detect {
-  record detect-objects-params {
+  record objects-params {
     /// Publicly reachable URL of an image.
     url: string
   }
-  detect-objects: func(params: detect-objects-params) -> result<string, string>;
+  objects: func(params: objects-params) -> result<string, string>;
 
 }
 
@@ -70,11 +104,21 @@ interface generate-thumbnail {
 }
 
 interface models {
+  enum analyze-image-by-domain-language-enum {
+    en,
+    es,
+    ja,
+    pt,
+    zh,
+  }
+
   list-models: func() -> result<string, string>;
 
   record analyze-image-by-domain-params {
     /// The domain-specific content to recognize.
     model: string,
+    /// The desired language for output generation. If this parameter is not specified, the default value is &quot;en&quot;.Supported languages:en - English, Default. es - Spanish, ja - Japanese, pt - Portuguese, zh - Simplified Chinese.
+    language: option<analyze-image-by-domain-language-enum>,
     /// Publicly reachable URL of an image.
     url: string
   }
@@ -83,7 +127,41 @@ interface models {
 }
 
 interface ocr {
+  enum recognize-printed-text-language-enum {
+    unk,
+    zh-hans,
+    zh-hant,
+    cs,
+    da,
+    nl,
+    en,
+    fi,
+    fr,
+    de,
+    el,
+    hu,
+    it,
+    ja,
+    ko,
+    nb,
+    pl,
+    pt,
+    ru,
+    es,
+    sv,
+    tr,
+    ar,
+    ro,
+    sr-cyrl,
+    sr-latn,
+    sk,
+  }
+
   record recognize-printed-text-params {
+    /// Whether detect the text orientation in the image. With detectOrientation=true the OCR service tries to detect the image orientation and correct it before further processing (e.g. if it's upside-down).
+    detect-orientation: bool,
+    /// The BCP-47 language code of the text to be detected in the image. The default value is 'unk'.
+    language: option<recognize-printed-text-language-enum>,
     /// Publicly reachable URL of an image.
     url: string
   }
@@ -92,11 +170,21 @@ interface ocr {
 }
 
 interface tag {
-  record tag-image-params {
+  enum image-language-enum {
+    en,
+    es,
+    ja,
+    pt,
+    zh,
+  }
+
+  record image-params {
+    /// The desired language for output generation. If this parameter is not specified, the default value is &quot;en&quot;.Supported languages:en - English, Default. es - Spanish, ja - Japanese, pt - Portuguese, zh - Simplified Chinese.
+    language: option<image-language-enum>,
     /// Publicly reachable URL of an image.
     url: string
   }
-  tag-image: func(params: tag-image-params) -> result<string, string>;
+  image: func(params: image-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

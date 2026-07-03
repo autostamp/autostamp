@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:tfl"
-version = "0.2.1+tfl-v1"
+version = "0.3.0+tfl-v1"
 registry = "ghcr.io/autostamp/tfl"
 kind = "component"
 file = "build/tfl.wasm"

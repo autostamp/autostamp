@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:hubapi@0.2.1` |
-| Published version | `0.2.1+hubapi-v3` |
+| Package | `autostamp:hubapi@0.3.0` |
+| Published version | `0.3.0+hubapi-v3` |
 | Tag filter | all tags |
 | Operations generated | 1 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

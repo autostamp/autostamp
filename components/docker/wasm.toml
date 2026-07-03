@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:docker"
-version = "0.2.1+docker-1.0.0"
+version = "0.3.0+docker-1.0.0"
 registry = "ghcr.io/autostamp/docker"
 kind = "component"
 file = "build/docker.wasm"

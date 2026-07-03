@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:box-api"
-version = "0.2.1+box-api-2.0.0"
+version = "0.3.0+box-api-2.0.0"
 registry = "ghcr.io/autostamp/box-api"
 kind = "component"
 file = "build/box-api.wasm"

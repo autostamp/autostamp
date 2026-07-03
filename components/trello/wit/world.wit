@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `key` |
-package autostamp:trello@0.2.1;
+package autostamp:trello@0.3.0;
 
 interface action {
   /// getActionsByIdAction()

@@ -6,11 +6,17 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `personalAccessToken` | `Authorization: Bearer <secret>` |
-package autostamp:asana@0.2.1;
+package autostamp:asana@0.3.0;
 
 interface attachments {
   /// Get attachments from an object
   record get-attachments-for-object-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
     /// Globally unique identifier for object to fetch statuses from. Must be a GID for a `project`, `project_brief`, or `task`.
     parent: string
   }
@@ -170,6 +176,12 @@ interface goal-relationships {
 
   /// Get goal relationships
   record get-goal-relationships-params {
+    /// Provides “pretty” output.
+    /// Provides the response in a “pretty” format. In the case of JSON this means doing proper line breaking and indentation to make it readable. This will take extra time and increase the response size so it is advisable only to use this during debugging.
+    opt-pretty: option<bool>,
+    /// Defines fields to return.
+    /// Some requests return *compact* representations of objects in order to conserve resources and complete the request more efficiently. Other times requests return more information than you may need. This option allows you to list the exact set of fields that the API should be sure to return for the objects. The field names should be provided as paths, described below.
+    opt-fields: option<list<string>>,
     /// Globally unique identifier for the supported goal in the goal relationship.
     supported-goal: string,
     /// If provided, filter to goal relationships with a given resource_subtype.
@@ -369,6 +381,12 @@ interface portfolios {
 
   /// Get multiple portfolios
   record get-portfolios-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
     /// The workspace or organization to filter portfolios on.
     workspace: string,
     /// The user who owns the portfolio. Currently, API users can only get a list of portfolios that they themselves own.
@@ -492,7 +510,23 @@ interface project-statuses {
   delete-project-status: func() -> result<string, string>;
 
   /// Get statuses from a project
-  get-project-statuses-for-project: func() -> result<string, string>;
+  record get-project-statuses-for-project-params {
+    /// Globally unique identifier for the project.
+    project-gid: string,
+    /// Provides “pretty” output.
+    /// Provides the response in a “pretty” format. In the case of JSON this means doing proper line breaking and indentation to make it readable. This will take extra time and increase the response size so it is advisable only to use this during debugging.
+    opt-pretty: option<bool>,
+    /// Defines fields to return.
+    /// Some requests return *compact* representations of objects in order to conserve resources and complete the request more efficiently. Other times requests return more information than you may need. This option allows you to list the exact set of fields that the API should be sure to return for the objects. The field names should be provided as paths, described below.
+    opt-fields: option<list<string>>,
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-project-statuses-for-project: func(params: get-project-statuses-for-project-params) -> result<string, string>;
 
   /// Create a project status
   record create-project-status-for-project-params {
@@ -526,7 +560,19 @@ interface project-templates {
   }
 
   /// Get multiple project templates
-  get-project-templates: func() -> result<string, string>;
+  record get-project-templates-params {
+    /// The workspace to filter results on.
+    workspace: option<string>,
+    /// The team to filter projects on.
+    team: option<string>,
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-project-templates: func(params: get-project-templates-params) -> result<string, string>;
 
   /// Get a project template
   get-project-template: func() -> result<string, string>;
@@ -538,7 +584,15 @@ interface project-templates {
   instantiate-project: func(params: instantiate-project-params) -> result<string, string>;
 
   /// Get a team's project templates
-  get-project-templates-for-team: func() -> result<string, string>;
+  record get-project-templates-for-team-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-project-templates-for-team: func(params: get-project-templates-for-team-params) -> result<string, string>;
 
 }
 
@@ -633,10 +687,18 @@ interface projects {
 
   /// Get multiple projects
   record get-projects-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
     /// The workspace or organization to filter projects on.
     workspace: option<string>,
     /// The team to filter projects on.
-    team: option<string>
+    team: option<string>,
+    /// Only return projects whose `archived` field takes on the value of this parameter.
+    archived: option<bool>
   }
   get-projects: func(params: get-projects-params) -> result<string, string>;
 
@@ -713,7 +775,17 @@ interface projects {
   get-projects-for-task: func() -> result<string, string>;
 
   /// Get a team's projects
-  get-projects-for-team: func() -> result<string, string>;
+  record get-projects-for-team-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
+    /// Only return projects whose `archived` field takes on the value of this parameter.
+    archived: option<bool>
+  }
+  get-projects-for-team: func(params: get-projects-for-team-params) -> result<string, string>;
 
   /// Create a project in a team
   record create-project-for-team-params {
@@ -722,7 +794,17 @@ interface projects {
   create-project-for-team: func(params: create-project-for-team-params) -> result<string, string>;
 
   /// Get all projects in a workspace
-  get-projects-for-workspace: func() -> result<string, string>;
+  record get-projects-for-workspace-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
+    /// Only return projects whose `archived` field takes on the value of this parameter.
+    archived: option<bool>
+  }
+  get-projects-for-workspace: func(params: get-projects-for-workspace-params) -> result<string, string>;
 
   /// Create a project in a workspace
   record create-project-for-workspace-params {
@@ -763,7 +845,15 @@ interface sections {
   }
 
   /// Get sections in a project
-  get-sections-for-project: func() -> result<string, string>;
+  record get-sections-for-project-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-sections-for-project: func(params: get-sections-for-project-params) -> result<string, string>;
 
   /// Create a section in a project
   record create-section-for-project-params {
@@ -890,6 +980,12 @@ interface tasks {
 
   /// Get multiple tasks
   record get-tasks-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
     /// The assignee to filter tasks on. If searching for unassigned tasks, assignee.any = null can be specified.
     /// *Note: If you specify `assignee`, you must also specify the `workspace` to filter on.*
     assignee: option<string>,
@@ -1006,7 +1102,15 @@ interface tasks {
   set-parent-for-task: func(params: set-parent-for-task-params) -> result<string, string>;
 
   /// Get subtasks from a task
-  get-subtasks-for-task: func() -> result<string, string>;
+  record get-subtasks-for-task-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-subtasks-for-task: func(params: get-subtasks-for-task-params) -> result<string, string>;
 
   /// Create a subtask
   record create-subtask-for-task-params {
@@ -1058,7 +1162,15 @@ interface stories {
   }
 
   /// Get a story
-  get-story: func() -> result<string, string>;
+  record get-story-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-story: func(params: get-story-params) -> result<string, string>;
 
   /// Update a story
   record update-story-params {
@@ -1070,7 +1182,15 @@ interface stories {
   delete-story: func() -> result<string, string>;
 
   /// Get stories from a task
-  get-stories-for-task: func() -> result<string, string>;
+  record get-stories-for-task-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-stories-for-task: func(params: get-stories-for-task-params) -> result<string, string>;
 
   /// Create a story on a task
   record create-story-for-task-params {
@@ -1093,6 +1213,12 @@ interface tags {
 
   /// Get multiple tags
   record get-tags-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
     /// The workspace to filter tags on.
     workspace: option<string>
   }
@@ -1117,7 +1243,15 @@ interface tags {
   get-tags-for-task: func() -> result<string, string>;
 
   /// Get tags in a workspace
-  get-tags-for-workspace: func() -> result<string, string>;
+  record get-tags-for-workspace-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>
+  }
+  get-tags-for-workspace: func(params: get-tags-for-workspace-params) -> result<string, string>;
 
   /// Create a tag in a workspace
   record create-tag-for-workspace-params {
@@ -1280,6 +1414,12 @@ interface webhooks {
 
   /// Get multiple webhooks
   record get-webhooks-params {
+    /// Results per page.
+    /// The number of objects to return per page. The value must be between 1 and 100.
+    limit: option<s32>,
+    /// Offset token.
+    /// An offset to the next page returned by the API. A pagination request will return an offset token, which can be used as an input parameter to the next request. If an offset is not passed in, the API will return the first page of results.
+    offset: option<string>,
     /// The workspace to query for webhooks in.
     workspace: string,
     /// Only return webhooks for the given resource.
@@ -1359,7 +1499,7 @@ interface audit-log-api {
 
 interface typeahead {
   /// Get objects via typeahead
-  typeahead-for-workspace: func() -> result<string, string>;
+  for-workspace: func() -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

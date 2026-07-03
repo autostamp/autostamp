@@ -21,8 +21,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:shutterstock@0.2.1` |
-| Published version | `0.2.1+shutterstock-1.1.32` |
+| Package | `autostamp:shutterstock@0.3.0` |
+| Published version | `0.3.0+shutterstock-1.1.32` |
 | Tag filter | all tags |
 | Operations generated | 118 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

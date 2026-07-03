@@ -288,6 +288,9 @@ const OP_CHARGE_METRICS_GET_CHARGE_METRICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/charge-metrics/data/charge-metrics",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
         FieldSpec { snake: "from_timestamp", location: FieldLocation::Query },
         FieldSpec { snake: "to_timestamp", location: FieldLocation::Query },
     ],
@@ -299,6 +302,9 @@ const OP_CHARGE_METRICS_GET_CHARGE_METRICS_DISCOUNT_ALLOCATION_DETAILS: OpSpec =
     method: "GET",
     path_template: "/charge-metrics/data/charge-metrics-discount-allocation-detail",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
         FieldSpec { snake: "from_timestamp", location: FieldLocation::Query },
         FieldSpec { snake: "to_timestamp", location: FieldLocation::Query },
     ],
@@ -308,6 +314,9 @@ const OP_CHARGE_METRICS_GET_CHARGE_METRICS_DISCOUNT_ALLOCATION_DETAILS: OpSpec =
 
 fn iface_charge_metrics__get_charge_metrics_params__to_json(p: &iface_charge_metrics::GetChargeMetricsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from_timestamp".into(), Value::String((&p.from_timestamp).clone()));
     m.insert("to_timestamp".into(), Value::String((&p.to_timestamp).clone()));
     Value::Object(m)
@@ -315,6 +324,9 @@ fn iface_charge_metrics__get_charge_metrics_params__to_json(p: &iface_charge_met
 
 fn iface_charge_metrics__get_charge_metrics_discount_allocation_details_params__to_json(p: &iface_charge_metrics::GetChargeMetricsDiscountAllocationDetailsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from_timestamp".into(), Value::String((&p.from_timestamp).clone()));
     m.insert("to_timestamp".into(), Value::String((&p.to_timestamp).clone()));
     Value::Object(m)
@@ -336,6 +348,9 @@ const OP_EVENT_TRIGGERS_GET_EVENT_TRIGGERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/events/event-triggers",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "base_object", location: FieldLocation::Query },
         FieldSpec { snake: "event_type_name", location: FieldLocation::Query },
         FieldSpec { snake: "active", location: FieldLocation::Query },
@@ -350,6 +365,9 @@ const OP_EVENT_TRIGGERS_POST_EVENT_TRIGGER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/events/event-triggers",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -359,6 +377,9 @@ const OP_EVENT_TRIGGERS_GET_EVENT_TRIGGER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/events/event-triggers/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -369,6 +390,9 @@ const OP_EVENT_TRIGGERS_PUT_EVENT_TRIGGER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/events/event-triggers/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -379,6 +403,9 @@ const OP_EVENT_TRIGGERS_DELETE_EVENT_TRIGGER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/events/event-triggers/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -387,6 +414,9 @@ const OP_EVENT_TRIGGERS_DELETE_EVENT_TRIGGER: OpSpec = OpSpec {
 
 fn iface_event_triggers__get_event_triggers_params__to_json(p: &iface_event_triggers::GetEventTriggersParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("base_object".into(), match (&p.base_object) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_type_name".into(), match (&p.event_type_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("active".into(), match (&p.active) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -395,20 +425,37 @@ fn iface_event_triggers__get_event_triggers_params__to_json(p: &iface_event_trig
     Value::Object(m)
 }
 
+fn iface_event_triggers__post_event_trigger_params__to_json(p: &iface_event_triggers::PostEventTriggerParams) -> Value {
+    let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_event_triggers__get_event_trigger_params__to_json(p: &iface_event_triggers::GetEventTriggerParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_event_triggers__put_event_trigger_params__to_json(p: &iface_event_triggers::PutEventTriggerParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_event_triggers__delete_event_trigger_params__to_json(p: &iface_event_triggers::DeleteEventTriggerParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -418,8 +465,9 @@ impl iface_event_triggers::Guest for crate::Component {
         let json = iface_event_triggers__get_event_triggers_params__to_json(&params);
         dispatch(&OP_EVENT_TRIGGERS_GET_EVENT_TRIGGERS, json)
     }
-    fn post_event_trigger() -> Result<String, String> {
-        dispatch(&OP_EVENT_TRIGGERS_POST_EVENT_TRIGGER, Value::Object(Map::new()))
+    fn post_event_trigger(params: iface_event_triggers::PostEventTriggerParams) -> Result<String, String> {
+        let json = iface_event_triggers__post_event_trigger_params__to_json(&params);
+        dispatch(&OP_EVENT_TRIGGERS_POST_EVENT_TRIGGER, json)
     }
     fn get_event_trigger(params: iface_event_triggers::GetEventTriggerParams) -> Result<String, String> {
         let json = iface_event_triggers__get_event_trigger_params__to_json(&params);
@@ -440,6 +488,9 @@ const OP_NOTIFICATIONS_GET_QUERY_EMAIL_TEMPLATES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notifications/email-templates",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "start", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "event_type_name", location: FieldLocation::Query },
@@ -453,6 +504,9 @@ const OP_NOTIFICATIONS_POST_CREATE_EMAIL_TEMPLATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/notifications/email-templates",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -462,6 +516,9 @@ const OP_NOTIFICATIONS_GET_GET_EMAIL_TEMPLATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notifications/email-templates/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -472,6 +529,9 @@ const OP_NOTIFICATIONS_PUT_UPDATE_EMAIL_TEMPLATE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/notifications/email-templates/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -482,6 +542,9 @@ const OP_NOTIFICATIONS_DELETE_DELETE_EMAIL_TEMPLATE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/notifications/email-templates/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -492,6 +555,9 @@ const OP_NOTIFICATIONS_DELETE_DELETE_NOTIFICATION_HISTORY_FOR_ACCOUNT: OpSpec = 
     method: "DELETE",
     path_template: "/notifications/history",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "account_id", location: FieldLocation::Query },
     ],
     auth: &[
@@ -502,6 +568,9 @@ const OP_NOTIFICATIONS_GET_GET_NOTIFICATION_HISTORY_DELETION_TASK: OpSpec = OpSp
     method: "GET",
     path_template: "/notifications/history/tasks/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -512,6 +581,9 @@ const OP_NOTIFICATIONS_GET_QUERY_NOTIFICATION_DEFINITIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notifications/notification-definitions",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "start", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "profile_id", location: FieldLocation::Query },
@@ -526,6 +598,9 @@ const OP_NOTIFICATIONS_POST_CREATE_NOTIFICATION_DEFINITION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/notifications/notification-definitions",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -535,6 +610,9 @@ const OP_NOTIFICATIONS_GET_GET_NOTIFICATION_DEFINITION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notifications/notification-definitions/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -545,6 +623,9 @@ const OP_NOTIFICATIONS_PUT_UPDATE_NOTIFICATION_DEFINITION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/notifications/notification-definitions/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -555,6 +636,9 @@ const OP_NOTIFICATIONS_DELETE_DELETE_NOTIFICATION_DEFINITION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/notifications/notification-definitions/{id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -565,6 +649,9 @@ const OP_NOTIFICATIONS_GET_CALLOUT_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/notification-history/callout",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "object_id", location: FieldLocation::Query },
@@ -580,6 +667,9 @@ const OP_NOTIFICATIONS_GET_EMAIL_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/notification-history/email",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "object_id", location: FieldLocation::Query },
@@ -592,6 +682,9 @@ const OP_NOTIFICATIONS_GET_EMAIL_HISTORY: OpSpec = OpSpec {
 
 fn iface_notifications__get_query_email_templates_params__to_json(p: &iface_notifications::GetQueryEmailTemplatesParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start".into(), match (&p.start) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("event_type_name".into(), match (&p.event_type_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -599,38 +692,64 @@ fn iface_notifications__get_query_email_templates_params__to_json(p: &iface_noti
     Value::Object(m)
 }
 
+fn iface_notifications__post_create_email_template_params__to_json(p: &iface_notifications::PostCreateEmailTemplateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_notifications__get_get_email_template_params__to_json(p: &iface_notifications::GetGetEmailTemplateParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__put_update_email_template_params__to_json(p: &iface_notifications::PutUpdateEmailTemplateParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__delete_delete_email_template_params__to_json(p: &iface_notifications::DeleteDeleteEmailTemplateParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__delete_delete_notification_history_for_account_params__to_json(p: &iface_notifications::DeleteDeleteNotificationHistoryForAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account_id".into(), Value::String((&p.account_id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__get_get_notification_history_deletion_task_params__to_json(p: &iface_notifications::GetGetNotificationHistoryDeletionTaskParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__get_query_notification_definitions_params__to_json(p: &iface_notifications::GetQueryNotificationDefinitionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start".into(), match (&p.start) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("profile_id".into(), match (&p.profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -639,26 +758,46 @@ fn iface_notifications__get_query_notification_definitions_params__to_json(p: &i
     Value::Object(m)
 }
 
+fn iface_notifications__post_create_notification_definition_params__to_json(p: &iface_notifications::PostCreateNotificationDefinitionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_notifications__get_get_notification_definition_params__to_json(p: &iface_notifications::GetGetNotificationDefinitionParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__put_update_notification_definition_params__to_json(p: &iface_notifications::PutUpdateNotificationDefinitionParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__delete_delete_notification_definition_params__to_json(p: &iface_notifications::DeleteDeleteNotificationDefinitionParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_notifications__get_callout_history_params__to_json(p: &iface_notifications::GetCalloutHistoryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object_id".into(), match (&p.object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -670,6 +809,9 @@ fn iface_notifications__get_callout_history_params__to_json(p: &iface_notificati
 
 fn iface_notifications__get_email_history_params__to_json(p: &iface_notifications::GetEmailHistoryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object_id".into(), match (&p.object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -683,8 +825,9 @@ impl iface_notifications::Guest for crate::Component {
         let json = iface_notifications__get_query_email_templates_params__to_json(&params);
         dispatch(&OP_NOTIFICATIONS_GET_QUERY_EMAIL_TEMPLATES, json)
     }
-    fn post_create_email_template() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_POST_CREATE_EMAIL_TEMPLATE, Value::Object(Map::new()))
+    fn post_create_email_template(params: iface_notifications::PostCreateEmailTemplateParams) -> Result<String, String> {
+        let json = iface_notifications__post_create_email_template_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_POST_CREATE_EMAIL_TEMPLATE, json)
     }
     fn get_get_email_template(params: iface_notifications::GetGetEmailTemplateParams) -> Result<String, String> {
         let json = iface_notifications__get_get_email_template_params__to_json(&params);
@@ -710,8 +853,9 @@ impl iface_notifications::Guest for crate::Component {
         let json = iface_notifications__get_query_notification_definitions_params__to_json(&params);
         dispatch(&OP_NOTIFICATIONS_GET_QUERY_NOTIFICATION_DEFINITIONS, json)
     }
-    fn post_create_notification_definition() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_POST_CREATE_NOTIFICATION_DEFINITION, Value::Object(Map::new()))
+    fn post_create_notification_definition(params: iface_notifications::PostCreateNotificationDefinitionParams) -> Result<String, String> {
+        let json = iface_notifications__post_create_notification_definition_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_POST_CREATE_NOTIFICATION_DEFINITION, json)
     }
     fn get_get_notification_definition(params: iface_notifications::GetGetNotificationDefinitionParams) -> Result<String, String> {
         let json = iface_notifications__get_get_notification_definition_params__to_json(&params);
@@ -740,14 +884,22 @@ const OP_O_AUTH_CREATE_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/token",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_o_auth__create_token_params__to_json(p: &iface_o_auth::CreateTokenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_o_auth::Guest for crate::Component {
-    fn create_token() -> Result<String, String> {
-        dispatch(&OP_O_AUTH_CREATE_TOKEN, Value::Object(Map::new()))
+    fn create_token(params: iface_o_auth::CreateTokenParams) -> Result<String, String> {
+        let json = iface_o_auth__create_token_params__to_json(&params);
+        dispatch(&OP_O_AUTH_CREATE_TOKEN, json)
     }
 }
 use crate::exports::autostamp::zuora::custom_object_records as iface_custom_object_records;
@@ -756,6 +908,9 @@ const OP_CUSTOM_OBJECT_RECORDS_POST_CUSTOM_OBJECT_RECORDS_BATCH_UPDATE_OR_DELETE
     method: "POST",
     path_template: "/objects/batch/default/{object}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
     ],
@@ -767,6 +922,9 @@ const OP_CUSTOM_OBJECT_RECORDS_GET_ALL_RECORDS_FOR_CUSTOM_OBJECT_TYPE: OpSpec = 
     method: "GET",
     path_template: "/objects/records/default/{object}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
         FieldSpec { snake: "q", location: FieldLocation::Query },
@@ -782,6 +940,9 @@ const OP_CUSTOM_OBJECT_RECORDS_POST_CUSTOM_OBJECT_RECORDS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/objects/records/default/{object}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
     ],
@@ -793,6 +954,9 @@ const OP_CUSTOM_OBJECT_RECORDS_GET_CUSTOM_OBJECT_RECORD_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/objects/records/default/{object}/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
         FieldSpec { snake: "id", location: FieldLocation::Path },
@@ -805,6 +969,10 @@ const OP_CUSTOM_OBJECT_RECORDS_PUT_CUSTOM_OBJECT_RECORD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/objects/records/default/{object}/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "if_match", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
         FieldSpec { snake: "id", location: FieldLocation::Path },
@@ -817,6 +985,9 @@ const OP_CUSTOM_OBJECT_RECORDS_PATCH_PARTIAL_UPDATE_CUSTOM_OBJECT_RECORD: OpSpec
     method: "PATCH",
     path_template: "/objects/records/default/{object}/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
         FieldSpec { snake: "id", location: FieldLocation::Path },
@@ -829,6 +1000,9 @@ const OP_CUSTOM_OBJECT_RECORDS_DELETE_CUSTOM_OBJECT_RECORD_BY_ID: OpSpec = OpSpe
     method: "DELETE",
     path_template: "/objects/records/default/{object}/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
         FieldSpec { snake: "id", location: FieldLocation::Path },
@@ -839,6 +1013,9 @@ const OP_CUSTOM_OBJECT_RECORDS_DELETE_CUSTOM_OBJECT_RECORD_BY_ID: OpSpec = OpSpe
 
 fn iface_custom_object_records__post_custom_object_records_batch_update_or_delete_params__to_json(p: &iface_custom_object_records::PostCustomObjectRecordsBatchUpdateOrDeleteParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     Value::Object(m)
@@ -846,6 +1023,9 @@ fn iface_custom_object_records__post_custom_object_records_batch_update_or_delet
 
 fn iface_custom_object_records__get_all_records_for_custom_object_type_params__to_json(p: &iface_custom_object_records::GetAllRecordsForCustomObjectTypeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("q".into(), match (&p.q) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -857,6 +1037,9 @@ fn iface_custom_object_records__get_all_records_for_custom_object_type_params__t
 
 fn iface_custom_object_records__post_custom_object_records_params__to_json(p: &iface_custom_object_records::PostCustomObjectRecordsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     Value::Object(m)
@@ -864,6 +1047,9 @@ fn iface_custom_object_records__post_custom_object_records_params__to_json(p: &i
 
 fn iface_custom_object_records__get_custom_object_record_by_id_params__to_json(p: &iface_custom_object_records::GetCustomObjectRecordByIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -872,6 +1058,10 @@ fn iface_custom_object_records__get_custom_object_record_by_id_params__to_json(p
 
 fn iface_custom_object_records__put_custom_object_record_params__to_json(p: &iface_custom_object_records::PutCustomObjectRecordParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("if_match".into(), match (&p.if_match) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -880,6 +1070,9 @@ fn iface_custom_object_records__put_custom_object_record_params__to_json(p: &ifa
 
 fn iface_custom_object_records__patch_partial_update_custom_object_record_params__to_json(p: &iface_custom_object_records::PatchPartialUpdateCustomObjectRecordParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -888,6 +1081,9 @@ fn iface_custom_object_records__patch_partial_update_custom_object_record_params
 
 fn iface_custom_object_records__delete_custom_object_record_by_id_params__to_json(p: &iface_custom_object_records::DeleteCustomObjectRecordByIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -930,6 +1126,9 @@ const OP_CUSTOM_OBJECT_DEFINITIONS_GET_ALL_CUSTOM_OBJECT_DEFINITIONS_IN_NAMESPAC
     method: "GET",
     path_template: "/objects/definitions/default",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "select", location: FieldLocation::Query },
     ],
@@ -941,6 +1140,9 @@ const OP_CUSTOM_OBJECT_DEFINITIONS_POST_CUSTOM_OBJECT_DEFINITIONS: OpSpec = OpSp
     method: "POST",
     path_template: "/objects/definitions/default",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -951,6 +1153,9 @@ const OP_CUSTOM_OBJECT_DEFINITIONS_GET_CUSTOM_OBJECT_DEFINITION_BY_TYPE: OpSpec 
     method: "GET",
     path_template: "/objects/definitions/default/{object}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
     ],
@@ -962,6 +1167,9 @@ const OP_CUSTOM_OBJECT_DEFINITIONS_DELETE_CUSTOM_OBJECT_DEFINITION_BY_TYPE: OpSp
     method: "DELETE",
     path_template: "/objects/definitions/default/{object}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
     ],
@@ -973,6 +1181,9 @@ const OP_CUSTOM_OBJECT_DEFINITIONS_POST_UPDATE_CUSTOM_OBJECT_DEFINITION: OpSpec 
     method: "POST",
     path_template: "/objects/migrations",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -987,6 +1198,9 @@ fn iface_custom_object_definitions__get_all_custom_object_definitions_in_namespa
 
 fn iface_custom_object_definitions__get_all_custom_object_definitions_in_namespace_params__to_json(p: &iface_custom_object_definitions::GetAllCustomObjectDefinitionsInNamespaceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("select".into(), match (&p.select) { Some(v) => Value::String(iface_custom_object_definitions__get_all_custom_object_definitions_in_namespace_select_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
@@ -994,12 +1208,18 @@ fn iface_custom_object_definitions__get_all_custom_object_definitions_in_namespa
 
 fn iface_custom_object_definitions__post_custom_object_definitions_params__to_json(p: &iface_custom_object_definitions::PostCustomObjectDefinitionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_custom_object_definitions__get_custom_object_definition_by_type_params__to_json(p: &iface_custom_object_definitions::GetCustomObjectDefinitionByTypeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     Value::Object(m)
@@ -1007,6 +1227,9 @@ fn iface_custom_object_definitions__get_custom_object_definition_by_type_params_
 
 fn iface_custom_object_definitions__delete_custom_object_definition_by_type_params__to_json(p: &iface_custom_object_definitions::DeleteCustomObjectDefinitionByTypeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     Value::Object(m)
@@ -1014,6 +1237,9 @@ fn iface_custom_object_definitions__delete_custom_object_definition_by_type_para
 
 fn iface_custom_object_definitions__post_update_custom_object_definition_params__to_json(p: &iface_custom_object_definitions::PostUpdateCustomObjectDefinitionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1046,6 +1272,9 @@ const OP_CUSTOM_OBJECT_JOBS_GET_ALL_CUSTOM_OBJECT_BULK_JOBS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/objects/jobs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "cursor", location: FieldLocation::Query },
@@ -1058,6 +1287,9 @@ const OP_CUSTOM_OBJECT_JOBS_POST_CUSTOM_OBJECT_BULK_JOB: OpSpec = OpSpec {
     method: "POST",
     path_template: "/objects/jobs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -1068,6 +1300,9 @@ const OP_CUSTOM_OBJECT_JOBS_GET_CUSTOM_OBJECT_BULK_JOB: OpSpec = OpSpec {
     method: "GET",
     path_template: "/objects/jobs/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -1079,6 +1314,9 @@ const OP_CUSTOM_OBJECT_JOBS_GET_CUSTOM_OBJECT_BULK_JOB_ERRORS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/objects/jobs/{id}/errors",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -1090,6 +1328,9 @@ const OP_CUSTOM_OBJECT_JOBS_POST_UPLOAD_FILE_FOR_CUSTOM_OBJECT_BULK_JOB: OpSpec 
     method: "POST",
     path_template: "/objects/jobs/{id}/files",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "content_type", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
@@ -1100,6 +1341,9 @@ const OP_CUSTOM_OBJECT_JOBS_POST_UPLOAD_FILE_FOR_CUSTOM_OBJECT_BULK_JOB: OpSpec 
 
 fn iface_custom_object_jobs__get_all_custom_object_bulk_jobs_params__to_json(p: &iface_custom_object_jobs::GetAllCustomObjectBulkJobsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1108,12 +1352,18 @@ fn iface_custom_object_jobs__get_all_custom_object_bulk_jobs_params__to_json(p: 
 
 fn iface_custom_object_jobs__post_custom_object_bulk_job_params__to_json(p: &iface_custom_object_jobs::PostCustomObjectBulkJobParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_custom_object_jobs__get_custom_object_bulk_job_params__to_json(p: &iface_custom_object_jobs::GetCustomObjectBulkJobParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -1121,6 +1371,9 @@ fn iface_custom_object_jobs__get_custom_object_bulk_job_params__to_json(p: &ifac
 
 fn iface_custom_object_jobs__get_custom_object_bulk_job_errors_params__to_json(p: &iface_custom_object_jobs::GetCustomObjectBulkJobErrorsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -1128,6 +1381,9 @@ fn iface_custom_object_jobs__get_custom_object_bulk_job_errors_params__to_json(p
 
 fn iface_custom_object_jobs__post_upload_file_for_custom_object_bulk_job_params__to_json(p: &iface_custom_object_jobs::PostUploadFileForCustomObjectBulkJobParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("content_type".into(), Value::String((&p.content_type).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -1162,6 +1418,9 @@ const OP_DATA_QUERIES_GET_DATA_QUERY_JOBS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/query/jobs",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "query_status", location: FieldLocation::Query },
         FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
@@ -1173,6 +1432,9 @@ const OP_DATA_QUERIES_POST_DATA_QUERY_JOB: OpSpec = OpSpec {
     method: "POST",
     path_template: "/query/jobs",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1182,6 +1444,9 @@ const OP_DATA_QUERIES_GET_DATA_QUERY_JOB: OpSpec = OpSpec {
     method: "GET",
     path_template: "/query/jobs/{job_id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "job_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1192,6 +1457,9 @@ const OP_DATA_QUERIES_DELETE_DATA_QUERY_JOB: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/query/jobs/{job_id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "job_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1210,19 +1478,36 @@ fn iface_data_queries__get_data_query_jobs_query_status_enum__to_str(e: &iface_d
 
 fn iface_data_queries__get_data_query_jobs_params__to_json(p: &iface_data_queries::GetDataQueryJobsParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("query_status".into(), match (&p.query_status) { Some(v) => Value::String(iface_data_queries__get_data_query_jobs_query_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_data_queries__post_data_query_job_params__to_json(p: &iface_data_queries::PostDataQueryJobParams) -> Value {
+    let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_data_queries__get_data_query_job_params__to_json(p: &iface_data_queries::GetDataQueryJobParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("job_id".into(), Value::String((&p.job_id).clone()));
     Value::Object(m)
 }
 
 fn iface_data_queries__delete_data_query_job_params__to_json(p: &iface_data_queries::DeleteDataQueryJobParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("job_id".into(), Value::String((&p.job_id).clone()));
     Value::Object(m)
 }
@@ -1232,8 +1517,9 @@ impl iface_data_queries::Guest for crate::Component {
         let json = iface_data_queries__get_data_query_jobs_params__to_json(&params);
         dispatch(&OP_DATA_QUERIES_GET_DATA_QUERY_JOBS, json)
     }
-    fn post_data_query_job() -> Result<String, String> {
-        dispatch(&OP_DATA_QUERIES_POST_DATA_QUERY_JOB, Value::Object(Map::new()))
+    fn post_data_query_job(params: iface_data_queries::PostDataQueryJobParams) -> Result<String, String> {
+        let json = iface_data_queries__post_data_query_job_params__to_json(&params);
+        dispatch(&OP_DATA_QUERIES_POST_DATA_QUERY_JOB, json)
     }
     fn get_data_query_job(params: iface_data_queries::GetDataQueryJobParams) -> Result<String, String> {
         let json = iface_data_queries__get_data_query_job_params__to_json(&params);
@@ -1250,6 +1536,9 @@ const OP_SETTINGS_POST_PROCESS_SETTINGS_BATCH_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/settings/batch-requests",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "requests", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1260,6 +1549,9 @@ const OP_SETTINGS_GET_LIST_ALL_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/settings/listing",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "accept", location: FieldLocation::Header },
     ],
     auth: &[
@@ -1306,12 +1598,18 @@ fn iface_settings__children_setting_value_request__to_json(p: &iface_settings::C
 
 fn iface_settings__post_process_settings_batch_request_params__to_json(p: &iface_settings::PostProcessSettingsBatchRequestParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("requests".into(), match (&p.requests) { Some(v) => Value::Array((v).iter().map(|v| iface_settings__setting_value_request__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_settings__get_list_all_settings_params__to_json(p: &iface_settings::GetListAllSettingsParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1332,6 +1630,9 @@ const OP_ACCOUNTING_CODES_GET_ALL_ACCOUNTING_CODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/accounting-codes",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1341,6 +1642,8 @@ const OP_ACCOUNTING_CODES_POST_ACCOUNTING_CODE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/accounting-codes",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1350,6 +1653,8 @@ const OP_ACCOUNTING_CODES_GET_ACCOUNTING_CODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/accounting-codes/{ac_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ac_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1360,6 +1665,8 @@ const OP_ACCOUNTING_CODES_PUT_ACCOUNTING_CODE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounting-codes/{ac_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ac_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1370,6 +1677,8 @@ const OP_ACCOUNTING_CODES_DELETE_ACCOUNTING_CODE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/accounting-codes/{ac_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ac_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1380,6 +1689,8 @@ const OP_ACCOUNTING_CODES_PUT_ACTIVATE_ACCOUNTING_CODE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounting-codes/{ac_id}/activate",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ac_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1390,48 +1701,77 @@ const OP_ACCOUNTING_CODES_PUT_DEACTIVATE_ACCOUNTING_CODE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounting-codes/{ac_id}/deactivate",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ac_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_accounting_codes__get_all_accounting_codes_params__to_json(p: &iface_accounting_codes::GetAllAccountingCodesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounting_codes__post_accounting_code_params__to_json(p: &iface_accounting_codes::PostAccountingCodeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_accounting_codes__get_accounting_code_params__to_json(p: &iface_accounting_codes::GetAccountingCodeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ac_id".into(), Value::String((&p.ac_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_codes__put_accounting_code_params__to_json(p: &iface_accounting_codes::PutAccountingCodeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ac_id".into(), Value::String((&p.ac_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_codes__delete_accounting_code_params__to_json(p: &iface_accounting_codes::DeleteAccountingCodeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ac_id".into(), Value::String((&p.ac_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_codes__put_activate_accounting_code_params__to_json(p: &iface_accounting_codes::PutActivateAccountingCodeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ac_id".into(), Value::String((&p.ac_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_codes__put_deactivate_accounting_code_params__to_json(p: &iface_accounting_codes::PutDeactivateAccountingCodeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ac_id".into(), Value::String((&p.ac_id).clone()));
     Value::Object(m)
 }
 
 impl iface_accounting_codes::Guest for crate::Component {
-    fn get_all_accounting_codes() -> Result<String, String> {
-        dispatch(&OP_ACCOUNTING_CODES_GET_ALL_ACCOUNTING_CODES, Value::Object(Map::new()))
+    fn get_all_accounting_codes(params: iface_accounting_codes::GetAllAccountingCodesParams) -> Result<String, String> {
+        let json = iface_accounting_codes__get_all_accounting_codes_params__to_json(&params);
+        dispatch(&OP_ACCOUNTING_CODES_GET_ALL_ACCOUNTING_CODES, json)
     }
-    fn post_accounting_code() -> Result<String, String> {
-        dispatch(&OP_ACCOUNTING_CODES_POST_ACCOUNTING_CODE, Value::Object(Map::new()))
+    fn post_accounting_code(params: iface_accounting_codes::PostAccountingCodeParams) -> Result<String, String> {
+        let json = iface_accounting_codes__post_accounting_code_params__to_json(&params);
+        dispatch(&OP_ACCOUNTING_CODES_POST_ACCOUNTING_CODE, json)
     }
     fn get_accounting_code(params: iface_accounting_codes::GetAccountingCodeParams) -> Result<String, String> {
         let json = iface_accounting_codes__get_accounting_code_params__to_json(&params);
@@ -1460,6 +1800,9 @@ const OP_ACCOUNTING_PERIODS_GET_ALL_ACCOUNTING_PERIODS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/accounting-periods",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1469,6 +1812,8 @@ const OP_ACCOUNTING_PERIODS_POST_ACCOUNTING_PERIOD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/accounting-periods",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1478,6 +1823,8 @@ const OP_ACCOUNTING_PERIODS_GET_ACCOUNTING_PERIOD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/accounting-periods/{ap_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ap_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1488,6 +1835,8 @@ const OP_ACCOUNTING_PERIODS_PUT_UPDATE_ACCOUNTING_PERIOD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounting-periods/{ap_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ap_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1498,6 +1847,8 @@ const OP_ACCOUNTING_PERIODS_DELETE_ACCOUNTING_PERIOD: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/accounting-periods/{ap_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ap_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1508,6 +1859,8 @@ const OP_ACCOUNTING_PERIODS_PUT_CLOSE_ACCOUNTING_PERIOD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounting-periods/{ap_id}/close",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ap_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1518,6 +1871,8 @@ const OP_ACCOUNTING_PERIODS_PUT_PENDING_CLOSE_ACCOUNTING_PERIOD: OpSpec = OpSpec
     method: "PUT",
     path_template: "/v1/accounting-periods/{ap_id}/pending-close",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ap_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1528,6 +1883,8 @@ const OP_ACCOUNTING_PERIODS_PUT_REOPEN_ACCOUNTING_PERIOD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounting-periods/{ap_id}/reopen",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ap_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1538,60 +1895,93 @@ const OP_ACCOUNTING_PERIODS_PUT_RUN_TRIAL_BALANCE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounting-periods/{ap_id}/run-trial-balance",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ap_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_accounting_periods__get_all_accounting_periods_params__to_json(p: &iface_accounting_periods::GetAllAccountingPeriodsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounting_periods__post_accounting_period_params__to_json(p: &iface_accounting_periods::PostAccountingPeriodParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_accounting_periods__get_accounting_period_params__to_json(p: &iface_accounting_periods::GetAccountingPeriodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ap_id".into(), Value::String((&p.ap_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_periods__put_update_accounting_period_params__to_json(p: &iface_accounting_periods::PutUpdateAccountingPeriodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ap_id".into(), Value::String((&p.ap_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_periods__delete_accounting_period_params__to_json(p: &iface_accounting_periods::DeleteAccountingPeriodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ap_id".into(), Value::String((&p.ap_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_periods__put_close_accounting_period_params__to_json(p: &iface_accounting_periods::PutCloseAccountingPeriodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ap_id".into(), Value::String((&p.ap_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_periods__put_pending_close_accounting_period_params__to_json(p: &iface_accounting_periods::PutPendingCloseAccountingPeriodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ap_id".into(), Value::String((&p.ap_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_periods__put_reopen_accounting_period_params__to_json(p: &iface_accounting_periods::PutReopenAccountingPeriodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ap_id".into(), Value::String((&p.ap_id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounting_periods__put_run_trial_balance_params__to_json(p: &iface_accounting_periods::PutRunTrialBalanceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ap_id".into(), Value::String((&p.ap_id).clone()));
     Value::Object(m)
 }
 
 impl iface_accounting_periods::Guest for crate::Component {
-    fn get_all_accounting_periods() -> Result<String, String> {
-        dispatch(&OP_ACCOUNTING_PERIODS_GET_ALL_ACCOUNTING_PERIODS, Value::Object(Map::new()))
+    fn get_all_accounting_periods(params: iface_accounting_periods::GetAllAccountingPeriodsParams) -> Result<String, String> {
+        let json = iface_accounting_periods__get_all_accounting_periods_params__to_json(&params);
+        dispatch(&OP_ACCOUNTING_PERIODS_GET_ALL_ACCOUNTING_PERIODS, json)
     }
-    fn post_accounting_period() -> Result<String, String> {
-        dispatch(&OP_ACCOUNTING_PERIODS_POST_ACCOUNTING_PERIOD, Value::Object(Map::new()))
+    fn post_accounting_period(params: iface_accounting_periods::PostAccountingPeriodParams) -> Result<String, String> {
+        let json = iface_accounting_periods__post_accounting_period_params__to_json(&params);
+        dispatch(&OP_ACCOUNTING_PERIODS_POST_ACCOUNTING_PERIOD, json)
     }
     fn get_accounting_period(params: iface_accounting_periods::GetAccountingPeriodParams) -> Result<String, String> {
         let json = iface_accounting_periods__get_accounting_period_params__to_json(&params);
@@ -1628,6 +2018,8 @@ const OP_ACCOUNTS_POST_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/accounts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -1638,6 +2030,8 @@ const OP_ACCOUNTS_GET_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/accounts/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1648,6 +2042,8 @@ const OP_ACCOUNTS_PUT_ACCOUNT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/accounts/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1658,6 +2054,8 @@ const OP_ACCOUNTS_GET_ACCOUNT_SUMMARY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/accounts/{account_key}/summary",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1668,6 +2066,9 @@ const OP_ACCOUNTS_OBJECT_POST_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/account",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1677,6 +2078,8 @@ const OP_ACCOUNTS_OBJECT_GET_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/account/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -1688,6 +2091,9 @@ const OP_ACCOUNTS_OBJECT_PUT_ACCOUNT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/account/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1698,6 +2104,8 @@ const OP_ACCOUNTS_OBJECT_DELETE_ACCOUNT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/account/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1706,30 +2114,48 @@ const OP_ACCOUNTS_OBJECT_DELETE_ACCOUNT: OpSpec = OpSpec {
 
 fn iface_accounts__post_account_params__to_json(p: &iface_accounts::PostAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounts__get_account_params__to_json(p: &iface_accounts::GetAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__put_account_params__to_json(p: &iface_accounts::PutAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__get_account_summary_params__to_json(p: &iface_accounts::GetAccountSummaryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_accounts__object_post_account_params__to_json(p: &iface_accounts::ObjectPostAccountParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounts__object_get_account_params__to_json(p: &iface_accounts::ObjectGetAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -1737,12 +2163,17 @@ fn iface_accounts__object_get_account_params__to_json(p: &iface_accounts::Object
 
 fn iface_accounts__object_put_account_params__to_json(p: &iface_accounts::ObjectPutAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__object_delete_account_params__to_json(p: &iface_accounts::ObjectDeleteAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -1764,8 +2195,9 @@ impl iface_accounts::Guest for crate::Component {
         let json = iface_accounts__get_account_summary_params__to_json(&params);
         dispatch(&OP_ACCOUNTS_GET_ACCOUNT_SUMMARY, json)
     }
-    fn object_post_account() -> Result<String, String> {
-        dispatch(&OP_ACCOUNTS_OBJECT_POST_ACCOUNT, Value::Object(Map::new()))
+    fn object_post_account(params: iface_accounts::ObjectPostAccountParams) -> Result<String, String> {
+        let json = iface_accounts__object_post_account_params__to_json(&params);
+        dispatch(&OP_ACCOUNTS_OBJECT_POST_ACCOUNT, json)
     }
     fn object_get_account(params: iface_accounts::ObjectGetAccountParams) -> Result<String, String> {
         let json = iface_accounts__object_get_account_params__to_json(&params);
@@ -1786,6 +2218,8 @@ const OP_BILLING_DOCUMENTS_POST_BILLING_DOCUMENT_FILES_DELETION_JOB: OpSpec = Op
     method: "POST",
     path_template: "/v1/accounts/billing-documents/files/deletion-jobs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1795,6 +2229,8 @@ const OP_BILLING_DOCUMENTS_GET_BILLING_DOCUMENT_FILES_DELETION_JOB: OpSpec = OpS
     method: "GET",
     path_template: "/v1/accounts/billing-documents/files/deletion-jobs/{job_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "job_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1805,6 +2241,8 @@ const OP_BILLING_DOCUMENTS_POST_GENERATE_BILLING_DOCUMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/accounts/{id}/billing-documents/generate",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1815,6 +2253,9 @@ const OP_BILLING_DOCUMENTS_GET_BILLING_DOCUMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/billing-documents",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_id", location: FieldLocation::Query },
         FieldSpec { snake: "document_date", location: FieldLocation::Query },
         FieldSpec { snake: "status", location: FieldLocation::Query },
@@ -1833,20 +2274,34 @@ fn iface_billing_documents__get_billing_documents_status_enum__to_str(e: &iface_
     }
 }
 
+fn iface_billing_documents__post_billing_document_files_deletion_job_params__to_json(p: &iface_billing_documents::PostBillingDocumentFilesDeletionJobParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_billing_documents__get_billing_document_files_deletion_job_params__to_json(p: &iface_billing_documents::GetBillingDocumentFilesDeletionJobParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("job_id".into(), Value::String((&p.job_id).clone()));
     Value::Object(m)
 }
 
 fn iface_billing_documents__post_generate_billing_documents_params__to_json(p: &iface_billing_documents::PostGenerateBillingDocumentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_billing_documents__get_billing_documents_params__to_json(p: &iface_billing_documents::GetBillingDocumentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_id".into(), Value::String((&p.account_id).clone()));
     m.insert("document_date".into(), match (&p.document_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_billing_documents__get_billing_documents_status_enum__to_str(v).into()), None => Value::Null });
@@ -1855,8 +2310,9 @@ fn iface_billing_documents__get_billing_documents_params__to_json(p: &iface_bill
 }
 
 impl iface_billing_documents::Guest for crate::Component {
-    fn post_billing_document_files_deletion_job() -> Result<String, String> {
-        dispatch(&OP_BILLING_DOCUMENTS_POST_BILLING_DOCUMENT_FILES_DELETION_JOB, Value::Object(Map::new()))
+    fn post_billing_document_files_deletion_job(params: iface_billing_documents::PostBillingDocumentFilesDeletionJobParams) -> Result<String, String> {
+        let json = iface_billing_documents__post_billing_document_files_deletion_job_params__to_json(&params);
+        dispatch(&OP_BILLING_DOCUMENTS_POST_BILLING_DOCUMENT_FILES_DELETION_JOB, json)
     }
     fn get_billing_document_files_deletion_job(params: iface_billing_documents::GetBillingDocumentFilesDeletionJobParams) -> Result<String, String> {
         let json = iface_billing_documents__get_billing_document_files_deletion_job_params__to_json(&params);
@@ -1877,6 +2333,10 @@ const OP_ACTIONS_ACTION_POS_TAMEND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/amend",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1886,6 +2346,10 @@ const OP_ACTIONS_ACTION_POS_TCREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/create",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1895,6 +2359,10 @@ const OP_ACTIONS_ACTION_POS_TDELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/delete",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1904,6 +2372,10 @@ const OP_ACTIONS_ACTION_POS_TEXECUTE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/execute",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1913,6 +2385,10 @@ const OP_ACTIONS_ACTION_POS_TGENERATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/generate",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1922,6 +2398,10 @@ const OP_ACTIONS_ACTION_POS_TQUERY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/query",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1931,6 +2411,10 @@ const OP_ACTIONS_ACTION_POS_TQUERY_MORE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/queryMore",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1940,6 +2424,10 @@ const OP_ACTIONS_ACTION_POS_TSUBSCRIBE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/subscribe",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1949,38 +2437,132 @@ const OP_ACTIONS_ACTION_POS_TUPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/action/update",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_actions__action_pos_tamend_params__to_json(p: &iface_actions::ActionPosTamendParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_tcreate_params__to_json(p: &iface_actions::ActionPosTcreateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_tdelete_params__to_json(p: &iface_actions::ActionPosTdeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_texecute_params__to_json(p: &iface_actions::ActionPosTexecuteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_tgenerate_params__to_json(p: &iface_actions::ActionPosTgenerateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_tquery_params__to_json(p: &iface_actions::ActionPosTqueryParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_tquery_more_params__to_json(p: &iface_actions::ActionPosTqueryMoreParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_tsubscribe_params__to_json(p: &iface_actions::ActionPosTsubscribeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_actions__action_pos_tupdate_params__to_json(p: &iface_actions::ActionPosTupdateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_actions::Guest for crate::Component {
-    fn action_pos_tamend() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TAMEND, Value::Object(Map::new()))
+    fn action_pos_tamend(params: iface_actions::ActionPosTamendParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tamend_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TAMEND, json)
     }
-    fn action_pos_tcreate() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TCREATE, Value::Object(Map::new()))
+    fn action_pos_tcreate(params: iface_actions::ActionPosTcreateParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tcreate_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TCREATE, json)
     }
-    fn action_pos_tdelete() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TDELETE, Value::Object(Map::new()))
+    fn action_pos_tdelete(params: iface_actions::ActionPosTdeleteParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tdelete_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TDELETE, json)
     }
-    fn action_pos_texecute() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TEXECUTE, Value::Object(Map::new()))
+    fn action_pos_texecute(params: iface_actions::ActionPosTexecuteParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_texecute_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TEXECUTE, json)
     }
-    fn action_pos_tgenerate() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TGENERATE, Value::Object(Map::new()))
+    fn action_pos_tgenerate(params: iface_actions::ActionPosTgenerateParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tgenerate_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TGENERATE, json)
     }
-    fn action_pos_tquery() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TQUERY, Value::Object(Map::new()))
+    fn action_pos_tquery(params: iface_actions::ActionPosTqueryParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tquery_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TQUERY, json)
     }
-    fn action_pos_tquery_more() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TQUERY_MORE, Value::Object(Map::new()))
+    fn action_pos_tquery_more(params: iface_actions::ActionPosTqueryMoreParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tquery_more_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TQUERY_MORE, json)
     }
-    fn action_pos_tsubscribe() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TSUBSCRIBE, Value::Object(Map::new()))
+    fn action_pos_tsubscribe(params: iface_actions::ActionPosTsubscribeParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tsubscribe_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TSUBSCRIBE, json)
     }
-    fn action_pos_tupdate() -> Result<String, String> {
-        dispatch(&OP_ACTIONS_ACTION_POS_TUPDATE, Value::Object(Map::new()))
+    fn action_pos_tupdate(params: iface_actions::ActionPosTupdateParams) -> Result<String, String> {
+        let json = iface_actions__action_pos_tupdate_params__to_json(&params);
+        dispatch(&OP_ACTIONS_ACTION_POS_TUPDATE, json)
     }
 }
 use crate::exports::autostamp::zuora::amendments as iface_amendments;
@@ -1989,6 +2571,8 @@ const OP_AMENDMENTS_GET_AMENDMENTS_BY_SUBSCRIPTION_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/amendments/subscriptions/{subscription_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -1999,6 +2583,8 @@ const OP_AMENDMENTS_GET_AMENDMENTS_BY_KEY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/amendments/{amendment_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "amendment_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2009,6 +2595,8 @@ const OP_AMENDMENTS_OBJECT_GET_AMENDMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/amendment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -2020,6 +2608,9 @@ const OP_AMENDMENTS_OBJECT_PUT_AMENDMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/amendment/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2030,6 +2621,8 @@ const OP_AMENDMENTS_OBJECT_DELETE_AMENDMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/amendment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2038,18 +2631,24 @@ const OP_AMENDMENTS_OBJECT_DELETE_AMENDMENT: OpSpec = OpSpec {
 
 fn iface_amendments__get_amendments_by_subscription_id_params__to_json(p: &iface_amendments::GetAmendmentsBySubscriptionIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
     Value::Object(m)
 }
 
 fn iface_amendments__get_amendments_by_key_params__to_json(p: &iface_amendments::GetAmendmentsByKeyParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amendment_key".into(), Value::String((&p.amendment_key).clone()));
     Value::Object(m)
 }
 
 fn iface_amendments__object_get_amendment_params__to_json(p: &iface_amendments::ObjectGetAmendmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -2057,12 +2656,17 @@ fn iface_amendments__object_get_amendment_params__to_json(p: &iface_amendments::
 
 fn iface_amendments__object_put_amendment_params__to_json(p: &iface_amendments::ObjectPutAmendmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_amendments__object_delete_amendment_params__to_json(p: &iface_amendments::ObjectDeleteAmendmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -2095,6 +2699,7 @@ const OP_ORDERS_GET_JOB_STATUS_AND_RESPONSE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/async-jobs/{job_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "job_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2105,6 +2710,8 @@ const OP_ORDERS_POST_CREATE_ORDER_ASYNCHRONOUSLY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/async/orders",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "return_ids", location: FieldLocation::Query },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
@@ -2116,6 +2723,8 @@ const OP_ORDERS_POST_PREVIEW_ORDER_ASYNCHRONOUSLY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/async/orders/preview",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2125,7 +2734,10 @@ const OP_ORDERS_GET_ALL_ORDERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "date_filter_option", location: FieldLocation::Query },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
         FieldSpec { snake: "end_date", location: FieldLocation::Query },
@@ -2138,6 +2750,8 @@ const OP_ORDERS_POST_ORDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/orders",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "return_ids", location: FieldLocation::Query },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
@@ -2149,8 +2763,11 @@ const OP_ORDERS_GET_ORDERS_BY_INVOICE_OWNER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders/invoiceOwner/{account_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "account_number", location: FieldLocation::Path },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "date_filter_option", location: FieldLocation::Query },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
         FieldSpec { snake: "end_date", location: FieldLocation::Query },
@@ -2163,6 +2780,8 @@ const OP_ORDERS_POST_PREVIEW_ORDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/orders/preview",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2172,8 +2791,11 @@ const OP_ORDERS_GET_ORDERS_BY_SUBSCRIPTION_NUMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders/subscription/{subscription_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_number", location: FieldLocation::Path },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "date_filter_option", location: FieldLocation::Query },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
         FieldSpec { snake: "end_date", location: FieldLocation::Query },
@@ -2186,8 +2808,11 @@ const OP_ORDERS_GET_ORDERS_BY_SUBSCRIPTION_OWNER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders/subscriptionOwner/{account_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "account_number", location: FieldLocation::Path },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "date_filter_option", location: FieldLocation::Query },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
         FieldSpec { snake: "end_date", location: FieldLocation::Query },
@@ -2200,9 +2825,12 @@ const OP_ORDERS_GET_SUBSCRIPTION_TERM_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders/term/{subscription_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_number", location: FieldLocation::Path },
         FieldSpec { snake: "version", location: FieldLocation::Query },
         FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2212,6 +2840,8 @@ const OP_ORDERS_GET_ORDER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders/{order_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "order_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2222,6 +2852,8 @@ const OP_ORDERS_DELETE_ORDER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/orders/{order_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "order_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2232,6 +2864,8 @@ const OP_ORDERS_PUT_UPDATE_ORDER_CUSTOM_FIELDS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/orders/{order_number}/customFields",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "order_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2242,6 +2876,8 @@ const OP_ORDERS_GET_ORDER_METRICSFOR_EVERGREEN_SUBSCRIPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders/{order_number}/evergreenMetrics/{subscription_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "order_number", location: FieldLocation::Path },
         FieldSpec { snake: "subscription_number", location: FieldLocation::Path },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
@@ -2255,6 +2891,8 @@ const OP_ORDERS_PUT_ORDER_TRIGGER_DATES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/orders/{order_number}/triggerDates",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "order_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2265,6 +2903,8 @@ const OP_ORDERS_PUT_UPDATE_SUBSCRIPTION_CUSTOM_FIELDS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/subscriptions/{subscription_number}/customFields",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2273,20 +2913,33 @@ const OP_ORDERS_PUT_UPDATE_SUBSCRIPTION_CUSTOM_FIELDS: OpSpec = OpSpec {
 
 fn iface_orders__get_job_status_and_response_params__to_json(p: &iface_orders::GetJobStatusAndResponseParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("job_id".into(), Value::String((&p.job_id).clone()));
     Value::Object(m)
 }
 
 fn iface_orders__post_create_order_asynchronously_params__to_json(p: &iface_orders::PostCreateOrderAsynchronouslyParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("return_ids".into(), match (&p.return_ids) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_orders__post_preview_order_asynchronously_params__to_json(p: &iface_orders::PostPreviewOrderAsynchronouslyParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_orders__get_all_orders_params__to_json(p: &iface_orders::GetAllOrdersParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("date_filter_option".into(), match (&p.date_filter_option) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2295,6 +2948,8 @@ fn iface_orders__get_all_orders_params__to_json(p: &iface_orders::GetAllOrdersPa
 
 fn iface_orders__post_order_params__to_json(p: &iface_orders::PostOrderParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("return_ids".into(), match (&p.return_ids) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2302,18 +2957,31 @@ fn iface_orders__post_order_params__to_json(p: &iface_orders::PostOrderParams) -
 
 fn iface_orders__get_orders_by_invoice_owner_params__to_json(p: &iface_orders::GetOrdersByInvoiceOwnerParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account_number".into(), Value::String((&p.account_number).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("date_filter_option".into(), match (&p.date_filter_option) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_orders__post_preview_order_params__to_json(p: &iface_orders::PostPreviewOrderParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_orders__get_orders_by_subscription_number_params__to_json(p: &iface_orders::GetOrdersBySubscriptionNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_number".into(), Value::String((&p.subscription_number).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("date_filter_option".into(), match (&p.date_filter_option) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2322,8 +2990,11 @@ fn iface_orders__get_orders_by_subscription_number_params__to_json(p: &iface_ord
 
 fn iface_orders__get_orders_by_subscription_owner_params__to_json(p: &iface_orders::GetOrdersBySubscriptionOwnerParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account_number".into(), Value::String((&p.account_number).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("date_filter_option".into(), match (&p.date_filter_option) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2332,32 +3003,43 @@ fn iface_orders__get_orders_by_subscription_owner_params__to_json(p: &iface_orde
 
 fn iface_orders__get_subscription_term_info_params__to_json(p: &iface_orders::GetSubscriptionTermInfoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_number".into(), Value::String((&p.subscription_number).clone()));
     m.insert("version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_orders__get_order_params__to_json(p: &iface_orders::GetOrderParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_number".into(), Value::String((&p.order_number).clone()));
     Value::Object(m)
 }
 
 fn iface_orders__delete_order_params__to_json(p: &iface_orders::DeleteOrderParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_number".into(), Value::String((&p.order_number).clone()));
     Value::Object(m)
 }
 
 fn iface_orders__put_update_order_custom_fields_params__to_json(p: &iface_orders::PutUpdateOrderCustomFieldsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_number".into(), Value::String((&p.order_number).clone()));
     Value::Object(m)
 }
 
 fn iface_orders__get_order_metricsfor_evergreen_subscription_params__to_json(p: &iface_orders::GetOrderMetricsforEvergreenSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_number".into(), Value::String((&p.order_number).clone()));
     m.insert("subscription_number".into(), Value::String((&p.subscription_number).clone()));
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
@@ -2367,12 +3049,16 @@ fn iface_orders__get_order_metricsfor_evergreen_subscription_params__to_json(p: 
 
 fn iface_orders__put_order_trigger_dates_params__to_json(p: &iface_orders::PutOrderTriggerDatesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_number".into(), Value::String((&p.order_number).clone()));
     Value::Object(m)
 }
 
 fn iface_orders__put_update_subscription_custom_fields_params__to_json(p: &iface_orders::PutUpdateSubscriptionCustomFieldsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_number".into(), Value::String((&p.subscription_number).clone()));
     Value::Object(m)
 }
@@ -2386,8 +3072,9 @@ impl iface_orders::Guest for crate::Component {
         let json = iface_orders__post_create_order_asynchronously_params__to_json(&params);
         dispatch(&OP_ORDERS_POST_CREATE_ORDER_ASYNCHRONOUSLY, json)
     }
-    fn post_preview_order_asynchronously() -> Result<String, String> {
-        dispatch(&OP_ORDERS_POST_PREVIEW_ORDER_ASYNCHRONOUSLY, Value::Object(Map::new()))
+    fn post_preview_order_asynchronously(params: iface_orders::PostPreviewOrderAsynchronouslyParams) -> Result<String, String> {
+        let json = iface_orders__post_preview_order_asynchronously_params__to_json(&params);
+        dispatch(&OP_ORDERS_POST_PREVIEW_ORDER_ASYNCHRONOUSLY, json)
     }
     fn get_all_orders(params: iface_orders::GetAllOrdersParams) -> Result<String, String> {
         let json = iface_orders__get_all_orders_params__to_json(&params);
@@ -2401,8 +3088,9 @@ impl iface_orders::Guest for crate::Component {
         let json = iface_orders__get_orders_by_invoice_owner_params__to_json(&params);
         dispatch(&OP_ORDERS_GET_ORDERS_BY_INVOICE_OWNER, json)
     }
-    fn post_preview_order() -> Result<String, String> {
-        dispatch(&OP_ORDERS_POST_PREVIEW_ORDER, Value::Object(Map::new()))
+    fn post_preview_order(params: iface_orders::PostPreviewOrderParams) -> Result<String, String> {
+        let json = iface_orders__post_preview_order_params__to_json(&params);
+        dispatch(&OP_ORDERS_POST_PREVIEW_ORDER, json)
     }
     fn get_orders_by_subscription_number(params: iface_orders::GetOrdersBySubscriptionNumberParams) -> Result<String, String> {
         let json = iface_orders__get_orders_by_subscription_number_params__to_json(&params);
@@ -2447,6 +3135,8 @@ const OP_ATTACHMENTS_POST_ATTACHMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/attachments",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "description", location: FieldLocation::Query },
         FieldSpec { snake: "associated_object_type", location: FieldLocation::Query },
         FieldSpec { snake: "associated_object_key", location: FieldLocation::Query },
@@ -2459,6 +3149,8 @@ const OP_ATTACHMENTS_GET_ATTACHMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/attachments/{attachment_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "attachment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2469,6 +3161,8 @@ const OP_ATTACHMENTS_PUT_ATTACHMENTS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/attachments/{attachment_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "attachment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2479,6 +3173,8 @@ const OP_ATTACHMENTS_DELETE_ATTACHMENTS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/attachments/{attachment_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "attachment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2489,6 +3185,9 @@ const OP_ATTACHMENTS_GET_ATTACHMENTS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/attachments/{object_type}/{object_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "object_type", location: FieldLocation::Path },
         FieldSpec { snake: "object_key", location: FieldLocation::Path },
     ],
@@ -2508,6 +3207,8 @@ fn iface_attachments__post_attachments_associated_object_type_enum__to_str(e: &i
 
 fn iface_attachments__post_attachments_params__to_json(p: &iface_attachments::PostAttachmentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("associated_object_type".into(), Value::String(iface_attachments__post_attachments_associated_object_type_enum__to_str(&p.associated_object_type).into()));
     m.insert("associated_object_key".into(), Value::String((&p.associated_object_key).clone()));
@@ -2516,24 +3217,33 @@ fn iface_attachments__post_attachments_params__to_json(p: &iface_attachments::Po
 
 fn iface_attachments__get_attachments_params__to_json(p: &iface_attachments::GetAttachmentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("attachment_id".into(), Value::String((&p.attachment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_attachments__put_attachments_params__to_json(p: &iface_attachments::PutAttachmentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("attachment_id".into(), Value::String((&p.attachment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_attachments__delete_attachments_params__to_json(p: &iface_attachments::DeleteAttachmentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("attachment_id".into(), Value::String((&p.attachment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_attachments__get_attachments_list_params__to_json(p: &iface_attachments::GetAttachmentsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("object_type".into(), Value::String((&p.object_type).clone()));
     m.insert("object_key".into(), Value::String((&p.object_key).clone()));
     Value::Object(m)
@@ -2567,6 +3277,8 @@ const OP_BILL_RUN_POST_EMAIL_BILLING_DOCUMENTSFROM_BILL_RUN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/bill-runs/{bill_run_id}/emails",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "bill_run_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2577,6 +3289,9 @@ const OP_BILL_RUN_OBJECT_POST_BILL_RUN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/bill-run",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2586,6 +3301,8 @@ const OP_BILL_RUN_OBJECT_GET_BILL_RUN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/bill-run/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -2597,6 +3314,9 @@ const OP_BILL_RUN_OBJECT_PUT_BILL_RUN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/bill-run/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2607,6 +3327,8 @@ const OP_BILL_RUN_OBJECT_DELETE_BILL_RUN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/bill-run/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2615,12 +3337,24 @@ const OP_BILL_RUN_OBJECT_DELETE_BILL_RUN: OpSpec = OpSpec {
 
 fn iface_bill_run__post_email_billing_documentsfrom_bill_run_params__to_json(p: &iface_bill_run::PostEmailBillingDocumentsfromBillRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bill_run_id".into(), Value::String((&p.bill_run_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_bill_run__object_post_bill_run_params__to_json(p: &iface_bill_run::ObjectPostBillRunParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_bill_run__object_get_bill_run_params__to_json(p: &iface_bill_run::ObjectGetBillRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -2628,12 +3362,17 @@ fn iface_bill_run__object_get_bill_run_params__to_json(p: &iface_bill_run::Objec
 
 fn iface_bill_run__object_put_bill_run_params__to_json(p: &iface_bill_run::ObjectPutBillRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_bill_run__object_delete_bill_run_params__to_json(p: &iface_bill_run::ObjectDeleteBillRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -2643,8 +3382,9 @@ impl iface_bill_run::Guest for crate::Component {
         let json = iface_bill_run__post_email_billing_documentsfrom_bill_run_params__to_json(&params);
         dispatch(&OP_BILL_RUN_POST_EMAIL_BILLING_DOCUMENTSFROM_BILL_RUN, json)
     }
-    fn object_post_bill_run() -> Result<String, String> {
-        dispatch(&OP_BILL_RUN_OBJECT_POST_BILL_RUN, Value::Object(Map::new()))
+    fn object_post_bill_run(params: iface_bill_run::ObjectPostBillRunParams) -> Result<String, String> {
+        let json = iface_bill_run__object_post_bill_run_params__to_json(&params);
+        dispatch(&OP_BILL_RUN_OBJECT_POST_BILL_RUN, json)
     }
     fn object_get_bill_run(params: iface_bill_run::ObjectGetBillRunParams) -> Result<String, String> {
         let json = iface_bill_run__object_get_bill_run_params__to_json(&params);
@@ -2665,6 +3405,8 @@ const OP_BILLING_PREVIEW_RUN_POST_BILLING_PREVIEW_RUN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/billing-preview-runs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2674,21 +3416,33 @@ const OP_BILLING_PREVIEW_RUN_GET_BILLING_PREVIEW_RUN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/billing-preview-runs/{billing_preview_run_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "billing_preview_run_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_billing_preview_run__post_billing_preview_run_params__to_json(p: &iface_billing_preview_run::PostBillingPreviewRunParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_billing_preview_run__get_billing_preview_run_params__to_json(p: &iface_billing_preview_run::GetBillingPreviewRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("billing_preview_run_id".into(), Value::String((&p.billing_preview_run_id).clone()));
     Value::Object(m)
 }
 
 impl iface_billing_preview_run::Guest for crate::Component {
-    fn post_billing_preview_run() -> Result<String, String> {
-        dispatch(&OP_BILLING_PREVIEW_RUN_POST_BILLING_PREVIEW_RUN, Value::Object(Map::new()))
+    fn post_billing_preview_run(params: iface_billing_preview_run::PostBillingPreviewRunParams) -> Result<String, String> {
+        let json = iface_billing_preview_run__post_billing_preview_run_params__to_json(&params);
+        dispatch(&OP_BILLING_PREVIEW_RUN_POST_BILLING_PREVIEW_RUN, json)
     }
     fn get_billing_preview_run(params: iface_billing_preview_run::GetBillingPreviewRunParams) -> Result<String, String> {
         let json = iface_billing_preview_run__get_billing_preview_run_params__to_json(&params);
@@ -2701,6 +3455,8 @@ const OP_MASS_UPDATER_POST_MASS_UPDATER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/bulk",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2710,6 +3466,8 @@ const OP_MASS_UPDATER_GET_MASS_UPDATER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/bulk/{bulk_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "bulk_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2720,27 +3478,41 @@ const OP_MASS_UPDATER_PUT_MASS_UPDATER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/bulk/{bulk_key}/stop",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "bulk_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_mass_updater__post_mass_updater_params__to_json(p: &iface_mass_updater::PostMassUpdaterParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_mass_updater__get_mass_updater_params__to_json(p: &iface_mass_updater::GetMassUpdaterParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bulk_key".into(), Value::String((&p.bulk_key).clone()));
     Value::Object(m)
 }
 
 fn iface_mass_updater__put_mass_updater_params__to_json(p: &iface_mass_updater::PutMassUpdaterParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bulk_key".into(), Value::String((&p.bulk_key).clone()));
     Value::Object(m)
 }
 
 impl iface_mass_updater::Guest for crate::Component {
-    fn post_mass_updater() -> Result<String, String> {
-        dispatch(&OP_MASS_UPDATER_POST_MASS_UPDATER, Value::Object(Map::new()))
+    fn post_mass_updater(params: iface_mass_updater::PostMassUpdaterParams) -> Result<String, String> {
+        let json = iface_mass_updater__post_mass_updater_params__to_json(&params);
+        dispatch(&OP_MASS_UPDATER_POST_MASS_UPDATER, json)
     }
     fn get_mass_updater(params: iface_mass_updater::GetMassUpdaterParams) -> Result<String, String> {
         let json = iface_mass_updater__get_mass_updater_params__to_json(&params);
@@ -2757,6 +3529,8 @@ const OP_CATALOG_GET_PRODUCT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/catalog/product/{product_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "product_id", location: FieldLocation::Path },
     ],
@@ -2768,6 +3542,10 @@ const OP_CATALOG_GET_CATALOG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/catalog/products",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -2778,6 +3556,8 @@ const OP_CATALOG_POST_CATALOG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/catalog/products/{product_id}/share",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "product_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2786,6 +3566,8 @@ const OP_CATALOG_POST_CATALOG: OpSpec = OpSpec {
 
 fn iface_catalog__get_product_params__to_json(p: &iface_catalog::GetProductParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("product_id".into(), Value::String((&p.product_id).clone()));
     Value::Object(m)
@@ -2793,12 +3575,18 @@ fn iface_catalog__get_product_params__to_json(p: &iface_catalog::GetProductParam
 
 fn iface_catalog__get_catalog_params__to_json(p: &iface_catalog::GetCatalogParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_catalog__post_catalog_params__to_json(p: &iface_catalog::PostCatalogParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("product_id".into(), Value::String((&p.product_id).clone()));
     Value::Object(m)
 }
@@ -2823,6 +3611,8 @@ const OP_CHARGE_REVENUE_SUMMARIES_GET_CRS_BY_CHARGE_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/charge-revenue-summaries/subscription-charges/{charge_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "charge_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2833,6 +3623,8 @@ const OP_CHARGE_REVENUE_SUMMARIES_GET_CRS_BY_CRS_NUMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/charge-revenue-summaries/{crs_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "crs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2841,12 +3633,16 @@ const OP_CHARGE_REVENUE_SUMMARIES_GET_CRS_BY_CRS_NUMBER: OpSpec = OpSpec {
 
 fn iface_charge_revenue_summaries__get_crs_by_charge_id_params__to_json(p: &iface_charge_revenue_summaries::GetCrsByChargeIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("charge_key".into(), Value::String((&p.charge_key).clone()));
     Value::Object(m)
 }
 
 fn iface_charge_revenue_summaries__get_crs_by_crs_number_params__to_json(p: &iface_charge_revenue_summaries::GetCrsByCrsNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("crs_number".into(), Value::String((&p.crs_number).clone()));
     Value::Object(m)
 }
@@ -2867,6 +3663,8 @@ const OP_CONNECTIONS_POST_CONNECTIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/connections",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "api_access_key_id", location: FieldLocation::Header },
         FieldSpec { snake: "api_secret_access_key", location: FieldLocation::Header },
         FieldSpec { snake: "content_type", location: FieldLocation::Header },
@@ -2877,6 +3675,8 @@ const OP_CONNECTIONS_POST_CONNECTIONS: OpSpec = OpSpec {
 
 fn iface_connections__post_connections_params__to_json(p: &iface_connections::PostConnectionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("api_access_key_id".into(), Value::String((&p.api_access_key_id).clone()));
     m.insert("api_secret_access_key".into(), Value::String((&p.api_secret_access_key).clone()));
     m.insert("content_type".into(), Value::String((&p.content_type).clone()));
@@ -2895,6 +3695,8 @@ const OP_CONTACTS_PUT_SCRUB_CONTACT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/contacts/{contact_id}/scrub",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "contact_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2905,6 +3707,9 @@ const OP_CONTACTS_OBJECT_POST_CONTACT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/contact",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2914,6 +3719,8 @@ const OP_CONTACTS_OBJECT_GET_CONTACT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/contact/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -2925,6 +3732,9 @@ const OP_CONTACTS_OBJECT_PUT_CONTACT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/contact/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2935,6 +3745,8 @@ const OP_CONTACTS_OBJECT_DELETE_CONTACT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/contact/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -2943,12 +3755,24 @@ const OP_CONTACTS_OBJECT_DELETE_CONTACT: OpSpec = OpSpec {
 
 fn iface_contacts__put_scrub_contact_params__to_json(p: &iface_contacts::PutScrubContactParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("contact_id".into(), Value::String((&p.contact_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_contacts__object_post_contact_params__to_json(p: &iface_contacts::ObjectPostContactParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts__object_get_contact_params__to_json(p: &iface_contacts::ObjectGetContactParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -2956,12 +3780,17 @@ fn iface_contacts__object_get_contact_params__to_json(p: &iface_contacts::Object
 
 fn iface_contacts__object_put_contact_params__to_json(p: &iface_contacts::ObjectPutContactParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_contacts__object_delete_contact_params__to_json(p: &iface_contacts::ObjectDeleteContactParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -2971,8 +3800,9 @@ impl iface_contacts::Guest for crate::Component {
         let json = iface_contacts__put_scrub_contact_params__to_json(&params);
         dispatch(&OP_CONTACTS_PUT_SCRUB_CONTACT, json)
     }
-    fn object_post_contact() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_OBJECT_POST_CONTACT, Value::Object(Map::new()))
+    fn object_post_contact(params: iface_contacts::ObjectPostContactParams) -> Result<String, String> {
+        let json = iface_contacts__object_post_contact_params__to_json(&params);
+        dispatch(&OP_CONTACTS_OBJECT_POST_CONTACT, json)
     }
     fn object_get_contact(params: iface_contacts::ObjectGetContactParams) -> Result<String, String> {
         let json = iface_contacts__object_get_contact_params__to_json(&params);
@@ -2993,6 +3823,9 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_id", location: FieldLocation::Query },
         FieldSpec { snake: "amount", location: FieldLocation::Query },
         FieldSpec { snake: "applied_amount", location: FieldLocation::Query },
@@ -3023,6 +3856,8 @@ const OP_CREDIT_MEMOS_POST_CREDIT_MEMO_FROM_PRPC: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/creditmemos",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -3033,6 +3868,8 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3043,6 +3880,8 @@ const OP_CREDIT_MEMOS_PUT_UPDATE_CREDIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/creditmemos/{credit_memo_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3053,6 +3892,8 @@ const OP_CREDIT_MEMOS_DELETE_CREDIT_MEMO: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/creditmemos/{credit_memo_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3063,6 +3904,8 @@ const OP_CREDIT_MEMOS_PUT_APPLY_CREDIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/creditmemos/{credit_memo_id}/apply",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3073,6 +3916,8 @@ const OP_CREDIT_MEMOS_PUT_CANCEL_CREDIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/creditmemos/{credit_memo_id}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3083,6 +3928,8 @@ const OP_CREDIT_MEMOS_POST_EMAIL_CREDIT_MEMO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/creditmemos/{credit_memo_id}/emails",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3093,6 +3940,8 @@ const OP_CREDIT_MEMOS_POST_UPLOAD_FILE_FOR_CREDIT_MEMO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/creditmemos/{credit_memo_id}/files",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3103,6 +3952,9 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMO_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}/items",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "amount", location: FieldLocation::Query },
@@ -3129,6 +3981,8 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMO_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}/items/{cmitemid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "cmitemid", location: FieldLocation::Path },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
@@ -3141,6 +3995,10 @@ const OP_CREDIT_MEMOS_GET_TAXATION_ITEMS_OF_CREDIT_MEMO_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}/items/{cmitemid}/taxation-items",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "cmitemid", location: FieldLocation::Path },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
@@ -3152,6 +4010,9 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMO_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}/parts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3162,6 +4023,8 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMO_PART: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}/parts/{partid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "partid", location: FieldLocation::Path },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
@@ -3173,6 +4036,9 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMO_ITEM_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}/parts/{partid}/itemparts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "partid", location: FieldLocation::Path },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
@@ -3184,6 +4050,8 @@ const OP_CREDIT_MEMOS_GET_CREDIT_MEMO_ITEM_PART: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/creditmemos/{credit_memo_id}/parts/{partid}/itemparts/{itempartid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "partid", location: FieldLocation::Path },
         FieldSpec { snake: "itempartid", location: FieldLocation::Path },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
@@ -3196,6 +4064,8 @@ const OP_CREDIT_MEMOS_POST_CREDIT_MEMO_PDF: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/creditmemos/{credit_memo_id}/pdfs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3206,6 +4076,8 @@ const OP_CREDIT_MEMOS_PUT_POST_CREDIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/creditmemos/{credit_memo_id}/post",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3216,6 +4088,8 @@ const OP_CREDIT_MEMOS_POST_CM_TAXATION_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/creditmemos/{credit_memo_id}/taxationitems",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3226,6 +4100,8 @@ const OP_CREDIT_MEMOS_PUT_UNAPPLY_CREDIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/creditmemos/{credit_memo_id}/unapply",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3236,6 +4112,8 @@ const OP_CREDIT_MEMOS_PUT_UNPOST_CREDIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/creditmemos/{credit_memo_id}/unpost",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "credit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3246,6 +4124,8 @@ const OP_CREDIT_MEMOS_POST_REFUND_CREDIT_MEMO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/creditmemos/{creditmemo_id}/refunds",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "creditmemo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3276,6 +4156,9 @@ fn iface_credit_memos__get_credit_memos_transferred_to_accounting_enum__to_str(e
 
 fn iface_credit_memos__get_credit_memos_params__to_json(p: &iface_credit_memos::GetCreditMemosParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amount".into(), match (&p.amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("applied_amount".into(), match (&p.applied_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -3302,54 +4185,73 @@ fn iface_credit_memos__get_credit_memos_params__to_json(p: &iface_credit_memos::
 
 fn iface_credit_memos__post_credit_memo_from_prpc_params__to_json(p: &iface_credit_memos::PostCreditMemoFromPrpcParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_credit_memos__get_credit_memo_params__to_json(p: &iface_credit_memos::GetCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__put_update_credit_memo_params__to_json(p: &iface_credit_memos::PutUpdateCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__delete_credit_memo_params__to_json(p: &iface_credit_memos::DeleteCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__put_apply_credit_memo_params__to_json(p: &iface_credit_memos::PutApplyCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__put_cancel_credit_memo_params__to_json(p: &iface_credit_memos::PutCancelCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__post_email_credit_memo_params__to_json(p: &iface_credit_memos::PostEmailCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__post_upload_file_for_credit_memo_params__to_json(p: &iface_credit_memos::PostUploadFileForCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__get_credit_memo_items_params__to_json(p: &iface_credit_memos::GetCreditMemoItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amount".into(), match (&p.amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -3372,6 +4274,8 @@ fn iface_credit_memos__get_credit_memo_items_params__to_json(p: &iface_credit_me
 
 fn iface_credit_memos__get_credit_memo_item_params__to_json(p: &iface_credit_memos::GetCreditMemoItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cmitemid".into(), Value::String((&p.cmitemid).clone()));
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3380,6 +4284,10 @@ fn iface_credit_memos__get_credit_memo_item_params__to_json(p: &iface_credit_mem
 
 fn iface_credit_memos__get_taxation_items_of_credit_memo_item_params__to_json(p: &iface_credit_memos::GetTaxationItemsOfCreditMemoItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("cmitemid".into(), Value::String((&p.cmitemid).clone()));
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
@@ -3387,12 +4295,17 @@ fn iface_credit_memos__get_taxation_items_of_credit_memo_item_params__to_json(p:
 
 fn iface_credit_memos__get_credit_memo_parts_params__to_json(p: &iface_credit_memos::GetCreditMemoPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__get_credit_memo_part_params__to_json(p: &iface_credit_memos::GetCreditMemoPartParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("partid".into(), Value::String((&p.partid).clone()));
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
@@ -3400,6 +4313,9 @@ fn iface_credit_memos__get_credit_memo_part_params__to_json(p: &iface_credit_mem
 
 fn iface_credit_memos__get_credit_memo_item_parts_params__to_json(p: &iface_credit_memos::GetCreditMemoItemPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("partid".into(), Value::String((&p.partid).clone()));
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
@@ -3407,6 +4323,8 @@ fn iface_credit_memos__get_credit_memo_item_parts_params__to_json(p: &iface_cred
 
 fn iface_credit_memos__get_credit_memo_item_part_params__to_json(p: &iface_credit_memos::GetCreditMemoItemPartParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("partid".into(), Value::String((&p.partid).clone()));
     m.insert("itempartid".into(), Value::String((&p.itempartid).clone()));
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
@@ -3415,36 +4333,48 @@ fn iface_credit_memos__get_credit_memo_item_part_params__to_json(p: &iface_credi
 
 fn iface_credit_memos__post_credit_memo_pdf_params__to_json(p: &iface_credit_memos::PostCreditMemoPdfParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__put_post_credit_memo_params__to_json(p: &iface_credit_memos::PutPostCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__post_cm_taxation_items_params__to_json(p: &iface_credit_memos::PostCmTaxationItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__put_unapply_credit_memo_params__to_json(p: &iface_credit_memos::PutUnapplyCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__put_unpost_credit_memo_params__to_json(p: &iface_credit_memos::PutUnpostCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("credit_memo_id".into(), Value::String((&p.credit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_credit_memos__post_refund_credit_memo_params__to_json(p: &iface_credit_memos::PostRefundCreditMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("creditmemo_id".into(), Value::String((&p.creditmemo_id).clone()));
     Value::Object(m)
 }
@@ -3545,6 +4475,8 @@ const OP_CUSTOM_EXCHANGE_RATES_GET_CUSTOM_EXCHANGE_RATES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/custom-exchange-rates/{currency}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "currency", location: FieldLocation::Path },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
         FieldSpec { snake: "end_date", location: FieldLocation::Query },
@@ -3555,6 +4487,8 @@ const OP_CUSTOM_EXCHANGE_RATES_GET_CUSTOM_EXCHANGE_RATES: OpSpec = OpSpec {
 
 fn iface_custom_exchange_rates__get_custom_exchange_rates_params__to_json(p: &iface_custom_exchange_rates::GetCustomExchangeRatesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("currency".into(), Value::String((&p.currency).clone()));
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     m.insert("end_date".into(), Value::String((&p.end_date).clone()));
@@ -3573,6 +4507,9 @@ const OP_DEBIT_MEMOS_GET_DEBIT_MEMOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/debitmemos",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_id", location: FieldLocation::Query },
         FieldSpec { snake: "amount", location: FieldLocation::Query },
         FieldSpec { snake: "balance", location: FieldLocation::Query },
@@ -3600,6 +4537,8 @@ const OP_DEBIT_MEMOS_POST_DEBIT_MEMO_FROM_PRPC: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/debitmemos",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -3610,6 +4549,8 @@ const OP_DEBIT_MEMOS_PUT_BATCH_UPDATE_DEBIT_MEMOS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/debitmemos",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3619,6 +4560,8 @@ const OP_DEBIT_MEMOS_GET_DEBIT_MEMO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/debitmemos/{debit_memo_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3629,6 +4572,8 @@ const OP_DEBIT_MEMOS_PUT_DEBIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/debitmemos/{debit_memo_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3639,6 +4584,8 @@ const OP_DEBIT_MEMOS_DELETE_DEBIT_MEMO: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/debitmemos/{debit_memo_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3649,6 +4596,8 @@ const OP_DEBIT_MEMOS_GET_DEBIT_MEMO_APPLICATION_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/debitmemos/{debit_memo_id}/application-parts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3659,6 +4608,8 @@ const OP_DEBIT_MEMOS_PUT_CANCEL_DEBIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/debitmemos/{debit_memo_id}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3669,6 +4620,8 @@ const OP_DEBIT_MEMOS_POST_DEBIT_MEMO_COLLECT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/debitmemos/{debit_memo_id}/collect",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3679,6 +4632,8 @@ const OP_DEBIT_MEMOS_POST_EMAIL_DEBIT_MEMO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/debitmemos/{debit_memo_id}/emails",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3689,6 +4644,8 @@ const OP_DEBIT_MEMOS_POST_UPLOAD_FILE_FOR_DEBIT_MEMO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/debitmemos/{debit_memo_id}/files",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3699,6 +4656,9 @@ const OP_DEBIT_MEMOS_GET_DEBIT_MEMO_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/debitmemos/{debit_memo_id}/items",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "amount", location: FieldLocation::Query },
@@ -3724,6 +4684,8 @@ const OP_DEBIT_MEMOS_GET_DEBIT_MEMO_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/debitmemos/{debit_memo_id}/items/{dmitemid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "dmitemid", location: FieldLocation::Path },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
@@ -3736,6 +4698,10 @@ const OP_DEBIT_MEMOS_GET_TAXATION_ITEMS_OF_DEBIT_MEMO_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/debitmemos/{debit_memo_id}/items/{dmitemid}/taxation-items",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "dmitemid", location: FieldLocation::Path },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
@@ -3747,6 +4713,8 @@ const OP_DEBIT_MEMOS_POST_DEBIT_MEMO_PDF: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/debitmemos/{debit_memo_id}/pdfs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3757,6 +4725,8 @@ const OP_DEBIT_MEMOS_PUT_POST_DEBIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/debitmemos/{debit_memo_id}/post",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3767,6 +4737,8 @@ const OP_DEBIT_MEMOS_POST_DM_TAXATION_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/debitmemos/{debit_memo_id}/taxationitems",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3777,6 +4749,8 @@ const OP_DEBIT_MEMOS_PUT_UNPOST_DEBIT_MEMO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/debitmemos/{debit_memo_id}/unpost",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "debit_memo_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -3797,6 +4771,9 @@ fn iface_debit_memos__get_debit_memos_status_enum__to_str(e: &iface_debit_memos:
 
 fn iface_debit_memos__get_debit_memos_params__to_json(p: &iface_debit_memos::GetDebitMemosParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amount".into(), match (&p.amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("balance".into(), match (&p.balance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -3820,60 +4797,88 @@ fn iface_debit_memos__get_debit_memos_params__to_json(p: &iface_debit_memos::Get
 
 fn iface_debit_memos__post_debit_memo_from_prpc_params__to_json(p: &iface_debit_memos::PostDebitMemoFromPrpcParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_debit_memos__put_batch_update_debit_memos_params__to_json(p: &iface_debit_memos::PutBatchUpdateDebitMemosParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_debit_memos__get_debit_memo_params__to_json(p: &iface_debit_memos::GetDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__put_debit_memo_params__to_json(p: &iface_debit_memos::PutDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__delete_debit_memo_params__to_json(p: &iface_debit_memos::DeleteDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__get_debit_memo_application_parts_params__to_json(p: &iface_debit_memos::GetDebitMemoApplicationPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__put_cancel_debit_memo_params__to_json(p: &iface_debit_memos::PutCancelDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__post_debit_memo_collect_params__to_json(p: &iface_debit_memos::PostDebitMemoCollectParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__post_email_debit_memo_params__to_json(p: &iface_debit_memos::PostEmailDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__post_upload_file_for_debit_memo_params__to_json(p: &iface_debit_memos::PostUploadFileForDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__get_debit_memo_items_params__to_json(p: &iface_debit_memos::GetDebitMemoItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amount".into(), match (&p.amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -3895,6 +4900,8 @@ fn iface_debit_memos__get_debit_memo_items_params__to_json(p: &iface_debit_memos
 
 fn iface_debit_memos__get_debit_memo_item_params__to_json(p: &iface_debit_memos::GetDebitMemoItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("dmitemid".into(), Value::String((&p.dmitemid).clone()));
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3903,6 +4910,10 @@ fn iface_debit_memos__get_debit_memo_item_params__to_json(p: &iface_debit_memos:
 
 fn iface_debit_memos__get_taxation_items_of_debit_memo_item_params__to_json(p: &iface_debit_memos::GetTaxationItemsOfDebitMemoItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("dmitemid".into(), Value::String((&p.dmitemid).clone()));
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
@@ -3910,24 +4921,32 @@ fn iface_debit_memos__get_taxation_items_of_debit_memo_item_params__to_json(p: &
 
 fn iface_debit_memos__post_debit_memo_pdf_params__to_json(p: &iface_debit_memos::PostDebitMemoPdfParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__put_post_debit_memo_params__to_json(p: &iface_debit_memos::PutPostDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__post_dm_taxation_items_params__to_json(p: &iface_debit_memos::PostDmTaxationItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
 
 fn iface_debit_memos__put_unpost_debit_memo_params__to_json(p: &iface_debit_memos::PutUnpostDebitMemoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("debit_memo_id".into(), Value::String((&p.debit_memo_id).clone()));
     Value::Object(m)
 }
@@ -3941,8 +4960,9 @@ impl iface_debit_memos::Guest for crate::Component {
         let json = iface_debit_memos__post_debit_memo_from_prpc_params__to_json(&params);
         dispatch(&OP_DEBIT_MEMOS_POST_DEBIT_MEMO_FROM_PRPC, json)
     }
-    fn put_batch_update_debit_memos() -> Result<String, String> {
-        dispatch(&OP_DEBIT_MEMOS_PUT_BATCH_UPDATE_DEBIT_MEMOS, Value::Object(Map::new()))
+    fn put_batch_update_debit_memos(params: iface_debit_memos::PutBatchUpdateDebitMemosParams) -> Result<String, String> {
+        let json = iface_debit_memos__put_batch_update_debit_memos_params__to_json(&params);
+        dispatch(&OP_DEBIT_MEMOS_PUT_BATCH_UPDATE_DEBIT_MEMOS, json)
     }
     fn get_debit_memo(params: iface_debit_memos::GetDebitMemoParams) -> Result<String, String> {
         let json = iface_debit_memos__get_debit_memo_params__to_json(&params);
@@ -4011,6 +5031,8 @@ const OP_DESCRIBE_GET_DESCRIBE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/describe/{object}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "object", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4019,6 +5041,8 @@ const OP_DESCRIBE_GET_DESCRIBE: OpSpec = OpSpec {
 
 fn iface_describe__get_describe_params__to_json(p: &iface_describe::GetDescribeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("object".into(), Value::String((&p.object).clone()));
     Value::Object(m)
 }
@@ -4035,6 +5059,8 @@ const OP_DOCUMENT_PROPERTIES_POST_DOCUMENT_PROPERTIES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/document-properties",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -4044,6 +5070,8 @@ const OP_DOCUMENT_PROPERTIES_PUT_DOCUMENT_PROPERTIES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/document-properties/{document_properties_id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "document_properties_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4054,6 +5082,8 @@ const OP_DOCUMENT_PROPERTIES_DELETE_DOCUMENT_PROPERTIES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/document-properties/{document_properties_id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "document_properties_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4064,6 +5094,8 @@ const OP_DOCUMENT_PROPERTIES_GET_DOCUMENT_PROPERIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/document-properties/{document_type}/{document_id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "document_type", location: FieldLocation::Path },
         FieldSpec { snake: "document_id", location: FieldLocation::Path },
     ],
@@ -4071,28 +5103,42 @@ const OP_DOCUMENT_PROPERTIES_GET_DOCUMENT_PROPERIES: OpSpec = OpSpec {
     ],
 };
 
+fn iface_document_properties__post_document_properties_params__to_json(p: &iface_document_properties::PostDocumentPropertiesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_document_properties__put_document_properties_params__to_json(p: &iface_document_properties::PutDocumentPropertiesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("document_properties_id".into(), Value::String((&p.document_properties_id).clone()));
     Value::Object(m)
 }
 
 fn iface_document_properties__delete_document_properties_params__to_json(p: &iface_document_properties::DeleteDocumentPropertiesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("document_properties_id".into(), Value::String((&p.document_properties_id).clone()));
     Value::Object(m)
 }
 
 fn iface_document_properties__get_document_properies_params__to_json(p: &iface_document_properties::GetDocumentProperiesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("document_type".into(), Value::String((&p.document_type).clone()));
     m.insert("document_id".into(), Value::String((&p.document_id).clone()));
     Value::Object(m)
 }
 
 impl iface_document_properties::Guest for crate::Component {
-    fn post_document_properties() -> Result<String, String> {
-        dispatch(&OP_DOCUMENT_PROPERTIES_POST_DOCUMENT_PROPERTIES, Value::Object(Map::new()))
+    fn post_document_properties(params: iface_document_properties::PostDocumentPropertiesParams) -> Result<String, String> {
+        let json = iface_document_properties__post_document_properties_params__to_json(&params);
+        dispatch(&OP_DOCUMENT_PROPERTIES_POST_DOCUMENT_PROPERTIES, json)
     }
     fn put_document_properties(params: iface_document_properties::PutDocumentPropertiesParams) -> Result<String, String> {
         let json = iface_document_properties__put_document_properties_params__to_json(&params);
@@ -4113,6 +5159,8 @@ const OP_ENTITIES_GET_ENTITIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/entities",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "provisioned", location: FieldLocation::Query },
     ],
     auth: &[
@@ -4123,6 +5171,8 @@ const OP_ENTITIES_POST_ENTITIES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/entities",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -4132,6 +5182,8 @@ const OP_ENTITIES_GET_ENTITY_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/entities/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4142,6 +5194,8 @@ const OP_ENTITIES_PUT_ENTITIES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/entities/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4152,6 +5206,8 @@ const OP_ENTITIES_DELETE_ENTITIES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/entities/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4162,6 +5218,8 @@ const OP_ENTITIES_PUT_PROVISION_ENTITY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/entities/{id}/provision",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4170,30 +5228,47 @@ const OP_ENTITIES_PUT_PROVISION_ENTITY: OpSpec = OpSpec {
 
 fn iface_entities__get_entities_params__to_json(p: &iface_entities::GetEntitiesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("provisioned".into(), match (&p.provisioned) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_entities__post_entities_params__to_json(p: &iface_entities::PostEntitiesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_entities__get_entity_by_id_params__to_json(p: &iface_entities::GetEntityByIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_entities__put_entities_params__to_json(p: &iface_entities::PutEntitiesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_entities__delete_entities_params__to_json(p: &iface_entities::DeleteEntitiesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_entities__put_provision_entity_params__to_json(p: &iface_entities::PutProvisionEntityParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -4203,8 +5278,9 @@ impl iface_entities::Guest for crate::Component {
         let json = iface_entities__get_entities_params__to_json(&params);
         dispatch(&OP_ENTITIES_GET_ENTITIES, json)
     }
-    fn post_entities() -> Result<String, String> {
-        dispatch(&OP_ENTITIES_POST_ENTITIES, Value::Object(Map::new()))
+    fn post_entities(params: iface_entities::PostEntitiesParams) -> Result<String, String> {
+        let json = iface_entities__post_entities_params__to_json(&params);
+        dispatch(&OP_ENTITIES_POST_ENTITIES, json)
     }
     fn get_entity_by_id(params: iface_entities::GetEntityByIdParams) -> Result<String, String> {
         let json = iface_entities__get_entity_by_id_params__to_json(&params);
@@ -4229,6 +5305,9 @@ const OP_ENTITY_CONNECTIONS_GET_ENTITY_CONNECTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/entity-connections",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "type", location: FieldLocation::Query },
     ],
     auth: &[
@@ -4239,6 +5318,8 @@ const OP_ENTITY_CONNECTIONS_POST_ENTITY_CONNECTIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/entity-connections",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -4248,6 +5329,8 @@ const OP_ENTITY_CONNECTIONS_PUT_ENTITY_CONNECTIONS_ACCEPT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/entity-connections/{connection_id}/accept",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "connection_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4258,6 +5341,8 @@ const OP_ENTITY_CONNECTIONS_PUT_ENTITY_CONNECTIONS_DENY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/entity-connections/{connection_id}/deny",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "connection_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4268,6 +5353,8 @@ const OP_ENTITY_CONNECTIONS_PUT_ENTITY_CONNECTIONS_DISCONNECT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/entity-connections/{connection_id}/disconnect",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "connection_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4283,24 +5370,40 @@ fn iface_entity_connections__get_entity_connections_type_op_enum__to_str(e: &ifa
 
 fn iface_entity_connections__get_entity_connections_params__to_json(p: &iface_entity_connections::GetEntityConnectionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_entity_connections__get_entity_connections_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_entity_connections__post_entity_connections_params__to_json(p: &iface_entity_connections::PostEntityConnectionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_entity_connections__put_entity_connections_accept_params__to_json(p: &iface_entity_connections::PutEntityConnectionsAcceptParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("connection_id".into(), Value::String((&p.connection_id).clone()));
     Value::Object(m)
 }
 
 fn iface_entity_connections__put_entity_connections_deny_params__to_json(p: &iface_entity_connections::PutEntityConnectionsDenyParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("connection_id".into(), Value::String((&p.connection_id).clone()));
     Value::Object(m)
 }
 
 fn iface_entity_connections__put_entity_connections_disconnect_params__to_json(p: &iface_entity_connections::PutEntityConnectionsDisconnectParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("connection_id".into(), Value::String((&p.connection_id).clone()));
     Value::Object(m)
 }
@@ -4310,8 +5413,9 @@ impl iface_entity_connections::Guest for crate::Component {
         let json = iface_entity_connections__get_entity_connections_params__to_json(&params);
         dispatch(&OP_ENTITY_CONNECTIONS_GET_ENTITY_CONNECTIONS, json)
     }
-    fn post_entity_connections() -> Result<String, String> {
-        dispatch(&OP_ENTITY_CONNECTIONS_POST_ENTITY_CONNECTIONS, Value::Object(Map::new()))
+    fn post_entity_connections(params: iface_entity_connections::PostEntityConnectionsParams) -> Result<String, String> {
+        let json = iface_entity_connections__post_entity_connections_params__to_json(&params);
+        dispatch(&OP_ENTITY_CONNECTIONS_POST_ENTITY_CONNECTIONS, json)
     }
     fn put_entity_connections_accept(params: iface_entity_connections::PutEntityConnectionsAcceptParams) -> Result<String, String> {
         let json = iface_entity_connections__put_entity_connections_accept_params__to_json(&params);
@@ -4332,6 +5436,8 @@ const OP_FILES_GET_FILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/files/{file_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "file_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4340,6 +5446,8 @@ const OP_FILES_GET_FILES: OpSpec = OpSpec {
 
 fn iface_files__get_files_params__to_json(p: &iface_files::GetFilesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("file_id".into(), Value::String((&p.file_id).clone()));
     Value::Object(m)
 }
@@ -4356,6 +5464,8 @@ const OP_PAYMENT_GATEWAY_RECONCILIATION_POST_REVERSE_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/gateway-settlement/payments/{payment_id}/chargeback",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4366,6 +5476,8 @@ const OP_PAYMENT_GATEWAY_RECONCILIATION_POST_REJECT_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/gateway-settlement/payments/{payment_id}/reject",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4376,6 +5488,8 @@ const OP_PAYMENT_GATEWAY_RECONCILIATION_POST_SETTLE_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/gateway-settlement/payments/{payment_id}/settle",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4386,6 +5500,8 @@ const OP_PAYMENT_GATEWAY_RECONCILIATION_POST_RECONCILE_REFUND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/refunds/{refund_id}/reconcile",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4394,24 +5510,32 @@ const OP_PAYMENT_GATEWAY_RECONCILIATION_POST_RECONCILE_REFUND: OpSpec = OpSpec {
 
 fn iface_payment_gateway_reconciliation__post_reverse_payment_params__to_json(p: &iface_payment_gateway_reconciliation::PostReversePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_gateway_reconciliation__post_reject_payment_params__to_json(p: &iface_payment_gateway_reconciliation::PostRejectPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_gateway_reconciliation__post_settle_payment_params__to_json(p: &iface_payment_gateway_reconciliation::PostSettlePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_gateway_reconciliation__post_reconcile_refund_params__to_json(p: &iface_payment_gateway_reconciliation::PostReconcileRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
 }
@@ -4440,14 +5564,24 @@ const OP_HMAC_SIGNATURES_POST_HMAC_SIGNATURES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/hmac-signatures",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_hmac_signatures__post_hmac_signatures_params__to_json(p: &iface_hmac_signatures::PostHmacSignaturesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_hmac_signatures::Guest for crate::Component {
-    fn post_hmac_signatures() -> Result<String, String> {
-        dispatch(&OP_HMAC_SIGNATURES_POST_HMAC_SIGNATURES, Value::Object(Map::new()))
+    fn post_hmac_signatures(params: iface_hmac_signatures::PostHmacSignaturesParams) -> Result<String, String> {
+        let json = iface_hmac_signatures__post_hmac_signatures_params__to_json(&params);
+        dispatch(&OP_HMAC_SIGNATURES_POST_HMAC_SIGNATURES, json)
     }
 }
 use crate::exports::autostamp::zuora::hosted_pages as iface_hosted_pages;
@@ -4456,6 +5590,8 @@ const OP_HOSTED_PAGES_GET_HOSTED_PAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/hostedpages",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "version_number", location: FieldLocation::Query },
     ],
     auth: &[
@@ -4464,6 +5600,8 @@ const OP_HOSTED_PAGES_GET_HOSTED_PAGES: OpSpec = OpSpec {
 
 fn iface_hosted_pages__get_hosted_pages_params__to_json(p: &iface_hosted_pages::GetHostedPagesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("version_number".into(), match (&p.version_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -4480,6 +5618,8 @@ const OP_INVOICES_POST_STANDALONE_INVOICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/invoices",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -4489,6 +5629,8 @@ const OP_INVOICES_PUT_BATCH_UPDATE_INVOICES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/invoices",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -4498,6 +5640,8 @@ const OP_INVOICES_PUT_UPDATE_INVOICE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/invoices/{invoice_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4508,6 +5652,8 @@ const OP_INVOICES_GET_INVOICE_APPLICATION_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/invoices/{invoice_id}/application-parts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4518,6 +5664,8 @@ const OP_INVOICES_POST_CREDIT_MEMO_FROM_INVOICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/invoices/{invoice_id}/creditmemos",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
@@ -4529,6 +5677,8 @@ const OP_INVOICES_POST_DEBIT_MEMO_FROM_INVOICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/invoices/{invoice_id}/debitmemos",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
@@ -4540,6 +5690,8 @@ const OP_INVOICES_POST_EMAIL_INVOICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/invoices/{invoice_id}/emails",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4550,6 +5702,9 @@ const OP_INVOICES_GET_INVOICE_FILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/invoices/{invoice_id}/files",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4560,6 +5715,8 @@ const OP_INVOICES_POST_UPLOAD_FILE_FOR_INVOICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/invoices/{invoice_id}/files",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4570,6 +5727,9 @@ const OP_INVOICES_GET_INVOICE_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/invoices/{invoice_id}/items",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4580,6 +5740,10 @@ const OP_INVOICES_GET_TAXATION_ITEMS_OF_INVOICE_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/invoices/{invoice_id}/items/{item_id}/taxation-items",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
         FieldSpec { snake: "item_id", location: FieldLocation::Path },
     ],
@@ -4591,6 +5755,8 @@ const OP_INVOICES_PUT_REVERSE_INVOICE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/invoices/{invoice_id}/reverse",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4601,6 +5767,8 @@ const OP_INVOICES_PUT_WRITE_OFF_INVOICE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/invoices/{invoice_id}/write-off",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4611,6 +5779,8 @@ const OP_INVOICES_OBJECT_GET_INVOICE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/invoice/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -4622,6 +5792,9 @@ const OP_INVOICES_OBJECT_PUT_INVOICE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/invoice/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4632,26 +5805,48 @@ const OP_INVOICES_OBJECT_DELETE_INVOICE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/invoice/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_invoices__post_standalone_invoice_params__to_json(p: &iface_invoices::PostStandaloneInvoiceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_invoices__put_batch_update_invoices_params__to_json(p: &iface_invoices::PutBatchUpdateInvoicesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_invoices__put_update_invoice_params__to_json(p: &iface_invoices::PutUpdateInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__get_invoice_application_parts_params__to_json(p: &iface_invoices::GetInvoiceApplicationPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__post_credit_memo_from_invoice_params__to_json(p: &iface_invoices::PostCreditMemoFromInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
@@ -4659,6 +5854,8 @@ fn iface_invoices__post_credit_memo_from_invoice_params__to_json(p: &iface_invoi
 
 fn iface_invoices__post_debit_memo_from_invoice_params__to_json(p: &iface_invoices::PostDebitMemoFromInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -4666,30 +5863,44 @@ fn iface_invoices__post_debit_memo_from_invoice_params__to_json(p: &iface_invoic
 
 fn iface_invoices__post_email_invoice_params__to_json(p: &iface_invoices::PostEmailInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__get_invoice_files_params__to_json(p: &iface_invoices::GetInvoiceFilesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__post_upload_file_for_invoice_params__to_json(p: &iface_invoices::PostUploadFileForInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__get_invoice_items_params__to_json(p: &iface_invoices::GetInvoiceItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__get_taxation_items_of_invoice_item_params__to_json(p: &iface_invoices::GetTaxationItemsOfInvoiceItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     m.insert("item_id".into(), Value::String((&p.item_id).clone()));
     Value::Object(m)
@@ -4697,18 +5908,24 @@ fn iface_invoices__get_taxation_items_of_invoice_item_params__to_json(p: &iface_
 
 fn iface_invoices__put_reverse_invoice_params__to_json(p: &iface_invoices::PutReverseInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__put_write_off_invoice_params__to_json(p: &iface_invoices::PutWriteOffInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_id".into(), Value::String((&p.invoice_id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__object_get_invoice_params__to_json(p: &iface_invoices::ObjectGetInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -4716,22 +5933,29 @@ fn iface_invoices__object_get_invoice_params__to_json(p: &iface_invoices::Object
 
 fn iface_invoices__object_put_invoice_params__to_json(p: &iface_invoices::ObjectPutInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoices__object_delete_invoice_params__to_json(p: &iface_invoices::ObjectDeleteInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_invoices::Guest for crate::Component {
-    fn post_standalone_invoice() -> Result<String, String> {
-        dispatch(&OP_INVOICES_POST_STANDALONE_INVOICE, Value::Object(Map::new()))
+    fn post_standalone_invoice(params: iface_invoices::PostStandaloneInvoiceParams) -> Result<String, String> {
+        let json = iface_invoices__post_standalone_invoice_params__to_json(&params);
+        dispatch(&OP_INVOICES_POST_STANDALONE_INVOICE, json)
     }
-    fn put_batch_update_invoices() -> Result<String, String> {
-        dispatch(&OP_INVOICES_PUT_BATCH_UPDATE_INVOICES, Value::Object(Map::new()))
+    fn put_batch_update_invoices(params: iface_invoices::PutBatchUpdateInvoicesParams) -> Result<String, String> {
+        let json = iface_invoices__put_batch_update_invoices_params__to_json(&params);
+        dispatch(&OP_INVOICES_PUT_BATCH_UPDATE_INVOICES, json)
     }
     fn put_update_invoice(params: iface_invoices::PutUpdateInvoiceParams) -> Result<String, String> {
         let json = iface_invoices__put_update_invoice_params__to_json(&params);
@@ -4796,6 +6020,8 @@ const OP_SUMMARY_JOURNAL_ENTRIES_POST_SUMMARY_JOURNAL_ENTRY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/journal-entries",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -4805,6 +6031,9 @@ const OP_SUMMARY_JOURNAL_ENTRIES_GET_ALL_SUMMARY_JOURNAL_ENTRIES: OpSpec = OpSpe
     method: "GET",
     path_template: "/v1/journal-entries/journal-runs/{jr_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "jr_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4815,6 +6044,8 @@ const OP_SUMMARY_JOURNAL_ENTRIES_GET_SUMMARY_JOURNAL_ENTRY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/journal-entries/{je_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "je_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4825,6 +6056,8 @@ const OP_SUMMARY_JOURNAL_ENTRIES_DELETE_SUMMARY_JOURNAL_ENTRY: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/journal-entries/{je_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "je_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4835,6 +6068,8 @@ const OP_SUMMARY_JOURNAL_ENTRIES_PUT_BASIC_SUMMARY_JOURNAL_ENTRY: OpSpec = OpSpe
     method: "PUT",
     path_template: "/v1/journal-entries/{je_number}/basic-information",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "je_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4845,45 +6080,66 @@ const OP_SUMMARY_JOURNAL_ENTRIES_PUT_SUMMARY_JOURNAL_ENTRY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/journal-entries/{je_number}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "je_number", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_summary_journal_entries__post_summary_journal_entry_params__to_json(p: &iface_summary_journal_entries::PostSummaryJournalEntryParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_summary_journal_entries__get_all_summary_journal_entries_params__to_json(p: &iface_summary_journal_entries::GetAllSummaryJournalEntriesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("jr_number".into(), Value::String((&p.jr_number).clone()));
     Value::Object(m)
 }
 
 fn iface_summary_journal_entries__get_summary_journal_entry_params__to_json(p: &iface_summary_journal_entries::GetSummaryJournalEntryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("je_number".into(), Value::String((&p.je_number).clone()));
     Value::Object(m)
 }
 
 fn iface_summary_journal_entries__delete_summary_journal_entry_params__to_json(p: &iface_summary_journal_entries::DeleteSummaryJournalEntryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("je_number".into(), Value::String((&p.je_number).clone()));
     Value::Object(m)
 }
 
 fn iface_summary_journal_entries__put_basic_summary_journal_entry_params__to_json(p: &iface_summary_journal_entries::PutBasicSummaryJournalEntryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("je_number".into(), Value::String((&p.je_number).clone()));
     Value::Object(m)
 }
 
 fn iface_summary_journal_entries__put_summary_journal_entry_params__to_json(p: &iface_summary_journal_entries::PutSummaryJournalEntryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("je_number".into(), Value::String((&p.je_number).clone()));
     Value::Object(m)
 }
 
 impl iface_summary_journal_entries::Guest for crate::Component {
-    fn post_summary_journal_entry() -> Result<String, String> {
-        dispatch(&OP_SUMMARY_JOURNAL_ENTRIES_POST_SUMMARY_JOURNAL_ENTRY, Value::Object(Map::new()))
+    fn post_summary_journal_entry(params: iface_summary_journal_entries::PostSummaryJournalEntryParams) -> Result<String, String> {
+        let json = iface_summary_journal_entries__post_summary_journal_entry_params__to_json(&params);
+        dispatch(&OP_SUMMARY_JOURNAL_ENTRIES_POST_SUMMARY_JOURNAL_ENTRY, json)
     }
     fn get_all_summary_journal_entries(params: iface_summary_journal_entries::GetAllSummaryJournalEntriesParams) -> Result<String, String> {
         let json = iface_summary_journal_entries__get_all_summary_journal_entries_params__to_json(&params);
@@ -4912,6 +6168,8 @@ const OP_JOURNAL_RUNS_POST_JOURNAL_RUN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/journal-runs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -4921,6 +6179,8 @@ const OP_JOURNAL_RUNS_GET_JOURNAL_RUN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/journal-runs/{jr_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "jr_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4931,6 +6191,8 @@ const OP_JOURNAL_RUNS_DELETE_JOURNAL_RUN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/journal-runs/{jr_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "jr_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -4941,33 +6203,49 @@ const OP_JOURNAL_RUNS_PUT_JOURNAL_RUN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/journal-runs/{jr_number}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "jr_number", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_journal_runs__post_journal_run_params__to_json(p: &iface_journal_runs::PostJournalRunParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_journal_runs__get_journal_run_params__to_json(p: &iface_journal_runs::GetJournalRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("jr_number".into(), Value::String((&p.jr_number).clone()));
     Value::Object(m)
 }
 
 fn iface_journal_runs__delete_journal_run_params__to_json(p: &iface_journal_runs::DeleteJournalRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("jr_number".into(), Value::String((&p.jr_number).clone()));
     Value::Object(m)
 }
 
 fn iface_journal_runs__put_journal_run_params__to_json(p: &iface_journal_runs::PutJournalRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("jr_number".into(), Value::String((&p.jr_number).clone()));
     Value::Object(m)
 }
 
 impl iface_journal_runs::Guest for crate::Component {
-    fn post_journal_run() -> Result<String, String> {
-        dispatch(&OP_JOURNAL_RUNS_POST_JOURNAL_RUN, Value::Object(Map::new()))
+    fn post_journal_run(params: iface_journal_runs::PostJournalRunParams) -> Result<String, String> {
+        let json = iface_journal_runs__post_journal_run_params__to_json(&params);
+        dispatch(&OP_JOURNAL_RUNS_POST_JOURNAL_RUN, json)
     }
     fn get_journal_run(params: iface_journal_runs::GetJournalRunParams) -> Result<String, String> {
         let json = iface_journal_runs__get_journal_run_params__to_json(&params);
@@ -4988,6 +6266,8 @@ const OP_COMMUNICATION_PROFILES_OBJECT_GET_COMMUNICATION_PROFILE: OpSpec = OpSpe
     method: "GET",
     path_template: "/v1/object/communication-profile/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -4997,6 +6277,8 @@ const OP_COMMUNICATION_PROFILES_OBJECT_GET_COMMUNICATION_PROFILE: OpSpec = OpSpe
 
 fn iface_communication_profiles__object_get_communication_profile_params__to_json(p: &iface_communication_profiles::ObjectGetCommunicationProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5014,6 +6296,9 @@ const OP_CREDIT_BALANCE_ADJUSTMENTS_OBJECT_POST_CREDIT_BALANCE_ADJUSTMENT: OpSpe
     method: "POST",
     path_template: "/v1/object/credit-balance-adjustment",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5023,6 +6308,8 @@ const OP_CREDIT_BALANCE_ADJUSTMENTS_OBJECT_GET_CREDIT_BALANCE_ADJUSTMENT: OpSpec
     method: "GET",
     path_template: "/v1/object/credit-balance-adjustment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5034,14 +6321,27 @@ const OP_CREDIT_BALANCE_ADJUSTMENTS_OBJECT_PUT_CREDIT_BALANCE_ADJUSTMENT: OpSpec
     method: "PUT",
     path_template: "/v1/object/credit-balance-adjustment/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_credit_balance_adjustments__object_post_credit_balance_adjustment_params__to_json(p: &iface_credit_balance_adjustments::ObjectPostCreditBalanceAdjustmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_credit_balance_adjustments__object_get_credit_balance_adjustment_params__to_json(p: &iface_credit_balance_adjustments::ObjectGetCreditBalanceAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5049,13 +6349,17 @@ fn iface_credit_balance_adjustments__object_get_credit_balance_adjustment_params
 
 fn iface_credit_balance_adjustments__object_put_credit_balance_adjustment_params__to_json(p: &iface_credit_balance_adjustments::ObjectPutCreditBalanceAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_credit_balance_adjustments::Guest for crate::Component {
-    fn object_post_credit_balance_adjustment() -> Result<String, String> {
-        dispatch(&OP_CREDIT_BALANCE_ADJUSTMENTS_OBJECT_POST_CREDIT_BALANCE_ADJUSTMENT, Value::Object(Map::new()))
+    fn object_post_credit_balance_adjustment(params: iface_credit_balance_adjustments::ObjectPostCreditBalanceAdjustmentParams) -> Result<String, String> {
+        let json = iface_credit_balance_adjustments__object_post_credit_balance_adjustment_params__to_json(&params);
+        dispatch(&OP_CREDIT_BALANCE_ADJUSTMENTS_OBJECT_POST_CREDIT_BALANCE_ADJUSTMENT, json)
     }
     fn object_get_credit_balance_adjustment(params: iface_credit_balance_adjustments::ObjectGetCreditBalanceAdjustmentParams) -> Result<String, String> {
         let json = iface_credit_balance_adjustments__object_get_credit_balance_adjustment_params__to_json(&params);
@@ -5072,6 +6376,9 @@ const OP_EXPORTS_OBJECT_POST_EXPORT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/export",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5081,6 +6388,8 @@ const OP_EXPORTS_OBJECT_GET_EXPORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/export/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5088,16 +6397,27 @@ const OP_EXPORTS_OBJECT_GET_EXPORT: OpSpec = OpSpec {
     ],
 };
 
+fn iface_exports__object_post_export_params__to_json(p: &iface_exports::ObjectPostExportParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_exports__object_get_export_params__to_json(p: &iface_exports::ObjectGetExportParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_exports::Guest for crate::Component {
-    fn object_post_export() -> Result<String, String> {
-        dispatch(&OP_EXPORTS_OBJECT_POST_EXPORT, Value::Object(Map::new()))
+    fn object_post_export(params: iface_exports::ObjectPostExportParams) -> Result<String, String> {
+        let json = iface_exports__object_post_export_params__to_json(&params);
+        dispatch(&OP_EXPORTS_OBJECT_POST_EXPORT, json)
     }
     fn object_get_export(params: iface_exports::ObjectGetExportParams) -> Result<String, String> {
         let json = iface_exports__object_get_export_params__to_json(&params);
@@ -5110,6 +6430,9 @@ const OP_FEATURES_OBJECT_POST_FEATURE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/feature",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5119,6 +6442,8 @@ const OP_FEATURES_OBJECT_GET_FEATURE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/feature/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5130,6 +6455,9 @@ const OP_FEATURES_OBJECT_PUT_FEATURE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/feature/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5140,14 +6468,26 @@ const OP_FEATURES_OBJECT_DELETE_FEATURE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/feature/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_features__object_post_feature_params__to_json(p: &iface_features::ObjectPostFeatureParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_features__object_get_feature_params__to_json(p: &iface_features::ObjectGetFeatureParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5155,19 +6495,25 @@ fn iface_features__object_get_feature_params__to_json(p: &iface_features::Object
 
 fn iface_features__object_put_feature_params__to_json(p: &iface_features::ObjectPutFeatureParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_features__object_delete_feature_params__to_json(p: &iface_features::ObjectDeleteFeatureParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_features::Guest for crate::Component {
-    fn object_post_feature() -> Result<String, String> {
-        dispatch(&OP_FEATURES_OBJECT_POST_FEATURE, Value::Object(Map::new()))
+    fn object_post_feature(params: iface_features::ObjectPostFeatureParams) -> Result<String, String> {
+        let json = iface_features__object_post_feature_params__to_json(&params);
+        dispatch(&OP_FEATURES_OBJECT_POST_FEATURE, json)
     }
     fn object_get_feature(params: iface_features::ObjectGetFeatureParams) -> Result<String, String> {
         let json = iface_features__object_get_feature_params__to_json(&params);
@@ -5188,6 +6534,9 @@ const OP_IMPORTS_OBJECT_POST_IMPORT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/import",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5197,6 +6546,8 @@ const OP_IMPORTS_OBJECT_GET_IMPORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/import/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5204,16 +6555,27 @@ const OP_IMPORTS_OBJECT_GET_IMPORT: OpSpec = OpSpec {
     ],
 };
 
+fn iface_imports__object_post_import_params__to_json(p: &iface_imports::ObjectPostImportParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_imports__object_get_import_params__to_json(p: &iface_imports::ObjectGetImportParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_imports::Guest for crate::Component {
-    fn object_post_import() -> Result<String, String> {
-        dispatch(&OP_IMPORTS_OBJECT_POST_IMPORT, Value::Object(Map::new()))
+    fn object_post_import(params: iface_imports::ObjectPostImportParams) -> Result<String, String> {
+        let json = iface_imports__object_post_import_params__to_json(&params);
+        dispatch(&OP_IMPORTS_OBJECT_POST_IMPORT, json)
     }
     fn object_get_import(params: iface_imports::ObjectGetImportParams) -> Result<String, String> {
         let json = iface_imports__object_get_import_params__to_json(&params);
@@ -5226,6 +6588,9 @@ const OP_INVOICE_ADJUSTMENTS_OBJECT_POST_INVOICE_ADJUSTMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/invoice-adjustment",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5235,6 +6600,8 @@ const OP_INVOICE_ADJUSTMENTS_OBJECT_GET_INVOICE_ADJUSTMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/invoice-adjustment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5246,6 +6613,9 @@ const OP_INVOICE_ADJUSTMENTS_OBJECT_PUT_INVOICE_ADJUSTMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/invoice-adjustment/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5256,14 +6626,26 @@ const OP_INVOICE_ADJUSTMENTS_OBJECT_DELETE_INVOICE_ADJUSTMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/invoice-adjustment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_invoice_adjustments__object_post_invoice_adjustment_params__to_json(p: &iface_invoice_adjustments::ObjectPostInvoiceAdjustmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_invoice_adjustments__object_get_invoice_adjustment_params__to_json(p: &iface_invoice_adjustments::ObjectGetInvoiceAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5271,19 +6653,25 @@ fn iface_invoice_adjustments__object_get_invoice_adjustment_params__to_json(p: &
 
 fn iface_invoice_adjustments__object_put_invoice_adjustment_params__to_json(p: &iface_invoice_adjustments::ObjectPutInvoiceAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_invoice_adjustments__object_delete_invoice_adjustment_params__to_json(p: &iface_invoice_adjustments::ObjectDeleteInvoiceAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_invoice_adjustments::Guest for crate::Component {
-    fn object_post_invoice_adjustment() -> Result<String, String> {
-        dispatch(&OP_INVOICE_ADJUSTMENTS_OBJECT_POST_INVOICE_ADJUSTMENT, Value::Object(Map::new()))
+    fn object_post_invoice_adjustment(params: iface_invoice_adjustments::ObjectPostInvoiceAdjustmentParams) -> Result<String, String> {
+        let json = iface_invoice_adjustments__object_post_invoice_adjustment_params__to_json(&params);
+        dispatch(&OP_INVOICE_ADJUSTMENTS_OBJECT_POST_INVOICE_ADJUSTMENT, json)
     }
     fn object_get_invoice_adjustment(params: iface_invoice_adjustments::ObjectGetInvoiceAdjustmentParams) -> Result<String, String> {
         let json = iface_invoice_adjustments__object_get_invoice_adjustment_params__to_json(&params);
@@ -5304,6 +6692,8 @@ const OP_INVOICE_ITEM_ADJUSTMENTS_OBJECT_GET_INVOICE_ITEM_ADJUSTMENT: OpSpec = O
     method: "GET",
     path_template: "/v1/object/invoice-item-adjustment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5315,6 +6705,8 @@ const OP_INVOICE_ITEM_ADJUSTMENTS_OBJECT_DELETE_INVOICE_ITEM_ADJUSTMENT: OpSpec 
     method: "DELETE",
     path_template: "/v1/object/invoice-item-adjustment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5323,6 +6715,8 @@ const OP_INVOICE_ITEM_ADJUSTMENTS_OBJECT_DELETE_INVOICE_ITEM_ADJUSTMENT: OpSpec 
 
 fn iface_invoice_item_adjustments__object_get_invoice_item_adjustment_params__to_json(p: &iface_invoice_item_adjustments::ObjectGetInvoiceItemAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5330,6 +6724,8 @@ fn iface_invoice_item_adjustments__object_get_invoice_item_adjustment_params__to
 
 fn iface_invoice_item_adjustments__object_delete_invoice_item_adjustment_params__to_json(p: &iface_invoice_item_adjustments::ObjectDeleteInvoiceItemAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -5350,6 +6746,8 @@ const OP_INVOICE_ITEMS_OBJECT_GET_INVOICE_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/invoice-item/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5359,6 +6757,8 @@ const OP_INVOICE_ITEMS_OBJECT_GET_INVOICE_ITEM: OpSpec = OpSpec {
 
 fn iface_invoice_items__object_get_invoice_item_params__to_json(p: &iface_invoice_items::ObjectGetInvoiceItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5376,6 +6776,9 @@ const OP_INVOICE_PAYMENTS_OBJECT_POST_INVOICE_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/invoice-payment",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5385,6 +6788,8 @@ const OP_INVOICE_PAYMENTS_OBJECT_GET_INVOICE_PAYMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/invoice-payment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5396,14 +6801,27 @@ const OP_INVOICE_PAYMENTS_OBJECT_PUT_INVOICE_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/invoice-payment/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_invoice_payments__object_post_invoice_payment_params__to_json(p: &iface_invoice_payments::ObjectPostInvoicePaymentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_invoice_payments__object_get_invoice_payment_params__to_json(p: &iface_invoice_payments::ObjectGetInvoicePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5411,13 +6829,17 @@ fn iface_invoice_payments__object_get_invoice_payment_params__to_json(p: &iface_
 
 fn iface_invoice_payments__object_put_invoice_payment_params__to_json(p: &iface_invoice_payments::ObjectPutInvoicePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_invoice_payments::Guest for crate::Component {
-    fn object_post_invoice_payment() -> Result<String, String> {
-        dispatch(&OP_INVOICE_PAYMENTS_OBJECT_POST_INVOICE_PAYMENT, Value::Object(Map::new()))
+    fn object_post_invoice_payment(params: iface_invoice_payments::ObjectPostInvoicePaymentParams) -> Result<String, String> {
+        let json = iface_invoice_payments__object_post_invoice_payment_params__to_json(&params);
+        dispatch(&OP_INVOICE_PAYMENTS_OBJECT_POST_INVOICE_PAYMENT, json)
     }
     fn object_get_invoice_payment(params: iface_invoice_payments::ObjectGetInvoicePaymentParams) -> Result<String, String> {
         let json = iface_invoice_payments__object_get_invoice_payment_params__to_json(&params);
@@ -5434,6 +6856,8 @@ const OP_INVOICE_SPLIT_ITEMS_OBJECT_GET_INVOICE_SPLIT_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/invoice-split-item/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5443,6 +6867,8 @@ const OP_INVOICE_SPLIT_ITEMS_OBJECT_GET_INVOICE_SPLIT_ITEM: OpSpec = OpSpec {
 
 fn iface_invoice_split_items__object_get_invoice_split_item_params__to_json(p: &iface_invoice_split_items::ObjectGetInvoiceSplitItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5460,6 +6886,8 @@ const OP_INVOICE_SPLITS_OBJECT_GET_INVOICE_SPLIT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/invoice-split/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5469,6 +6897,8 @@ const OP_INVOICE_SPLITS_OBJECT_GET_INVOICE_SPLIT: OpSpec = OpSpec {
 
 fn iface_invoice_splits__object_get_invoice_split_params__to_json(p: &iface_invoice_splits::ObjectGetInvoiceSplitParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -5486,6 +6916,9 @@ const OP_PAYMENTS_OBJECT_POST_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/payment",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5495,6 +6928,8 @@ const OP_PAYMENTS_OBJECT_GET_PAYMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/payment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5505,6 +6940,9 @@ const OP_PAYMENTS_OBJECT_PUT_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/payment/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5515,6 +6953,8 @@ const OP_PAYMENTS_OBJECT_DELETE_PAYMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/payment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5525,6 +6965,9 @@ const OP_PAYMENTS_GET_RETRIEVE_ALL_PAYMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payments",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_id", location: FieldLocation::Query },
         FieldSpec { snake: "amount", location: FieldLocation::Query },
         FieldSpec { snake: "applied_amount", location: FieldLocation::Query },
@@ -5550,6 +6993,8 @@ const OP_PAYMENTS_POST_CREATE_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payments",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5559,6 +7004,8 @@ const OP_PAYMENTS_GET_PAYMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payments/{payment_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5569,6 +7016,8 @@ const OP_PAYMENTS_PUT_UPDATE_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payments/{payment_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5579,6 +7028,8 @@ const OP_PAYMENTS_DELETE_PAYMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/payments/{payment_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5589,6 +7040,8 @@ const OP_PAYMENTS_PUT_APPLY_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payments/{payment_id}/apply",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5599,6 +7052,8 @@ const OP_PAYMENTS_PUT_CANCEL_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payments/{payment_id}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5609,6 +7064,9 @@ const OP_PAYMENTS_GET_PAYMENT_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payments/{payment_id}/parts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5619,6 +7077,8 @@ const OP_PAYMENTS_GET_PAYMENT_PART: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payments/{payment_id}/parts/{partid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "partid", location: FieldLocation::Path },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
@@ -5630,6 +7090,9 @@ const OP_PAYMENTS_GET_PAYMENT_ITEM_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payments/{payment_id}/parts/{partid}/itemparts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "partid", location: FieldLocation::Path },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
@@ -5641,6 +7104,8 @@ const OP_PAYMENTS_GET_PAYMENT_ITEM_PART: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payments/{payment_id}/parts/{partid}/itemparts/{itempartid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "partid", location: FieldLocation::Path },
         FieldSpec { snake: "itempartid", location: FieldLocation::Path },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
@@ -5653,6 +7118,8 @@ const OP_PAYMENTS_POST_REFUND_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payments/{payment_id}/refunds",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5663,6 +7130,8 @@ const OP_PAYMENTS_PUT_TRANSFER_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payments/{payment_id}/transfer",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5673,6 +7142,8 @@ const OP_PAYMENTS_PUT_UNAPPLY_PAYMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payments/{payment_id}/unapply",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5697,26 +7168,44 @@ fn iface_payments__get_retrieve_all_payments_type_op_enum__to_str(e: &iface_paym
     }
 }
 
+fn iface_payments__object_post_payment_params__to_json(p: &iface_payments::ObjectPostPaymentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_payments__object_get_payment_params__to_json(p: &iface_payments::ObjectGetPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__object_put_payment_params__to_json(p: &iface_payments::ObjectPutPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__object_delete_payment_params__to_json(p: &iface_payments::ObjectDeletePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__get_retrieve_all_payments_params__to_json(p: &iface_payments::GetRetrieveAllPaymentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amount".into(), match (&p.amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("applied_amount".into(), match (&p.applied_amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -5736,44 +7225,66 @@ fn iface_payments__get_retrieve_all_payments_params__to_json(p: &iface_payments:
     Value::Object(m)
 }
 
+fn iface_payments__post_create_payment_params__to_json(p: &iface_payments::PostCreatePaymentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_payments__get_payment_params__to_json(p: &iface_payments::GetPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__put_update_payment_params__to_json(p: &iface_payments::PutUpdatePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__delete_payment_params__to_json(p: &iface_payments::DeletePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__put_apply_payment_params__to_json(p: &iface_payments::PutApplyPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__put_cancel_payment_params__to_json(p: &iface_payments::PutCancelPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__get_payment_parts_params__to_json(p: &iface_payments::GetPaymentPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__get_payment_part_params__to_json(p: &iface_payments::GetPaymentPartParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("partid".into(), Value::String((&p.partid).clone()));
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
@@ -5781,6 +7292,9 @@ fn iface_payments__get_payment_part_params__to_json(p: &iface_payments::GetPayme
 
 fn iface_payments__get_payment_item_parts_params__to_json(p: &iface_payments::GetPaymentItemPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("partid".into(), Value::String((&p.partid).clone()));
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
@@ -5788,6 +7302,8 @@ fn iface_payments__get_payment_item_parts_params__to_json(p: &iface_payments::Ge
 
 fn iface_payments__get_payment_item_part_params__to_json(p: &iface_payments::GetPaymentItemPartParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("partid".into(), Value::String((&p.partid).clone()));
     m.insert("itempartid".into(), Value::String((&p.itempartid).clone()));
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
@@ -5796,25 +7312,32 @@ fn iface_payments__get_payment_item_part_params__to_json(p: &iface_payments::Get
 
 fn iface_payments__post_refund_payment_params__to_json(p: &iface_payments::PostRefundPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__put_transfer_payment_params__to_json(p: &iface_payments::PutTransferPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payments__put_unapply_payment_params__to_json(p: &iface_payments::PutUnapplyPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_id".into(), Value::String((&p.payment_id).clone()));
     Value::Object(m)
 }
 
 impl iface_payments::Guest for crate::Component {
-    fn object_post_payment() -> Result<String, String> {
-        dispatch(&OP_PAYMENTS_OBJECT_POST_PAYMENT, Value::Object(Map::new()))
+    fn object_post_payment(params: iface_payments::ObjectPostPaymentParams) -> Result<String, String> {
+        let json = iface_payments__object_post_payment_params__to_json(&params);
+        dispatch(&OP_PAYMENTS_OBJECT_POST_PAYMENT, json)
     }
     fn object_get_payment(params: iface_payments::ObjectGetPaymentParams) -> Result<String, String> {
         let json = iface_payments__object_get_payment_params__to_json(&params);
@@ -5832,8 +7355,9 @@ impl iface_payments::Guest for crate::Component {
         let json = iface_payments__get_retrieve_all_payments_params__to_json(&params);
         dispatch(&OP_PAYMENTS_GET_RETRIEVE_ALL_PAYMENTS, json)
     }
-    fn post_create_payment() -> Result<String, String> {
-        dispatch(&OP_PAYMENTS_POST_CREATE_PAYMENT, Value::Object(Map::new()))
+    fn post_create_payment(params: iface_payments::PostCreatePaymentParams) -> Result<String, String> {
+        let json = iface_payments__post_create_payment_params__to_json(&params);
+        dispatch(&OP_PAYMENTS_POST_CREATE_PAYMENT, json)
     }
     fn get_payment(params: iface_payments::GetPaymentParams) -> Result<String, String> {
         let json = iface_payments__get_payment_params__to_json(&params);
@@ -5890,6 +7414,9 @@ const OP_PAYMENT_METHODS_OBJECT_POST_PAYMENT_METHOD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/payment-method",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5899,6 +7426,8 @@ const OP_PAYMENT_METHODS_OBJECT_GET_PAYMENT_METHOD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/payment-method/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -5910,6 +7439,9 @@ const OP_PAYMENT_METHODS_OBJECT_PUT_PAYMENT_METHOD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/payment-method/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5920,6 +7452,8 @@ const OP_PAYMENT_METHODS_OBJECT_DELETE_PAYMENT_METHOD: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/payment-method/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5930,6 +7464,8 @@ const OP_PAYMENT_METHODS_POST_PAYMENT_METHODS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payment-methods",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5939,6 +7475,8 @@ const OP_PAYMENT_METHODS_POST_PAYMENT_METHODS_CREDIT_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payment-methods/credit-cards",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5948,6 +7486,9 @@ const OP_PAYMENT_METHODS_GET_PAYMENT_METHODS_CREDIT_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payment-methods/credit-cards/accounts/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5958,6 +7499,8 @@ const OP_PAYMENT_METHODS_PUT_PAYMENT_METHODS_CREDIT_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payment-methods/credit-cards/{payment_method_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5968,6 +7511,8 @@ const OP_PAYMENT_METHODS_POST_PAYMENT_METHODS_DECRYPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payment-methods/decryption",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5977,6 +7522,8 @@ const OP_PAYMENT_METHODS_GET_PAYMENT_METHOD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payment-methods/{payment_method_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5987,6 +7534,8 @@ const OP_PAYMENT_METHODS_PUT_PAYMENT_METHOD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payment-methods/{payment_method_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -5997,6 +7546,8 @@ const OP_PAYMENT_METHODS_DELETE_PAYMENT_METHODS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/payment-methods/{payment_method_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6007,6 +7558,8 @@ const OP_PAYMENT_METHODS_POST_CREATE_AUTHORIZATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payment-methods/{payment_method_id}/authorize",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6017,6 +7570,8 @@ const OP_PAYMENT_METHODS_GET_STORED_CREDENTIAL_PROFILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payment-methods/{payment_method_id}/profiles",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
         FieldSpec { snake: "include_all", location: FieldLocation::Query },
     ],
@@ -6028,6 +7583,8 @@ const OP_PAYMENT_METHODS_POST_CREATE_STORED_CREDENTIAL_PROFILE: OpSpec = OpSpec 
     method: "POST",
     path_template: "/v1/payment-methods/{payment_method_id}/profiles",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6038,6 +7595,8 @@ const OP_PAYMENT_METHODS_POST_CANCEL_STORED_CREDENTIAL_PROFILE: OpSpec = OpSpec 
     method: "POST",
     path_template: "/v1/payment-methods/{payment_method_id}/profiles/{profile_number}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
         FieldSpec { snake: "profile_number", location: FieldLocation::Path },
     ],
@@ -6049,6 +7608,8 @@ const OP_PAYMENT_METHODS_POST_EXPIRE_STORED_CREDENTIAL_PROFILE: OpSpec = OpSpec 
     method: "POST",
     path_template: "/v1/payment-methods/{payment_method_id}/profiles/{profile_number}/expire",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
         FieldSpec { snake: "profile_number", location: FieldLocation::Path },
     ],
@@ -6060,6 +7621,8 @@ const OP_PAYMENT_METHODS_PUT_SCRUB_PAYMENT_METHODS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payment-methods/{payment_method_id}/scrub",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6070,6 +7633,7 @@ const OP_PAYMENT_METHODS_PUT_VERIFY_PAYMENT_METHODS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payment-methods/{payment_method_id}/verify",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6080,14 +7644,26 @@ const OP_PAYMENT_METHODS_POST_CANCEL_AUTHORIZATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payment-methods/{payment_method_id}/voidAuthorize",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_method_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_payment_methods__object_post_payment_method_params__to_json(p: &iface_payment_methods::ObjectPostPaymentMethodParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_payment_methods__object_get_payment_method_params__to_json(p: &iface_payment_methods::ObjectGetPaymentMethodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6095,54 +7671,95 @@ fn iface_payment_methods__object_get_payment_method_params__to_json(p: &iface_pa
 
 fn iface_payment_methods__object_put_payment_method_params__to_json(p: &iface_payment_methods::ObjectPutPaymentMethodParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__object_delete_payment_method_params__to_json(p: &iface_payment_methods::ObjectDeletePaymentMethodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_payment_methods__post_payment_methods_params__to_json(p: &iface_payment_methods::PostPaymentMethodsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_payment_methods__post_payment_methods_credit_card_params__to_json(p: &iface_payment_methods::PostPaymentMethodsCreditCardParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_payment_methods__get_payment_methods_credit_card_params__to_json(p: &iface_payment_methods::GetPaymentMethodsCreditCardParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__put_payment_methods_credit_card_params__to_json(p: &iface_payment_methods::PutPaymentMethodsCreditCardParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_payment_methods__post_payment_methods_decryption_params__to_json(p: &iface_payment_methods::PostPaymentMethodsDecryptionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_payment_methods__get_payment_method_params__to_json(p: &iface_payment_methods::GetPaymentMethodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__put_payment_method_params__to_json(p: &iface_payment_methods::PutPaymentMethodParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__delete_payment_methods_params__to_json(p: &iface_payment_methods::DeletePaymentMethodsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__post_create_authorization_params__to_json(p: &iface_payment_methods::PostCreateAuthorizationParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__get_stored_credential_profiles_params__to_json(p: &iface_payment_methods::GetStoredCredentialProfilesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     m.insert("include_all".into(), match (&p.include_all) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
@@ -6150,12 +7767,16 @@ fn iface_payment_methods__get_stored_credential_profiles_params__to_json(p: &ifa
 
 fn iface_payment_methods__post_create_stored_credential_profile_params__to_json(p: &iface_payment_methods::PostCreateStoredCredentialProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__post_cancel_stored_credential_profile_params__to_json(p: &iface_payment_methods::PostCancelStoredCredentialProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     m.insert("profile_number".into(), Value::String((&p.profile_number).clone()));
     Value::Object(m)
@@ -6163,6 +7784,8 @@ fn iface_payment_methods__post_cancel_stored_credential_profile_params__to_json(
 
 fn iface_payment_methods__post_expire_stored_credential_profile_params__to_json(p: &iface_payment_methods::PostExpireStoredCredentialProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     m.insert("profile_number".into(), Value::String((&p.profile_number).clone()));
     Value::Object(m)
@@ -6170,25 +7793,31 @@ fn iface_payment_methods__post_expire_stored_credential_profile_params__to_json(
 
 fn iface_payment_methods__put_scrub_payment_methods_params__to_json(p: &iface_payment_methods::PutScrubPaymentMethodsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__put_verify_payment_methods_params__to_json(p: &iface_payment_methods::PutVerifyPaymentMethodsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_methods__post_cancel_authorization_params__to_json(p: &iface_payment_methods::PostCancelAuthorizationParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_method_id".into(), Value::String((&p.payment_method_id).clone()));
     Value::Object(m)
 }
 
 impl iface_payment_methods::Guest for crate::Component {
-    fn object_post_payment_method() -> Result<String, String> {
-        dispatch(&OP_PAYMENT_METHODS_OBJECT_POST_PAYMENT_METHOD, Value::Object(Map::new()))
+    fn object_post_payment_method(params: iface_payment_methods::ObjectPostPaymentMethodParams) -> Result<String, String> {
+        let json = iface_payment_methods__object_post_payment_method_params__to_json(&params);
+        dispatch(&OP_PAYMENT_METHODS_OBJECT_POST_PAYMENT_METHOD, json)
     }
     fn object_get_payment_method(params: iface_payment_methods::ObjectGetPaymentMethodParams) -> Result<String, String> {
         let json = iface_payment_methods__object_get_payment_method_params__to_json(&params);
@@ -6202,11 +7831,13 @@ impl iface_payment_methods::Guest for crate::Component {
         let json = iface_payment_methods__object_delete_payment_method_params__to_json(&params);
         dispatch(&OP_PAYMENT_METHODS_OBJECT_DELETE_PAYMENT_METHOD, json)
     }
-    fn post_payment_methods() -> Result<String, String> {
-        dispatch(&OP_PAYMENT_METHODS_POST_PAYMENT_METHODS, Value::Object(Map::new()))
+    fn post_payment_methods(params: iface_payment_methods::PostPaymentMethodsParams) -> Result<String, String> {
+        let json = iface_payment_methods__post_payment_methods_params__to_json(&params);
+        dispatch(&OP_PAYMENT_METHODS_POST_PAYMENT_METHODS, json)
     }
-    fn post_payment_methods_credit_card() -> Result<String, String> {
-        dispatch(&OP_PAYMENT_METHODS_POST_PAYMENT_METHODS_CREDIT_CARD, Value::Object(Map::new()))
+    fn post_payment_methods_credit_card(params: iface_payment_methods::PostPaymentMethodsCreditCardParams) -> Result<String, String> {
+        let json = iface_payment_methods__post_payment_methods_credit_card_params__to_json(&params);
+        dispatch(&OP_PAYMENT_METHODS_POST_PAYMENT_METHODS_CREDIT_CARD, json)
     }
     fn get_payment_methods_credit_card(params: iface_payment_methods::GetPaymentMethodsCreditCardParams) -> Result<String, String> {
         let json = iface_payment_methods__get_payment_methods_credit_card_params__to_json(&params);
@@ -6216,8 +7847,9 @@ impl iface_payment_methods::Guest for crate::Component {
         let json = iface_payment_methods__put_payment_methods_credit_card_params__to_json(&params);
         dispatch(&OP_PAYMENT_METHODS_PUT_PAYMENT_METHODS_CREDIT_CARD, json)
     }
-    fn post_payment_methods_decryption() -> Result<String, String> {
-        dispatch(&OP_PAYMENT_METHODS_POST_PAYMENT_METHODS_DECRYPTION, Value::Object(Map::new()))
+    fn post_payment_methods_decryption(params: iface_payment_methods::PostPaymentMethodsDecryptionParams) -> Result<String, String> {
+        let json = iface_payment_methods__post_payment_methods_decryption_params__to_json(&params);
+        dispatch(&OP_PAYMENT_METHODS_POST_PAYMENT_METHODS_DECRYPTION, json)
     }
     fn get_payment_method(params: iface_payment_methods::GetPaymentMethodParams) -> Result<String, String> {
         let json = iface_payment_methods__get_payment_method_params__to_json(&params);
@@ -6270,6 +7902,8 @@ const OP_PAYMENT_METHOD_SNAPSHOTS_OBJECT_GET_PAYMENT_METHOD_SNAPSHOT: OpSpec = O
     method: "GET",
     path_template: "/v1/object/payment-method-snapshot/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6279,6 +7913,8 @@ const OP_PAYMENT_METHOD_SNAPSHOTS_OBJECT_GET_PAYMENT_METHOD_SNAPSHOT: OpSpec = O
 
 fn iface_payment_method_snapshots__object_get_payment_method_snapshot_params__to_json(p: &iface_payment_method_snapshots::ObjectGetPaymentMethodSnapshotParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6296,6 +7932,8 @@ const OP_PAYMENT_METHOD_TRANSACTION_LOGS_OBJECT_GET_PAYMENT_METHOD_TRANSACTION_L
     method: "GET",
     path_template: "/v1/object/payment-method-transaction-log/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6305,6 +7943,8 @@ const OP_PAYMENT_METHOD_TRANSACTION_LOGS_OBJECT_GET_PAYMENT_METHOD_TRANSACTION_L
 
 fn iface_payment_method_transaction_logs__object_get_payment_method_transaction_log_params__to_json(p: &iface_payment_method_transaction_logs::ObjectGetPaymentMethodTransactionLogParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6322,6 +7962,8 @@ const OP_PAYMENT_TRANSACTION_LOGS_OBJECT_GET_PAYMENT_TRANSACTION_LOG: OpSpec = O
     method: "GET",
     path_template: "/v1/object/payment-transaction-log/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6330,6 +7972,8 @@ const OP_PAYMENT_TRANSACTION_LOGS_OBJECT_GET_PAYMENT_TRANSACTION_LOG: OpSpec = O
 
 fn iface_payment_transaction_logs__object_get_payment_transaction_log_params__to_json(p: &iface_payment_transaction_logs::ObjectGetPaymentTransactionLogParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -6346,6 +7990,9 @@ const OP_PRODUCTS_OBJECT_POST_PRODUCT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/product",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -6355,6 +8002,8 @@ const OP_PRODUCTS_OBJECT_GET_PRODUCT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/product/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6366,6 +8015,9 @@ const OP_PRODUCTS_OBJECT_PUT_PRODUCT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/product/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6376,14 +8028,26 @@ const OP_PRODUCTS_OBJECT_DELETE_PRODUCT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/product/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_products__object_post_product_params__to_json(p: &iface_products::ObjectPostProductParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_products__object_get_product_params__to_json(p: &iface_products::ObjectGetProductParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6391,19 +8055,25 @@ fn iface_products__object_get_product_params__to_json(p: &iface_products::Object
 
 fn iface_products__object_put_product_params__to_json(p: &iface_products::ObjectPutProductParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_products__object_delete_product_params__to_json(p: &iface_products::ObjectDeleteProductParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_products::Guest for crate::Component {
-    fn object_post_product() -> Result<String, String> {
-        dispatch(&OP_PRODUCTS_OBJECT_POST_PRODUCT, Value::Object(Map::new()))
+    fn object_post_product(params: iface_products::ObjectPostProductParams) -> Result<String, String> {
+        let json = iface_products__object_post_product_params__to_json(&params);
+        dispatch(&OP_PRODUCTS_OBJECT_POST_PRODUCT, json)
     }
     fn object_get_product(params: iface_products::ObjectGetProductParams) -> Result<String, String> {
         let json = iface_products__object_get_product_params__to_json(&params);
@@ -6424,6 +8094,8 @@ const OP_PRODUCT_FEATURES_OBJECT_GET_PRODUCT_FEATURE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/product-feature/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6435,6 +8107,8 @@ const OP_PRODUCT_FEATURES_OBJECT_DELETE_PRODUCT_FEATURE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/product-feature/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6443,6 +8117,8 @@ const OP_PRODUCT_FEATURES_OBJECT_DELETE_PRODUCT_FEATURE: OpSpec = OpSpec {
 
 fn iface_product_features__object_get_product_feature_params__to_json(p: &iface_product_features::ObjectGetProductFeatureParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6450,6 +8126,8 @@ fn iface_product_features__object_get_product_feature_params__to_json(p: &iface_
 
 fn iface_product_features__object_delete_product_feature_params__to_json(p: &iface_product_features::ObjectDeleteProductFeatureParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -6470,6 +8148,9 @@ const OP_PRODUCT_RATE_PLANS_OBJECT_POST_PRODUCT_RATE_PLAN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/product-rate-plan",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -6479,6 +8160,8 @@ const OP_PRODUCT_RATE_PLANS_OBJECT_GET_PRODUCT_RATE_PLAN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/product-rate-plan/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6490,6 +8173,9 @@ const OP_PRODUCT_RATE_PLANS_OBJECT_PUT_PRODUCT_RATE_PLAN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/product-rate-plan/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6500,6 +8186,8 @@ const OP_PRODUCT_RATE_PLANS_OBJECT_DELETE_PRODUCT_RATE_PLAN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/product-rate-plan/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6510,14 +8198,28 @@ const OP_PRODUCT_RATE_PLANS_GET_PRODUCT_RATE_PLANS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/rateplan/{product_id}/productRatePlan",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "product_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_product_rate_plans__object_post_product_rate_plan_params__to_json(p: &iface_product_rate_plans::ObjectPostProductRatePlanParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_product_rate_plans__object_get_product_rate_plan_params__to_json(p: &iface_product_rate_plans::ObjectGetProductRatePlanParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6525,25 +8227,35 @@ fn iface_product_rate_plans__object_get_product_rate_plan_params__to_json(p: &if
 
 fn iface_product_rate_plans__object_put_product_rate_plan_params__to_json(p: &iface_product_rate_plans::ObjectPutProductRatePlanParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_product_rate_plans__object_delete_product_rate_plan_params__to_json(p: &iface_product_rate_plans::ObjectDeleteProductRatePlanParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_product_rate_plans__get_product_rate_plans_params__to_json(p: &iface_product_rate_plans::GetProductRatePlansParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("product_id".into(), Value::String((&p.product_id).clone()));
     Value::Object(m)
 }
 
 impl iface_product_rate_plans::Guest for crate::Component {
-    fn object_post_product_rate_plan() -> Result<String, String> {
-        dispatch(&OP_PRODUCT_RATE_PLANS_OBJECT_POST_PRODUCT_RATE_PLAN, Value::Object(Map::new()))
+    fn object_post_product_rate_plan(params: iface_product_rate_plans::ObjectPostProductRatePlanParams) -> Result<String, String> {
+        let json = iface_product_rate_plans__object_post_product_rate_plan_params__to_json(&params);
+        dispatch(&OP_PRODUCT_RATE_PLANS_OBJECT_POST_PRODUCT_RATE_PLAN, json)
     }
     fn object_get_product_rate_plan(params: iface_product_rate_plans::ObjectGetProductRatePlanParams) -> Result<String, String> {
         let json = iface_product_rate_plans__object_get_product_rate_plan_params__to_json(&params);
@@ -6568,6 +8280,10 @@ const OP_PRODUCT_RATE_PLAN_CHARGES_OBJECT_POST_PRODUCT_RATE_PLAN_CHARGE: OpSpec 
     method: "POST",
     path_template: "/v1/object/product-rate-plan-charge",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -6577,6 +8293,8 @@ const OP_PRODUCT_RATE_PLAN_CHARGES_OBJECT_GET_PRODUCT_RATE_PLAN_CHARGE: OpSpec =
     method: "GET",
     path_template: "/v1/object/product-rate-plan-charge/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6588,6 +8306,10 @@ const OP_PRODUCT_RATE_PLAN_CHARGES_OBJECT_PUT_PRODUCT_RATE_PLAN_CHARGE: OpSpec =
     method: "PUT",
     path_template: "/v1/object/product-rate-plan-charge/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6598,14 +8320,27 @@ const OP_PRODUCT_RATE_PLAN_CHARGES_OBJECT_DELETE_PRODUCT_RATE_PLAN_CHARGE: OpSpe
     method: "DELETE",
     path_template: "/v1/object/product-rate-plan-charge/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_product_rate_plan_charges__object_post_product_rate_plan_charge_params__to_json(p: &iface_product_rate_plan_charges::ObjectPostProductRatePlanChargeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_product_rate_plan_charges__object_get_product_rate_plan_charge_params__to_json(p: &iface_product_rate_plan_charges::ObjectGetProductRatePlanChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6613,19 +8348,26 @@ fn iface_product_rate_plan_charges__object_get_product_rate_plan_charge_params__
 
 fn iface_product_rate_plan_charges__object_put_product_rate_plan_charge_params__to_json(p: &iface_product_rate_plan_charges::ObjectPutProductRatePlanChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_product_rate_plan_charges__object_delete_product_rate_plan_charge_params__to_json(p: &iface_product_rate_plan_charges::ObjectDeleteProductRatePlanChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_product_rate_plan_charges::Guest for crate::Component {
-    fn object_post_product_rate_plan_charge() -> Result<String, String> {
-        dispatch(&OP_PRODUCT_RATE_PLAN_CHARGES_OBJECT_POST_PRODUCT_RATE_PLAN_CHARGE, Value::Object(Map::new()))
+    fn object_post_product_rate_plan_charge(params: iface_product_rate_plan_charges::ObjectPostProductRatePlanChargeParams) -> Result<String, String> {
+        let json = iface_product_rate_plan_charges__object_post_product_rate_plan_charge_params__to_json(&params);
+        dispatch(&OP_PRODUCT_RATE_PLAN_CHARGES_OBJECT_POST_PRODUCT_RATE_PLAN_CHARGE, json)
     }
     fn object_get_product_rate_plan_charge(params: iface_product_rate_plan_charges::ObjectGetProductRatePlanChargeParams) -> Result<String, String> {
         let json = iface_product_rate_plan_charges__object_get_product_rate_plan_charge_params__to_json(&params);
@@ -6646,6 +8388,8 @@ const OP_PRODUCT_RATE_PLAN_CHARGE_TIERS_OBJECT_GET_PRODUCT_RATE_PLAN_CHARGE_TIER
     method: "GET",
     path_template: "/v1/object/product-rate-plan-charge-tier/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6657,6 +8401,9 @@ const OP_PRODUCT_RATE_PLAN_CHARGE_TIERS_OBJECT_PUT_PRODUCT_RATE_PLAN_CHARGE_TIER
     method: "PUT",
     path_template: "/v1/object/product-rate-plan-charge-tier/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6665,6 +8412,8 @@ const OP_PRODUCT_RATE_PLAN_CHARGE_TIERS_OBJECT_PUT_PRODUCT_RATE_PLAN_CHARGE_TIER
 
 fn iface_product_rate_plan_charge_tiers__object_get_product_rate_plan_charge_tier_params__to_json(p: &iface_product_rate_plan_charge_tiers::ObjectGetProductRatePlanChargeTierParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6672,6 +8421,9 @@ fn iface_product_rate_plan_charge_tiers__object_get_product_rate_plan_charge_tie
 
 fn iface_product_rate_plan_charge_tiers__object_put_product_rate_plan_charge_tier_params__to_json(p: &iface_product_rate_plan_charge_tiers::ObjectPutProductRatePlanChargeTierParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -6692,6 +8444,8 @@ const OP_RATE_PLAN_CHARGE_TIERS_OBJECT_GET_RATE_PLAN_CHARGE_TIER: OpSpec = OpSpe
     method: "GET",
     path_template: "/v1/object/rate-plan-charge-tier/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6701,6 +8455,8 @@ const OP_RATE_PLAN_CHARGE_TIERS_OBJECT_GET_RATE_PLAN_CHARGE_TIER: OpSpec = OpSpe
 
 fn iface_rate_plan_charge_tiers__object_get_rate_plan_charge_tier_params__to_json(p: &iface_rate_plan_charge_tiers::ObjectGetRatePlanChargeTierParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6718,6 +8474,8 @@ const OP_RATE_PLAN_CHARGES_OBJECT_GET_RATE_PLAN_CHARGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/rate-plan-charge/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6729,6 +8487,9 @@ const OP_RATE_PLAN_CHARGES_OBJECT_PUT_RATE_PLAN_CHARGE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/rate-plan-charge/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6737,6 +8498,8 @@ const OP_RATE_PLAN_CHARGES_OBJECT_PUT_RATE_PLAN_CHARGE: OpSpec = OpSpec {
 
 fn iface_rate_plan_charges__object_get_rate_plan_charge_params__to_json(p: &iface_rate_plan_charges::ObjectGetRatePlanChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6744,6 +8507,9 @@ fn iface_rate_plan_charges__object_get_rate_plan_charge_params__to_json(p: &ifac
 
 fn iface_rate_plan_charges__object_put_rate_plan_charge_params__to_json(p: &iface_rate_plan_charges::ObjectPutRatePlanChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -6764,6 +8530,8 @@ const OP_RATE_PLANS_OBJECT_GET_RATE_PLAN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/rate-plan/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6773,6 +8541,8 @@ const OP_RATE_PLANS_OBJECT_GET_RATE_PLAN: OpSpec = OpSpec {
 
 fn iface_rate_plans__object_get_rate_plan_params__to_json(p: &iface_rate_plans::ObjectGetRatePlanParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6790,6 +8560,9 @@ const OP_REFUNDS_OBJECT_POST_REFUND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/refund",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -6799,6 +8572,8 @@ const OP_REFUNDS_OBJECT_GET_REFUND: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/refund/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -6810,6 +8585,9 @@ const OP_REFUNDS_OBJECT_PUT_REFUND: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/refund/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6820,6 +8598,8 @@ const OP_REFUNDS_OBJECT_DELETE_REFUND: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/refund/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6830,6 +8610,9 @@ const OP_REFUNDS_GET_REFUNDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/refunds",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_id", location: FieldLocation::Query },
         FieldSpec { snake: "amount", location: FieldLocation::Query },
         FieldSpec { snake: "created_by_id", location: FieldLocation::Query },
@@ -6852,6 +8635,8 @@ const OP_REFUNDS_GET_REFUND: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/refunds/{refund_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6862,6 +8647,8 @@ const OP_REFUNDS_PUT_UPDATE_REFUND: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/refunds/{refund_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6872,6 +8659,8 @@ const OP_REFUNDS_DELETE_REFUND: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/refunds/{refund_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6882,6 +8671,8 @@ const OP_REFUNDS_PUT_CANCEL_REFUND: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/refunds/{refund_id}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6892,6 +8683,8 @@ const OP_REFUNDS_GET_REFUND_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/refunds/{refund_id}/parts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -6902,6 +8695,8 @@ const OP_REFUNDS_GET_REFUND_PART: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/refunds/{refund_id}/parts/{refundpartid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "refundpartid", location: FieldLocation::Path },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
@@ -6913,6 +8708,9 @@ const OP_REFUNDS_GET_REFUND_ITEM_PARTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/refunds/{refund_id}/parts/{refundpartid}/itemparts",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "refundpartid", location: FieldLocation::Path },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
     ],
@@ -6924,6 +8722,8 @@ const OP_REFUNDS_GET_REFUND_ITEM_PART: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/refunds/{refund_id}/parts/{refundpartid}/itemparts/{itempartid}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "itempartid", location: FieldLocation::Path },
         FieldSpec { snake: "refundpartid", location: FieldLocation::Path },
         FieldSpec { snake: "refund_id", location: FieldLocation::Path },
@@ -6963,8 +8763,18 @@ fn iface_refunds__get_refunds_type_op_enum__to_str(e: &iface_refunds::GetRefunds
     }
 }
 
+fn iface_refunds__object_post_refund_params__to_json(p: &iface_refunds::ObjectPostRefundParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_refunds__object_get_refund_params__to_json(p: &iface_refunds::ObjectGetRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -6972,18 +8782,26 @@ fn iface_refunds__object_get_refund_params__to_json(p: &iface_refunds::ObjectGet
 
 fn iface_refunds__object_put_refund_params__to_json(p: &iface_refunds::ObjectPutRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_refunds__object_delete_refund_params__to_json(p: &iface_refunds::ObjectDeleteRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_refunds__get_refunds_params__to_json(p: &iface_refunds::GetRefundsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("amount".into(), match (&p.amount) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("created_by_id".into(), match (&p.created_by_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7002,36 +8820,48 @@ fn iface_refunds__get_refunds_params__to_json(p: &iface_refunds::GetRefundsParam
 
 fn iface_refunds__get_refund_params__to_json(p: &iface_refunds::GetRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
 }
 
 fn iface_refunds__put_update_refund_params__to_json(p: &iface_refunds::PutUpdateRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
 }
 
 fn iface_refunds__delete_refund_params__to_json(p: &iface_refunds::DeleteRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
 }
 
 fn iface_refunds__put_cancel_refund_params__to_json(p: &iface_refunds::PutCancelRefundParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
 }
 
 fn iface_refunds__get_refund_parts_params__to_json(p: &iface_refunds::GetRefundPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
 }
 
 fn iface_refunds__get_refund_part_params__to_json(p: &iface_refunds::GetRefundPartParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("refundpartid".into(), Value::String((&p.refundpartid).clone()));
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
@@ -7039,6 +8869,9 @@ fn iface_refunds__get_refund_part_params__to_json(p: &iface_refunds::GetRefundPa
 
 fn iface_refunds__get_refund_item_parts_params__to_json(p: &iface_refunds::GetRefundItemPartsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("refundpartid".into(), Value::String((&p.refundpartid).clone()));
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
     Value::Object(m)
@@ -7046,6 +8879,8 @@ fn iface_refunds__get_refund_item_parts_params__to_json(p: &iface_refunds::GetRe
 
 fn iface_refunds__get_refund_item_part_params__to_json(p: &iface_refunds::GetRefundItemPartParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("itempartid".into(), Value::String((&p.itempartid).clone()));
     m.insert("refundpartid".into(), Value::String((&p.refundpartid).clone()));
     m.insert("refund_id".into(), Value::String((&p.refund_id).clone()));
@@ -7053,8 +8888,9 @@ fn iface_refunds__get_refund_item_part_params__to_json(p: &iface_refunds::GetRef
 }
 
 impl iface_refunds::Guest for crate::Component {
-    fn object_post_refund() -> Result<String, String> {
-        dispatch(&OP_REFUNDS_OBJECT_POST_REFUND, Value::Object(Map::new()))
+    fn object_post_refund(params: iface_refunds::ObjectPostRefundParams) -> Result<String, String> {
+        let json = iface_refunds__object_post_refund_params__to_json(&params);
+        dispatch(&OP_REFUNDS_OBJECT_POST_REFUND, json)
     }
     fn object_get_refund(params: iface_refunds::ObjectGetRefundParams) -> Result<String, String> {
         let json = iface_refunds__object_get_refund_params__to_json(&params);
@@ -7111,6 +8947,8 @@ const OP_REFUND_INVOICE_PAYMENTS_OBJECT_GET_REFUND_INVOICE_PAYMENT: OpSpec = OpS
     method: "GET",
     path_template: "/v1/object/refund-invoice-payment/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -7120,6 +8958,8 @@ const OP_REFUND_INVOICE_PAYMENTS_OBJECT_GET_REFUND_INVOICE_PAYMENT: OpSpec = OpS
 
 fn iface_refund_invoice_payments__object_get_refund_invoice_payment_params__to_json(p: &iface_refund_invoice_payments::ObjectGetRefundInvoicePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -7137,6 +8977,8 @@ const OP_REFUND_TRANSACTION_LOGS_OBJECT_GET_REFUND_TRANSACTION_LOG: OpSpec = OpS
     method: "GET",
     path_template: "/v1/object/refund-transaction-log/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -7146,6 +8988,8 @@ const OP_REFUND_TRANSACTION_LOGS_OBJECT_GET_REFUND_TRANSACTION_LOG: OpSpec = OpS
 
 fn iface_refund_transaction_logs__object_get_refund_transaction_log_params__to_json(p: &iface_refund_transaction_logs::ObjectGetRefundTransactionLogParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -7163,6 +9007,8 @@ const OP_SUBSCRIPTION_PRODUCT_FEATURES_OBJECT_GET_SUBSCRIPTION_PRODUCT_FEATURE: 
     method: "GET",
     path_template: "/v1/object/subscription-product-feature/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -7172,6 +9018,8 @@ const OP_SUBSCRIPTION_PRODUCT_FEATURES_OBJECT_GET_SUBSCRIPTION_PRODUCT_FEATURE: 
 
 fn iface_subscription_product_features__object_get_subscription_product_feature_params__to_json(p: &iface_subscription_product_features::ObjectGetSubscriptionProductFeatureParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -7189,6 +9037,9 @@ const OP_SUBSCRIPTIONS_OBJECT_GET_SUBSCRIPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/subscription/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "x_zuora_wsdl_version", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -7200,6 +9051,9 @@ const OP_SUBSCRIPTIONS_OBJECT_PUT_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/subscription/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7210,6 +9064,8 @@ const OP_SUBSCRIPTIONS_OBJECT_DELETE_SUBSCRIPTION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/subscription/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7220,6 +9076,8 @@ const OP_SUBSCRIPTIONS_POST_SUBSCRIPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/subscriptions",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -7230,6 +9088,9 @@ const OP_SUBSCRIPTIONS_GET_SUBSCRIPTIONS_BY_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/subscriptions/accounts/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
         FieldSpec { snake: "charge_detail", location: FieldLocation::Query },
     ],
@@ -7241,6 +9102,8 @@ const OP_SUBSCRIPTIONS_POST_PREVIEW_SUBSCRIPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/subscriptions/preview",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
@@ -7251,6 +9114,8 @@ const OP_SUBSCRIPTIONS_GET_SUBSCRIPTIONS_BY_KEY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/subscriptions/{subscription_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
         FieldSpec { snake: "charge_detail", location: FieldLocation::Query },
     ],
@@ -7262,6 +9127,8 @@ const OP_SUBSCRIPTIONS_PUT_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/subscriptions/{subscription_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
     ],
@@ -7273,6 +9140,8 @@ const OP_SUBSCRIPTIONS_PUT_CANCEL_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/subscriptions/{subscription_key}/cancel",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
     ],
@@ -7284,6 +9153,8 @@ const OP_SUBSCRIPTIONS_PUT_RENEW_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/subscriptions/{subscription_key}/renew",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
     ],
@@ -7295,6 +9166,8 @@ const OP_SUBSCRIPTIONS_PUT_RESUME_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/subscriptions/{subscription_key}/resume",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
     ],
@@ -7306,6 +9179,8 @@ const OP_SUBSCRIPTIONS_PUT_SUSPEND_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/subscriptions/{subscription_key}/suspend",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
     ],
@@ -7317,6 +9192,8 @@ const OP_SUBSCRIPTIONS_GET_SUBSCRIPTIONS_BY_KEY_AND_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/subscriptions/{subscription_key}/versions/{version}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
         FieldSpec { snake: "version", location: FieldLocation::Path },
         FieldSpec { snake: "charge_detail", location: FieldLocation::Query },
@@ -7329,6 +9206,8 @@ const OP_SUBSCRIPTIONS_PUT_UPDATE_SUBSCRIPTION_CUSTOM_FIELDS_OF_A_SPECIFIED_VERS
     method: "PUT",
     path_template: "/v1/subscriptions/{subscription_number}/versions/{version}/customFields",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_number", location: FieldLocation::Path },
         FieldSpec { snake: "version", location: FieldLocation::Path },
     ],
@@ -7338,6 +9217,9 @@ const OP_SUBSCRIPTIONS_PUT_UPDATE_SUBSCRIPTION_CUSTOM_FIELDS_OF_A_SPECIFIED_VERS
 
 fn iface_subscriptions__object_get_subscription_params__to_json(p: &iface_subscriptions::ObjectGetSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_zuora_wsdl_version".into(), match (&p.x_zuora_wsdl_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -7345,24 +9227,34 @@ fn iface_subscriptions__object_get_subscription_params__to_json(p: &iface_subscr
 
 fn iface_subscriptions__object_put_subscription_params__to_json(p: &iface_subscriptions::ObjectPutSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_subscriptions__object_delete_subscription_params__to_json(p: &iface_subscriptions::ObjectDeleteSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_subscriptions__post_subscription_params__to_json(p: &iface_subscriptions::PostSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_subscriptions__get_subscriptions_by_account_params__to_json(p: &iface_subscriptions::GetSubscriptionsByAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     m.insert("charge_detail".into(), match (&p.charge_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -7370,12 +9262,16 @@ fn iface_subscriptions__get_subscriptions_by_account_params__to_json(p: &iface_s
 
 fn iface_subscriptions__post_preview_subscription_params__to_json(p: &iface_subscriptions::PostPreviewSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_subscriptions__get_subscriptions_by_key_params__to_json(p: &iface_subscriptions::GetSubscriptionsByKeyParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     m.insert("charge_detail".into(), match (&p.charge_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -7383,6 +9279,8 @@ fn iface_subscriptions__get_subscriptions_by_key_params__to_json(p: &iface_subsc
 
 fn iface_subscriptions__put_subscription_params__to_json(p: &iface_subscriptions::PutSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     Value::Object(m)
@@ -7390,6 +9288,8 @@ fn iface_subscriptions__put_subscription_params__to_json(p: &iface_subscriptions
 
 fn iface_subscriptions__put_cancel_subscription_params__to_json(p: &iface_subscriptions::PutCancelSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     Value::Object(m)
@@ -7397,6 +9297,8 @@ fn iface_subscriptions__put_cancel_subscription_params__to_json(p: &iface_subscr
 
 fn iface_subscriptions__put_renew_subscription_params__to_json(p: &iface_subscriptions::PutRenewSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     Value::Object(m)
@@ -7404,6 +9306,8 @@ fn iface_subscriptions__put_renew_subscription_params__to_json(p: &iface_subscri
 
 fn iface_subscriptions__put_resume_subscription_params__to_json(p: &iface_subscriptions::PutResumeSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     Value::Object(m)
@@ -7411,6 +9315,8 @@ fn iface_subscriptions__put_resume_subscription_params__to_json(p: &iface_subscr
 
 fn iface_subscriptions__put_suspend_subscription_params__to_json(p: &iface_subscriptions::PutSuspendSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     Value::Object(m)
@@ -7418,6 +9324,8 @@ fn iface_subscriptions__put_suspend_subscription_params__to_json(p: &iface_subsc
 
 fn iface_subscriptions__get_subscriptions_by_key_and_version_params__to_json(p: &iface_subscriptions::GetSubscriptionsByKeyAndVersionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     m.insert("version".into(), Value::String((&p.version).clone()));
     m.insert("charge_detail".into(), match (&p.charge_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7426,6 +9334,8 @@ fn iface_subscriptions__get_subscriptions_by_key_and_version_params__to_json(p: 
 
 fn iface_subscriptions__put_update_subscription_custom_fields_of_a_specified_version_params__to_json(p: &iface_subscriptions::PutUpdateSubscriptionCustomFieldsOfASpecifiedVersionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_number".into(), Value::String((&p.subscription_number).clone()));
     m.insert("version".into(), Value::String((&p.version).clone()));
     Value::Object(m)
@@ -7495,6 +9405,9 @@ const OP_TAXATION_ITEMS_OBJECT_POST_TAXATION_ITEM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/taxation-item",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -7504,6 +9417,8 @@ const OP_TAXATION_ITEMS_OBJECT_GET_TAXATION_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/taxation-item/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -7515,6 +9430,9 @@ const OP_TAXATION_ITEMS_OBJECT_PUT_TAXATION_ITEM: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/taxation-item/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7525,6 +9443,8 @@ const OP_TAXATION_ITEMS_OBJECT_DELETE_TAXATION_ITEM: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/taxation-item/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7535,6 +9455,8 @@ const OP_TAXATION_ITEMS_GET_TAXATION_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/taxationitems/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7545,6 +9467,8 @@ const OP_TAXATION_ITEMS_PUT_TAXATION_ITEM: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/taxationitems/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7555,14 +9479,26 @@ const OP_TAXATION_ITEMS_DELETE_TAXATION_ITEM: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/taxationitems/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_taxation_items__object_post_taxation_item_params__to_json(p: &iface_taxation_items::ObjectPostTaxationItemParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_taxation_items__object_get_taxation_item_params__to_json(p: &iface_taxation_items::ObjectGetTaxationItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -7570,37 +9506,49 @@ fn iface_taxation_items__object_get_taxation_item_params__to_json(p: &iface_taxa
 
 fn iface_taxation_items__object_put_taxation_item_params__to_json(p: &iface_taxation_items::ObjectPutTaxationItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_taxation_items__object_delete_taxation_item_params__to_json(p: &iface_taxation_items::ObjectDeleteTaxationItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_taxation_items__get_taxation_item_params__to_json(p: &iface_taxation_items::GetTaxationItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_taxation_items__put_taxation_item_params__to_json(p: &iface_taxation_items::PutTaxationItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_taxation_items__delete_taxation_item_params__to_json(p: &iface_taxation_items::DeleteTaxationItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_taxation_items::Guest for crate::Component {
-    fn object_post_taxation_item() -> Result<String, String> {
-        dispatch(&OP_TAXATION_ITEMS_OBJECT_POST_TAXATION_ITEM, Value::Object(Map::new()))
+    fn object_post_taxation_item(params: iface_taxation_items::ObjectPostTaxationItemParams) -> Result<String, String> {
+        let json = iface_taxation_items__object_post_taxation_item_params__to_json(&params);
+        dispatch(&OP_TAXATION_ITEMS_OBJECT_POST_TAXATION_ITEM, json)
     }
     fn object_get_taxation_item(params: iface_taxation_items::ObjectGetTaxationItemParams) -> Result<String, String> {
         let json = iface_taxation_items__object_get_taxation_item_params__to_json(&params);
@@ -7633,6 +9581,9 @@ const OP_UNIT_OF_MEASURE_OBJECT_POST_UNIT_OF_MEASURE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/unit-of-measure",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -7642,6 +9593,8 @@ const OP_UNIT_OF_MEASURE_OBJECT_GET_UNIT_OF_MEASURE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/unit-of-measure/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -7653,6 +9606,9 @@ const OP_UNIT_OF_MEASURE_OBJECT_PUT_UNIT_OF_MEASURE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/unit-of-measure/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7663,14 +9619,26 @@ const OP_UNIT_OF_MEASURE_OBJECT_DELETE_UNIT_OF_MEASURE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/unit-of-measure/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_unit_of_measure__object_post_unit_of_measure_params__to_json(p: &iface_unit_of_measure::ObjectPostUnitOfMeasureParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_unit_of_measure__object_get_unit_of_measure_params__to_json(p: &iface_unit_of_measure::ObjectGetUnitOfMeasureParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -7678,19 +9646,25 @@ fn iface_unit_of_measure__object_get_unit_of_measure_params__to_json(p: &iface_u
 
 fn iface_unit_of_measure__object_put_unit_of_measure_params__to_json(p: &iface_unit_of_measure::ObjectPutUnitOfMeasureParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_unit_of_measure__object_delete_unit_of_measure_params__to_json(p: &iface_unit_of_measure::ObjectDeleteUnitOfMeasureParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_unit_of_measure::Guest for crate::Component {
-    fn object_post_unit_of_measure() -> Result<String, String> {
-        dispatch(&OP_UNIT_OF_MEASURE_OBJECT_POST_UNIT_OF_MEASURE, Value::Object(Map::new()))
+    fn object_post_unit_of_measure(params: iface_unit_of_measure::ObjectPostUnitOfMeasureParams) -> Result<String, String> {
+        let json = iface_unit_of_measure__object_post_unit_of_measure_params__to_json(&params);
+        dispatch(&OP_UNIT_OF_MEASURE_OBJECT_POST_UNIT_OF_MEASURE, json)
     }
     fn object_get_unit_of_measure(params: iface_unit_of_measure::ObjectGetUnitOfMeasureParams) -> Result<String, String> {
         let json = iface_unit_of_measure__object_get_unit_of_measure_params__to_json(&params);
@@ -7711,6 +9685,9 @@ const OP_USAGE_OBJECT_POST_USAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/object/usage",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -7720,6 +9697,8 @@ const OP_USAGE_OBJECT_GET_USAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/object/usage/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
@@ -7731,6 +9710,9 @@ const OP_USAGE_OBJECT_PUT_USAGE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/object/usage/{id}",
     fields: &[
+        FieldSpec { snake: "reject_unknown_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7741,6 +9723,8 @@ const OP_USAGE_OBJECT_DELETE_USAGE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/object/usage/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7751,6 +9735,8 @@ const OP_USAGE_POST_USAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/usage",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -7760,14 +9746,27 @@ const OP_USAGE_GET_USAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/usage/accounts/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_usage__object_post_usage_params__to_json(p: &iface_usage::ObjectPostUsageParams) -> Value {
+    let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_usage__object_get_usage_params__to_json(p: &iface_usage::ObjectGetUsageParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -7775,25 +9774,41 @@ fn iface_usage__object_get_usage_params__to_json(p: &iface_usage::ObjectGetUsage
 
 fn iface_usage__object_put_usage_params__to_json(p: &iface_usage::ObjectPutUsageParams) -> Value {
     let mut m = Map::new();
+    m.insert("reject_unknown_fields".into(), match (&p.reject_unknown_fields) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_usage__object_delete_usage_params__to_json(p: &iface_usage::ObjectDeleteUsageParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_usage__post_usage_params__to_json(p: &iface_usage::PostUsageParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_usage__get_usage_params__to_json(p: &iface_usage::GetUsageParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     Value::Object(m)
 }
 
 impl iface_usage::Guest for crate::Component {
-    fn object_post_usage() -> Result<String, String> {
-        dispatch(&OP_USAGE_OBJECT_POST_USAGE, Value::Object(Map::new()))
+    fn object_post_usage(params: iface_usage::ObjectPostUsageParams) -> Result<String, String> {
+        let json = iface_usage__object_post_usage_params__to_json(&params);
+        dispatch(&OP_USAGE_OBJECT_POST_USAGE, json)
     }
     fn object_get_usage(params: iface_usage::ObjectGetUsageParams) -> Result<String, String> {
         let json = iface_usage__object_get_usage_params__to_json(&params);
@@ -7807,8 +9822,9 @@ impl iface_usage::Guest for crate::Component {
         let json = iface_usage__object_delete_usage_params__to_json(&params);
         dispatch(&OP_USAGE_OBJECT_DELETE_USAGE, json)
     }
-    fn post_usage() -> Result<String, String> {
-        dispatch(&OP_USAGE_POST_USAGE, Value::Object(Map::new()))
+    fn post_usage(params: iface_usage::PostUsageParams) -> Result<String, String> {
+        let json = iface_usage__post_usage_params__to_json(&params);
+        dispatch(&OP_USAGE_POST_USAGE, json)
     }
     fn get_usage(params: iface_usage::GetUsageParams) -> Result<String, String> {
         let json = iface_usage__get_usage_params__to_json(&params);
@@ -7821,6 +9837,8 @@ const OP_OPERATIONS_POST_BILLING_PREVIEW: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/operations/billing-preview",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -7830,21 +9848,33 @@ const OP_OPERATIONS_POST_TRANSACTION_INVOICE_PAYMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/operations/invoice-collect",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "zuora_version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_operations__post_billing_preview_params__to_json(p: &iface_operations::PostBillingPreviewParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_operations__post_transaction_invoice_payment_params__to_json(p: &iface_operations::PostTransactionInvoicePaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("zuora_version".into(), match (&p.zuora_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_operations::Guest for crate::Component {
-    fn post_billing_preview() -> Result<String, String> {
-        dispatch(&OP_OPERATIONS_POST_BILLING_PREVIEW, Value::Object(Map::new()))
+    fn post_billing_preview(params: iface_operations::PostBillingPreviewParams) -> Result<String, String> {
+        let json = iface_operations__post_billing_preview_params__to_json(&params);
+        dispatch(&OP_OPERATIONS_POST_BILLING_PREVIEW, json)
     }
     fn post_transaction_invoice_payment(params: iface_operations::PostTransactionInvoicePaymentParams) -> Result<String, String> {
         let json = iface_operations__post_transaction_invoice_payment_params__to_json(&params);
@@ -7857,6 +9887,8 @@ const OP_ORDER_LINE_ITEMS_POST_ORDER_LINE_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/order-line-items/bulk",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -7866,6 +9898,8 @@ const OP_ORDER_LINE_ITEMS_GET_ORDER_LINE_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/order-line-items/{item_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "item_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7876,27 +9910,41 @@ const OP_ORDER_LINE_ITEMS_PUT_ORDER_LINE_ITEM: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/order-line-items/{item_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "item_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_order_line_items__post_order_line_items_params__to_json(p: &iface_order_line_items::PostOrderLineItemsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_order_line_items__get_order_line_item_params__to_json(p: &iface_order_line_items::GetOrderLineItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("item_id".into(), Value::String((&p.item_id).clone()));
     Value::Object(m)
 }
 
 fn iface_order_line_items__put_order_line_item_params__to_json(p: &iface_order_line_items::PutOrderLineItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("item_id".into(), Value::String((&p.item_id).clone()));
     Value::Object(m)
 }
 
 impl iface_order_line_items::Guest for crate::Component {
-    fn post_order_line_items() -> Result<String, String> {
-        dispatch(&OP_ORDER_LINE_ITEMS_POST_ORDER_LINE_ITEMS, Value::Object(Map::new()))
+    fn post_order_line_items(params: iface_order_line_items::PostOrderLineItemsParams) -> Result<String, String> {
+        let json = iface_order_line_items__post_order_line_items_params__to_json(&params);
+        dispatch(&OP_ORDER_LINE_ITEMS_POST_ORDER_LINE_ITEMS, json)
     }
     fn get_order_line_item(params: iface_order_line_items::GetOrderLineItemParams) -> Result<String, String> {
         let json = iface_order_line_items__get_order_line_item_params__to_json(&params);
@@ -7913,6 +9961,8 @@ const OP_RAMPS_GET_RAMP_METRICS_BY_ORDER_NUMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/orders/{order_number}/ramp-metrics",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "order_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7923,6 +9973,8 @@ const OP_RAMPS_GET_RAMP_BY_RAMP_NUMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/ramps/{ramp_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ramp_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7933,6 +9985,8 @@ const OP_RAMPS_GET_RAMP_METRICS_BY_RAMP_NUMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/ramps/{ramp_number}/ramp-metrics",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "ramp_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7943,6 +9997,8 @@ const OP_RAMPS_GET_RAMP_METRICS_BY_SUBSCRIPTION_KEY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/subscriptions/{subscription_key}/ramp-metrics",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7953,6 +10009,8 @@ const OP_RAMPS_GET_RAMPS_BY_SUBSCRIPTION_KEY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/subscriptions/{subscription_key}/ramps",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "subscription_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -7961,30 +10019,40 @@ const OP_RAMPS_GET_RAMPS_BY_SUBSCRIPTION_KEY: OpSpec = OpSpec {
 
 fn iface_ramps__get_ramp_metrics_by_order_number_params__to_json(p: &iface_ramps::GetRampMetricsByOrderNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_number".into(), Value::String((&p.order_number).clone()));
     Value::Object(m)
 }
 
 fn iface_ramps__get_ramp_by_ramp_number_params__to_json(p: &iface_ramps::GetRampByRampNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ramp_number".into(), Value::String((&p.ramp_number).clone()));
     Value::Object(m)
 }
 
 fn iface_ramps__get_ramp_metrics_by_ramp_number_params__to_json(p: &iface_ramps::GetRampMetricsByRampNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ramp_number".into(), Value::String((&p.ramp_number).clone()));
     Value::Object(m)
 }
 
 fn iface_ramps__get_ramp_metrics_by_subscription_key_params__to_json(p: &iface_ramps::GetRampMetricsBySubscriptionKeyParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     Value::Object(m)
 }
 
 fn iface_ramps__get_ramps_by_subscription_key_params__to_json(p: &iface_ramps::GetRampsBySubscriptionKeyParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscription_key".into(), Value::String((&p.subscription_key).clone()));
     Value::Object(m)
 }
@@ -8017,6 +10085,9 @@ const OP_PAYMENT_RUNS_GET_PAYMENT_RUNS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payment-runs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "created_by_id", location: FieldLocation::Query },
         FieldSpec { snake: "created_date", location: FieldLocation::Query },
         FieldSpec { snake: "status", location: FieldLocation::Query },
@@ -8033,6 +10104,8 @@ const OP_PAYMENT_RUNS_POST_PAYMENT_RUN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/payment-runs",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -8042,6 +10115,8 @@ const OP_PAYMENT_RUNS_GET_PAYMENT_RUN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payment-runs/{payment_run_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_run_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8052,6 +10127,8 @@ const OP_PAYMENT_RUNS_PUT_PAYMENT_RUN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/payment-runs/{payment_run_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "payment_run_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8062,6 +10139,7 @@ const OP_PAYMENT_RUNS_DELETE_PAYMENT_RUN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/payment-runs/{payment_run_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "payment_run_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8072,6 +10150,7 @@ const OP_PAYMENT_RUNS_GET_PAYMENT_RUN_DATA: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payment-runs/{payment_run_id}/data",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "payment_run_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8082,6 +10161,7 @@ const OP_PAYMENT_RUNS_GET_PAYMENT_RUN_SUMMARY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/payment-runs/{payment_run_id}/summary",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "payment_run_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8100,6 +10180,9 @@ fn iface_payment_runs__get_payment_runs_status_enum__to_str(e: &iface_payment_ru
 
 fn iface_payment_runs__get_payment_runs_params__to_json(p: &iface_payment_runs::GetPaymentRunsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("created_by_id".into(), match (&p.created_by_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_date".into(), match (&p.created_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_payment_runs__get_payment_runs_status_enum__to_str(v).into()), None => Value::Null });
@@ -8110,32 +10193,46 @@ fn iface_payment_runs__get_payment_runs_params__to_json(p: &iface_payment_runs::
     Value::Object(m)
 }
 
+fn iface_payment_runs__post_payment_run_params__to_json(p: &iface_payment_runs::PostPaymentRunParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_payment_runs__get_payment_run_params__to_json(p: &iface_payment_runs::GetPaymentRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_run_id".into(), Value::String((&p.payment_run_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_runs__put_payment_run_params__to_json(p: &iface_payment_runs::PutPaymentRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_run_id".into(), Value::String((&p.payment_run_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_runs__delete_payment_run_params__to_json(p: &iface_payment_runs::DeletePaymentRunParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_run_id".into(), Value::String((&p.payment_run_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_runs__get_payment_run_data_params__to_json(p: &iface_payment_runs::GetPaymentRunDataParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_run_id".into(), Value::String((&p.payment_run_id).clone()));
     Value::Object(m)
 }
 
 fn iface_payment_runs__get_payment_run_summary_params__to_json(p: &iface_payment_runs::GetPaymentRunSummaryParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("payment_run_id".into(), Value::String((&p.payment_run_id).clone()));
     Value::Object(m)
 }
@@ -8145,8 +10242,9 @@ impl iface_payment_runs::Guest for crate::Component {
         let json = iface_payment_runs__get_payment_runs_params__to_json(&params);
         dispatch(&OP_PAYMENT_RUNS_GET_PAYMENT_RUNS, json)
     }
-    fn post_payment_run() -> Result<String, String> {
-        dispatch(&OP_PAYMENT_RUNS_POST_PAYMENT_RUN, Value::Object(Map::new()))
+    fn post_payment_run(params: iface_payment_runs::PostPaymentRunParams) -> Result<String, String> {
+        let json = iface_payment_runs__post_payment_run_params__to_json(&params);
+        dispatch(&OP_PAYMENT_RUNS_POST_PAYMENT_RUN, json)
     }
     fn get_payment_run(params: iface_payment_runs::GetPaymentRunParams) -> Result<String, String> {
         let json = iface_payment_runs__get_payment_run_params__to_json(&params);
@@ -8175,14 +10273,24 @@ const OP_PAYMENT_GATEWAYS_GET_PAYMENTGATEWAYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/paymentgateways",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_payment_gateways__get_paymentgateways_params__to_json(p: &iface_payment_gateways::GetPaymentgatewaysParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_payment_gateways::Guest for crate::Component {
-    fn get_paymentgateways() -> Result<String, String> {
-        dispatch(&OP_PAYMENT_GATEWAYS_GET_PAYMENTGATEWAYS, Value::Object(Map::new()))
+    fn get_paymentgateways(params: iface_payment_gateways::GetPaymentgatewaysParams) -> Result<String, String> {
+        let json = iface_payment_gateways__get_paymentgateways_params__to_json(&params);
+        dispatch(&OP_PAYMENT_GATEWAYS_GET_PAYMENTGATEWAYS, json)
     }
 }
 use crate::exports::autostamp::zuora::quotes_document as iface_quotes_document;
@@ -8191,14 +10299,24 @@ const OP_QUOTES_DOCUMENT_POST_QUOTES_DOCUMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/quotes/document",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_quotes_document__post_quotes_document_params__to_json(p: &iface_quotes_document::PostQuotesDocumentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_quotes_document::Guest for crate::Component {
-    fn post_quotes_document() -> Result<String, String> {
-        dispatch(&OP_QUOTES_DOCUMENT_POST_QUOTES_DOCUMENT, Value::Object(Map::new()))
+    fn post_quotes_document(params: iface_quotes_document::PostQuotesDocumentParams) -> Result<String, String> {
+        let json = iface_quotes_document__post_quotes_document_params__to_json(&params);
+        dispatch(&OP_QUOTES_DOCUMENT_POST_QUOTES_DOCUMENT, json)
     }
 }
 use crate::exports::autostamp::zuora::revenue_events as iface_revenue_events;
@@ -8207,6 +10325,9 @@ const OP_REVENUE_EVENTS_GET_REVENUE_EVENT_FOR_REVENUE_SCHEDULE: OpSpec = OpSpec 
     method: "GET",
     path_template: "/v1/revenue-events/revenue-schedules/{rs_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8217,6 +10338,8 @@ const OP_REVENUE_EVENTS_GET_REVENUE_EVENT_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-events/{event_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "event_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8225,12 +10348,17 @@ const OP_REVENUE_EVENTS_GET_REVENUE_EVENT_DETAILS: OpSpec = OpSpec {
 
 fn iface_revenue_events__get_revenue_event_for_revenue_schedule_params__to_json(p: &iface_revenue_events::GetRevenueEventForRevenueScheduleParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_events__get_revenue_event_details_params__to_json(p: &iface_revenue_events::GetRevenueEventDetailsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_number".into(), Value::String((&p.event_number).clone()));
     Value::Object(m)
 }
@@ -8251,6 +10379,9 @@ const OP_REVENUE_ITEMS_GET_REVENUE_ITEMS_BY_CHARGE_REVENUE_SUMMARY_NUMBER: OpSpe
     method: "GET",
     path_template: "/v1/revenue-items/charge-revenue-summaries/{crs_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "crs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8261,6 +10392,9 @@ const OP_REVENUE_ITEMS_GET_REVENUE_ITEMS_BY_CHARGE_REVENUE_EVENT_NUMBER: OpSpec 
     method: "GET",
     path_template: "/v1/revenue-items/revenue-events/{event_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "event_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8271,6 +10405,8 @@ const OP_REVENUE_ITEMS_PUT_CUSTOM_FIELDSON_REVENUE_ITEMS_BY_REVENUE_EVENT: OpSpe
     method: "PUT",
     path_template: "/v1/revenue-items/revenue-events/{event_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "event_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8281,6 +10417,9 @@ const OP_REVENUE_ITEMS_GET_REVENUE_ITEMS_BY_REVENUE_SCHEDULE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-items/revenue-schedules/{rs_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8291,6 +10430,8 @@ const OP_REVENUE_ITEMS_PUT_CUSTOM_FIELDSON_REVENUE_ITEMS_BY_REVENUE_SCHEDULE: Op
     method: "PUT",
     path_template: "/v1/revenue-items/revenue-schedules/{rs_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8299,30 +10440,43 @@ const OP_REVENUE_ITEMS_PUT_CUSTOM_FIELDSON_REVENUE_ITEMS_BY_REVENUE_SCHEDULE: Op
 
 fn iface_revenue_items__get_revenue_items_by_charge_revenue_summary_number_params__to_json(p: &iface_revenue_items::GetRevenueItemsByChargeRevenueSummaryNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("crs_number".into(), Value::String((&p.crs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_items__get_revenue_items_by_charge_revenue_event_number_params__to_json(p: &iface_revenue_items::GetRevenueItemsByChargeRevenueEventNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("event_number".into(), Value::String((&p.event_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_items__put_custom_fieldson_revenue_items_by_revenue_event_params__to_json(p: &iface_revenue_items::PutCustomFieldsonRevenueItemsByRevenueEventParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event_number".into(), Value::String((&p.event_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_items__get_revenue_items_by_revenue_schedule_params__to_json(p: &iface_revenue_items::GetRevenueItemsByRevenueScheduleParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_items__put_custom_fieldson_revenue_items_by_revenue_schedule_params__to_json(p: &iface_revenue_items::PutCustomFieldsonRevenueItemsByRevenueScheduleParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
@@ -8355,6 +10509,8 @@ const OP_REVENUE_RULES_GET_REVENUE_REC_RULEBY_PRODUCT_RATE_PLAN_CHARGE: OpSpec =
     method: "GET",
     path_template: "/v1/revenue-recognition-rules/product-charges/{charge_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "charge_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8365,6 +10521,8 @@ const OP_REVENUE_RULES_GET_REVENUE_REC_RULES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-recognition-rules/subscription-charges/{charge_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "charge_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8375,6 +10533,8 @@ const OP_REVENUE_RULES_GET_REVENUE_AUTOMATION_START_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/settings/finance/revenue-automation-start-date",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -8382,13 +10542,24 @@ const OP_REVENUE_RULES_GET_REVENUE_AUTOMATION_START_DATE: OpSpec = OpSpec {
 
 fn iface_revenue_rules__get_revenue_rec_ruleby_product_rate_plan_charge_params__to_json(p: &iface_revenue_rules::GetRevenueRecRulebyProductRatePlanChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("charge_key".into(), Value::String((&p.charge_key).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_rules__get_revenue_rec_rules_params__to_json(p: &iface_revenue_rules::GetRevenueRecRulesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("charge_key".into(), Value::String((&p.charge_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_revenue_rules__get_revenue_automation_start_date_params__to_json(p: &iface_revenue_rules::GetRevenueAutomationStartDateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8401,8 +10572,9 @@ impl iface_revenue_rules::Guest for crate::Component {
         let json = iface_revenue_rules__get_revenue_rec_rules_params__to_json(&params);
         dispatch(&OP_REVENUE_RULES_GET_REVENUE_REC_RULES, json)
     }
-    fn get_revenue_automation_start_date() -> Result<String, String> {
-        dispatch(&OP_REVENUE_RULES_GET_REVENUE_AUTOMATION_START_DATE, Value::Object(Map::new()))
+    fn get_revenue_automation_start_date(params: iface_revenue_rules::GetRevenueAutomationStartDateParams) -> Result<String, String> {
+        let json = iface_revenue_rules__get_revenue_automation_start_date_params__to_json(&params);
+        dispatch(&OP_REVENUE_RULES_GET_REVENUE_AUTOMATION_START_DATE, json)
     }
 }
 use crate::exports::autostamp::zuora::revenue_schedules as iface_revenue_schedules;
@@ -8411,6 +10583,8 @@ const OP_REVENUE_SCHEDULES_GET_R_SBY_CREDIT_MEMO_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-schedules/credit-memo-items/{cmi_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "cmi_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8421,6 +10595,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_CREDIT_MEMO_ITEM_MANUAL_DISTRIBUTION: OpS
     method: "POST",
     path_template: "/v1/revenue-schedules/credit-memo-items/{cmi_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "cmi_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8431,6 +10607,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_CREDIT_MEMO_ITEM_DISTRIBUTE_BY_DATE_RANGE
     method: "POST",
     path_template: "/v1/revenue-schedules/credit-memo-items/{cmi_id}/distribute-revenue-with-date-range",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "cmi_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8441,6 +10619,8 @@ const OP_REVENUE_SCHEDULES_GET_R_SBY_DEBIT_MEMO_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-schedules/debit-memo-items/{dmi_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "dmi_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8451,6 +10631,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_DEBIT_MEMO_ITEM_MANUAL_DISTRIBUTION: OpSp
     method: "POST",
     path_template: "/v1/revenue-schedules/debit-memo-items/{dmi_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "dmi_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8461,6 +10643,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_DEBIT_MEMO_ITEM_DISTRIBUTE_BY_DATE_RANGE:
     method: "POST",
     path_template: "/v1/revenue-schedules/debit-memo-items/{dmi_id}/distribute-revenue-with-date-range",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "dmi_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8471,6 +10655,8 @@ const OP_REVENUE_SCHEDULES_GET_R_SBY_INVOICE_ITEM_ADJUSTMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-schedules/invoice-item-adjustments/{invoice_item_adj_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_item_adj_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8481,6 +10667,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_INVOICE_ITEM_ADJUSTMENT_MANUAL_DISTRIBUTI
     method: "POST",
     path_template: "/v1/revenue-schedules/invoice-item-adjustments/{invoice_item_adj_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_item_adj_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8491,6 +10679,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_INVOICE_ITEM_ADJUSTMENT_DISTRIBUTE_BY_DAT
     method: "POST",
     path_template: "/v1/revenue-schedules/invoice-item-adjustments/{invoice_item_adj_key}/distribute-revenue-with-date-range",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_item_adj_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8501,6 +10691,8 @@ const OP_REVENUE_SCHEDULES_GET_R_SBY_INVOICE_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-schedules/invoice-items/{invoice_item_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_item_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8511,6 +10703,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_INVOICE_ITEM_MANUAL_DISTRIBUTION: OpSpec 
     method: "POST",
     path_template: "/v1/revenue-schedules/invoice-items/{invoice_item_id}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_item_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8521,6 +10715,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_INVOICE_ITEM_DISTRIBUTE_BY_DATE_RANGE: Op
     method: "POST",
     path_template: "/v1/revenue-schedules/invoice-items/{invoice_item_id}/distribute-revenue-with-date-range",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "invoice_item_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8531,6 +10727,9 @@ const OP_REVENUE_SCHEDULES_GET_R_SBY_PRODUCT_CHARGE_AND_BILLING_ACCOUNT: OpSpec 
     method: "GET",
     path_template: "/v1/revenue-schedules/product-charges/{charge_key}/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
         FieldSpec { snake: "charge_key", location: FieldLocation::Path },
     ],
@@ -8542,6 +10741,9 @@ const OP_REVENUE_SCHEDULES_GET_R_SFOR_SUBSC_CHARGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-schedules/subscription-charges/{charge_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "charge_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8552,6 +10754,8 @@ const OP_REVENUE_SCHEDULES_POST_R_SFOR_SUBSC_CHARGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/revenue-schedules/subscription-charges/{charge_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "charge_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8562,6 +10766,8 @@ const OP_REVENUE_SCHEDULES_GET_RS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/revenue-schedules/{rs_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8572,6 +10778,8 @@ const OP_REVENUE_SCHEDULES_DELETE_RS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/revenue-schedules/{rs_number}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8582,6 +10790,8 @@ const OP_REVENUE_SCHEDULES_PUT_RS_BASIC_INFO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/revenue-schedules/{rs_number}/basic-information",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8592,6 +10802,8 @@ const OP_REVENUE_SCHEDULES_PUT_REVENUE_ACROSS_AP: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/revenue-schedules/{rs_number}/distribute-revenue-across-accounting-periods",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8602,6 +10814,8 @@ const OP_REVENUE_SCHEDULES_PUT_REVENUE_SPECIFIC_DATE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/revenue-schedules/{rs_number}/distribute-revenue-on-specific-date",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8612,6 +10826,8 @@ const OP_REVENUE_SCHEDULES_PUT_REVENUE_BY_RECOGNITION_STARTAND_END_DATES: OpSpec
     method: "PUT",
     path_template: "/v1/revenue-schedules/{rs_number}/distribute-revenue-with-date-range",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "rs_number", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8620,78 +10836,105 @@ const OP_REVENUE_SCHEDULES_PUT_REVENUE_BY_RECOGNITION_STARTAND_END_DATES: OpSpec
 
 fn iface_revenue_schedules__get_r_sby_credit_memo_item_params__to_json(p: &iface_revenue_schedules::GetRSbyCreditMemoItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cmi_id".into(), Value::String((&p.cmi_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_credit_memo_item_manual_distribution_params__to_json(p: &iface_revenue_schedules::PostRSforCreditMemoItemManualDistributionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cmi_id".into(), Value::String((&p.cmi_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_credit_memo_item_distribute_by_date_range_params__to_json(p: &iface_revenue_schedules::PostRSforCreditMemoItemDistributeByDateRangeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cmi_id".into(), Value::String((&p.cmi_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__get_r_sby_debit_memo_item_params__to_json(p: &iface_revenue_schedules::GetRSbyDebitMemoItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("dmi_id".into(), Value::String((&p.dmi_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_debit_memo_item_manual_distribution_params__to_json(p: &iface_revenue_schedules::PostRSforDebitMemoItemManualDistributionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("dmi_id".into(), Value::String((&p.dmi_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_debit_memo_item_distribute_by_date_range_params__to_json(p: &iface_revenue_schedules::PostRSforDebitMemoItemDistributeByDateRangeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("dmi_id".into(), Value::String((&p.dmi_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__get_r_sby_invoice_item_adjustment_params__to_json(p: &iface_revenue_schedules::GetRSbyInvoiceItemAdjustmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_item_adj_key".into(), Value::String((&p.invoice_item_adj_key).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_invoice_item_adjustment_manual_distribution_params__to_json(p: &iface_revenue_schedules::PostRSforInvoiceItemAdjustmentManualDistributionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_item_adj_key".into(), Value::String((&p.invoice_item_adj_key).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_invoice_item_adjustment_distribute_by_date_range_params__to_json(p: &iface_revenue_schedules::PostRSforInvoiceItemAdjustmentDistributeByDateRangeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_item_adj_key".into(), Value::String((&p.invoice_item_adj_key).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__get_r_sby_invoice_item_params__to_json(p: &iface_revenue_schedules::GetRSbyInvoiceItemParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_item_id".into(), Value::String((&p.invoice_item_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_invoice_item_manual_distribution_params__to_json(p: &iface_revenue_schedules::PostRSforInvoiceItemManualDistributionParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_item_id".into(), Value::String((&p.invoice_item_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_invoice_item_distribute_by_date_range_params__to_json(p: &iface_revenue_schedules::PostRSforInvoiceItemDistributeByDateRangeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("invoice_item_id".into(), Value::String((&p.invoice_item_id).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__get_r_sby_product_charge_and_billing_account_params__to_json(p: &iface_revenue_schedules::GetRSbyProductChargeAndBillingAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     m.insert("charge_key".into(), Value::String((&p.charge_key).clone()));
     Value::Object(m)
@@ -8699,48 +10942,65 @@ fn iface_revenue_schedules__get_r_sby_product_charge_and_billing_account_params_
 
 fn iface_revenue_schedules__get_r_sfor_subsc_charge_params__to_json(p: &iface_revenue_schedules::GetRSforSubscChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("charge_key".into(), Value::String((&p.charge_key).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__post_r_sfor_subsc_charge_params__to_json(p: &iface_revenue_schedules::PostRSforSubscChargeParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("charge_key".into(), Value::String((&p.charge_key).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__get_rs_params__to_json(p: &iface_revenue_schedules::GetRsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__delete_rs_params__to_json(p: &iface_revenue_schedules::DeleteRsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__put_rs_basic_info_params__to_json(p: &iface_revenue_schedules::PutRsBasicInfoParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__put_revenue_across_ap_params__to_json(p: &iface_revenue_schedules::PutRevenueAcrossApParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__put_revenue_specific_date_params__to_json(p: &iface_revenue_schedules::PutRevenueSpecificDateParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
 
 fn iface_revenue_schedules__put_revenue_by_recognition_startand_end_dates_params__to_json(p: &iface_revenue_schedules::PutRevenueByRecognitionStartandEndDatesParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rs_number".into(), Value::String((&p.rs_number).clone()));
     Value::Object(m)
 }
@@ -8837,14 +11097,26 @@ const OP_ZUORA_REVENUE_INTEGRATION_PUT_REV_PRO_ACCOUNTING_CODES: OpSpec = OpSpec
     method: "PUT",
     path_template: "/v1/revpro-accounting-codes",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_zuora_revenue_integration__put_rev_pro_accounting_codes_params__to_json(p: &iface_zuora_revenue_integration::PutRevProAccountingCodesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_zuora_revenue_integration::Guest for crate::Component {
-    fn put_rev_pro_accounting_codes() -> Result<String, String> {
-        dispatch(&OP_ZUORA_REVENUE_INTEGRATION_PUT_REV_PRO_ACCOUNTING_CODES, Value::Object(Map::new()))
+    fn put_rev_pro_accounting_codes(params: iface_zuora_revenue_integration::PutRevProAccountingCodesParams) -> Result<String, String> {
+        let json = iface_zuora_revenue_integration__put_rev_pro_accounting_codes_params__to_json(&params);
+        dispatch(&OP_ZUORA_REVENUE_INTEGRATION_PUT_REV_PRO_ACCOUNTING_CODES, json)
     }
 }
 use crate::exports::autostamp::zuora::rsa_signatures as iface_rsa_signatures;
@@ -8853,6 +11125,8 @@ const OP_RSA_SIGNATURES_POST_RSA_SIGNATURES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/rsa-signatures",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -8862,17 +11136,35 @@ const OP_RSA_SIGNATURES_POST_DECRYPT_RSA_SIGNATURES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/rsa-signatures/decrypt",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
 
+fn iface_rsa_signatures__post_rsa_signatures_params__to_json(p: &iface_rsa_signatures::PostRsaSignaturesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_rsa_signatures__post_decrypt_rsa_signatures_params__to_json(p: &iface_rsa_signatures::PostDecryptRsaSignaturesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_rsa_signatures::Guest for crate::Component {
-    fn post_rsa_signatures() -> Result<String, String> {
-        dispatch(&OP_RSA_SIGNATURES_POST_RSA_SIGNATURES, Value::Object(Map::new()))
+    fn post_rsa_signatures(params: iface_rsa_signatures::PostRsaSignaturesParams) -> Result<String, String> {
+        let json = iface_rsa_signatures__post_rsa_signatures_params__to_json(&params);
+        dispatch(&OP_RSA_SIGNATURES_POST_RSA_SIGNATURES, json)
     }
-    fn post_decrypt_rsa_signatures() -> Result<String, String> {
-        dispatch(&OP_RSA_SIGNATURES_POST_DECRYPT_RSA_SIGNATURES, Value::Object(Map::new()))
+    fn post_decrypt_rsa_signatures(params: iface_rsa_signatures::PostDecryptRsaSignaturesParams) -> Result<String, String> {
+        let json = iface_rsa_signatures__post_decrypt_rsa_signatures_params__to_json(&params);
+        dispatch(&OP_RSA_SIGNATURES_POST_DECRYPT_RSA_SIGNATURES, json)
     }
 }
 use crate::exports::autostamp::zuora::sequence_sets as iface_sequence_sets;
@@ -8881,6 +11173,10 @@ const OP_SEQUENCE_SETS_GET_SEQUENCE_SETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/sequence-sets",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "name", location: FieldLocation::Query },
     ],
     auth: &[
@@ -8891,6 +11187,8 @@ const OP_SEQUENCE_SETS_POST_SEQUENCE_SETS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/sequence-sets",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -8900,6 +11198,8 @@ const OP_SEQUENCE_SETS_GET_SEQUENCE_SET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/sequence-sets/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8910,6 +11210,8 @@ const OP_SEQUENCE_SETS_PUT_SEQUENCE_SET: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/sequence-sets/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8920,6 +11222,8 @@ const OP_SEQUENCE_SETS_DELETE_SEQUENCE_SET: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/sequence-sets/{id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8928,24 +11232,41 @@ const OP_SEQUENCE_SETS_DELETE_SEQUENCE_SET: OpSpec = OpSpec {
 
 fn iface_sequence_sets__get_sequence_sets_params__to_json(p: &iface_sequence_sets::GetSequenceSetsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sequence_sets__post_sequence_sets_params__to_json(p: &iface_sequence_sets::PostSequenceSetsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_sequence_sets__get_sequence_set_params__to_json(p: &iface_sequence_sets::GetSequenceSetParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_sequence_sets__put_sequence_set_params__to_json(p: &iface_sequence_sets::PutSequenceSetParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_sequence_sets__delete_sequence_set_params__to_json(p: &iface_sequence_sets::DeleteSequenceSetParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
@@ -8955,8 +11276,9 @@ impl iface_sequence_sets::Guest for crate::Component {
         let json = iface_sequence_sets__get_sequence_sets_params__to_json(&params);
         dispatch(&OP_SEQUENCE_SETS_GET_SEQUENCE_SETS, json)
     }
-    fn post_sequence_sets() -> Result<String, String> {
-        dispatch(&OP_SEQUENCE_SETS_POST_SEQUENCE_SETS, Value::Object(Map::new()))
+    fn post_sequence_sets(params: iface_sequence_sets::PostSequenceSetsParams) -> Result<String, String> {
+        let json = iface_sequence_sets__post_sequence_sets_params__to_json(&params);
+        dispatch(&OP_SEQUENCE_SETS_POST_SEQUENCE_SETS, json)
     }
     fn get_sequence_set(params: iface_sequence_sets::GetSequenceSetParams) -> Result<String, String> {
         let json = iface_sequence_sets__get_sequence_set_params__to_json(&params);
@@ -8977,6 +11299,9 @@ const OP_TRANSACTIONS_GET_TRANSACTION_INVOICE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/transactions/invoices/accounts/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8987,6 +11312,9 @@ const OP_TRANSACTIONS_GET_TRANSACTION_PAYMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/transactions/payments/accounts/{account_key}",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "account_key", location: FieldLocation::Path },
     ],
     auth: &[
@@ -8995,12 +11323,18 @@ const OP_TRANSACTIONS_GET_TRANSACTION_PAYMENT: OpSpec = OpSpec {
 
 fn iface_transactions__get_transaction_invoice_params__to_json(p: &iface_transactions::GetTransactionInvoiceParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     Value::Object(m)
 }
 
 fn iface_transactions__get_transaction_payment_params__to_json(p: &iface_transactions::GetTransactionPaymentParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("account_key".into(), Value::String((&p.account_key).clone()));
     Value::Object(m)
 }
@@ -9021,6 +11355,8 @@ const OP_USERS_PUT_ACCEPT_USER_ACCESS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/users/{username}/accept-access",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "username", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9031,6 +11367,8 @@ const OP_USERS_GET_ENTITIES_USER_ACCESSIBLE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/users/{username}/accessible-entities",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "username", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9041,6 +11379,8 @@ const OP_USERS_PUT_DENY_USER_ACCESS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/users/{username}/deny-access",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "username", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9051,6 +11391,8 @@ const OP_USERS_PUT_SEND_USER_ACCESS_REQUESTS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v1/users/{username}/request-access",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
         FieldSpec { snake: "username", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9059,24 +11401,32 @@ const OP_USERS_PUT_SEND_USER_ACCESS_REQUESTS: OpSpec = OpSpec {
 
 fn iface_users__put_accept_user_access_params__to_json(p: &iface_users::PutAcceptUserAccessParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
 
 fn iface_users__get_entities_user_accessible_params__to_json(p: &iface_users::GetEntitiesUserAccessibleParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
 
 fn iface_users__put_deny_user_access_params__to_json(p: &iface_users::PutDenyUserAccessParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
 
 fn iface_users__put_send_user_access_requests_params__to_json(p: &iface_users::PutSendUserAccessRequestsParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
@@ -9105,6 +11455,9 @@ const OP_WORKFLOWS_GET_WORKFLOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "callout_trigger", location: FieldLocation::Query },
         FieldSpec { snake: "interval", location: FieldLocation::Query },
         FieldSpec { snake: "name", location: FieldLocation::Query },
@@ -9121,6 +11474,7 @@ const OP_WORKFLOWS_POST_WORKFLOW_IMPORT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/workflows/import",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -9130,6 +11484,9 @@ const OP_WORKFLOWS_GET_WORKFLOWS_USAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows/metrics.json",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
         FieldSpec { snake: "end_date", location: FieldLocation::Query },
         FieldSpec { snake: "metrics", location: FieldLocation::Query },
@@ -9142,6 +11499,9 @@ const OP_WORKFLOWS_GET_WORKFLOWS_TASKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows/tasks",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "id", location: FieldLocation::Query },
         FieldSpec { snake: "name", location: FieldLocation::Query },
         FieldSpec { snake: "instance", location: FieldLocation::Query },
@@ -9162,6 +11522,9 @@ const OP_WORKFLOWS_PUT_WORKFLOWS_TASKS_UPDATE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/workflows/tasks/batch_update",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -9171,6 +11534,9 @@ const OP_WORKFLOWS_GET_WORKFLOWS_TASK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows/tasks/{task_id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "task_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9181,6 +11547,9 @@ const OP_WORKFLOWS_POST_WORKFLOWS_TASK_RERUN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/workflows/tasks/{task_id}/rerun",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "task_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9191,6 +11560,9 @@ const OP_WORKFLOWS_GET_WORKFLOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows/{workflow_id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "workflow_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9201,6 +11573,8 @@ const OP_WORKFLOWS_PATCH_UPDATE_WORKFLOW: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/workflows/{workflow_id}",
     fields: &[
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
         FieldSpec { snake: "workflow_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9211,6 +11585,9 @@ const OP_WORKFLOWS_DELETE_WORKFLOW: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/workflows/{workflow_id}",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "workflow_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9221,6 +11598,7 @@ const OP_WORKFLOWS_GET_WORKFLOW_EXPORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows/{workflow_id}/export",
     fields: &[
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "workflow_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9231,6 +11609,9 @@ const OP_WORKFLOWS_POST_RUN_WORKFLOW: OpSpec = OpSpec {
     method: "POST",
     path_template: "/workflows/{workflow_id}/run",
     fields: &[
+        FieldSpec { snake: "authorization", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_entity_ids", location: FieldLocation::Header },
+        FieldSpec { snake: "zuora_track_id", location: FieldLocation::Header },
         FieldSpec { snake: "workflow_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -9239,6 +11620,9 @@ const OP_WORKFLOWS_POST_RUN_WORKFLOW: OpSpec = OpSpec {
 
 fn iface_workflows__get_workflows_params__to_json(p: &iface_workflows::GetWorkflowsParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("callout_trigger".into(), match (&p.callout_trigger) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("interval".into(), match (&p.interval) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -9249,8 +11633,17 @@ fn iface_workflows__get_workflows_params__to_json(p: &iface_workflows::GetWorkfl
     Value::Object(m)
 }
 
+fn iface_workflows__post_workflow_import_params__to_json(p: &iface_workflows::PostWorkflowImportParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_workflows__get_workflows_usages_params__to_json(p: &iface_workflows::GetWorkflowsUsagesParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     m.insert("end_date".into(), Value::String((&p.end_date).clone()));
     m.insert("metrics".into(), Value::String((&p.metrics).clone()));
@@ -9259,6 +11652,9 @@ fn iface_workflows__get_workflows_usages_params__to_json(p: &iface_workflows::Ge
 
 fn iface_workflows__get_workflows_tasks_params__to_json(p: &iface_workflows::GetWorkflowsTasksParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("instance".into(), match (&p.instance) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -9273,44 +11669,70 @@ fn iface_workflows__get_workflows_tasks_params__to_json(p: &iface_workflows::Get
     Value::Object(m)
 }
 
+fn iface_workflows__put_workflows_tasks_update_params__to_json(p: &iface_workflows::PutWorkflowsTasksUpdateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_workflows__get_workflows_task_params__to_json(p: &iface_workflows::GetWorkflowsTaskParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("task_id".into(), Value::String((&p.task_id).clone()));
     Value::Object(m)
 }
 
 fn iface_workflows__post_workflows_task_rerun_params__to_json(p: &iface_workflows::PostWorkflowsTaskRerunParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("task_id".into(), Value::String((&p.task_id).clone()));
     Value::Object(m)
 }
 
 fn iface_workflows__get_workflow_params__to_json(p: &iface_workflows::GetWorkflowParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workflow_id".into(), Value::String((&p.workflow_id).clone()));
     Value::Object(m)
 }
 
 fn iface_workflows__patch_update_workflow_params__to_json(p: &iface_workflows::PatchUpdateWorkflowParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
     m.insert("workflow_id".into(), Value::String((&p.workflow_id).clone()));
     Value::Object(m)
 }
 
 fn iface_workflows__delete_workflow_params__to_json(p: &iface_workflows::DeleteWorkflowParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workflow_id".into(), Value::String((&p.workflow_id).clone()));
     Value::Object(m)
 }
 
 fn iface_workflows__get_workflow_export_params__to_json(p: &iface_workflows::GetWorkflowExportParams) -> Value {
     let mut m = Map::new();
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workflow_id".into(), Value::String((&p.workflow_id).clone()));
     Value::Object(m)
 }
 
 fn iface_workflows__post_run_workflow_params__to_json(p: &iface_workflows::PostRunWorkflowParams) -> Value {
     let mut m = Map::new();
+    m.insert("authorization".into(), Value::String((&p.authorization).clone()));
+    m.insert("zuora_entity_ids".into(), match (&p.zuora_entity_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zuora_track_id".into(), match (&p.zuora_track_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workflow_id".into(), Value::String((&p.workflow_id).clone()));
     Value::Object(m)
 }
@@ -9320,8 +11742,9 @@ impl iface_workflows::Guest for crate::Component {
         let json = iface_workflows__get_workflows_params__to_json(&params);
         dispatch(&OP_WORKFLOWS_GET_WORKFLOWS, json)
     }
-    fn post_workflow_import() -> Result<String, String> {
-        dispatch(&OP_WORKFLOWS_POST_WORKFLOW_IMPORT, Value::Object(Map::new()))
+    fn post_workflow_import(params: iface_workflows::PostWorkflowImportParams) -> Result<String, String> {
+        let json = iface_workflows__post_workflow_import_params__to_json(&params);
+        dispatch(&OP_WORKFLOWS_POST_WORKFLOW_IMPORT, json)
     }
     fn get_workflows_usages(params: iface_workflows::GetWorkflowsUsagesParams) -> Result<String, String> {
         let json = iface_workflows__get_workflows_usages_params__to_json(&params);
@@ -9331,8 +11754,9 @@ impl iface_workflows::Guest for crate::Component {
         let json = iface_workflows__get_workflows_tasks_params__to_json(&params);
         dispatch(&OP_WORKFLOWS_GET_WORKFLOWS_TASKS, json)
     }
-    fn put_workflows_tasks_update() -> Result<String, String> {
-        dispatch(&OP_WORKFLOWS_PUT_WORKFLOWS_TASKS_UPDATE, Value::Object(Map::new()))
+    fn put_workflows_tasks_update(params: iface_workflows::PutWorkflowsTasksUpdateParams) -> Result<String, String> {
+        let json = iface_workflows__put_workflows_tasks_update_params__to_json(&params);
+        dispatch(&OP_WORKFLOWS_PUT_WORKFLOWS_TASKS_UPDATE, json)
     }
     fn get_workflows_task(params: iface_workflows::GetWorkflowsTaskParams) -> Result<String, String> {
         let json = iface_workflows__get_workflows_task_params__to_json(&params);

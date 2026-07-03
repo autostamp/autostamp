@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `private_apps_legacy` | header `private-app-legacy` |
-package autostamp:hubapi@0.2.1;
+package autostamp:hubapi@0.3.0;
 
 interface custom-event-data {
   /// Map of properties for the event in the format property internal name - property value

@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `basicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:stripe@0.2.1;
+package autostamp:stripe@0.3.0;
 
 interface account {
   record get-account-params {

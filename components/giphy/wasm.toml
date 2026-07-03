@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:giphy"
-version = "0.2.1+giphy-1.0"
+version = "0.3.0+giphy-1.0"
 registry = "ghcr.io/autostamp/giphy"
 kind = "component"
 file = "build/giphy.wasm"

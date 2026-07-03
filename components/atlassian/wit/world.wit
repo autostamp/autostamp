@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `basicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:atlassian@0.2.1;
+package autostamp:atlassian@0.3.0;
 
 interface announcement-banner {
   /// Get announcement banner configuration
@@ -647,14 +647,14 @@ interface project-components {
 }
 
 interface time-tracking {
-  enum time-tracking-configuration-default-unit-enum {
+  enum configuration-default-unit-enum {
     minute,
     hour,
     day,
     week,
   }
 
-  enum time-tracking-configuration-time-format-enum {
+  enum configuration-time-format-enum {
     pretty,
     days,
     hours,
@@ -683,9 +683,9 @@ interface time-tracking {
   /// Set time tracking settings
   record set-shared-time-tracking-configuration-params {
     /// The default unit of time applied to logged time.
-    default-unit: time-tracking-configuration-default-unit-enum,
+    default-unit: configuration-default-unit-enum,
     /// The format that will appear on an issue's *Time Spent* field.
-    time-format: time-tracking-configuration-time-format-enum,
+    time-format: configuration-time-format-enum,
     /// The number of days in a working week.
     working-days-per-week: f64,
     /// The number of hours in a working day.
@@ -3882,7 +3882,7 @@ interface jql {
   }
 
   /// The JQL query to sanitize for the account ID. If the account ID is null, sanitizing is performed for an anonymous user.
-  record jql-query-to-sanitize {
+  record query-to-sanitize {
     /// The account ID of the user, which uniquely identifies the user across all Atlassian products. For example, *5b10ac8d82e05b22cc7d4ef5*.
     account-id: option<string>,
     /// The query to sanitize.
@@ -3934,7 +3934,7 @@ interface jql {
   /// Sanitize JQL queries
   record sanitise-jql-queries-params {
     /// The list of JQL queries to sanitize. Must contain unique values. Maximum of 20 queries.
-    queries: list<jql-query-to-sanitize>
+    queries: list<query-to-sanitize>
   }
   sanitise-jql-queries: func(params: sanitise-jql-queries-params) -> result<string, string>;
 
@@ -4954,7 +4954,7 @@ interface project-role-actors {
   /// As a group's name can change, use of `atlassian-group-role-actor-id` is recommended. For example, `"atlassian-group-role-actor-id":["eef79f81-0b89-4fca-a736-4be531a10869","77f6ab39-e755-4570-a6ae-2d7a8df0bcb8"]`.
   /// 
   /// Add users using `atlassian-user-role-actor` and a list of account IDs. For example, `"atlassian-user-role-actor":["12345678-9abc-def1-2345-6789abcdef12", "abcdef12-3456-789a-bcde-f123456789ab"]`.
-  record project-role-actors-update-bean-categorised-actors {
+  record update-bean-categorised-actors {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
@@ -4982,7 +4982,7 @@ interface project-role-actors {
     id: string,
     /// The actors to add to the project role.
     /// 
-    categorised-actors: option<project-role-actors-update-bean-categorised-actors>
+    categorised-actors: option<update-bean-categorised-actors>
   }
   set-actors: func(params: set-actors-params) -> result<string, string>;
 
@@ -5680,22 +5680,22 @@ interface workflow-status-categories {
 }
 
 interface status {
-  enum status-scope-type-op-enum {
+  enum scope-type-op-enum {
     project,
     global,
   }
 
-  enum status-create-status-category-enum {
+  enum create-status-category-enum {
     todo,
     in-progress,
     done,
   }
 
   /// The scope of the status.
-  record status-scope {
+  record scope {
     project: option<project-id>,
     /// The scope of the status. `GLOBAL` for company-managed projects and `PROJECT` for team-managed projects.
-    type-op: status-scope-type-op-enum
+    type-op: scope-type-op-enum
   }
 
   /// Project ID details.
@@ -5705,17 +5705,17 @@ interface status {
   }
 
   /// Details of the status being created.
-  record status-create {
+  record create {
     /// The description of the status.
     description: option<string>,
     /// The name of the status.
     name: string,
     /// The category of the status.
-    status-category: status-create-status-category-enum
+    status-category: create-status-category-enum
   }
 
   /// Details of the status being updated.
-  record status-update {
+  record update {
     /// The description of the status.
     description: option<string>,
     /// The ID of the status.
@@ -5723,7 +5723,7 @@ interface status {
     /// The name of the status.
     name: string,
     /// The category of the status.
-    status-category: status-create-status-category-enum
+    status-category: create-status-category-enum
   }
 
   /// Bulk get statuses
@@ -5739,16 +5739,16 @@ interface status {
 
   /// Bulk create statuses
   record create-statuses-params {
-    scope: status-scope,
+    scope: scope,
     /// Details of the statuses being created.
-    statuses: list<status-create>
+    statuses: list<create>
   }
   create-statuses: func(params: create-statuses-params) -> result<string, string>;
 
   /// Bulk update statuses
   record update-statuses-params {
     /// The list of statuses that will be updated.
-    statuses: option<list<status-update>>
+    statuses: option<list<update>>
   }
   update-statuses: func(params: update-statuses-params) -> result<string, string>;
 
@@ -6425,7 +6425,7 @@ interface workflow-transition-rules {
   }
 
   /// Details about a workflow configuration update request.
-  record workflow-transition-rules-details {
+  record details {
     workflow-id: workflow-id,
     /// The list of connect workflow rule IDs.
     workflow-rule-ids: list<string>
@@ -6462,7 +6462,7 @@ interface workflow-transition-rules {
   /// Delete workflow transition rule configurations
   record delete-workflow-transition-rule-configurations-params {
     /// The list of workflows with transition rules to delete.
-    workflows: list<workflow-transition-rules-details>
+    workflows: list<details>
   }
   delete-workflow-transition-rule-configurations: func(params: delete-workflow-transition-rule-configurations-params) -> result<string, string>;
 
@@ -7000,23 +7000,23 @@ interface dynamic-modules {
   }
 
   /// Get modules
-  dynamic-modules-resource-get-modules-get: func() -> result<string, string>;
+  resource-get-modules-get: func() -> result<string, string>;
 
   /// Register modules
-  record dynamic-modules-resource-register-modules-post-params {
+  record resource-register-modules-post-params {
     /// A list of app modules in the same format as the `modules` property in the
     /// [app descriptor](https://developer.atlassian.com/cloud/jira/platform/app-descriptor/).
     modules: list<connect-module>
   }
-  dynamic-modules-resource-register-modules-post: func(params: dynamic-modules-resource-register-modules-post-params) -> result<string, string>;
+  resource-register-modules-post: func(params: resource-register-modules-post-params) -> result<string, string>;
 
   /// Remove modules
-  record dynamic-modules-resource-remove-modules-delete-params {
+  record resource-remove-modules-delete-params {
     /// The key of the module to remove. To include multiple module keys, provide multiple copies of this parameter.
     /// For example, `moduleKey=dynamic-attachment-entity-property&moduleKey=dynamic-select-field`.
     module-key: option<list<string>>
   }
-  dynamic-modules-resource-remove-modules-delete: func(params: dynamic-modules-resource-remove-modules-delete-params) -> result<string, string>;
+  resource-remove-modules-delete: func(params: resource-remove-modules-delete-params) -> result<string, string>;
 
 }
 

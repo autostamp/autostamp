@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:dev@0.2.1` |
-| Published version | `0.2.1+dev-1.0.0` |
+| Package | `autostamp:dev@0.3.0` |
+| Published version | `0.3.0+dev-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 40 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

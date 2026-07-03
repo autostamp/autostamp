@@ -289,6 +289,7 @@ const OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_ACTIVITY: OpSpec = OpSpec {
     path_template: "/access_settings/activity",
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -299,6 +300,7 @@ const OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_WHITELIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/access_settings/whitelist",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -309,6 +311,7 @@ const OP_IP_ACCESS_MANAGEMENT_POST_ACCESS_SETTINGS_WHITELIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/access_settings/whitelist",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "ips", location: FieldLocation::Body },
     ],
     auth: &[
@@ -320,6 +323,7 @@ const OP_IP_ACCESS_MANAGEMENT_DELETE_ACCESS_SETTINGS_WHITELIST: OpSpec = OpSpec 
     method: "DELETE",
     path_template: "/access_settings/whitelist",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "ids", location: FieldLocation::Body },
     ],
     auth: &[
@@ -331,6 +335,7 @@ const OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_WHITELIST_RULE_ID: OpSpec = Op
     method: "GET",
     path_template: "/access_settings/whitelist/{rule_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -341,6 +346,7 @@ const OP_IP_ACCESS_MANAGEMENT_DELETE_ACCESS_SETTINGS_WHITELIST_RULE_ID: OpSpec =
     method: "DELETE",
     path_template: "/access_settings/whitelist/{rule_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -356,18 +362,39 @@ fn iface_ip_access_management__post_access_settings_whitelist_body_ips_item__to_
 fn iface_ip_access_management__get_access_settings_activity_params__to_json(p: &iface_ip_access_management::GetAccessSettingsActivityParams) -> Value {
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ip_access_management__get_access_settings_whitelist_params__to_json(p: &iface_ip_access_management::GetAccessSettingsWhitelistParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_ip_access_management__post_access_settings_whitelist_params__to_json(p: &iface_ip_access_management::PostAccessSettingsWhitelistParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ips".into(), Value::Array((&p.ips).iter().map(|v| iface_ip_access_management__post_access_settings_whitelist_body_ips_item__to_json(v)).collect()));
     Value::Object(m)
 }
 
 fn iface_ip_access_management__delete_access_settings_whitelist_params__to_json(p: &iface_ip_access_management::DeleteAccessSettingsWhitelistParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ip_access_management__get_access_settings_whitelist_rule_id_params__to_json(p: &iface_ip_access_management::GetAccessSettingsWhitelistRuleIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ip_access_management__delete_access_settings_whitelist_rule_id_params__to_json(p: &iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -376,8 +403,9 @@ impl iface_ip_access_management::Guest for crate::Component {
         let json = iface_ip_access_management__get_access_settings_activity_params__to_json(&params);
         dispatch(&OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_ACTIVITY, json)
     }
-    fn get_access_settings_whitelist() -> Result<String, String> {
-        dispatch(&OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_WHITELIST, Value::Object(Map::new()))
+    fn get_access_settings_whitelist(params: iface_ip_access_management::GetAccessSettingsWhitelistParams) -> Result<String, String> {
+        let json = iface_ip_access_management__get_access_settings_whitelist_params__to_json(&params);
+        dispatch(&OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_WHITELIST, json)
     }
     fn post_access_settings_whitelist(params: iface_ip_access_management::PostAccessSettingsWhitelistParams) -> Result<String, String> {
         let json = iface_ip_access_management__post_access_settings_whitelist_params__to_json(&params);
@@ -387,11 +415,13 @@ impl iface_ip_access_management::Guest for crate::Component {
         let json = iface_ip_access_management__delete_access_settings_whitelist_params__to_json(&params);
         dispatch(&OP_IP_ACCESS_MANAGEMENT_DELETE_ACCESS_SETTINGS_WHITELIST, json)
     }
-    fn get_access_settings_whitelist_rule_id() -> Result<String, String> {
-        dispatch(&OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_WHITELIST_RULE_ID, Value::Object(Map::new()))
+    fn get_access_settings_whitelist_rule_id(params: iface_ip_access_management::GetAccessSettingsWhitelistRuleIdParams) -> Result<String, String> {
+        let json = iface_ip_access_management__get_access_settings_whitelist_rule_id_params__to_json(&params);
+        dispatch(&OP_IP_ACCESS_MANAGEMENT_GET_ACCESS_SETTINGS_WHITELIST_RULE_ID, json)
     }
-    fn delete_access_settings_whitelist_rule_id() -> Result<String, String> {
-        dispatch(&OP_IP_ACCESS_MANAGEMENT_DELETE_ACCESS_SETTINGS_WHITELIST_RULE_ID, Value::Object(Map::new()))
+    fn delete_access_settings_whitelist_rule_id(params: iface_ip_access_management::DeleteAccessSettingsWhitelistRuleIdParams) -> Result<String, String> {
+        let json = iface_ip_access_management__delete_access_settings_whitelist_rule_id_params__to_json(&params);
+        dispatch(&OP_IP_ACCESS_MANAGEMENT_DELETE_ACCESS_SETTINGS_WHITELIST_RULE_ID, json)
     }
 }
 use crate::exports::autostamp::sendgrid::alerts as iface_alerts;
@@ -400,6 +430,7 @@ const OP_ALERTS_GET_ALERTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/alerts",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -425,6 +456,7 @@ const OP_ALERTS_GET_ALERTS_ALERT_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/alerts/{alert_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -435,6 +467,7 @@ const OP_ALERTS_PATCH_ALERTS_ALERT_ID: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/alerts/{alert_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "email_to", location: FieldLocation::Body },
         FieldSpec { snake: "frequency", location: FieldLocation::Body },
         FieldSpec { snake: "percentage", location: FieldLocation::Body },
@@ -448,6 +481,7 @@ const OP_ALERTS_DELETE_ALERTS_ALERT_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/alerts/{alert_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -461,6 +495,12 @@ fn iface_alerts__post_alerts_body_type_op_enum__to_str(e: &iface_alerts::PostAle
     }
 }
 
+fn iface_alerts__get_alerts_params__to_json(p: &iface_alerts::GetAlertsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_alerts__post_alerts_params__to_json(p: &iface_alerts::PostAlertsParams) -> Value {
     let mut m = Map::new();
     m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -471,31 +511,47 @@ fn iface_alerts__post_alerts_params__to_json(p: &iface_alerts::PostAlertsParams)
     Value::Object(m)
 }
 
+fn iface_alerts__get_alerts_alert_id_params__to_json(p: &iface_alerts::GetAlertsAlertIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_alerts__patch_alerts_alert_id_params__to_json(p: &iface_alerts::PatchAlertsAlertIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email_to".into(), match (&p.email_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("frequency".into(), match (&p.frequency) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("percentage".into(), match (&p.percentage) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_alerts__delete_alerts_alert_id_params__to_json(p: &iface_alerts::DeleteAlertsAlertIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_alerts::Guest for crate::Component {
-    fn get_alerts() -> Result<String, String> {
-        dispatch(&OP_ALERTS_GET_ALERTS, Value::Object(Map::new()))
+    fn get_alerts(params: iface_alerts::GetAlertsParams) -> Result<String, String> {
+        let json = iface_alerts__get_alerts_params__to_json(&params);
+        dispatch(&OP_ALERTS_GET_ALERTS, json)
     }
     fn post_alerts(params: iface_alerts::PostAlertsParams) -> Result<String, String> {
         let json = iface_alerts__post_alerts_params__to_json(&params);
         dispatch(&OP_ALERTS_POST_ALERTS, json)
     }
-    fn get_alerts_alert_id() -> Result<String, String> {
-        dispatch(&OP_ALERTS_GET_ALERTS_ALERT_ID, Value::Object(Map::new()))
+    fn get_alerts_alert_id(params: iface_alerts::GetAlertsAlertIdParams) -> Result<String, String> {
+        let json = iface_alerts__get_alerts_alert_id_params__to_json(&params);
+        dispatch(&OP_ALERTS_GET_ALERTS_ALERT_ID, json)
     }
     fn patch_alerts_alert_id(params: iface_alerts::PatchAlertsAlertIdParams) -> Result<String, String> {
         let json = iface_alerts__patch_alerts_alert_id_params__to_json(&params);
         dispatch(&OP_ALERTS_PATCH_ALERTS_ALERT_ID, json)
     }
-    fn delete_alerts_alert_id() -> Result<String, String> {
-        dispatch(&OP_ALERTS_DELETE_ALERTS_ALERT_ID, Value::Object(Map::new()))
+    fn delete_alerts_alert_id(params: iface_alerts::DeleteAlertsAlertIdParams) -> Result<String, String> {
+        let json = iface_alerts__delete_alerts_alert_id_params__to_json(&params);
+        dispatch(&OP_ALERTS_DELETE_ALERTS_ALERT_ID, json)
     }
 }
 use crate::exports::autostamp::sendgrid::api_keys as iface_api_keys;
@@ -505,6 +561,7 @@ const OP_API_KEYS_GET_API_KEYS: OpSpec = OpSpec {
     path_template: "/api_keys",
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -515,6 +572,7 @@ const OP_API_KEYS_CREATE_API_KEYS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/api_keys",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
         FieldSpec { snake: "scopes", location: FieldLocation::Body },
     ],
@@ -527,6 +585,7 @@ const OP_API_KEYS_GET_API_KEYS_API_KEY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api_keys/{api_key_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -537,6 +596,7 @@ const OP_API_KEYS_PUT_API_KEYS_API_KEY_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/api_keys/{api_key_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
         FieldSpec { snake: "scopes", location: FieldLocation::Body },
     ],
@@ -549,6 +609,7 @@ const OP_API_KEYS_PATCH_API_KEYS_API_KEY_ID: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/api_keys/{api_key_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
     auth: &[
@@ -560,6 +621,7 @@ const OP_API_KEYS_DELETE_API_KEYS_API_KEY_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/api_keys/{api_key_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -569,18 +631,27 @@ const OP_API_KEYS_DELETE_API_KEYS_API_KEY_ID: OpSpec = OpSpec {
 fn iface_api_keys__get_api_keys_params__to_json(p: &iface_api_keys::GetApiKeysParams) -> Value {
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_api_keys__create_api_keys_params__to_json(p: &iface_api_keys::CreateApiKeysParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_api_keys__get_api_keys_api_key_id_params__to_json(p: &iface_api_keys::GetApiKeysApiKeyIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_api_keys__put_api_keys_api_key_id_params__to_json(p: &iface_api_keys::PutApiKeysApiKeyIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
@@ -588,7 +659,14 @@ fn iface_api_keys__put_api_keys_api_key_id_params__to_json(p: &iface_api_keys::P
 
 fn iface_api_keys__patch_api_keys_api_key_id_params__to_json(p: &iface_api_keys::PatchApiKeysApiKeyIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_api_keys__delete_api_keys_api_key_id_params__to_json(p: &iface_api_keys::DeleteApiKeysApiKeyIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -601,8 +679,9 @@ impl iface_api_keys::Guest for crate::Component {
         let json = iface_api_keys__create_api_keys_params__to_json(&params);
         dispatch(&OP_API_KEYS_CREATE_API_KEYS, json)
     }
-    fn get_api_keys_api_key_id() -> Result<String, String> {
-        dispatch(&OP_API_KEYS_GET_API_KEYS_API_KEY_ID, Value::Object(Map::new()))
+    fn get_api_keys_api_key_id(params: iface_api_keys::GetApiKeysApiKeyIdParams) -> Result<String, String> {
+        let json = iface_api_keys__get_api_keys_api_key_id_params__to_json(&params);
+        dispatch(&OP_API_KEYS_GET_API_KEYS_API_KEY_ID, json)
     }
     fn put_api_keys_api_key_id(params: iface_api_keys::PutApiKeysApiKeyIdParams) -> Result<String, String> {
         let json = iface_api_keys__put_api_keys_api_key_id_params__to_json(&params);
@@ -612,8 +691,9 @@ impl iface_api_keys::Guest for crate::Component {
         let json = iface_api_keys__patch_api_keys_api_key_id_params__to_json(&params);
         dispatch(&OP_API_KEYS_PATCH_API_KEYS_API_KEY_ID, json)
     }
-    fn delete_api_keys_api_key_id() -> Result<String, String> {
-        dispatch(&OP_API_KEYS_DELETE_API_KEYS_API_KEY_ID, Value::Object(Map::new()))
+    fn delete_api_keys_api_key_id(params: iface_api_keys::DeleteApiKeysApiKeyIdParams) -> Result<String, String> {
+        let json = iface_api_keys__delete_api_keys_api_key_id_params__to_json(&params);
+        dispatch(&OP_API_KEYS_DELETE_API_KEYS_API_KEY_ID, json)
     }
 }
 use crate::exports::autostamp::sendgrid::suppressions_unsubscribe_groups as iface_suppressions_unsubscribe_groups;
@@ -623,6 +703,7 @@ const OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_GET_ASM_GROUPS: OpSpec = OpSpec {
     path_template: "/asm/groups",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -633,6 +714,7 @@ const OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_POST_ASM_GROUPS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/asm/groups",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "description", location: FieldLocation::Body },
         FieldSpec { snake: "is_default", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
@@ -646,6 +728,7 @@ const OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_GET_ASM_GROUPS_GROUP_ID: OpSpec = OpSpe
     method: "GET",
     path_template: "/asm/groups/{group_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -656,6 +739,7 @@ const OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_PATCH_ASM_GROUPS_GROUP_ID: OpSpec = OpS
     method: "PATCH",
     path_template: "/asm/groups/{group_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -667,6 +751,7 @@ const OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_DELETE_ASM_GROUPS_GROUP_ID: OpSpec = Op
     method: "DELETE",
     path_template: "/asm/groups/{group_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -676,20 +761,35 @@ const OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_DELETE_ASM_GROUPS_GROUP_ID: OpSpec = Op
 fn iface_suppressions_unsubscribe_groups__get_asm_groups_params__to_json(p: &iface_suppressions_unsubscribe_groups::GetAsmGroupsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_suppressions_unsubscribe_groups__post_asm_groups_params__to_json(p: &iface_suppressions_unsubscribe_groups::PostAsmGroupsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_default".into(), match (&p.is_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_suppressions_unsubscribe_groups__get_asm_groups_group_id_params__to_json(p: &iface_suppressions_unsubscribe_groups::GetAsmGroupsGroupIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_suppressions_unsubscribe_groups__patch_asm_groups_group_id_params__to_json(p: &iface_suppressions_unsubscribe_groups::PatchAsmGroupsGroupIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_params__to_json(p: &iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -702,15 +802,17 @@ impl iface_suppressions_unsubscribe_groups::Guest for crate::Component {
         let json = iface_suppressions_unsubscribe_groups__post_asm_groups_params__to_json(&params);
         dispatch(&OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_POST_ASM_GROUPS, json)
     }
-    fn get_asm_groups_group_id() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_GET_ASM_GROUPS_GROUP_ID, Value::Object(Map::new()))
+    fn get_asm_groups_group_id(params: iface_suppressions_unsubscribe_groups::GetAsmGroupsGroupIdParams) -> Result<String, String> {
+        let json = iface_suppressions_unsubscribe_groups__get_asm_groups_group_id_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_GET_ASM_GROUPS_GROUP_ID, json)
     }
     fn patch_asm_groups_group_id(params: iface_suppressions_unsubscribe_groups::PatchAsmGroupsGroupIdParams) -> Result<String, String> {
         let json = iface_suppressions_unsubscribe_groups__patch_asm_groups_group_id_params__to_json(&params);
         dispatch(&OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_PATCH_ASM_GROUPS_GROUP_ID, json)
     }
-    fn delete_asm_groups_group_id() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_DELETE_ASM_GROUPS_GROUP_ID, Value::Object(Map::new()))
+    fn delete_asm_groups_group_id(params: iface_suppressions_unsubscribe_groups::DeleteAsmGroupsGroupIdParams) -> Result<String, String> {
+        let json = iface_suppressions_unsubscribe_groups__delete_asm_groups_group_id_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_UNSUBSCRIBE_GROUPS_DELETE_ASM_GROUPS_GROUP_ID, json)
     }
 }
 use crate::exports::autostamp::sendgrid::suppressions_suppressions as iface_suppressions_suppressions;
@@ -719,6 +821,7 @@ const OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_GROUPS_GROUP_ID_SUPPRESSIONS: OpSpec 
     method: "GET",
     path_template: "/asm/groups/{group_id}/suppressions",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -729,6 +832,7 @@ const OP_SUPPRESSIONS_SUPPRESSIONS_POST_ASM_GROUPS_GROUP_ID_SUPPRESSIONS: OpSpec
     method: "POST",
     path_template: "/asm/groups/{group_id}/suppressions",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "recipient_emails", location: FieldLocation::Body },
     ],
     auth: &[
@@ -740,6 +844,7 @@ const OP_SUPPRESSIONS_SUPPRESSIONS_POST_ASM_GROUPS_GROUP_ID_SUPPRESSIONS_SEARCH:
     method: "POST",
     path_template: "/asm/groups/{group_id}/suppressions/search",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "recipient_emails", location: FieldLocation::Body },
     ],
     auth: &[
@@ -751,6 +856,7 @@ const OP_SUPPRESSIONS_SUPPRESSIONS_DELETE_ASM_GROUPS_GROUP_ID_SUPPRESSIONS_EMAIL
     method: "DELETE",
     path_template: "/asm/groups/{group_id}/suppressions/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -761,6 +867,7 @@ const OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_SUPPRESSIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/asm/suppressions",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -771,27 +878,55 @@ const OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_SUPPRESSIONS_EMAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/asm/suppressions/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
+fn iface_suppressions_suppressions__get_asm_groups_group_id_suppressions_params__to_json(p: &iface_suppressions_suppressions::GetAsmGroupsGroupIdSuppressionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_suppressions_suppressions__post_asm_groups_group_id_suppressions_params__to_json(p: &iface_suppressions_suppressions::PostAsmGroupsGroupIdSuppressionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recipient_emails".into(), Value::Array((&p.recipient_emails).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
 fn iface_suppressions_suppressions__post_asm_groups_group_id_suppressions_search_params__to_json(p: &iface_suppressions_suppressions::PostAsmGroupsGroupIdSuppressionsSearchParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recipient_emails".into(), Value::Array((&p.recipient_emails).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
+fn iface_suppressions_suppressions__delete_asm_groups_group_id_suppressions_email_params__to_json(p: &iface_suppressions_suppressions::DeleteAsmGroupsGroupIdSuppressionsEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suppressions_suppressions__get_asm_suppressions_params__to_json(p: &iface_suppressions_suppressions::GetAsmSuppressionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suppressions_suppressions__get_asm_suppressions_email_params__to_json(p: &iface_suppressions_suppressions::GetAsmSuppressionsEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_suppressions_suppressions::Guest for crate::Component {
-    fn get_asm_groups_group_id_suppressions() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_GROUPS_GROUP_ID_SUPPRESSIONS, Value::Object(Map::new()))
+    fn get_asm_groups_group_id_suppressions(params: iface_suppressions_suppressions::GetAsmGroupsGroupIdSuppressionsParams) -> Result<String, String> {
+        let json = iface_suppressions_suppressions__get_asm_groups_group_id_suppressions_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_GROUPS_GROUP_ID_SUPPRESSIONS, json)
     }
     fn post_asm_groups_group_id_suppressions(params: iface_suppressions_suppressions::PostAsmGroupsGroupIdSuppressionsParams) -> Result<String, String> {
         let json = iface_suppressions_suppressions__post_asm_groups_group_id_suppressions_params__to_json(&params);
@@ -801,14 +936,17 @@ impl iface_suppressions_suppressions::Guest for crate::Component {
         let json = iface_suppressions_suppressions__post_asm_groups_group_id_suppressions_search_params__to_json(&params);
         dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_POST_ASM_GROUPS_GROUP_ID_SUPPRESSIONS_SEARCH, json)
     }
-    fn delete_asm_groups_group_id_suppressions_email() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_DELETE_ASM_GROUPS_GROUP_ID_SUPPRESSIONS_EMAIL, Value::Object(Map::new()))
+    fn delete_asm_groups_group_id_suppressions_email(params: iface_suppressions_suppressions::DeleteAsmGroupsGroupIdSuppressionsEmailParams) -> Result<String, String> {
+        let json = iface_suppressions_suppressions__delete_asm_groups_group_id_suppressions_email_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_DELETE_ASM_GROUPS_GROUP_ID_SUPPRESSIONS_EMAIL, json)
     }
-    fn get_asm_suppressions() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_SUPPRESSIONS, Value::Object(Map::new()))
+    fn get_asm_suppressions(params: iface_suppressions_suppressions::GetAsmSuppressionsParams) -> Result<String, String> {
+        let json = iface_suppressions_suppressions__get_asm_suppressions_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_SUPPRESSIONS, json)
     }
-    fn get_asm_suppressions_email() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_SUPPRESSIONS_EMAIL, Value::Object(Map::new()))
+    fn get_asm_suppressions_email(params: iface_suppressions_suppressions::GetAsmSuppressionsEmailParams) -> Result<String, String> {
+        let json = iface_suppressions_suppressions__get_asm_suppressions_email_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_SUPPRESSIONS_GET_ASM_SUPPRESSIONS_EMAIL, json)
     }
 }
 use crate::exports::autostamp::sendgrid::suppressions_global_suppressions as iface_suppressions_global_suppressions;
@@ -817,6 +955,7 @@ const OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_POST_ASM_SUPPRESSIONS_GLOBAL: OpSpec =
     method: "POST",
     path_template: "/asm/suppressions/global",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "recipient_emails", location: FieldLocation::Body },
     ],
     auth: &[
@@ -828,6 +967,7 @@ const OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_GET_ASM_SUPPRESSIONS_GLOBAL_EMAIL: OpS
     method: "GET",
     path_template: "/asm/suppressions/global/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -838,6 +978,7 @@ const OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_DELETE_ASM_SUPPRESSIONS_GLOBAL_EMAIL: 
     method: "DELETE",
     path_template: "/asm/suppressions/global/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -852,6 +993,7 @@ const OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_GET_SUPPRESSION_UNSUBSCRIBES: OpSpec =
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -860,7 +1002,20 @@ const OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_GET_SUPPRESSION_UNSUBSCRIBES: OpSpec =
 
 fn iface_suppressions_global_suppressions__post_asm_suppressions_global_params__to_json(p: &iface_suppressions_global_suppressions::PostAsmSuppressionsGlobalParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recipient_emails".into(), Value::Array((&p.recipient_emails).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_suppressions_global_suppressions__get_asm_suppressions_global_email_params__to_json(p: &iface_suppressions_global_suppressions::GetAsmSuppressionsGlobalEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_params__to_json(p: &iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -870,6 +1025,7 @@ fn iface_suppressions_global_suppressions__get_suppression_unsubscribes_params__
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -878,11 +1034,13 @@ impl iface_suppressions_global_suppressions::Guest for crate::Component {
         let json = iface_suppressions_global_suppressions__post_asm_suppressions_global_params__to_json(&params);
         dispatch(&OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_POST_ASM_SUPPRESSIONS_GLOBAL, json)
     }
-    fn get_asm_suppressions_global_email() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_GET_ASM_SUPPRESSIONS_GLOBAL_EMAIL, Value::Object(Map::new()))
+    fn get_asm_suppressions_global_email(params: iface_suppressions_global_suppressions::GetAsmSuppressionsGlobalEmailParams) -> Result<String, String> {
+        let json = iface_suppressions_global_suppressions__get_asm_suppressions_global_email_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_GET_ASM_SUPPRESSIONS_GLOBAL_EMAIL, json)
     }
-    fn delete_asm_suppressions_global_email() -> Result<String, String> {
-        dispatch(&OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_DELETE_ASM_SUPPRESSIONS_GLOBAL_EMAIL, Value::Object(Map::new()))
+    fn delete_asm_suppressions_global_email(params: iface_suppressions_global_suppressions::DeleteAsmSuppressionsGlobalEmailParams) -> Result<String, String> {
+        let json = iface_suppressions_global_suppressions__delete_asm_suppressions_global_email_params__to_json(&params);
+        dispatch(&OP_SUPPRESSIONS_GLOBAL_SUPPRESSIONS_DELETE_ASM_SUPPRESSIONS_GLOBAL_EMAIL, json)
     }
     fn get_suppression_unsubscribes(params: iface_suppressions_global_suppressions::GetSuppressionUnsubscribesParams) -> Result<String, String> {
         let json = iface_suppressions_global_suppressions__get_suppression_unsubscribes_params__to_json(&params);
@@ -896,6 +1054,12 @@ const OP_STATS_GET_BROWSERS_STATS: OpSpec = OpSpec {
     path_template: "/browsers/stats",
     fields: &[
         FieldSpec { snake: "browsers", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -906,6 +1070,10 @@ const OP_STATS_GET_CLIENTS_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/clients/stats",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -916,6 +1084,10 @@ const OP_STATS_GET_CLIENTS_CLIENT_TYPE_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/clients/{client_type}/stats",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -926,6 +1098,12 @@ const OP_STATS_GET_DEVICES_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/devices/stats",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -937,6 +1115,12 @@ const OP_STATS_GET_GEO_STATS: OpSpec = OpSpec {
     path_template: "/geo/stats",
     fields: &[
         FieldSpec { snake: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -948,6 +1132,12 @@ const OP_STATS_GET_MAILBOX_PROVIDERS_STATS: OpSpec = OpSpec {
     path_template: "/mailbox_providers/stats",
     fields: &[
         FieldSpec { snake: "mailbox_providers", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -958,11 +1148,25 @@ const OP_STATS_GET_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stats",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
+
+fn iface_stats__get_browsers_stats_aggregated_by_enum__to_str(e: &iface_stats::GetBrowsersStatsAggregatedByEnum) -> &'static str {
+    match e {
+        iface_stats::GetBrowsersStatsAggregatedByEnum::Day => "day",
+        iface_stats::GetBrowsersStatsAggregatedByEnum::Week => "week",
+        iface_stats::GetBrowsersStatsAggregatedByEnum::Month => "month",
+    }
+}
 
 fn iface_stats__get_geo_stats_country_enum__to_str(e: &iface_stats::GetGeoStatsCountryEnum) -> &'static str {
     match e {
@@ -974,18 +1178,76 @@ fn iface_stats__get_geo_stats_country_enum__to_str(e: &iface_stats::GetGeoStatsC
 fn iface_stats__get_browsers_stats_params__to_json(p: &iface_stats::GetBrowsersStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("browsers".into(), match (&p.browsers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_stats__get_browsers_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stats__get_clients_stats_params__to_json(p: &iface_stats::GetClientsStatsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_stats__get_browsers_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stats__get_clients_client_type_stats_params__to_json(p: &iface_stats::GetClientsClientTypeStatsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_stats__get_browsers_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stats__get_devices_stats_params__to_json(p: &iface_stats::GetDevicesStatsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_stats__get_browsers_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_stats__get_geo_stats_params__to_json(p: &iface_stats::GetGeoStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String(iface_stats__get_geo_stats_country_enum__to_str(v).into()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_stats__get_browsers_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_stats__get_mailbox_providers_stats_params__to_json(p: &iface_stats::GetMailboxProvidersStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("mailbox_providers".into(), match (&p.mailbox_providers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_stats__get_browsers_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stats__get_stats_params__to_json(p: &iface_stats::GetStatsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_stats__get_browsers_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -994,14 +1256,17 @@ impl iface_stats::Guest for crate::Component {
         let json = iface_stats__get_browsers_stats_params__to_json(&params);
         dispatch(&OP_STATS_GET_BROWSERS_STATS, json)
     }
-    fn get_clients_stats() -> Result<String, String> {
-        dispatch(&OP_STATS_GET_CLIENTS_STATS, Value::Object(Map::new()))
+    fn get_clients_stats(params: iface_stats::GetClientsStatsParams) -> Result<String, String> {
+        let json = iface_stats__get_clients_stats_params__to_json(&params);
+        dispatch(&OP_STATS_GET_CLIENTS_STATS, json)
     }
-    fn get_clients_client_type_stats() -> Result<String, String> {
-        dispatch(&OP_STATS_GET_CLIENTS_CLIENT_TYPE_STATS, Value::Object(Map::new()))
+    fn get_clients_client_type_stats(params: iface_stats::GetClientsClientTypeStatsParams) -> Result<String, String> {
+        let json = iface_stats__get_clients_client_type_stats_params__to_json(&params);
+        dispatch(&OP_STATS_GET_CLIENTS_CLIENT_TYPE_STATS, json)
     }
-    fn get_devices_stats() -> Result<String, String> {
-        dispatch(&OP_STATS_GET_DEVICES_STATS, Value::Object(Map::new()))
+    fn get_devices_stats(params: iface_stats::GetDevicesStatsParams) -> Result<String, String> {
+        let json = iface_stats__get_devices_stats_params__to_json(&params);
+        dispatch(&OP_STATS_GET_DEVICES_STATS, json)
     }
     fn get_geo_stats(params: iface_stats::GetGeoStatsParams) -> Result<String, String> {
         let json = iface_stats__get_geo_stats_params__to_json(&params);
@@ -1011,8 +1276,9 @@ impl iface_stats::Guest for crate::Component {
         let json = iface_stats__get_mailbox_providers_stats_params__to_json(&params);
         dispatch(&OP_STATS_GET_MAILBOX_PROVIDERS_STATS, json)
     }
-    fn get_stats() -> Result<String, String> {
-        dispatch(&OP_STATS_GET_STATS, Value::Object(Map::new()))
+    fn get_stats(params: iface_stats::GetStatsParams) -> Result<String, String> {
+        let json = iface_stats__get_stats_params__to_json(&params);
+        dispatch(&OP_STATS_GET_STATS, json)
     }
 }
 use crate::exports::autostamp::sendgrid::campaigns_api as iface_campaigns_api;
@@ -1023,6 +1289,7 @@ const OP_CAMPAIGNS_API_GET_CAMPAIGNS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1033,6 +1300,7 @@ const OP_CAMPAIGNS_API_POST_CAMPAIGNS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/campaigns",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "categories", location: FieldLocation::Body },
         FieldSpec { snake: "custom_unsubscribe_url", location: FieldLocation::Body },
         FieldSpec { snake: "editor", location: FieldLocation::Body },
@@ -1055,6 +1323,7 @@ const OP_CAMPAIGNS_API_GET_CAMPAIGNS_CAMPAIGN_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/campaigns/{campaign_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1065,6 +1334,7 @@ const OP_CAMPAIGNS_API_PATCH_CAMPAIGNS_CAMPAIGN_ID: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/campaigns/{campaign_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "categories", location: FieldLocation::Body },
         FieldSpec { snake: "html_content", location: FieldLocation::Body },
         FieldSpec { snake: "plain_content", location: FieldLocation::Body },
@@ -1080,6 +1350,7 @@ const OP_CAMPAIGNS_API_DELETE_CAMPAIGNS_CAMPAIGN_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/campaigns/{campaign_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1090,6 +1361,7 @@ const OP_CAMPAIGNS_API_GET_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/campaigns/{campaign_id}/schedules",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1100,6 +1372,7 @@ const OP_CAMPAIGNS_API_POST_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/campaigns/{campaign_id}/schedules",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "send_at", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1111,6 +1384,7 @@ const OP_CAMPAIGNS_API_PATCH_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/campaigns/{campaign_id}/schedules",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "send_at", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1122,6 +1396,7 @@ const OP_CAMPAIGNS_API_DELETE_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/campaigns/{campaign_id}/schedules",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1132,6 +1407,7 @@ const OP_CAMPAIGNS_API_POST_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES_NOW: OpSpec = OpSpec
     method: "POST",
     path_template: "/campaigns/{campaign_id}/schedules/now",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1142,6 +1418,7 @@ const OP_CAMPAIGNS_API_POST_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES_TEST: OpSpec = OpSpe
     method: "POST",
     path_template: "/campaigns/{campaign_id}/schedules/test",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "to", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1160,11 +1437,13 @@ fn iface_campaigns_api__get_campaigns_params__to_json(p: &iface_campaigns_api::G
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_campaigns_api__post_campaigns_params__to_json(p: &iface_campaigns_api::PostCampaignsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("categories".into(), match (&p.categories) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("custom_unsubscribe_url".into(), match (&p.custom_unsubscribe_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("editor".into(), match (&p.editor) { Some(v) => Value::String(iface_campaigns_api__campaign_request_editor_enum__to_str(v).into()), None => Value::Null });
@@ -1180,8 +1459,15 @@ fn iface_campaigns_api__post_campaigns_params__to_json(p: &iface_campaigns_api::
     Value::Object(m)
 }
 
+fn iface_campaigns_api__get_campaigns_campaign_id_params__to_json(p: &iface_campaigns_api::GetCampaignsCampaignIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_campaigns_api__patch_campaigns_campaign_id_params__to_json(p: &iface_campaigns_api::PatchCampaignsCampaignIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("categories".into(), Value::Array((&p.categories).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("html_content".into(), Value::String((&p.html_content).clone()));
     m.insert("plain_content".into(), Value::String((&p.plain_content).clone()));
@@ -1190,20 +1476,47 @@ fn iface_campaigns_api__patch_campaigns_campaign_id_params__to_json(p: &iface_ca
     Value::Object(m)
 }
 
+fn iface_campaigns_api__delete_campaigns_campaign_id_params__to_json(p: &iface_campaigns_api::DeleteCampaignsCampaignIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_campaigns_api__get_campaigns_campaign_id_schedules_params__to_json(p: &iface_campaigns_api::GetCampaignsCampaignIdSchedulesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_campaigns_api__post_campaigns_campaign_id_schedules_params__to_json(p: &iface_campaigns_api::PostCampaignsCampaignIdSchedulesParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("send_at".into(), Value::Number(serde_json::Number::from(*(&p.send_at))));
     Value::Object(m)
 }
 
 fn iface_campaigns_api__patch_campaigns_campaign_id_schedules_params__to_json(p: &iface_campaigns_api::PatchCampaignsCampaignIdSchedulesParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("send_at".into(), Value::Number(serde_json::Number::from(*(&p.send_at))));
+    Value::Object(m)
+}
+
+fn iface_campaigns_api__delete_campaigns_campaign_id_schedules_params__to_json(p: &iface_campaigns_api::DeleteCampaignsCampaignIdSchedulesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_campaigns_api__post_campaigns_campaign_id_schedules_now_params__to_json(p: &iface_campaigns_api::PostCampaignsCampaignIdSchedulesNowParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_campaigns_api__post_campaigns_campaign_id_schedules_test_params__to_json(p: &iface_campaigns_api::PostCampaignsCampaignIdSchedulesTestParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("to".into(), Value::String((&p.to).clone()));
     Value::Object(m)
 }
@@ -1217,18 +1530,21 @@ impl iface_campaigns_api::Guest for crate::Component {
         let json = iface_campaigns_api__post_campaigns_params__to_json(&params);
         dispatch(&OP_CAMPAIGNS_API_POST_CAMPAIGNS, json)
     }
-    fn get_campaigns_campaign_id() -> Result<String, String> {
-        dispatch(&OP_CAMPAIGNS_API_GET_CAMPAIGNS_CAMPAIGN_ID, Value::Object(Map::new()))
+    fn get_campaigns_campaign_id(params: iface_campaigns_api::GetCampaignsCampaignIdParams) -> Result<String, String> {
+        let json = iface_campaigns_api__get_campaigns_campaign_id_params__to_json(&params);
+        dispatch(&OP_CAMPAIGNS_API_GET_CAMPAIGNS_CAMPAIGN_ID, json)
     }
     fn patch_campaigns_campaign_id(params: iface_campaigns_api::PatchCampaignsCampaignIdParams) -> Result<String, String> {
         let json = iface_campaigns_api__patch_campaigns_campaign_id_params__to_json(&params);
         dispatch(&OP_CAMPAIGNS_API_PATCH_CAMPAIGNS_CAMPAIGN_ID, json)
     }
-    fn delete_campaigns_campaign_id() -> Result<String, String> {
-        dispatch(&OP_CAMPAIGNS_API_DELETE_CAMPAIGNS_CAMPAIGN_ID, Value::Object(Map::new()))
+    fn delete_campaigns_campaign_id(params: iface_campaigns_api::DeleteCampaignsCampaignIdParams) -> Result<String, String> {
+        let json = iface_campaigns_api__delete_campaigns_campaign_id_params__to_json(&params);
+        dispatch(&OP_CAMPAIGNS_API_DELETE_CAMPAIGNS_CAMPAIGN_ID, json)
     }
-    fn get_campaigns_campaign_id_schedules() -> Result<String, String> {
-        dispatch(&OP_CAMPAIGNS_API_GET_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES, Value::Object(Map::new()))
+    fn get_campaigns_campaign_id_schedules(params: iface_campaigns_api::GetCampaignsCampaignIdSchedulesParams) -> Result<String, String> {
+        let json = iface_campaigns_api__get_campaigns_campaign_id_schedules_params__to_json(&params);
+        dispatch(&OP_CAMPAIGNS_API_GET_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES, json)
     }
     fn post_campaigns_campaign_id_schedules(params: iface_campaigns_api::PostCampaignsCampaignIdSchedulesParams) -> Result<String, String> {
         let json = iface_campaigns_api__post_campaigns_campaign_id_schedules_params__to_json(&params);
@@ -1238,11 +1554,13 @@ impl iface_campaigns_api::Guest for crate::Component {
         let json = iface_campaigns_api__patch_campaigns_campaign_id_schedules_params__to_json(&params);
         dispatch(&OP_CAMPAIGNS_API_PATCH_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES, json)
     }
-    fn delete_campaigns_campaign_id_schedules() -> Result<String, String> {
-        dispatch(&OP_CAMPAIGNS_API_DELETE_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES, Value::Object(Map::new()))
+    fn delete_campaigns_campaign_id_schedules(params: iface_campaigns_api::DeleteCampaignsCampaignIdSchedulesParams) -> Result<String, String> {
+        let json = iface_campaigns_api__delete_campaigns_campaign_id_schedules_params__to_json(&params);
+        dispatch(&OP_CAMPAIGNS_API_DELETE_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES, json)
     }
-    fn post_campaigns_campaign_id_schedules_now() -> Result<String, String> {
-        dispatch(&OP_CAMPAIGNS_API_POST_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES_NOW, Value::Object(Map::new()))
+    fn post_campaigns_campaign_id_schedules_now(params: iface_campaigns_api::PostCampaignsCampaignIdSchedulesNowParams) -> Result<String, String> {
+        let json = iface_campaigns_api__post_campaigns_campaign_id_schedules_now_params__to_json(&params);
+        dispatch(&OP_CAMPAIGNS_API_POST_CAMPAIGNS_CAMPAIGN_ID_SCHEDULES_NOW, json)
     }
     fn post_campaigns_campaign_id_schedules_test(params: iface_campaigns_api::PostCampaignsCampaignIdSchedulesTestParams) -> Result<String, String> {
         let json = iface_campaigns_api__post_campaigns_campaign_id_schedules_test_params__to_json(&params);
@@ -1258,6 +1576,7 @@ const OP_CATEGORIES_GET_CATEGORIES: OpSpec = OpSpec {
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "category", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1274,6 +1593,7 @@ const OP_CATEGORIES_GET_CATEGORIES_STATS: OpSpec = OpSpec {
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1291,6 +1611,7 @@ const OP_CATEGORIES_GET_CATEGORIES_STATS_SUMS: OpSpec = OpSpec {
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1317,6 +1638,7 @@ fn iface_categories__get_categories_params__to_json(p: &iface_categories::GetCat
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1328,6 +1650,7 @@ fn iface_categories__get_categories_stats_params__to_json(p: &iface_categories::
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_categories__get_categories_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1340,6 +1663,7 @@ fn iface_categories__get_categories_stats_sums_params__to_json(p: &iface_categor
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_categories__get_categories_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1363,6 +1687,7 @@ const OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_CUSTOM_FIELDS: OpSpec = OpSpec
     method: "GET",
     path_template: "/contactdb/custom_fields",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1373,6 +1698,7 @@ const OP_CONTACTS_API_CUSTOM_FIELDS_POST_CONTACTDB_CUSTOM_FIELDS: OpSpec = OpSpe
     method: "POST",
     path_template: "/contactdb/custom_fields",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
         FieldSpec { snake: "type", location: FieldLocation::Body },
     ],
@@ -1385,6 +1711,7 @@ const OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_CUSTOM_FIELDS_CUSTOM_FIELD_ID:
     method: "GET",
     path_template: "/contactdb/custom_fields/{custom_field_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1395,6 +1722,7 @@ const OP_CONTACTS_API_CUSTOM_FIELDS_DELETE_CONTACTDB_CUSTOM_FIELDS_CUSTOM_FIELD_
     method: "DELETE",
     path_template: "/contactdb/custom_fields/{custom_field_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1405,35 +1733,65 @@ const OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_RESERVED_FIELDS: OpSpec = OpSp
     method: "GET",
     path_template: "/contactdb/reserved_fields",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
+fn iface_contacts_api_custom_fields__get_contactdb_custom_fields_params__to_json(p: &iface_contacts_api_custom_fields::GetContactdbCustomFieldsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_contacts_api_custom_fields__post_contactdb_custom_fields_params__to_json(p: &iface_contacts_api_custom_fields::PostContactdbCustomFieldsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_contacts_api_custom_fields__get_contactdb_custom_fields_custom_field_id_params__to_json(p: &iface_contacts_api_custom_fields::GetContactdbCustomFieldsCustomFieldIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_custom_fields__delete_contactdb_custom_fields_custom_field_id_params__to_json(p: &iface_contacts_api_custom_fields::DeleteContactdbCustomFieldsCustomFieldIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_custom_fields__get_contactdb_reserved_fields_params__to_json(p: &iface_contacts_api_custom_fields::GetContactdbReservedFieldsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_contacts_api_custom_fields::Guest for crate::Component {
-    fn get_contactdb_custom_fields() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_CUSTOM_FIELDS, Value::Object(Map::new()))
+    fn get_contactdb_custom_fields(params: iface_contacts_api_custom_fields::GetContactdbCustomFieldsParams) -> Result<String, String> {
+        let json = iface_contacts_api_custom_fields__get_contactdb_custom_fields_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_CUSTOM_FIELDS, json)
     }
     fn post_contactdb_custom_fields(params: iface_contacts_api_custom_fields::PostContactdbCustomFieldsParams) -> Result<String, String> {
         let json = iface_contacts_api_custom_fields__post_contactdb_custom_fields_params__to_json(&params);
         dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_POST_CONTACTDB_CUSTOM_FIELDS, json)
     }
-    fn get_contactdb_custom_fields_custom_field_id() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_CUSTOM_FIELDS_CUSTOM_FIELD_ID, Value::Object(Map::new()))
+    fn get_contactdb_custom_fields_custom_field_id(params: iface_contacts_api_custom_fields::GetContactdbCustomFieldsCustomFieldIdParams) -> Result<String, String> {
+        let json = iface_contacts_api_custom_fields__get_contactdb_custom_fields_custom_field_id_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_CUSTOM_FIELDS_CUSTOM_FIELD_ID, json)
     }
-    fn delete_contactdb_custom_fields_custom_field_id() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_DELETE_CONTACTDB_CUSTOM_FIELDS_CUSTOM_FIELD_ID, Value::Object(Map::new()))
+    fn delete_contactdb_custom_fields_custom_field_id(params: iface_contacts_api_custom_fields::DeleteContactdbCustomFieldsCustomFieldIdParams) -> Result<String, String> {
+        let json = iface_contacts_api_custom_fields__delete_contactdb_custom_fields_custom_field_id_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_DELETE_CONTACTDB_CUSTOM_FIELDS_CUSTOM_FIELD_ID, json)
     }
-    fn get_contactdb_reserved_fields() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_RESERVED_FIELDS, Value::Object(Map::new()))
+    fn get_contactdb_reserved_fields(params: iface_contacts_api_custom_fields::GetContactdbReservedFieldsParams) -> Result<String, String> {
+        let json = iface_contacts_api_custom_fields__get_contactdb_reserved_fields_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_CUSTOM_FIELDS_GET_CONTACTDB_RESERVED_FIELDS, json)
     }
 }
 use crate::exports::autostamp::sendgrid::contacts_api_lists as iface_contacts_api_lists;
@@ -1442,6 +1800,7 @@ const OP_CONTACTS_API_LISTS_GET_CONTACTDB_LISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/contactdb/lists",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1452,6 +1811,7 @@ const OP_CONTACTS_API_LISTS_POST_CONTACTDB_LISTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/contactdb/lists",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1463,6 +1823,7 @@ const OP_CONTACTS_API_LISTS_DELETE_CONTACTDB_LISTS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/contactdb/lists",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1475,6 +1836,7 @@ const OP_CONTACTS_API_LISTS_GET_CONTACTDB_LISTS_LIST_ID: OpSpec = OpSpec {
     path_template: "/contactdb/lists/{list_id}",
     fields: &[
         FieldSpec { snake: "list_id", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1486,6 +1848,7 @@ const OP_CONTACTS_API_LISTS_PATCH_CONTACTDB_LISTS_LIST_ID: OpSpec = OpSpec {
     path_template: "/contactdb/lists/{list_id}",
     fields: &[
         FieldSpec { snake: "list_id", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1498,6 +1861,7 @@ const OP_CONTACTS_API_LISTS_DELETE_CONTACTDB_LISTS_LIST_ID: OpSpec = OpSpec {
     path_template: "/contactdb/lists/{list_id}",
     fields: &[
         FieldSpec { snake: "delete_contacts", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1512,6 +1876,7 @@ const OP_CONTACTS_API_LISTS_GET_CONTACTDB_LISTS_LIST_ID_RECIPIENTS: OpSpec = OpS
         FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "list_id", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1522,6 +1887,7 @@ const OP_CONTACTS_API_LISTS_POST_CONTACTDB_LISTS_LIST_ID_RECIPIENTS: OpSpec = Op
     method: "POST",
     path_template: "/contactdb/lists/{list_id}/recipients",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1533,6 +1899,7 @@ const OP_CONTACTS_API_LISTS_POST_CONTACTDB_LISTS_LIST_ID_RECIPIENTS_RECIPIENT_ID
     method: "POST",
     path_template: "/contactdb/lists/{list_id}/recipients/{recipient_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1545,6 +1912,7 @@ const OP_CONTACTS_API_LISTS_DELETE_CONTACTDB_LISTS_LIST_ID_RECIPIENTS_RECIPIENT_
     fields: &[
         FieldSpec { snake: "list_id", location: FieldLocation::Query },
         FieldSpec { snake: "recipient_id", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1552,14 +1920,22 @@ const OP_CONTACTS_API_LISTS_DELETE_CONTACTDB_LISTS_LIST_ID_RECIPIENTS_RECIPIENT_
     ],
 };
 
+fn iface_contacts_api_lists__get_contactdb_lists_params__to_json(p: &iface_contacts_api_lists::GetContactdbListsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_contacts_api_lists__post_contactdb_lists_params__to_json(p: &iface_contacts_api_lists::PostContactdbListsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
 fn iface_contacts_api_lists__delete_contactdb_lists_params__to_json(p: &iface_contacts_api_lists::DeleteContactdbListsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
     Value::Object(m)
 }
@@ -1567,12 +1943,14 @@ fn iface_contacts_api_lists__delete_contactdb_lists_params__to_json(p: &iface_co
 fn iface_contacts_api_lists__get_contactdb_lists_list_id_params__to_json(p: &iface_contacts_api_lists::GetContactdbListsListIdParams) -> Value {
     let mut m = Map::new();
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts_api_lists__patch_contactdb_lists_list_id_params__to_json(p: &iface_contacts_api_lists::PatchContactdbListsListIdParams) -> Value {
     let mut m = Map::new();
     m.insert("list_id".into(), Value::Number(serde_json::Number::from(*(&p.list_id))));
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
@@ -1580,6 +1958,7 @@ fn iface_contacts_api_lists__patch_contactdb_lists_list_id_params__to_json(p: &i
 fn iface_contacts_api_lists__delete_contactdb_lists_list_id_params__to_json(p: &iface_contacts_api_lists::DeleteContactdbListsListIdParams) -> Value {
     let mut m = Map::new();
     m.insert("delete_contacts".into(), match (&p.delete_contacts) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1589,12 +1968,20 @@ fn iface_contacts_api_lists__get_contactdb_lists_list_id_recipients_params__to_j
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("list_id".into(), Value::Number(serde_json::Number::from(*(&p.list_id))));
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts_api_lists__post_contactdb_lists_list_id_recipients_params__to_json(p: &iface_contacts_api_lists::PostContactdbListsListIdRecipientsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_lists__post_contactdb_lists_list_id_recipients_recipient_id_params__to_json(p: &iface_contacts_api_lists::PostContactdbListsListIdRecipientsRecipientIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1602,13 +1989,15 @@ fn iface_contacts_api_lists__delete_contactdb_lists_list_id_recipients_recipient
     let mut m = Map::new();
     m.insert("list_id".into(), Value::Number(serde_json::Number::from(*(&p.list_id))));
     m.insert("recipient_id".into(), Value::Number(serde_json::Number::from(*(&p.recipient_id))));
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_contacts_api_lists::Guest for crate::Component {
-    fn get_contactdb_lists() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_LISTS_GET_CONTACTDB_LISTS, Value::Object(Map::new()))
+    fn get_contactdb_lists(params: iface_contacts_api_lists::GetContactdbListsParams) -> Result<String, String> {
+        let json = iface_contacts_api_lists__get_contactdb_lists_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_LISTS_GET_CONTACTDB_LISTS, json)
     }
     fn post_contactdb_lists(params: iface_contacts_api_lists::PostContactdbListsParams) -> Result<String, String> {
         let json = iface_contacts_api_lists__post_contactdb_lists_params__to_json(&params);
@@ -1638,8 +2027,9 @@ impl iface_contacts_api_lists::Guest for crate::Component {
         let json = iface_contacts_api_lists__post_contactdb_lists_list_id_recipients_params__to_json(&params);
         dispatch(&OP_CONTACTS_API_LISTS_POST_CONTACTDB_LISTS_LIST_ID_RECIPIENTS, json)
     }
-    fn post_contactdb_lists_list_id_recipients_recipient_id() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_LISTS_POST_CONTACTDB_LISTS_LIST_ID_RECIPIENTS_RECIPIENT_ID, Value::Object(Map::new()))
+    fn post_contactdb_lists_list_id_recipients_recipient_id(params: iface_contacts_api_lists::PostContactdbListsListIdRecipientsRecipientIdParams) -> Result<String, String> {
+        let json = iface_contacts_api_lists__post_contactdb_lists_list_id_recipients_recipient_id_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_LISTS_POST_CONTACTDB_LISTS_LIST_ID_RECIPIENTS_RECIPIENT_ID, json)
     }
     fn delete_contactdb_lists_list_id_recipients_recipient_id(params: iface_contacts_api_lists::DeleteContactdbListsListIdRecipientsRecipientIdParams) -> Result<String, String> {
         let json = iface_contacts_api_lists__delete_contactdb_lists_list_id_recipients_recipient_id_params__to_json(&params);
@@ -1654,6 +2044,7 @@ const OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1664,6 +2055,7 @@ const OP_CONTACTS_API_RECIPIENTS_POST_CONTACTDB_RECIPIENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/contactdb/recipients",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1675,6 +2067,7 @@ const OP_CONTACTS_API_RECIPIENTS_PATCH_CONTACTDB_RECIPIENTS: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/contactdb/recipients",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1686,6 +2079,7 @@ const OP_CONTACTS_API_RECIPIENTS_DELETE_CONTACTDB_RECIPIENTS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/contactdb/recipients",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1697,6 +2091,7 @@ const OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_BILLABLE_COUNT: OpSpec
     method: "GET",
     path_template: "/contactdb/recipients/billable_count",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1707,6 +2102,7 @@ const OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_COUNT: OpSpec = OpSpec
     method: "GET",
     path_template: "/contactdb/recipients/count",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1718,6 +2114,7 @@ const OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_SEARCH: OpSpec = OpSpe
     path_template: "/contactdb/recipients/search",
     fields: &[
         FieldSpec { snake: "field_name", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1740,6 +2137,7 @@ const OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_RECIPIENT_ID: OpSpec =
     method: "GET",
     path_template: "/contactdb/recipients/{recipient_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1750,6 +2148,7 @@ const OP_CONTACTS_API_RECIPIENTS_DELETE_CONTACTDB_RECIPIENTS_RECIPIENT_ID: OpSpe
     method: "DELETE",
     path_template: "/contactdb/recipients/{recipient_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1760,6 +2159,7 @@ const OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_RECIPIENT_ID_LISTS: Op
     method: "GET",
     path_template: "/contactdb/recipients/{recipient_id}/lists",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1770,6 +2170,7 @@ const OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/contactdb/status",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1797,30 +2198,47 @@ fn iface_contacts_api_recipients__get_contactdb_recipients_params__to_json(p: &i
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts_api_recipients__post_contactdb_recipients_params__to_json(p: &iface_contacts_api_recipients::PostContactdbRecipientsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| iface_contacts_api_recipients__post_contactdb_recipients_body_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts_api_recipients__patch_contactdb_recipients_params__to_json(p: &iface_contacts_api_recipients::PatchContactdbRecipientsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| iface_contacts_api_recipients__patch_contactdb_recipients_body_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts_api_recipients__delete_contactdb_recipients_params__to_json(p: &iface_contacts_api_recipients::DeleteContactdbRecipientsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_recipients__get_contactdb_recipients_billable_count_params__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsBillableCountParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_recipients__get_contactdb_recipients_count_params__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsCountParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts_api_recipients__get_contactdb_recipients_search_params__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsSearchParams) -> Value {
     let mut m = Map::new();
     m.insert("field_name".into(), match (&p.field_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1828,6 +2246,30 @@ fn iface_contacts_api_recipients__post_contactdb_recipients_search_params__to_js
     let mut m = Map::new();
     m.insert("conditions".into(), Value::Array((&p.conditions).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("list_id".into(), Value::Number(serde_json::Number::from(*(&p.list_id))));
+    Value::Object(m)
+}
+
+fn iface_contacts_api_recipients__get_contactdb_recipients_recipient_id_params__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsRecipientIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_params__to_json(p: &iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_recipients__get_contactdb_recipients_recipient_id_lists_params__to_json(p: &iface_contacts_api_recipients::GetContactdbRecipientsRecipientIdListsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_contacts_api_recipients__get_contactdb_status_params__to_json(p: &iface_contacts_api_recipients::GetContactdbStatusParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1848,11 +2290,13 @@ impl iface_contacts_api_recipients::Guest for crate::Component {
         let json = iface_contacts_api_recipients__delete_contactdb_recipients_params__to_json(&params);
         dispatch(&OP_CONTACTS_API_RECIPIENTS_DELETE_CONTACTDB_RECIPIENTS, json)
     }
-    fn get_contactdb_recipients_billable_count() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_BILLABLE_COUNT, Value::Object(Map::new()))
+    fn get_contactdb_recipients_billable_count(params: iface_contacts_api_recipients::GetContactdbRecipientsBillableCountParams) -> Result<String, String> {
+        let json = iface_contacts_api_recipients__get_contactdb_recipients_billable_count_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_BILLABLE_COUNT, json)
     }
-    fn get_contactdb_recipients_count() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_COUNT, Value::Object(Map::new()))
+    fn get_contactdb_recipients_count(params: iface_contacts_api_recipients::GetContactdbRecipientsCountParams) -> Result<String, String> {
+        let json = iface_contacts_api_recipients__get_contactdb_recipients_count_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_COUNT, json)
     }
     fn get_contactdb_recipients_search(params: iface_contacts_api_recipients::GetContactdbRecipientsSearchParams) -> Result<String, String> {
         let json = iface_contacts_api_recipients__get_contactdb_recipients_search_params__to_json(&params);
@@ -1862,17 +2306,21 @@ impl iface_contacts_api_recipients::Guest for crate::Component {
         let json = iface_contacts_api_recipients__post_contactdb_recipients_search_params__to_json(&params);
         dispatch(&OP_CONTACTS_API_RECIPIENTS_POST_CONTACTDB_RECIPIENTS_SEARCH, json)
     }
-    fn get_contactdb_recipients_recipient_id() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_RECIPIENT_ID, Value::Object(Map::new()))
+    fn get_contactdb_recipients_recipient_id(params: iface_contacts_api_recipients::GetContactdbRecipientsRecipientIdParams) -> Result<String, String> {
+        let json = iface_contacts_api_recipients__get_contactdb_recipients_recipient_id_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_RECIPIENT_ID, json)
     }
-    fn delete_contactdb_recipients_recipient_id() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_RECIPIENTS_DELETE_CONTACTDB_RECIPIENTS_RECIPIENT_ID, Value::Object(Map::new()))
+    fn delete_contactdb_recipients_recipient_id(params: iface_contacts_api_recipients::DeleteContactdbRecipientsRecipientIdParams) -> Result<String, String> {
+        let json = iface_contacts_api_recipients__delete_contactdb_recipients_recipient_id_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_RECIPIENTS_DELETE_CONTACTDB_RECIPIENTS_RECIPIENT_ID, json)
     }
-    fn get_contactdb_recipients_recipient_id_lists() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_RECIPIENT_ID_LISTS, Value::Object(Map::new()))
+    fn get_contactdb_recipients_recipient_id_lists(params: iface_contacts_api_recipients::GetContactdbRecipientsRecipientIdListsParams) -> Result<String, String> {
+        let json = iface_contacts_api_recipients__get_contactdb_recipients_recipient_id_lists_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_RECIPIENTS_RECIPIENT_ID_LISTS, json)
     }
-    fn get_contactdb_status() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_STATUS, Value::Object(Map::new()))
+    fn get_contactdb_status(params: iface_contacts_api_recipients::GetContactdbStatusParams) -> Result<String, String> {
+        let json = iface_contacts_api_recipients__get_contactdb_status_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_RECIPIENTS_GET_CONTACTDB_STATUS, json)
     }
 }
 use crate::exports::autostamp::sendgrid::contacts_api_segments as iface_contacts_api_segments;
@@ -1881,6 +2329,7 @@ const OP_CONTACTS_API_SEGMENTS_GET_CONTACTDB_SEGMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/contactdb/segments",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1891,6 +2340,7 @@ const OP_CONTACTS_API_SEGMENTS_POST_CONTACTDB_SEGMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/contactdb/segments",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "conditions", location: FieldLocation::Body },
         FieldSpec { snake: "list_id", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
@@ -1906,6 +2356,7 @@ const OP_CONTACTS_API_SEGMENTS_GET_CONTACTDB_SEGMENTS_SEGMENT_ID: OpSpec = OpSpe
     path_template: "/contactdb/segments/{segment_id}",
     fields: &[
         FieldSpec { snake: "segment_id", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1917,6 +2368,7 @@ const OP_CONTACTS_API_SEGMENTS_PATCH_CONTACTDB_SEGMENTS_SEGMENT_ID: OpSpec = OpS
     path_template: "/contactdb/segments/{segment_id}",
     fields: &[
         FieldSpec { snake: "segment_id", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "conditions", location: FieldLocation::Body },
         FieldSpec { snake: "list_id", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
@@ -1931,6 +2383,7 @@ const OP_CONTACTS_API_SEGMENTS_DELETE_CONTACTDB_SEGMENTS_SEGMENT_ID: OpSpec = Op
     path_template: "/contactdb/segments/{segment_id}",
     fields: &[
         FieldSpec { snake: "delete_contacts", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1944,6 +2397,7 @@ const OP_CONTACTS_API_SEGMENTS_GET_CONTACTDB_SEGMENTS_SEGMENT_ID_RECIPIENTS: OpS
     fields: &[
         FieldSpec { snake: "page", location: FieldLocation::Query },
         FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1977,8 +2431,15 @@ fn iface_contacts_api_segments__contactdb_segments_conditions__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_contacts_api_segments__get_contactdb_segments_params__to_json(p: &iface_contacts_api_segments::GetContactdbSegmentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_contacts_api_segments__post_contactdb_segments_params__to_json(p: &iface_contacts_api_segments::PostContactdbSegmentsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("conditions".into(), Value::Array((&p.conditions).iter().map(|v| iface_contacts_api_segments__contactdb_segments_conditions__to_json(v)).collect()));
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
@@ -1989,12 +2450,14 @@ fn iface_contacts_api_segments__post_contactdb_segments_params__to_json(p: &ifac
 fn iface_contacts_api_segments__get_contactdb_segments_segment_id_params__to_json(p: &iface_contacts_api_segments::GetContactdbSegmentsSegmentIdParams) -> Value {
     let mut m = Map::new();
     m.insert("segment_id".into(), Value::Number(serde_json::Number::from(*(&p.segment_id))));
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_contacts_api_segments__patch_contactdb_segments_segment_id_params__to_json(p: &iface_contacts_api_segments::PatchContactdbSegmentsSegmentIdParams) -> Value {
     let mut m = Map::new();
     m.insert("segment_id".into(), match (&p.segment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("conditions".into(), match (&p.conditions) { Some(v) => Value::Array((v).iter().map(|v| iface_contacts_api_segments__contactdb_segments_conditions__to_json(v)).collect()), None => Value::Null });
     m.insert("list_id".into(), match (&p.list_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
@@ -2004,6 +2467,7 @@ fn iface_contacts_api_segments__patch_contactdb_segments_segment_id_params__to_j
 fn iface_contacts_api_segments__delete_contactdb_segments_segment_id_params__to_json(p: &iface_contacts_api_segments::DeleteContactdbSegmentsSegmentIdParams) -> Value {
     let mut m = Map::new();
     m.insert("delete_contacts".into(), match (&p.delete_contacts) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -2012,12 +2476,14 @@ fn iface_contacts_api_segments__get_contactdb_segments_segment_id_recipients_par
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_contacts_api_segments::Guest for crate::Component {
-    fn get_contactdb_segments() -> Result<String, String> {
-        dispatch(&OP_CONTACTS_API_SEGMENTS_GET_CONTACTDB_SEGMENTS, Value::Object(Map::new()))
+    fn get_contactdb_segments(params: iface_contacts_api_segments::GetContactdbSegmentsParams) -> Result<String, String> {
+        let json = iface_contacts_api_segments__get_contactdb_segments_params__to_json(&params);
+        dispatch(&OP_CONTACTS_API_SEGMENTS_GET_CONTACTDB_SEGMENTS, json)
     }
     fn post_contactdb_segments(params: iface_contacts_api_segments::PostContactdbSegmentsParams) -> Result<String, String> {
         let json = iface_contacts_api_segments__post_contactdb_segments_params__to_json(&params);
@@ -2046,6 +2512,9 @@ const OP_DESIGNS_API_LIST_DESIGNS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/designs",
     fields: &[
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "summary", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2067,6 +2536,9 @@ const OP_DESIGNS_API_LIST_SENDGRID_PRE_BUILT_DESIGNS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/designs/pre-builts",
     fields: &[
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "summary", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2150,9 +2622,25 @@ fn iface_designs_api__design_duplicate_input_editor_enum__to_str(e: &iface_desig
     }
 }
 
+fn iface_designs_api__list_designs_params__to_json(p: &iface_designs_api::ListDesignsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_designs_api__post_designs_params__to_json(p: &iface_designs_api::PostDesignsParams) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_designs_api__list_sendgrid_pre_built_designs_params__to_json(p: &iface_designs_api::ListSendgridPreBuiltDesignsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2182,15 +2670,17 @@ fn iface_designs_api__put_design_params__to_json(p: &iface_designs_api::PutDesig
 }
 
 impl iface_designs_api::Guest for crate::Component {
-    fn list_designs() -> Result<String, String> {
-        dispatch(&OP_DESIGNS_API_LIST_DESIGNS, Value::Object(Map::new()))
+    fn list_designs(params: iface_designs_api::ListDesignsParams) -> Result<String, String> {
+        let json = iface_designs_api__list_designs_params__to_json(&params);
+        dispatch(&OP_DESIGNS_API_LIST_DESIGNS, json)
     }
     fn post_designs(params: iface_designs_api::PostDesignsParams) -> Result<String, String> {
         let json = iface_designs_api__post_designs_params__to_json(&params);
         dispatch(&OP_DESIGNS_API_POST_DESIGNS, json)
     }
-    fn list_sendgrid_pre_built_designs() -> Result<String, String> {
-        dispatch(&OP_DESIGNS_API_LIST_SENDGRID_PRE_BUILT_DESIGNS, Value::Object(Map::new()))
+    fn list_sendgrid_pre_built_designs(params: iface_designs_api::ListSendgridPreBuiltDesignsParams) -> Result<String, String> {
+        let json = iface_designs_api__list_sendgrid_pre_built_designs_params__to_json(&params);
+        dispatch(&OP_DESIGNS_API_LIST_SENDGRID_PRE_BUILT_DESIGNS, json)
     }
     fn get_sendgrid_pre_built_design() -> Result<String, String> {
         dispatch(&OP_DESIGNS_API_GET_SENDGRID_PRE_BUILT_DESIGN, Value::Object(Map::new()))
@@ -2509,6 +2999,7 @@ const OP_CANCEL_SCHEDULED_SENDS_POST_MAIL_BATCH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mail/batch",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2519,6 +3010,7 @@ const OP_CANCEL_SCHEDULED_SENDS_GET_MAIL_BATCH_BATCH_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mail/batch/{batch_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2529,6 +3021,7 @@ const OP_CANCEL_SCHEDULED_SENDS_GET_USER_SCHEDULED_SENDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/scheduled_sends",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2539,6 +3032,7 @@ const OP_CANCEL_SCHEDULED_SENDS_POST_USER_SCHEDULED_SENDS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/user/scheduled_sends",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "batch_id", location: FieldLocation::Body },
         FieldSpec { snake: "status", location: FieldLocation::Body },
     ],
@@ -2551,6 +3045,7 @@ const OP_CANCEL_SCHEDULED_SENDS_GET_USER_SCHEDULED_SENDS_BATCH_ID: OpSpec = OpSp
     method: "GET",
     path_template: "/user/scheduled_sends/{batch_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2561,6 +3056,7 @@ const OP_CANCEL_SCHEDULED_SENDS_PATCH_USER_SCHEDULED_SENDS_BATCH_ID: OpSpec = Op
     method: "PATCH",
     path_template: "/user/scheduled_sends/{batch_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "status", location: FieldLocation::Body },
     ],
     auth: &[
@@ -2572,6 +3068,7 @@ const OP_CANCEL_SCHEDULED_SENDS_DELETE_USER_SCHEDULED_SENDS_BATCH_ID: OpSpec = O
     method: "DELETE",
     path_template: "/user/scheduled_sends/{batch_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2592,42 +3089,79 @@ fn iface_cancel_scheduled_sends__patch_user_scheduled_sends_batch_id_body_status
     }
 }
 
+fn iface_cancel_scheduled_sends__post_mail_batch_params__to_json(p: &iface_cancel_scheduled_sends::PostMailBatchParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_cancel_scheduled_sends__get_mail_batch_batch_id_params__to_json(p: &iface_cancel_scheduled_sends::GetMailBatchBatchIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_cancel_scheduled_sends__get_user_scheduled_sends_params__to_json(p: &iface_cancel_scheduled_sends::GetUserScheduledSendsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_cancel_scheduled_sends__post_user_scheduled_sends_params__to_json(p: &iface_cancel_scheduled_sends::PostUserScheduledSendsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("batch_id".into(), Value::String((&p.batch_id).clone()));
     m.insert("status".into(), Value::String(iface_cancel_scheduled_sends__post_user_scheduled_sends_body_status_enum__to_str(&p.status).into()));
     Value::Object(m)
 }
 
+fn iface_cancel_scheduled_sends__get_user_scheduled_sends_batch_id_params__to_json(p: &iface_cancel_scheduled_sends::GetUserScheduledSendsBatchIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_cancel_scheduled_sends__patch_user_scheduled_sends_batch_id_params__to_json(p: &iface_cancel_scheduled_sends::PatchUserScheduledSendsBatchIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("status".into(), Value::String(iface_cancel_scheduled_sends__patch_user_scheduled_sends_batch_id_body_status_enum__to_str(&p.status).into()));
     Value::Object(m)
 }
 
+fn iface_cancel_scheduled_sends__delete_user_scheduled_sends_batch_id_params__to_json(p: &iface_cancel_scheduled_sends::DeleteUserScheduledSendsBatchIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_cancel_scheduled_sends::Guest for crate::Component {
-    fn post_mail_batch() -> Result<String, String> {
-        dispatch(&OP_CANCEL_SCHEDULED_SENDS_POST_MAIL_BATCH, Value::Object(Map::new()))
+    fn post_mail_batch(params: iface_cancel_scheduled_sends::PostMailBatchParams) -> Result<String, String> {
+        let json = iface_cancel_scheduled_sends__post_mail_batch_params__to_json(&params);
+        dispatch(&OP_CANCEL_SCHEDULED_SENDS_POST_MAIL_BATCH, json)
     }
-    fn get_mail_batch_batch_id() -> Result<String, String> {
-        dispatch(&OP_CANCEL_SCHEDULED_SENDS_GET_MAIL_BATCH_BATCH_ID, Value::Object(Map::new()))
+    fn get_mail_batch_batch_id(params: iface_cancel_scheduled_sends::GetMailBatchBatchIdParams) -> Result<String, String> {
+        let json = iface_cancel_scheduled_sends__get_mail_batch_batch_id_params__to_json(&params);
+        dispatch(&OP_CANCEL_SCHEDULED_SENDS_GET_MAIL_BATCH_BATCH_ID, json)
     }
-    fn get_user_scheduled_sends() -> Result<String, String> {
-        dispatch(&OP_CANCEL_SCHEDULED_SENDS_GET_USER_SCHEDULED_SENDS, Value::Object(Map::new()))
+    fn get_user_scheduled_sends(params: iface_cancel_scheduled_sends::GetUserScheduledSendsParams) -> Result<String, String> {
+        let json = iface_cancel_scheduled_sends__get_user_scheduled_sends_params__to_json(&params);
+        dispatch(&OP_CANCEL_SCHEDULED_SENDS_GET_USER_SCHEDULED_SENDS, json)
     }
     fn post_user_scheduled_sends(params: iface_cancel_scheduled_sends::PostUserScheduledSendsParams) -> Result<String, String> {
         let json = iface_cancel_scheduled_sends__post_user_scheduled_sends_params__to_json(&params);
         dispatch(&OP_CANCEL_SCHEDULED_SENDS_POST_USER_SCHEDULED_SENDS, json)
     }
-    fn get_user_scheduled_sends_batch_id() -> Result<String, String> {
-        dispatch(&OP_CANCEL_SCHEDULED_SENDS_GET_USER_SCHEDULED_SENDS_BATCH_ID, Value::Object(Map::new()))
+    fn get_user_scheduled_sends_batch_id(params: iface_cancel_scheduled_sends::GetUserScheduledSendsBatchIdParams) -> Result<String, String> {
+        let json = iface_cancel_scheduled_sends__get_user_scheduled_sends_batch_id_params__to_json(&params);
+        dispatch(&OP_CANCEL_SCHEDULED_SENDS_GET_USER_SCHEDULED_SENDS_BATCH_ID, json)
     }
     fn patch_user_scheduled_sends_batch_id(params: iface_cancel_scheduled_sends::PatchUserScheduledSendsBatchIdParams) -> Result<String, String> {
         let json = iface_cancel_scheduled_sends__patch_user_scheduled_sends_batch_id_params__to_json(&params);
         dispatch(&OP_CANCEL_SCHEDULED_SENDS_PATCH_USER_SCHEDULED_SENDS_BATCH_ID, json)
     }
-    fn delete_user_scheduled_sends_batch_id() -> Result<String, String> {
-        dispatch(&OP_CANCEL_SCHEDULED_SENDS_DELETE_USER_SCHEDULED_SENDS_BATCH_ID, Value::Object(Map::new()))
+    fn delete_user_scheduled_sends_batch_id(params: iface_cancel_scheduled_sends::DeleteUserScheduledSendsBatchIdParams) -> Result<String, String> {
+        let json = iface_cancel_scheduled_sends__delete_user_scheduled_sends_batch_id_params__to_json(&params);
+        dispatch(&OP_CANCEL_SCHEDULED_SENDS_DELETE_USER_SCHEDULED_SENDS_BATCH_ID, json)
     }
 }
 use crate::exports::autostamp::sendgrid::mail_send as iface_mail_send;
@@ -2897,6 +3431,7 @@ const OP_SETTINGS_MAIL_GET_MAIL_SETTINGS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2907,6 +3442,7 @@ const OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_ADDRESS_WHITELIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mail_settings/address_whitelist",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2917,6 +3453,7 @@ const OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_ADDRESS_WHITELIST: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/mail_settings/address_whitelist",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
         FieldSpec { snake: "list", location: FieldLocation::Body },
     ],
@@ -2929,6 +3466,7 @@ const OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_BOUNCE_PURGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mail_settings/bounce_purge",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2939,6 +3477,7 @@ const OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_BOUNCE_PURGE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/mail_settings/bounce_purge",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
         FieldSpec { snake: "hard_bounces", location: FieldLocation::Body },
         FieldSpec { snake: "soft_bounces", location: FieldLocation::Body },
@@ -2952,6 +3491,7 @@ const OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FOOTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mail_settings/footer",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2962,6 +3502,7 @@ const OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_FOOTER: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/mail_settings/footer",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
         FieldSpec { snake: "html_content", location: FieldLocation::Body },
         FieldSpec { snake: "plain_content", location: FieldLocation::Body },
@@ -2975,6 +3516,7 @@ const OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FORWARD_BOUNCE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mail_settings/forward_bounce",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -2985,6 +3527,7 @@ const OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_FORWARD_BOUNCE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/mail_settings/forward_bounce",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "email", location: FieldLocation::Body },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
     ],
@@ -2997,6 +3540,7 @@ const OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FORWARD_SPAM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mail_settings/forward_spam",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -3007,6 +3551,7 @@ const OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_FORWARD_SPAM: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/mail_settings/forward_spam",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "email", location: FieldLocation::Body },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
     ],
@@ -3019,6 +3564,7 @@ const OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_TEMPLATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mail_settings/template",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -3029,6 +3575,7 @@ const OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_TEMPLATE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/mail_settings/template",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
         FieldSpec { snake: "html_content", location: FieldLocation::Body },
     ],
@@ -3041,48 +3588,91 @@ fn iface_settings_mail__get_mail_settings_params__to_json(p: &iface_settings_mai
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings_mail__get_mail_settings_address_whitelist_params__to_json(p: &iface_settings_mail::GetMailSettingsAddressWhitelistParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_settings_mail__patch_mail_settings_address_whitelist_params__to_json(p: &iface_settings_mail::PatchMailSettingsAddressWhitelistParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("list".into(), match (&p.list_op) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_settings_mail__get_mail_settings_bounce_purge_params__to_json(p: &iface_settings_mail::GetMailSettingsBouncePurgeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_mail__patch_mail_settings_bounce_purge_params__to_json(p: &iface_settings_mail::PatchMailSettingsBouncePurgeParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("hard_bounces".into(), match (&p.hard_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("soft_bounces".into(), match (&p.soft_bounces) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_settings_mail__get_mail_settings_footer_params__to_json(p: &iface_settings_mail::GetMailSettingsFooterParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_mail__patch_mail_settings_footer_params__to_json(p: &iface_settings_mail::PatchMailSettingsFooterParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("html_content".into(), match (&p.html_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("plain_content".into(), match (&p.plain_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_settings_mail__get_mail_settings_forward_bounce_params__to_json(p: &iface_settings_mail::GetMailSettingsForwardBounceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_mail__patch_mail_settings_forward_bounce_params__to_json(p: &iface_settings_mail::PatchMailSettingsForwardBounceParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings_mail__get_mail_settings_forward_spam_params__to_json(p: &iface_settings_mail::GetMailSettingsForwardSpamParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_settings_mail__patch_mail_settings_forward_spam_params__to_json(p: &iface_settings_mail::PatchMailSettingsForwardSpamParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_settings_mail__get_mail_settings_template_params__to_json(p: &iface_settings_mail::GetMailSettingsTemplateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_mail__patch_mail_settings_template_params__to_json(p: &iface_settings_mail::PatchMailSettingsTemplateParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("html_content".into(), match (&p.html_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -3093,43 +3683,49 @@ impl iface_settings_mail::Guest for crate::Component {
         let json = iface_settings_mail__get_mail_settings_params__to_json(&params);
         dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS, json)
     }
-    fn get_mail_settings_address_whitelist() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_ADDRESS_WHITELIST, Value::Object(Map::new()))
+    fn get_mail_settings_address_whitelist(params: iface_settings_mail::GetMailSettingsAddressWhitelistParams) -> Result<String, String> {
+        let json = iface_settings_mail__get_mail_settings_address_whitelist_params__to_json(&params);
+        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_ADDRESS_WHITELIST, json)
     }
     fn patch_mail_settings_address_whitelist(params: iface_settings_mail::PatchMailSettingsAddressWhitelistParams) -> Result<String, String> {
         let json = iface_settings_mail__patch_mail_settings_address_whitelist_params__to_json(&params);
         dispatch(&OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_ADDRESS_WHITELIST, json)
     }
-    fn get_mail_settings_bounce_purge() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_BOUNCE_PURGE, Value::Object(Map::new()))
+    fn get_mail_settings_bounce_purge(params: iface_settings_mail::GetMailSettingsBouncePurgeParams) -> Result<String, String> {
+        let json = iface_settings_mail__get_mail_settings_bounce_purge_params__to_json(&params);
+        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_BOUNCE_PURGE, json)
     }
     fn patch_mail_settings_bounce_purge(params: iface_settings_mail::PatchMailSettingsBouncePurgeParams) -> Result<String, String> {
         let json = iface_settings_mail__patch_mail_settings_bounce_purge_params__to_json(&params);
         dispatch(&OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_BOUNCE_PURGE, json)
     }
-    fn get_mail_settings_footer() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FOOTER, Value::Object(Map::new()))
+    fn get_mail_settings_footer(params: iface_settings_mail::GetMailSettingsFooterParams) -> Result<String, String> {
+        let json = iface_settings_mail__get_mail_settings_footer_params__to_json(&params);
+        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FOOTER, json)
     }
     fn patch_mail_settings_footer(params: iface_settings_mail::PatchMailSettingsFooterParams) -> Result<String, String> {
         let json = iface_settings_mail__patch_mail_settings_footer_params__to_json(&params);
         dispatch(&OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_FOOTER, json)
     }
-    fn get_mail_settings_forward_bounce() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FORWARD_BOUNCE, Value::Object(Map::new()))
+    fn get_mail_settings_forward_bounce(params: iface_settings_mail::GetMailSettingsForwardBounceParams) -> Result<String, String> {
+        let json = iface_settings_mail__get_mail_settings_forward_bounce_params__to_json(&params);
+        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FORWARD_BOUNCE, json)
     }
     fn patch_mail_settings_forward_bounce(params: iface_settings_mail::PatchMailSettingsForwardBounceParams) -> Result<String, String> {
         let json = iface_settings_mail__patch_mail_settings_forward_bounce_params__to_json(&params);
         dispatch(&OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_FORWARD_BOUNCE, json)
     }
-    fn get_mail_settings_forward_spam() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FORWARD_SPAM, Value::Object(Map::new()))
+    fn get_mail_settings_forward_spam(params: iface_settings_mail::GetMailSettingsForwardSpamParams) -> Result<String, String> {
+        let json = iface_settings_mail__get_mail_settings_forward_spam_params__to_json(&params);
+        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_FORWARD_SPAM, json)
     }
     fn patch_mail_settings_forward_spam(params: iface_settings_mail::PatchMailSettingsForwardSpamParams) -> Result<String, String> {
         let json = iface_settings_mail__patch_mail_settings_forward_spam_params__to_json(&params);
         dispatch(&OP_SETTINGS_MAIL_PATCH_MAIL_SETTINGS_FORWARD_SPAM, json)
     }
-    fn get_mail_settings_template() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_TEMPLATE, Value::Object(Map::new()))
+    fn get_mail_settings_template(params: iface_settings_mail::GetMailSettingsTemplateParams) -> Result<String, String> {
+        let json = iface_settings_mail__get_mail_settings_template_params__to_json(&params);
+        dispatch(&OP_SETTINGS_MAIL_GET_MAIL_SETTINGS_TEMPLATE, json)
     }
     fn patch_mail_settings_template(params: iface_settings_mail::PatchMailSettingsTemplateParams) -> Result<String, String> {
         let json = iface_settings_mail__patch_mail_settings_template_params__to_json(&params);
@@ -3891,6 +4487,7 @@ const OP_SENDERS_POST_MARKETING_SENDERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/marketing/senders",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "address", location: FieldLocation::Body },
         FieldSpec { snake: "address_2", location: FieldLocation::Body },
         FieldSpec { snake: "city", location: FieldLocation::Body },
@@ -3922,6 +4519,7 @@ fn iface_senders__post_marketing_senders_body_reply_to__to_json(p: &iface_sender
 
 fn iface_senders__post_marketing_senders_params__to_json(p: &iface_senders::PostMarketingSendersParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("address".into(), Value::String((&p.address).clone()));
     m.insert("address_2".into(), match (&p.address_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("city".into(), Value::String((&p.city).clone()));
@@ -4220,6 +4818,8 @@ const OP_MARKETING_CAMPAIGNS_STATS_GETALL_AUTOMATION_STATS: OpSpec = OpSpec {
     path_template: "/marketing/stats/automations",
     fields: &[
         FieldSpec { snake: "automation_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4242,6 +4842,14 @@ const OP_MARKETING_CAMPAIGNS_STATS_GET_AUTOMATION_STAT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/marketing/stats/automations/{id}",
     fields: &[
+        FieldSpec { snake: "group_by", location: FieldLocation::Query },
+        FieldSpec { snake: "step_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "timezone", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4252,6 +4860,10 @@ const OP_MARKETING_CAMPAIGNS_STATS_GET_AUTOMATION_LINK_STAT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/marketing/stats/automations/{id}/links",
     fields: &[
+        FieldSpec { snake: "group_by", location: FieldLocation::Query },
+        FieldSpec { snake: "step_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4263,6 +4875,8 @@ const OP_MARKETING_CAMPAIGNS_STATS_GETALL_SINGLESEND_STATS: OpSpec = OpSpec {
     path_template: "/marketing/stats/singlesends",
     fields: &[
         FieldSpec { snake: "singlesend_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4285,6 +4899,13 @@ const OP_MARKETING_CAMPAIGNS_STATS_GET_SINGLESEND_STAT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/marketing/stats/singlesends/{id}",
     fields: &[
+        FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "timezone", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "group_by", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4295,15 +4916,49 @@ const OP_MARKETING_CAMPAIGNS_STATS_GET_SINGLESEND_LINK_STAT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/marketing/stats/singlesends/{id}/links",
     fields: &[
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "group_by", location: FieldLocation::Query },
+        FieldSpec { snake: "ab_variation_id", location: FieldLocation::Query },
+        FieldSpec { snake: "ab_phase_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
+fn iface_marketing_campaigns_stats__get_automation_stat_group_by_item_enum__to_str(e: &iface_marketing_campaigns_stats::GetAutomationStatGroupByItemEnum) -> &'static str {
+    match e {
+        iface_marketing_campaigns_stats::GetAutomationStatGroupByItemEnum::StepId => "step_id",
+    }
+}
+
+fn iface_marketing_campaigns_stats__get_automation_stat_aggregated_by_enum__to_str(e: &iface_marketing_campaigns_stats::GetAutomationStatAggregatedByEnum) -> &'static str {
+    match e {
+        iface_marketing_campaigns_stats::GetAutomationStatAggregatedByEnum::Day => "day",
+        iface_marketing_campaigns_stats::GetAutomationStatAggregatedByEnum::Total => "total",
+    }
+}
+
+fn iface_marketing_campaigns_stats__get_singlesend_stat_group_by_item_enum__to_str(e: &iface_marketing_campaigns_stats::GetSinglesendStatGroupByItemEnum) -> &'static str {
+    match e {
+        iface_marketing_campaigns_stats::GetSinglesendStatGroupByItemEnum::AbVariation => "ab_variation",
+        iface_marketing_campaigns_stats::GetSinglesendStatGroupByItemEnum::AbPhase => "ab_phase",
+    }
+}
+
+fn iface_marketing_campaigns_stats__get_singlesend_link_stat_ab_phase_id_enum__to_str(e: &iface_marketing_campaigns_stats::GetSinglesendLinkStatAbPhaseIdEnum) -> &'static str {
+    match e {
+        iface_marketing_campaigns_stats::GetSinglesendLinkStatAbPhaseIdEnum::Test => "test",
+        iface_marketing_campaigns_stats::GetSinglesendLinkStatAbPhaseIdEnum::Send => "send",
+    }
+}
+
 fn iface_marketing_campaigns_stats__getall_automation_stats_params__to_json(p: &iface_marketing_campaigns_stats::GetallAutomationStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("automation_ids".into(), match (&p.automation_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4314,9 +4969,33 @@ fn iface_marketing_campaigns_stats__get_automations_stats_export_params__to_json
     Value::Object(m)
 }
 
+fn iface_marketing_campaigns_stats__get_automation_stat_params__to_json(p: &iface_marketing_campaigns_stats::GetAutomationStatParams) -> Value {
+    let mut m = Map::new();
+    m.insert("group_by".into(), match (&p.group_by) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_marketing_campaigns_stats__get_automation_stat_group_by_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("step_ids".into(), match (&p.step_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_marketing_campaigns_stats__get_automation_stat_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_marketing_campaigns_stats__get_automation_link_stat_params__to_json(p: &iface_marketing_campaigns_stats::GetAutomationLinkStatParams) -> Value {
+    let mut m = Map::new();
+    m.insert("group_by".into(), match (&p.group_by) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_marketing_campaigns_stats__get_automation_stat_group_by_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("step_ids".into(), match (&p.step_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_marketing_campaigns_stats__getall_singlesend_stats_params__to_json(p: &iface_marketing_campaigns_stats::GetallSinglesendStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("singlesend_ids".into(), match (&p.singlesend_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4324,6 +5003,28 @@ fn iface_marketing_campaigns_stats__get_singlesend_stats_export_params__to_json(
     let mut m = Map::new();
     m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_marketing_campaigns_stats__get_singlesend_stat_params__to_json(p: &iface_marketing_campaigns_stats::GetSinglesendStatParams) -> Value {
+    let mut m = Map::new();
+    m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_marketing_campaigns_stats__get_automation_stat_aggregated_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("group_by".into(), match (&p.group_by) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_marketing_campaigns_stats__get_singlesend_stat_group_by_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_marketing_campaigns_stats__get_singlesend_link_stat_params__to_json(p: &iface_marketing_campaigns_stats::GetSinglesendLinkStatParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("group_by".into(), match (&p.group_by) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_marketing_campaigns_stats__get_singlesend_stat_group_by_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("ab_variation_id".into(), match (&p.ab_variation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ab_phase_id".into(), match (&p.ab_phase_id) { Some(v) => Value::String(iface_marketing_campaigns_stats__get_singlesend_link_stat_ab_phase_id_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4336,11 +5037,13 @@ impl iface_marketing_campaigns_stats::Guest for crate::Component {
         let json = iface_marketing_campaigns_stats__get_automations_stats_export_params__to_json(&params);
         dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_AUTOMATIONS_STATS_EXPORT, json)
     }
-    fn get_automation_stat() -> Result<String, String> {
-        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_AUTOMATION_STAT, Value::Object(Map::new()))
+    fn get_automation_stat(params: iface_marketing_campaigns_stats::GetAutomationStatParams) -> Result<String, String> {
+        let json = iface_marketing_campaigns_stats__get_automation_stat_params__to_json(&params);
+        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_AUTOMATION_STAT, json)
     }
-    fn get_automation_link_stat() -> Result<String, String> {
-        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_AUTOMATION_LINK_STAT, Value::Object(Map::new()))
+    fn get_automation_link_stat(params: iface_marketing_campaigns_stats::GetAutomationLinkStatParams) -> Result<String, String> {
+        let json = iface_marketing_campaigns_stats__get_automation_link_stat_params__to_json(&params);
+        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_AUTOMATION_LINK_STAT, json)
     }
     fn getall_singlesend_stats(params: iface_marketing_campaigns_stats::GetallSinglesendStatsParams) -> Result<String, String> {
         let json = iface_marketing_campaigns_stats__getall_singlesend_stats_params__to_json(&params);
@@ -4350,11 +5053,13 @@ impl iface_marketing_campaigns_stats::Guest for crate::Component {
         let json = iface_marketing_campaigns_stats__get_singlesend_stats_export_params__to_json(&params);
         dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_SINGLESEND_STATS_EXPORT, json)
     }
-    fn get_singlesend_stat() -> Result<String, String> {
-        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_SINGLESEND_STAT, Value::Object(Map::new()))
+    fn get_singlesend_stat(params: iface_marketing_campaigns_stats::GetSinglesendStatParams) -> Result<String, String> {
+        let json = iface_marketing_campaigns_stats__get_singlesend_stat_params__to_json(&params);
+        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_SINGLESEND_STAT, json)
     }
-    fn get_singlesend_link_stat() -> Result<String, String> {
-        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_SINGLESEND_LINK_STAT, Value::Object(Map::new()))
+    fn get_singlesend_link_stat(params: iface_marketing_campaigns_stats::GetSinglesendLinkStatParams) -> Result<String, String> {
+        let json = iface_marketing_campaigns_stats__get_singlesend_link_stat_params__to_json(&params);
+        dispatch(&OP_MARKETING_CAMPAIGNS_STATS_GET_SINGLESEND_LINK_STAT, json)
     }
 }
 use crate::exports::autostamp::sendgrid::send_test_email as iface_send_test_email;
@@ -4484,6 +5189,7 @@ const OP_SETTINGS_PARTNER_GET_PARTNER_SETTINGS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4494,6 +5200,7 @@ const OP_SETTINGS_PARTNER_GET_PARTNER_SETTINGS_NEW_RELIC: OpSpec = OpSpec {
     method: "GET",
     path_template: "/partner_settings/new_relic",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4504,6 +5211,7 @@ const OP_SETTINGS_PARTNER_PATCH_PARTNER_SETTINGS_NEW_RELIC: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/partner_settings/new_relic",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enable_subuser_statistics", location: FieldLocation::Body },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
         FieldSpec { snake: "license_key", location: FieldLocation::Body },
@@ -4517,11 +5225,19 @@ fn iface_settings_partner__get_partner_settings_params__to_json(p: &iface_settin
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings_partner__get_partner_settings_new_relic_params__to_json(p: &iface_settings_partner::GetPartnerSettingsNewRelicParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_settings_partner__patch_partner_settings_new_relic_params__to_json(p: &iface_settings_partner::PatchPartnerSettingsNewRelicParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enable_subuser_statistics".into(), match (&p.enable_subuser_statistics) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("license_key".into(), match (&p.license_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -4533,8 +5249,9 @@ impl iface_settings_partner::Guest for crate::Component {
         let json = iface_settings_partner__get_partner_settings_params__to_json(&params);
         dispatch(&OP_SETTINGS_PARTNER_GET_PARTNER_SETTINGS, json)
     }
-    fn get_partner_settings_new_relic() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_PARTNER_GET_PARTNER_SETTINGS_NEW_RELIC, Value::Object(Map::new()))
+    fn get_partner_settings_new_relic(params: iface_settings_partner::GetPartnerSettingsNewRelicParams) -> Result<String, String> {
+        let json = iface_settings_partner__get_partner_settings_new_relic_params__to_json(&params);
+        dispatch(&OP_SETTINGS_PARTNER_GET_PARTNER_SETTINGS_NEW_RELIC, json)
     }
     fn patch_partner_settings_new_relic(params: iface_settings_partner::PatchPartnerSettingsNewRelicParams) -> Result<String, String> {
         let json = iface_settings_partner__patch_partner_settings_new_relic_params__to_json(&params);
@@ -4547,15 +5264,23 @@ const OP_API_KEY_PERMISSIONS_GET_SCOPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/scopes",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
+fn iface_api_key_permissions__get_scopes_params__to_json(p: &iface_api_key_permissions::GetScopesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_api_key_permissions::Guest for crate::Component {
-    fn get_scopes() -> Result<String, String> {
-        dispatch(&OP_API_KEY_PERMISSIONS_GET_SCOPES, Value::Object(Map::new()))
+    fn get_scopes(params: iface_api_key_permissions::GetScopesParams) -> Result<String, String> {
+        let json = iface_api_key_permissions__get_scopes_params__to_json(&params);
+        dispatch(&OP_API_KEY_PERMISSIONS_GET_SCOPES, json)
     }
 }
 use crate::exports::autostamp::sendgrid::teammates as iface_teammates;
@@ -4598,6 +5323,7 @@ const OP_TEAMMATES_GET_V3_TEAMMATES: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4608,6 +5334,7 @@ const OP_TEAMMATES_POST_V3_TEAMMATES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/teammates",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "email", location: FieldLocation::Body },
         FieldSpec { snake: "is_admin", location: FieldLocation::Body },
         FieldSpec { snake: "scopes", location: FieldLocation::Body },
@@ -4621,6 +5348,7 @@ const OP_TEAMMATES_GET_V3_TEAMMATES_PENDING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/teammates/pending",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4631,6 +5359,7 @@ const OP_TEAMMATES_DELETE_V3_TEAMMATES_PENDING_TOKEN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/teammates/pending/{token}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4641,6 +5370,7 @@ const OP_TEAMMATES_POST_V3_TEAMMATES_PENDING_TOKEN_RESEND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/teammates/pending/{token}/resend",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4651,6 +5381,7 @@ const OP_TEAMMATES_GET_V3_TEAMMATES_USERNAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/teammates/{username}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4661,6 +5392,7 @@ const OP_TEAMMATES_PATCH_V3_TEAMMATES_USERNAME: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/teammates/{username}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "is_admin", location: FieldLocation::Body },
         FieldSpec { snake: "scopes", location: FieldLocation::Body },
     ],
@@ -4673,6 +5405,7 @@ const OP_TEAMMATES_DELETE_V3_TEAMMATES_USERNAME: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/teammates/{username}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4690,21 +5423,54 @@ fn iface_teammates__get_v3_teammates_params__to_json(p: &iface_teammates::GetV3T
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_teammates__post_v3_teammates_params__to_json(p: &iface_teammates::PostV3TeammatesParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email".into(), Value::String((&p.email).clone()));
     m.insert("is_admin".into(), Value::Bool(*(&p.is_admin)));
     m.insert("scopes".into(), Value::Array((&p.scopes).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
+fn iface_teammates__get_v3_teammates_pending_params__to_json(p: &iface_teammates::GetV3TeammatesPendingParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_teammates__delete_v3_teammates_pending_token_params__to_json(p: &iface_teammates::DeleteV3TeammatesPendingTokenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_teammates__post_v3_teammates_pending_token_resend_params__to_json(p: &iface_teammates::PostV3TeammatesPendingTokenResendParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_teammates__get_v3_teammates_username_params__to_json(p: &iface_teammates::GetV3TeammatesUsernameParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_teammates__patch_v3_teammates_username_params__to_json(p: &iface_teammates::PatchV3TeammatesUsernameParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_admin".into(), Value::Bool(*(&p.is_admin)));
     m.insert("scopes".into(), Value::Array((&p.scopes).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_teammates__delete_v3_teammates_username_params__to_json(p: &iface_teammates::DeleteV3TeammatesUsernameParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -4727,24 +5493,29 @@ impl iface_teammates::Guest for crate::Component {
         let json = iface_teammates__post_v3_teammates_params__to_json(&params);
         dispatch(&OP_TEAMMATES_POST_V3_TEAMMATES, json)
     }
-    fn get_v3_teammates_pending() -> Result<String, String> {
-        dispatch(&OP_TEAMMATES_GET_V3_TEAMMATES_PENDING, Value::Object(Map::new()))
+    fn get_v3_teammates_pending(params: iface_teammates::GetV3TeammatesPendingParams) -> Result<String, String> {
+        let json = iface_teammates__get_v3_teammates_pending_params__to_json(&params);
+        dispatch(&OP_TEAMMATES_GET_V3_TEAMMATES_PENDING, json)
     }
-    fn delete_v3_teammates_pending_token() -> Result<String, String> {
-        dispatch(&OP_TEAMMATES_DELETE_V3_TEAMMATES_PENDING_TOKEN, Value::Object(Map::new()))
+    fn delete_v3_teammates_pending_token(params: iface_teammates::DeleteV3TeammatesPendingTokenParams) -> Result<String, String> {
+        let json = iface_teammates__delete_v3_teammates_pending_token_params__to_json(&params);
+        dispatch(&OP_TEAMMATES_DELETE_V3_TEAMMATES_PENDING_TOKEN, json)
     }
-    fn post_v3_teammates_pending_token_resend() -> Result<String, String> {
-        dispatch(&OP_TEAMMATES_POST_V3_TEAMMATES_PENDING_TOKEN_RESEND, Value::Object(Map::new()))
+    fn post_v3_teammates_pending_token_resend(params: iface_teammates::PostV3TeammatesPendingTokenResendParams) -> Result<String, String> {
+        let json = iface_teammates__post_v3_teammates_pending_token_resend_params__to_json(&params);
+        dispatch(&OP_TEAMMATES_POST_V3_TEAMMATES_PENDING_TOKEN_RESEND, json)
     }
-    fn get_v3_teammates_username() -> Result<String, String> {
-        dispatch(&OP_TEAMMATES_GET_V3_TEAMMATES_USERNAME, Value::Object(Map::new()))
+    fn get_v3_teammates_username(params: iface_teammates::GetV3TeammatesUsernameParams) -> Result<String, String> {
+        let json = iface_teammates__get_v3_teammates_username_params__to_json(&params);
+        dispatch(&OP_TEAMMATES_GET_V3_TEAMMATES_USERNAME, json)
     }
     fn patch_v3_teammates_username(params: iface_teammates::PatchV3TeammatesUsernameParams) -> Result<String, String> {
         let json = iface_teammates__patch_v3_teammates_username_params__to_json(&params);
         dispatch(&OP_TEAMMATES_PATCH_V3_TEAMMATES_USERNAME, json)
     }
-    fn delete_v3_teammates_username() -> Result<String, String> {
-        dispatch(&OP_TEAMMATES_DELETE_V3_TEAMMATES_USERNAME, Value::Object(Map::new()))
+    fn delete_v3_teammates_username(params: iface_teammates::DeleteV3TeammatesUsernameParams) -> Result<String, String> {
+        let json = iface_teammates__delete_v3_teammates_username_params__to_json(&params);
+        dispatch(&OP_TEAMMATES_DELETE_V3_TEAMMATES_USERNAME, json)
     }
 }
 use crate::exports::autostamp::sendgrid::sender_identities_api as iface_sender_identities_api;
@@ -4753,6 +5524,7 @@ const OP_SENDER_IDENTITIES_API_GET_V3_SENDERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/senders",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4763,6 +5535,7 @@ const OP_SENDER_IDENTITIES_API_POST_SENDERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/senders",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -4774,6 +5547,7 @@ const OP_SENDER_IDENTITIES_API_GET_V3_SENDERS_SENDER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/senders/{sender_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4784,6 +5558,7 @@ const OP_SENDER_IDENTITIES_API_PATCH_V3_SENDERS_SENDER_ID: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/senders/{sender_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "address", location: FieldLocation::Body },
         FieldSpec { snake: "address_2", location: FieldLocation::Body },
         FieldSpec { snake: "city", location: FieldLocation::Body },
@@ -4803,6 +5578,7 @@ const OP_SENDER_IDENTITIES_API_DELETE_V3_SENDERS_SENDER_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/senders/{sender_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4813,6 +5589,7 @@ const OP_SENDER_IDENTITIES_API_POST_V3_SENDERS_SENDER_ID_RESEND_VERIFICATION: Op
     method: "POST",
     path_template: "/senders/{sender_id}/resend_verification",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -4833,14 +5610,28 @@ fn iface_sender_identities_api__sender_id_request_reply_to__to_json(p: &iface_se
     Value::Object(m)
 }
 
+fn iface_sender_identities_api__get_v3_senders_params__to_json(p: &iface_sender_identities_api::GetV3SendersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_sender_identities_api__post_senders_params__to_json(p: &iface_sender_identities_api::PostSendersParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sender_identities_api__get_v3_senders_sender_id_params__to_json(p: &iface_sender_identities_api::GetV3SendersSenderIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_sender_identities_api__patch_v3_senders_sender_id_params__to_json(p: &iface_sender_identities_api::PatchV3SendersSenderIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("address_2".into(), match (&p.address_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -4853,26 +5644,42 @@ fn iface_sender_identities_api__patch_v3_senders_sender_id_params__to_json(p: &i
     Value::Object(m)
 }
 
+fn iface_sender_identities_api__delete_v3_senders_sender_id_params__to_json(p: &iface_sender_identities_api::DeleteV3SendersSenderIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_params__to_json(p: &iface_sender_identities_api::PostV3SendersSenderIdResendVerificationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_sender_identities_api::Guest for crate::Component {
-    fn get_v3_senders() -> Result<String, String> {
-        dispatch(&OP_SENDER_IDENTITIES_API_GET_V3_SENDERS, Value::Object(Map::new()))
+    fn get_v3_senders(params: iface_sender_identities_api::GetV3SendersParams) -> Result<String, String> {
+        let json = iface_sender_identities_api__get_v3_senders_params__to_json(&params);
+        dispatch(&OP_SENDER_IDENTITIES_API_GET_V3_SENDERS, json)
     }
     fn post_senders(params: iface_sender_identities_api::PostSendersParams) -> Result<String, String> {
         let json = iface_sender_identities_api__post_senders_params__to_json(&params);
         dispatch(&OP_SENDER_IDENTITIES_API_POST_SENDERS, json)
     }
-    fn get_v3_senders_sender_id() -> Result<String, String> {
-        dispatch(&OP_SENDER_IDENTITIES_API_GET_V3_SENDERS_SENDER_ID, Value::Object(Map::new()))
+    fn get_v3_senders_sender_id(params: iface_sender_identities_api::GetV3SendersSenderIdParams) -> Result<String, String> {
+        let json = iface_sender_identities_api__get_v3_senders_sender_id_params__to_json(&params);
+        dispatch(&OP_SENDER_IDENTITIES_API_GET_V3_SENDERS_SENDER_ID, json)
     }
     fn patch_v3_senders_sender_id(params: iface_sender_identities_api::PatchV3SendersSenderIdParams) -> Result<String, String> {
         let json = iface_sender_identities_api__patch_v3_senders_sender_id_params__to_json(&params);
         dispatch(&OP_SENDER_IDENTITIES_API_PATCH_V3_SENDERS_SENDER_ID, json)
     }
-    fn delete_v3_senders_sender_id() -> Result<String, String> {
-        dispatch(&OP_SENDER_IDENTITIES_API_DELETE_V3_SENDERS_SENDER_ID, Value::Object(Map::new()))
+    fn delete_v3_senders_sender_id(params: iface_sender_identities_api::DeleteV3SendersSenderIdParams) -> Result<String, String> {
+        let json = iface_sender_identities_api__delete_v3_senders_sender_id_params__to_json(&params);
+        dispatch(&OP_SENDER_IDENTITIES_API_DELETE_V3_SENDERS_SENDER_ID, json)
     }
-    fn post_v3_senders_sender_id_resend_verification() -> Result<String, String> {
-        dispatch(&OP_SENDER_IDENTITIES_API_POST_V3_SENDERS_SENDER_ID_RESEND_VERIFICATION, Value::Object(Map::new()))
+    fn post_v3_senders_sender_id_resend_verification(params: iface_sender_identities_api::PostV3SendersSenderIdResendVerificationParams) -> Result<String, String> {
+        let json = iface_sender_identities_api__post_v3_senders_sender_id_resend_verification_params__to_json(&params);
+        dispatch(&OP_SENDER_IDENTITIES_API_POST_V3_SENDERS_SENDER_ID_RESEND_VERIFICATION, json)
     }
 }
 use crate::exports::autostamp::sendgrid::certificates as iface_certificates;
@@ -5506,6 +6313,7 @@ const OP_BLOCKS_API_GET_SUPPRESSION_BLOCKS: OpSpec = OpSpec {
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5516,6 +6324,7 @@ const OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/suppression/blocks",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "delete_all", location: FieldLocation::Body },
         FieldSpec { snake: "emails", location: FieldLocation::Body },
     ],
@@ -5528,6 +6337,7 @@ const OP_BLOCKS_API_GET_SUPPRESSION_BLOCKS_EMAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/suppression/blocks/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5538,6 +6348,7 @@ const OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS_EMAIL: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/suppression/blocks/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5550,13 +6361,27 @@ fn iface_blocks_api__get_suppression_blocks_params__to_json(p: &iface_blocks_api
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_blocks_api__delete_suppression_blocks_params__to_json(p: &iface_blocks_api::DeleteSuppressionBlocksParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("delete_all".into(), match (&p.delete_all) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("emails".into(), match (&p.emails) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks_api__get_suppression_blocks_email_params__to_json(p: &iface_blocks_api::GetSuppressionBlocksEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks_api__delete_suppression_blocks_email_params__to_json(p: &iface_blocks_api::DeleteSuppressionBlocksEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5569,11 +6394,13 @@ impl iface_blocks_api::Guest for crate::Component {
         let json = iface_blocks_api__delete_suppression_blocks_params__to_json(&params);
         dispatch(&OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS, json)
     }
-    fn get_suppression_blocks_email() -> Result<String, String> {
-        dispatch(&OP_BLOCKS_API_GET_SUPPRESSION_BLOCKS_EMAIL, Value::Object(Map::new()))
+    fn get_suppression_blocks_email(params: iface_blocks_api::GetSuppressionBlocksEmailParams) -> Result<String, String> {
+        let json = iface_blocks_api__get_suppression_blocks_email_params__to_json(&params);
+        dispatch(&OP_BLOCKS_API_GET_SUPPRESSION_BLOCKS_EMAIL, json)
     }
-    fn delete_suppression_blocks_email() -> Result<String, String> {
-        dispatch(&OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS_EMAIL, Value::Object(Map::new()))
+    fn delete_suppression_blocks_email(params: iface_blocks_api::DeleteSuppressionBlocksEmailParams) -> Result<String, String> {
+        let json = iface_blocks_api__delete_suppression_blocks_email_params__to_json(&params);
+        dispatch(&OP_BLOCKS_API_DELETE_SUPPRESSION_BLOCKS_EMAIL, json)
     }
 }
 use crate::exports::autostamp::sendgrid::bounces_api as iface_bounces_api;
@@ -5585,6 +6412,7 @@ const OP_BOUNCES_API_GET_SUPPRESSION_BOUNCES: OpSpec = OpSpec {
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
         FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5595,6 +6423,7 @@ const OP_BOUNCES_API_DELETE_SUPPRESSION_BOUNCES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/suppression/bounces",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "delete_all", location: FieldLocation::Body },
         FieldSpec { snake: "emails", location: FieldLocation::Body },
     ],
@@ -5607,6 +6436,7 @@ const OP_BOUNCES_API_GET_SUPPRESSION_BOUNCES_EMAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/suppression/bounces/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5618,6 +6448,7 @@ const OP_BOUNCES_API_DELETE_SUPPRESSION_BOUNCES_EMAIL: OpSpec = OpSpec {
     path_template: "/suppression/bounces/{email}",
     fields: &[
         FieldSpec { snake: "email_address", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -5630,19 +6461,28 @@ fn iface_bounces_api__get_suppression_bounces_params__to_json(p: &iface_bounces_
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("accept".into(), Value::String((&p.accept).clone()));
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_bounces_api__delete_suppression_bounces_params__to_json(p: &iface_bounces_api::DeleteSuppressionBouncesParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("delete_all".into(), match (&p.delete_all) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("emails".into(), match (&p.emails) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bounces_api__get_suppression_bounces_email_params__to_json(p: &iface_bounces_api::GetSuppressionBouncesEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_bounces_api__delete_suppression_bounces_email_params__to_json(p: &iface_bounces_api::DeleteSuppressionBouncesEmailParams) -> Value {
     let mut m = Map::new();
     m.insert("email_address".into(), Value::String((&p.email_address).clone()));
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -5656,8 +6496,9 @@ impl iface_bounces_api::Guest for crate::Component {
         let json = iface_bounces_api__delete_suppression_bounces_params__to_json(&params);
         dispatch(&OP_BOUNCES_API_DELETE_SUPPRESSION_BOUNCES, json)
     }
-    fn get_suppression_bounces_email() -> Result<String, String> {
-        dispatch(&OP_BOUNCES_API_GET_SUPPRESSION_BOUNCES_EMAIL, Value::Object(Map::new()))
+    fn get_suppression_bounces_email(params: iface_bounces_api::GetSuppressionBouncesEmailParams) -> Result<String, String> {
+        let json = iface_bounces_api__get_suppression_bounces_email_params__to_json(&params);
+        dispatch(&OP_BOUNCES_API_GET_SUPPRESSION_BOUNCES_EMAIL, json)
     }
     fn delete_suppression_bounces_email(params: iface_bounces_api::DeleteSuppressionBouncesEmailParams) -> Result<String, String> {
         let json = iface_bounces_api__delete_suppression_bounces_email_params__to_json(&params);
@@ -5674,6 +6515,7 @@ const OP_INVALID_EMAILS_API_GET_SUPPRESSION_INVALID_EMAILS: OpSpec = OpSpec {
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5684,6 +6526,7 @@ const OP_INVALID_EMAILS_API_DELETE_SUPPRESSION_INVALID_EMAILS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/suppression/invalid_emails",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "delete_all", location: FieldLocation::Body },
         FieldSpec { snake: "emails", location: FieldLocation::Body },
     ],
@@ -5696,6 +6539,7 @@ const OP_INVALID_EMAILS_API_GET_SUPPRESSION_INVALID_EMAILS_EMAIL: OpSpec = OpSpe
     method: "GET",
     path_template: "/suppression/invalid_emails/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5706,6 +6550,7 @@ const OP_INVALID_EMAILS_API_DELETE_SUPPRESSION_INVALID_EMAILS_EMAIL: OpSpec = Op
     method: "DELETE",
     path_template: "/suppression/invalid_emails/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5718,13 +6563,27 @@ fn iface_invalid_emails_api__get_suppression_invalid_emails_params__to_json(p: &
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_invalid_emails_api__delete_suppression_invalid_emails_params__to_json(p: &iface_invalid_emails_api::DeleteSuppressionInvalidEmailsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("delete_all".into(), match (&p.delete_all) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("emails".into(), match (&p.emails) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_invalid_emails_api__get_suppression_invalid_emails_email_params__to_json(p: &iface_invalid_emails_api::GetSuppressionInvalidEmailsEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_invalid_emails_api__delete_suppression_invalid_emails_email_params__to_json(p: &iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5737,11 +6596,13 @@ impl iface_invalid_emails_api::Guest for crate::Component {
         let json = iface_invalid_emails_api__delete_suppression_invalid_emails_params__to_json(&params);
         dispatch(&OP_INVALID_EMAILS_API_DELETE_SUPPRESSION_INVALID_EMAILS, json)
     }
-    fn get_suppression_invalid_emails_email() -> Result<String, String> {
-        dispatch(&OP_INVALID_EMAILS_API_GET_SUPPRESSION_INVALID_EMAILS_EMAIL, Value::Object(Map::new()))
+    fn get_suppression_invalid_emails_email(params: iface_invalid_emails_api::GetSuppressionInvalidEmailsEmailParams) -> Result<String, String> {
+        let json = iface_invalid_emails_api__get_suppression_invalid_emails_email_params__to_json(&params);
+        dispatch(&OP_INVALID_EMAILS_API_GET_SUPPRESSION_INVALID_EMAILS_EMAIL, json)
     }
-    fn delete_suppression_invalid_emails_email() -> Result<String, String> {
-        dispatch(&OP_INVALID_EMAILS_API_DELETE_SUPPRESSION_INVALID_EMAILS_EMAIL, Value::Object(Map::new()))
+    fn delete_suppression_invalid_emails_email(params: iface_invalid_emails_api::DeleteSuppressionInvalidEmailsEmailParams) -> Result<String, String> {
+        let json = iface_invalid_emails_api__delete_suppression_invalid_emails_email_params__to_json(&params);
+        dispatch(&OP_INVALID_EMAILS_API_DELETE_SUPPRESSION_INVALID_EMAILS_EMAIL, json)
     }
 }
 use crate::exports::autostamp::sendgrid::spam_reports_api as iface_spam_reports_api;
@@ -5754,6 +6615,7 @@ const OP_SPAM_REPORTS_API_GET_SUPPRESSION_SPAM_REPORTS: OpSpec = OpSpec {
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5764,6 +6626,7 @@ const OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/suppression/spam_reports",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "delete_all", location: FieldLocation::Body },
         FieldSpec { snake: "emails", location: FieldLocation::Body },
     ],
@@ -5776,6 +6639,7 @@ const OP_SPAM_REPORTS_API_GET_SUPPRESSION_SPAM_REPORTS_EMAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/suppression/spam_reports/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5786,6 +6650,7 @@ const OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS_EMAIL: OpSpec = OpSpec
     method: "DELETE",
     path_template: "/suppression/spam_reports/{email}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5798,13 +6663,27 @@ fn iface_spam_reports_api__get_suppression_spam_reports_params__to_json(p: &ifac
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_spam_reports_api__delete_suppression_spam_reports_params__to_json(p: &iface_spam_reports_api::DeleteSuppressionSpamReportsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("delete_all".into(), match (&p.delete_all) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("emails".into(), match (&p.emails) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_spam_reports_api__get_suppression_spam_reports_email_params__to_json(p: &iface_spam_reports_api::GetSuppressionSpamReportsEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_spam_reports_api__delete_suppression_spam_reports_email_params__to_json(p: &iface_spam_reports_api::DeleteSuppressionSpamReportsEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5817,11 +6696,13 @@ impl iface_spam_reports_api::Guest for crate::Component {
         let json = iface_spam_reports_api__delete_suppression_spam_reports_params__to_json(&params);
         dispatch(&OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS, json)
     }
-    fn get_suppression_spam_reports_email() -> Result<String, String> {
-        dispatch(&OP_SPAM_REPORTS_API_GET_SUPPRESSION_SPAM_REPORTS_EMAIL, Value::Object(Map::new()))
+    fn get_suppression_spam_reports_email(params: iface_spam_reports_api::GetSuppressionSpamReportsEmailParams) -> Result<String, String> {
+        let json = iface_spam_reports_api__get_suppression_spam_reports_email_params__to_json(&params);
+        dispatch(&OP_SPAM_REPORTS_API_GET_SUPPRESSION_SPAM_REPORTS_EMAIL, json)
     }
-    fn delete_suppression_spam_reports_email() -> Result<String, String> {
-        dispatch(&OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS_EMAIL, Value::Object(Map::new()))
+    fn delete_suppression_spam_reports_email(params: iface_spam_reports_api::DeleteSuppressionSpamReportsEmailParams) -> Result<String, String> {
+        let json = iface_spam_reports_api__delete_suppression_spam_reports_email_params__to_json(&params);
+        dispatch(&OP_SPAM_REPORTS_API_DELETE_SUPPRESSION_SPAM_REPORTS_EMAIL, json)
     }
 }
 use crate::exports::autostamp::sendgrid::transactional_templates as iface_transactional_templates;
@@ -5833,6 +6714,7 @@ const OP_TRANSACTIONAL_TEMPLATES_GET_TEMPLATES: OpSpec = OpSpec {
         FieldSpec { snake: "generations", location: FieldLocation::Query },
         FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5843,6 +6725,7 @@ const OP_TRANSACTIONAL_TEMPLATES_POST_TEMPLATES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/templates",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "generation", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
@@ -5855,6 +6738,7 @@ const OP_TRANSACTIONAL_TEMPLATES_GET_TEMPLATES_TEMPLATE_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/templates/{template_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5865,6 +6749,7 @@ const OP_TRANSACTIONAL_TEMPLATES_POST_TEMPLATES_TEMPLATE_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/templates/{template_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
     auth: &[
@@ -5876,6 +6761,7 @@ const OP_TRANSACTIONAL_TEMPLATES_PATCH_TEMPLATES_TEMPLATE_ID: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/templates/{template_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
     auth: &[
@@ -5887,6 +6773,7 @@ const OP_TRANSACTIONAL_TEMPLATES_DELETE_TEMPLATES_TEMPLATE_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/templates/{template_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5913,25 +6800,41 @@ fn iface_transactional_templates__get_templates_params__to_json(p: &iface_transa
     m.insert("generations".into(), match (&p.generations) { Some(v) => Value::String(iface_transactional_templates__get_templates_generations_enum__to_str(v).into()), None => Value::Null });
     m.insert("page_size".into(), serde_json::Number::from_f64(*(&p.page_size)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("page_token".into(), match (&p.page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_transactional_templates__post_templates_params__to_json(p: &iface_transactional_templates::PostTemplatesParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("generation".into(), match (&p.generation) { Some(v) => Value::String(iface_transactional_templates__post_templates_body_generation_enum__to_str(v).into()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
+fn iface_transactional_templates__get_templates_template_id_params__to_json(p: &iface_transactional_templates::GetTemplatesTemplateIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_transactional_templates__post_templates_template_id_params__to_json(p: &iface_transactional_templates::PostTemplatesTemplateIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_transactional_templates__patch_templates_template_id_params__to_json(p: &iface_transactional_templates::PatchTemplatesTemplateIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transactional_templates__delete_templates_template_id_params__to_json(p: &iface_transactional_templates::DeleteTemplatesTemplateIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -5944,8 +6847,9 @@ impl iface_transactional_templates::Guest for crate::Component {
         let json = iface_transactional_templates__post_templates_params__to_json(&params);
         dispatch(&OP_TRANSACTIONAL_TEMPLATES_POST_TEMPLATES, json)
     }
-    fn get_templates_template_id() -> Result<String, String> {
-        dispatch(&OP_TRANSACTIONAL_TEMPLATES_GET_TEMPLATES_TEMPLATE_ID, Value::Object(Map::new()))
+    fn get_templates_template_id(params: iface_transactional_templates::GetTemplatesTemplateIdParams) -> Result<String, String> {
+        let json = iface_transactional_templates__get_templates_template_id_params__to_json(&params);
+        dispatch(&OP_TRANSACTIONAL_TEMPLATES_GET_TEMPLATES_TEMPLATE_ID, json)
     }
     fn post_templates_template_id(params: iface_transactional_templates::PostTemplatesTemplateIdParams) -> Result<String, String> {
         let json = iface_transactional_templates__post_templates_template_id_params__to_json(&params);
@@ -5955,8 +6859,9 @@ impl iface_transactional_templates::Guest for crate::Component {
         let json = iface_transactional_templates__patch_templates_template_id_params__to_json(&params);
         dispatch(&OP_TRANSACTIONAL_TEMPLATES_PATCH_TEMPLATES_TEMPLATE_ID, json)
     }
-    fn delete_templates_template_id() -> Result<String, String> {
-        dispatch(&OP_TRANSACTIONAL_TEMPLATES_DELETE_TEMPLATES_TEMPLATE_ID, Value::Object(Map::new()))
+    fn delete_templates_template_id(params: iface_transactional_templates::DeleteTemplatesTemplateIdParams) -> Result<String, String> {
+        let json = iface_transactional_templates__delete_templates_template_id_params__to_json(&params);
+        dispatch(&OP_TRANSACTIONAL_TEMPLATES_DELETE_TEMPLATES_TEMPLATE_ID, json)
     }
 }
 use crate::exports::autostamp::sendgrid::transactional_templates_versions as iface_transactional_templates_versions;
@@ -5965,6 +6870,7 @@ const OP_TRANSACTIONAL_TEMPLATES_VERSIONS_POST_TEMPLATES_TEMPLATE_ID_VERSIONS: O
     method: "POST",
     path_template: "/templates/{template_id}/versions",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "active", location: FieldLocation::Body },
         FieldSpec { snake: "editor", location: FieldLocation::Body },
         FieldSpec { snake: "generate_plain_content", location: FieldLocation::Body },
@@ -5983,6 +6889,7 @@ const OP_TRANSACTIONAL_TEMPLATES_VERSIONS_GET_TEMPLATES_TEMPLATE_ID_VERSIONS_VER
     method: "GET",
     path_template: "/templates/{template_id}/versions/{version_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -5993,6 +6900,7 @@ const OP_TRANSACTIONAL_TEMPLATES_VERSIONS_PATCH_TEMPLATES_TEMPLATE_ID_VERSIONS_V
     method: "PATCH",
     path_template: "/templates/{template_id}/versions/{version_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "active", location: FieldLocation::Body },
         FieldSpec { snake: "editor", location: FieldLocation::Body },
         FieldSpec { snake: "generate_plain_content", location: FieldLocation::Body },
@@ -6011,6 +6919,7 @@ const OP_TRANSACTIONAL_TEMPLATES_VERSIONS_DELETE_TEMPLATES_TEMPLATE_ID_VERSIONS_
     method: "DELETE",
     path_template: "/templates/{template_id}/versions/{version_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6021,6 +6930,7 @@ const OP_TRANSACTIONAL_TEMPLATES_VERSIONS_POST_TEMPLATES_TEMPLATE_ID_VERSIONS_VE
     method: "POST",
     path_template: "/templates/{template_id}/versions/{version_id}/activate",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6036,6 +6946,7 @@ fn iface_transactional_templates_versions__transactional_template_version_create
 
 fn iface_transactional_templates_versions__post_templates_template_id_versions_params__to_json(p: &iface_transactional_templates_versions::PostTemplatesTemplateIdVersionsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("editor".into(), match (&p.editor) { Some(v) => Value::String(iface_transactional_templates_versions__transactional_template_version_create_editor_enum__to_str(v).into()), None => Value::Null });
     m.insert("generate_plain_content".into(), match (&p.generate_plain_content) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -6047,8 +6958,15 @@ fn iface_transactional_templates_versions__post_templates_template_id_versions_p
     Value::Object(m)
 }
 
+fn iface_transactional_templates_versions__get_templates_template_id_versions_version_id_params__to_json(p: &iface_transactional_templates_versions::GetTemplatesTemplateIdVersionsVersionIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_transactional_templates_versions__patch_templates_template_id_versions_version_id_params__to_json(p: &iface_transactional_templates_versions::PatchTemplatesTemplateIdVersionsVersionIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("editor".into(), match (&p.editor) { Some(v) => Value::String(iface_transactional_templates_versions__transactional_template_version_create_editor_enum__to_str(v).into()), None => Value::Null });
     m.insert("generate_plain_content".into(), match (&p.generate_plain_content) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -6057,6 +6975,18 @@ fn iface_transactional_templates_versions__patch_templates_template_id_versions_
     m.insert("plain_content".into(), match (&p.plain_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subject".into(), Value::String((&p.subject).clone()));
     m.insert("test_data".into(), match (&p.test_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transactional_templates_versions__delete_templates_template_id_versions_version_id_params__to_json(p: &iface_transactional_templates_versions::DeleteTemplatesTemplateIdVersionsVersionIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transactional_templates_versions__post_templates_template_id_versions_version_id_activate_params__to_json(p: &iface_transactional_templates_versions::PostTemplatesTemplateIdVersionsVersionIdActivateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6065,18 +6995,21 @@ impl iface_transactional_templates_versions::Guest for crate::Component {
         let json = iface_transactional_templates_versions__post_templates_template_id_versions_params__to_json(&params);
         dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_POST_TEMPLATES_TEMPLATE_ID_VERSIONS, json)
     }
-    fn get_templates_template_id_versions_version_id() -> Result<String, String> {
-        dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_GET_TEMPLATES_TEMPLATE_ID_VERSIONS_VERSION_ID, Value::Object(Map::new()))
+    fn get_templates_template_id_versions_version_id(params: iface_transactional_templates_versions::GetTemplatesTemplateIdVersionsVersionIdParams) -> Result<String, String> {
+        let json = iface_transactional_templates_versions__get_templates_template_id_versions_version_id_params__to_json(&params);
+        dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_GET_TEMPLATES_TEMPLATE_ID_VERSIONS_VERSION_ID, json)
     }
     fn patch_templates_template_id_versions_version_id(params: iface_transactional_templates_versions::PatchTemplatesTemplateIdVersionsVersionIdParams) -> Result<String, String> {
         let json = iface_transactional_templates_versions__patch_templates_template_id_versions_version_id_params__to_json(&params);
         dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_PATCH_TEMPLATES_TEMPLATE_ID_VERSIONS_VERSION_ID, json)
     }
-    fn delete_templates_template_id_versions_version_id() -> Result<String, String> {
-        dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_DELETE_TEMPLATES_TEMPLATE_ID_VERSIONS_VERSION_ID, Value::Object(Map::new()))
+    fn delete_templates_template_id_versions_version_id(params: iface_transactional_templates_versions::DeleteTemplatesTemplateIdVersionsVersionIdParams) -> Result<String, String> {
+        let json = iface_transactional_templates_versions__delete_templates_template_id_versions_version_id_params__to_json(&params);
+        dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_DELETE_TEMPLATES_TEMPLATE_ID_VERSIONS_VERSION_ID, json)
     }
-    fn post_templates_template_id_versions_version_id_activate() -> Result<String, String> {
-        dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_POST_TEMPLATES_TEMPLATE_ID_VERSIONS_VERSION_ID_ACTIVATE, Value::Object(Map::new()))
+    fn post_templates_template_id_versions_version_id_activate(params: iface_transactional_templates_versions::PostTemplatesTemplateIdVersionsVersionIdActivateParams) -> Result<String, String> {
+        let json = iface_transactional_templates_versions__post_templates_template_id_versions_version_id_activate_params__to_json(&params);
+        dispatch(&OP_TRANSACTIONAL_TEMPLATES_VERSIONS_POST_TEMPLATES_TEMPLATE_ID_VERSIONS_VERSION_ID_ACTIVATE, json)
     }
 }
 use crate::exports::autostamp::sendgrid::settings_tracking as iface_settings_tracking;
@@ -6085,6 +7018,7 @@ const OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracking_settings",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6095,6 +7029,7 @@ const OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_CLICK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracking_settings/click",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6105,6 +7040,7 @@ const OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_CLICK: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/tracking_settings/click",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
     ],
     auth: &[
@@ -6116,6 +7052,7 @@ const OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_GOOGLE_ANALYTICS: OpSpec = OpSp
     method: "GET",
     path_template: "/tracking_settings/google_analytics",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6126,6 +7063,7 @@ const OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_GOOGLE_ANALYTICS: OpSpec = Op
     method: "PATCH",
     path_template: "/tracking_settings/google_analytics",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
         FieldSpec { snake: "utm_campaign", location: FieldLocation::Body },
         FieldSpec { snake: "utm_content", location: FieldLocation::Body },
@@ -6142,6 +7080,7 @@ const OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_OPEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracking_settings/open",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6152,6 +7091,7 @@ const OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_OPEN: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/tracking_settings/open",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
     ],
     auth: &[
@@ -6163,6 +7103,7 @@ const OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_SUBSCRIPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracking_settings/subscription",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6173,6 +7114,7 @@ const OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_SUBSCRIPTION: OpSpec = OpSpec
     method: "PATCH",
     path_template: "/tracking_settings/subscription",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
         FieldSpec { snake: "html_content", location: FieldLocation::Body },
         FieldSpec { snake: "landing", location: FieldLocation::Body },
@@ -6185,14 +7127,34 @@ const OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_SUBSCRIPTION: OpSpec = OpSpec
     ],
 };
 
+fn iface_settings_tracking__get_tracking_settings_params__to_json(p: &iface_settings_tracking::GetTrackingSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings_tracking__get_tracking_settings_click_params__to_json(p: &iface_settings_tracking::GetTrackingSettingsClickParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_tracking__patch_tracking_settings_click_params__to_json(p: &iface_settings_tracking::PatchTrackingSettingsClickParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings_tracking__get_tracking_settings_google_analytics_params__to_json(p: &iface_settings_tracking::GetTrackingSettingsGoogleAnalyticsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_settings_tracking__patch_tracking_settings_google_analytics_params__to_json(p: &iface_settings_tracking::PatchTrackingSettingsGoogleAnalyticsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("utm_campaign".into(), match (&p.utm_campaign) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("utm_content".into(), match (&p.utm_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -6202,14 +7164,28 @@ fn iface_settings_tracking__patch_tracking_settings_google_analytics_params__to_
     Value::Object(m)
 }
 
+fn iface_settings_tracking__get_tracking_settings_open_params__to_json(p: &iface_settings_tracking::GetTrackingSettingsOpenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_tracking__patch_tracking_settings_open_params__to_json(p: &iface_settings_tracking::PatchTrackingSettingsOpenParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings_tracking__get_tracking_settings_subscription_params__to_json(p: &iface_settings_tracking::GetTrackingSettingsSubscriptionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_settings_tracking__patch_tracking_settings_subscription_params__to_json(p: &iface_settings_tracking::PatchTrackingSettingsSubscriptionParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("html_content".into(), match (&p.html_content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("landing".into(), match (&p.landing) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -6220,32 +7196,37 @@ fn iface_settings_tracking__patch_tracking_settings_subscription_params__to_json
 }
 
 impl iface_settings_tracking::Guest for crate::Component {
-    fn get_tracking_settings() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS, Value::Object(Map::new()))
+    fn get_tracking_settings(params: iface_settings_tracking::GetTrackingSettingsParams) -> Result<String, String> {
+        let json = iface_settings_tracking__get_tracking_settings_params__to_json(&params);
+        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS, json)
     }
-    fn get_tracking_settings_click() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_CLICK, Value::Object(Map::new()))
+    fn get_tracking_settings_click(params: iface_settings_tracking::GetTrackingSettingsClickParams) -> Result<String, String> {
+        let json = iface_settings_tracking__get_tracking_settings_click_params__to_json(&params);
+        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_CLICK, json)
     }
     fn patch_tracking_settings_click(params: iface_settings_tracking::PatchTrackingSettingsClickParams) -> Result<String, String> {
         let json = iface_settings_tracking__patch_tracking_settings_click_params__to_json(&params);
         dispatch(&OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_CLICK, json)
     }
-    fn get_tracking_settings_google_analytics() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_GOOGLE_ANALYTICS, Value::Object(Map::new()))
+    fn get_tracking_settings_google_analytics(params: iface_settings_tracking::GetTrackingSettingsGoogleAnalyticsParams) -> Result<String, String> {
+        let json = iface_settings_tracking__get_tracking_settings_google_analytics_params__to_json(&params);
+        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_GOOGLE_ANALYTICS, json)
     }
     fn patch_tracking_settings_google_analytics(params: iface_settings_tracking::PatchTrackingSettingsGoogleAnalyticsParams) -> Result<String, String> {
         let json = iface_settings_tracking__patch_tracking_settings_google_analytics_params__to_json(&params);
         dispatch(&OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_GOOGLE_ANALYTICS, json)
     }
-    fn get_tracking_settings_open() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_OPEN, Value::Object(Map::new()))
+    fn get_tracking_settings_open(params: iface_settings_tracking::GetTrackingSettingsOpenParams) -> Result<String, String> {
+        let json = iface_settings_tracking__get_tracking_settings_open_params__to_json(&params);
+        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_OPEN, json)
     }
     fn patch_tracking_settings_open(params: iface_settings_tracking::PatchTrackingSettingsOpenParams) -> Result<String, String> {
         let json = iface_settings_tracking__patch_tracking_settings_open_params__to_json(&params);
         dispatch(&OP_SETTINGS_TRACKING_PATCH_TRACKING_SETTINGS_OPEN, json)
     }
-    fn get_tracking_settings_subscription() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_SUBSCRIPTION, Value::Object(Map::new()))
+    fn get_tracking_settings_subscription(params: iface_settings_tracking::GetTrackingSettingsSubscriptionParams) -> Result<String, String> {
+        let json = iface_settings_tracking__get_tracking_settings_subscription_params__to_json(&params);
+        dispatch(&OP_SETTINGS_TRACKING_GET_TRACKING_SETTINGS_SUBSCRIPTION, json)
     }
     fn patch_tracking_settings_subscription(params: iface_settings_tracking::PatchTrackingSettingsSubscriptionParams) -> Result<String, String> {
         let json = iface_settings_tracking__patch_tracking_settings_subscription_params__to_json(&params);
@@ -6258,6 +7239,7 @@ const OP_USERS_API_GET_USER_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/account",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6268,6 +7250,7 @@ const OP_USERS_API_GET_USER_CREDITS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/credits",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6278,6 +7261,7 @@ const OP_USERS_API_GET_USER_EMAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/email",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6288,6 +7272,7 @@ const OP_USERS_API_PUT_USER_EMAIL: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/email",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "email", location: FieldLocation::Body },
     ],
     auth: &[
@@ -6299,6 +7284,7 @@ const OP_USERS_API_PUT_USER_PASSWORD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/password",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "new_password", location: FieldLocation::Body },
         FieldSpec { snake: "old_password", location: FieldLocation::Body },
     ],
@@ -6311,6 +7297,7 @@ const OP_USERS_API_GET_USER_PROFILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/profile",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6321,6 +7308,7 @@ const OP_USERS_API_PATCH_USER_PROFILE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/user/profile",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "address", location: FieldLocation::Body },
         FieldSpec { snake: "address2", location: FieldLocation::Body },
         FieldSpec { snake: "city", location: FieldLocation::Body },
@@ -6342,6 +7330,7 @@ const OP_USERS_API_GET_USER_USERNAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/username",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6352,6 +7341,7 @@ const OP_USERS_API_PUT_USER_USERNAME: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/username",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "username", location: FieldLocation::Body },
     ],
     auth: &[
@@ -6359,21 +7349,48 @@ const OP_USERS_API_PUT_USER_USERNAME: OpSpec = OpSpec {
     ],
 };
 
+fn iface_users_api__get_user_account_params__to_json(p: &iface_users_api::GetUserAccountParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users_api__get_user_credits_params__to_json(p: &iface_users_api::GetUserCreditsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users_api__get_user_email_params__to_json(p: &iface_users_api::GetUserEmailParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_users_api__put_user_email_params__to_json(p: &iface_users_api::PutUserEmailParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_users_api__put_user_password_params__to_json(p: &iface_users_api::PutUserPasswordParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("new_password".into(), Value::String((&p.new_password).clone()));
     m.insert("old_password".into(), Value::String((&p.old_password).clone()));
     Value::Object(m)
 }
 
+fn iface_users_api__get_user_profile_params__to_json(p: &iface_users_api::GetUserProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_users_api__patch_user_profile_params__to_json(p: &iface_users_api::PatchUserProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("address2".into(), match (&p.address2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -6388,21 +7405,31 @@ fn iface_users_api__patch_user_profile_params__to_json(p: &iface_users_api::Patc
     Value::Object(m)
 }
 
+fn iface_users_api__get_user_username_params__to_json(p: &iface_users_api::GetUserUsernameParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_users_api__put_user_username_params__to_json(p: &iface_users_api::PutUserUsernameParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_users_api::Guest for crate::Component {
-    fn get_user_account() -> Result<String, String> {
-        dispatch(&OP_USERS_API_GET_USER_ACCOUNT, Value::Object(Map::new()))
+    fn get_user_account(params: iface_users_api::GetUserAccountParams) -> Result<String, String> {
+        let json = iface_users_api__get_user_account_params__to_json(&params);
+        dispatch(&OP_USERS_API_GET_USER_ACCOUNT, json)
     }
-    fn get_user_credits() -> Result<String, String> {
-        dispatch(&OP_USERS_API_GET_USER_CREDITS, Value::Object(Map::new()))
+    fn get_user_credits(params: iface_users_api::GetUserCreditsParams) -> Result<String, String> {
+        let json = iface_users_api__get_user_credits_params__to_json(&params);
+        dispatch(&OP_USERS_API_GET_USER_CREDITS, json)
     }
-    fn get_user_email() -> Result<String, String> {
-        dispatch(&OP_USERS_API_GET_USER_EMAIL, Value::Object(Map::new()))
+    fn get_user_email(params: iface_users_api::GetUserEmailParams) -> Result<String, String> {
+        let json = iface_users_api__get_user_email_params__to_json(&params);
+        dispatch(&OP_USERS_API_GET_USER_EMAIL, json)
     }
     fn put_user_email(params: iface_users_api::PutUserEmailParams) -> Result<String, String> {
         let json = iface_users_api__put_user_email_params__to_json(&params);
@@ -6412,15 +7439,17 @@ impl iface_users_api::Guest for crate::Component {
         let json = iface_users_api__put_user_password_params__to_json(&params);
         dispatch(&OP_USERS_API_PUT_USER_PASSWORD, json)
     }
-    fn get_user_profile() -> Result<String, String> {
-        dispatch(&OP_USERS_API_GET_USER_PROFILE, Value::Object(Map::new()))
+    fn get_user_profile(params: iface_users_api::GetUserProfileParams) -> Result<String, String> {
+        let json = iface_users_api__get_user_profile_params__to_json(&params);
+        dispatch(&OP_USERS_API_GET_USER_PROFILE, json)
     }
     fn patch_user_profile(params: iface_users_api::PatchUserProfileParams) -> Result<String, String> {
         let json = iface_users_api__patch_user_profile_params__to_json(&params);
         dispatch(&OP_USERS_API_PATCH_USER_PROFILE, json)
     }
-    fn get_user_username() -> Result<String, String> {
-        dispatch(&OP_USERS_API_GET_USER_USERNAME, Value::Object(Map::new()))
+    fn get_user_username(params: iface_users_api::GetUserUsernameParams) -> Result<String, String> {
+        let json = iface_users_api__get_user_username_params__to_json(&params);
+        dispatch(&OP_USERS_API_GET_USER_USERNAME, json)
     }
     fn put_user_username(params: iface_users_api::PutUserUsernameParams) -> Result<String, String> {
         let json = iface_users_api__put_user_username_params__to_json(&params);
@@ -6433,6 +7462,7 @@ const OP_SETTINGS_ENFORCED_TLS_GET_USER_SETTINGS_ENFORCED_TLS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/settings/enforced_tls",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6443,6 +7473,7 @@ const OP_SETTINGS_ENFORCED_TLS_PATCH_USER_SETTINGS_ENFORCED_TLS: OpSpec = OpSpec
     method: "PATCH",
     path_template: "/user/settings/enforced_tls",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "require_tls", location: FieldLocation::Body },
         FieldSpec { snake: "require_valid_cert", location: FieldLocation::Body },
     ],
@@ -6451,16 +7482,24 @@ const OP_SETTINGS_ENFORCED_TLS_PATCH_USER_SETTINGS_ENFORCED_TLS: OpSpec = OpSpec
     ],
 };
 
+fn iface_settings_enforced_tls__get_user_settings_enforced_tls_params__to_json(p: &iface_settings_enforced_tls::GetUserSettingsEnforcedTlsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_enforced_tls__patch_user_settings_enforced_tls_params__to_json(p: &iface_settings_enforced_tls::PatchUserSettingsEnforcedTlsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("require_tls".into(), match (&p.require_tls) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("require_valid_cert".into(), match (&p.require_valid_cert) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_settings_enforced_tls::Guest for crate::Component {
-    fn get_user_settings_enforced_tls() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_ENFORCED_TLS_GET_USER_SETTINGS_ENFORCED_TLS, Value::Object(Map::new()))
+    fn get_user_settings_enforced_tls(params: iface_settings_enforced_tls::GetUserSettingsEnforcedTlsParams) -> Result<String, String> {
+        let json = iface_settings_enforced_tls__get_user_settings_enforced_tls_params__to_json(&params);
+        dispatch(&OP_SETTINGS_ENFORCED_TLS_GET_USER_SETTINGS_ENFORCED_TLS, json)
     }
     fn patch_user_settings_enforced_tls(params: iface_settings_enforced_tls::PatchUserSettingsEnforcedTlsParams) -> Result<String, String> {
         let json = iface_settings_enforced_tls__patch_user_settings_enforced_tls_params__to_json(&params);
@@ -6473,6 +7512,7 @@ const OP_WEBHOOKS_GET_USER_WEBHOOKS_EVENT_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/webhooks/event/settings",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6483,6 +7523,7 @@ const OP_WEBHOOKS_PATCH_USER_WEBHOOKS_EVENT_SETTINGS: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/user/webhooks/event/settings",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "bounce", location: FieldLocation::Body },
         FieldSpec { snake: "click", location: FieldLocation::Body },
         FieldSpec { snake: "deferred", location: FieldLocation::Body },
@@ -6509,6 +7550,7 @@ const OP_WEBHOOKS_GET_USER_WEBHOOKS_EVENT_SETTINGS_SIGNED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/webhooks/event/settings/signed",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6519,6 +7561,7 @@ const OP_WEBHOOKS_PATCH_USER_WEBHOOKS_EVENT_SETTINGS_SIGNED: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/user/webhooks/event/settings/signed",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
     ],
     auth: &[
@@ -6530,6 +7573,7 @@ const OP_WEBHOOKS_POST_USER_WEBHOOKS_EVENT_TEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/user/webhooks/event/test",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "oauth_client_id", location: FieldLocation::Body },
         FieldSpec { snake: "oauth_client_secret", location: FieldLocation::Body },
         FieldSpec { snake: "oauth_token_url", location: FieldLocation::Body },
@@ -6544,6 +7588,7 @@ const OP_WEBHOOKS_GET_USER_WEBHOOKS_PARSE_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/webhooks/parse/settings",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6559,6 +7604,7 @@ const OP_WEBHOOKS_GET_USER_WEBHOOKS_PARSE_STATS: OpSpec = OpSpec {
         FieldSpec { snake: "aggregated_by", location: FieldLocation::Query },
         FieldSpec { snake: "start_date", location: FieldLocation::Query },
         FieldSpec { snake: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6573,8 +7619,15 @@ fn iface_webhooks__get_user_webhooks_parse_stats_aggregated_by_enum__to_str(e: &
     }
 }
 
+fn iface_webhooks__get_user_webhooks_event_settings_params__to_json(p: &iface_webhooks::GetUserWebhooksEventSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_webhooks__patch_user_webhooks_event_settings_params__to_json(p: &iface_webhooks::PatchUserWebhooksEventSettingsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bounce".into(), Value::Bool(*(&p.bounce)));
     m.insert("click".into(), Value::Bool(*(&p.click)));
     m.insert("deferred".into(), Value::Bool(*(&p.deferred)));
@@ -6594,18 +7647,32 @@ fn iface_webhooks__patch_user_webhooks_event_settings_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_webhooks__get_user_webhooks_event_settings_signed_params__to_json(p: &iface_webhooks::GetUserWebhooksEventSettingsSignedParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_webhooks__patch_user_webhooks_event_settings_signed_params__to_json(p: &iface_webhooks::PatchUserWebhooksEventSettingsSignedParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
     Value::Object(m)
 }
 
 fn iface_webhooks__post_user_webhooks_event_test_params__to_json(p: &iface_webhooks::PostUserWebhooksEventTestParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("oauth_client_id".into(), match (&p.oauth_client_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("oauth_client_secret".into(), match (&p.oauth_client_secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("oauth_token_url".into(), match (&p.oauth_token_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_webhooks__get_user_webhooks_parse_settings_params__to_json(p: &iface_webhooks::GetUserWebhooksParseSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6616,19 +7683,22 @@ fn iface_webhooks__get_user_webhooks_parse_stats_params__to_json(p: &iface_webho
     m.insert("aggregated_by".into(), match (&p.aggregated_by) { Some(v) => Value::String(iface_webhooks__get_user_webhooks_parse_stats_aggregated_by_enum__to_str(v).into()), None => Value::Null });
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_webhooks::Guest for crate::Component {
-    fn get_user_webhooks_event_settings() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_GET_USER_WEBHOOKS_EVENT_SETTINGS, Value::Object(Map::new()))
+    fn get_user_webhooks_event_settings(params: iface_webhooks::GetUserWebhooksEventSettingsParams) -> Result<String, String> {
+        let json = iface_webhooks__get_user_webhooks_event_settings_params__to_json(&params);
+        dispatch(&OP_WEBHOOKS_GET_USER_WEBHOOKS_EVENT_SETTINGS, json)
     }
     fn patch_user_webhooks_event_settings(params: iface_webhooks::PatchUserWebhooksEventSettingsParams) -> Result<String, String> {
         let json = iface_webhooks__patch_user_webhooks_event_settings_params__to_json(&params);
         dispatch(&OP_WEBHOOKS_PATCH_USER_WEBHOOKS_EVENT_SETTINGS, json)
     }
-    fn get_user_webhooks_event_settings_signed() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_GET_USER_WEBHOOKS_EVENT_SETTINGS_SIGNED, Value::Object(Map::new()))
+    fn get_user_webhooks_event_settings_signed(params: iface_webhooks::GetUserWebhooksEventSettingsSignedParams) -> Result<String, String> {
+        let json = iface_webhooks__get_user_webhooks_event_settings_signed_params__to_json(&params);
+        dispatch(&OP_WEBHOOKS_GET_USER_WEBHOOKS_EVENT_SETTINGS_SIGNED, json)
     }
     fn patch_user_webhooks_event_settings_signed(params: iface_webhooks::PatchUserWebhooksEventSettingsSignedParams) -> Result<String, String> {
         let json = iface_webhooks__patch_user_webhooks_event_settings_signed_params__to_json(&params);
@@ -6638,8 +7708,9 @@ impl iface_webhooks::Guest for crate::Component {
         let json = iface_webhooks__post_user_webhooks_event_test_params__to_json(&params);
         dispatch(&OP_WEBHOOKS_POST_USER_WEBHOOKS_EVENT_TEST, json)
     }
-    fn get_user_webhooks_parse_settings() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_GET_USER_WEBHOOKS_PARSE_SETTINGS, Value::Object(Map::new()))
+    fn get_user_webhooks_parse_settings(params: iface_webhooks::GetUserWebhooksParseSettingsParams) -> Result<String, String> {
+        let json = iface_webhooks__get_user_webhooks_parse_settings_params__to_json(&params);
+        dispatch(&OP_WEBHOOKS_GET_USER_WEBHOOKS_PARSE_SETTINGS, json)
     }
     fn get_user_webhooks_parse_stats(params: iface_webhooks::GetUserWebhooksParseStatsParams) -> Result<String, String> {
         let json = iface_webhooks__get_user_webhooks_parse_stats_params__to_json(&params);
@@ -6652,6 +7723,7 @@ const OP_SETTINGS_INBOUND_PARSE_POST_USER_WEBHOOKS_PARSE_SETTINGS: OpSpec = OpSp
     method: "POST",
     path_template: "/user/webhooks/parse/settings",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "hostname", location: FieldLocation::Body },
         FieldSpec { snake: "send_raw", location: FieldLocation::Body },
         FieldSpec { snake: "spam_check", location: FieldLocation::Body },
@@ -6666,6 +7738,7 @@ const OP_SETTINGS_INBOUND_PARSE_GET_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME: OpSpe
     method: "GET",
     path_template: "/user/webhooks/parse/settings/{hostname}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6676,6 +7749,7 @@ const OP_SETTINGS_INBOUND_PARSE_PATCH_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME: OpS
     method: "PATCH",
     path_template: "/user/webhooks/parse/settings/{hostname}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "hostname", location: FieldLocation::Body },
         FieldSpec { snake: "send_raw", location: FieldLocation::Body },
         FieldSpec { snake: "spam_check", location: FieldLocation::Body },
@@ -6690,6 +7764,7 @@ const OP_SETTINGS_INBOUND_PARSE_DELETE_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME: Op
     method: "DELETE",
     path_template: "/user/webhooks/parse/settings/{hostname}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6698,6 +7773,7 @@ const OP_SETTINGS_INBOUND_PARSE_DELETE_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME: Op
 
 fn iface_settings_inbound_parse__post_user_webhooks_parse_settings_params__to_json(p: &iface_settings_inbound_parse::PostUserWebhooksParseSettingsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hostname".into(), match (&p.hostname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("send_raw".into(), match (&p.send_raw) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("spam_check".into(), match (&p.spam_check) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -6705,12 +7781,25 @@ fn iface_settings_inbound_parse__post_user_webhooks_parse_settings_params__to_js
     Value::Object(m)
 }
 
+fn iface_settings_inbound_parse__get_user_webhooks_parse_settings_hostname_params__to_json(p: &iface_settings_inbound_parse::GetUserWebhooksParseSettingsHostnameParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_settings_inbound_parse__patch_user_webhooks_parse_settings_hostname_params__to_json(p: &iface_settings_inbound_parse::PatchUserWebhooksParseSettingsHostnameParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hostname".into(), match (&p.hostname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("send_raw".into(), match (&p.send_raw) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("spam_check".into(), match (&p.spam_check) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_params__to_json(p: &iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6719,15 +7808,17 @@ impl iface_settings_inbound_parse::Guest for crate::Component {
         let json = iface_settings_inbound_parse__post_user_webhooks_parse_settings_params__to_json(&params);
         dispatch(&OP_SETTINGS_INBOUND_PARSE_POST_USER_WEBHOOKS_PARSE_SETTINGS, json)
     }
-    fn get_user_webhooks_parse_settings_hostname() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_INBOUND_PARSE_GET_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME, Value::Object(Map::new()))
+    fn get_user_webhooks_parse_settings_hostname(params: iface_settings_inbound_parse::GetUserWebhooksParseSettingsHostnameParams) -> Result<String, String> {
+        let json = iface_settings_inbound_parse__get_user_webhooks_parse_settings_hostname_params__to_json(&params);
+        dispatch(&OP_SETTINGS_INBOUND_PARSE_GET_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME, json)
     }
     fn patch_user_webhooks_parse_settings_hostname(params: iface_settings_inbound_parse::PatchUserWebhooksParseSettingsHostnameParams) -> Result<String, String> {
         let json = iface_settings_inbound_parse__patch_user_webhooks_parse_settings_hostname_params__to_json(&params);
         dispatch(&OP_SETTINGS_INBOUND_PARSE_PATCH_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME, json)
     }
-    fn delete_user_webhooks_parse_settings_hostname() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_INBOUND_PARSE_DELETE_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME, Value::Object(Map::new()))
+    fn delete_user_webhooks_parse_settings_hostname(params: iface_settings_inbound_parse::DeleteUserWebhooksParseSettingsHostnameParams) -> Result<String, String> {
+        let json = iface_settings_inbound_parse__delete_user_webhooks_parse_settings_hostname_params__to_json(&params);
+        dispatch(&OP_SETTINGS_INBOUND_PARSE_DELETE_USER_WEBHOOKS_PARSE_SETTINGS_HOSTNAME, json)
     }
 }
 use crate::exports::autostamp::sendgrid::email_address_validation as iface_email_address_validation;
@@ -6975,6 +8066,7 @@ const OP_DOMAIN_AUTHENTICATION_GET_WHITELABEL_DOMAINS: OpSpec = OpSpec {
         FieldSpec { snake: "exclude_subusers", location: FieldLocation::Query },
         FieldSpec { snake: "username", location: FieldLocation::Query },
         FieldSpec { snake: "domain", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -6985,6 +8077,7 @@ const OP_DOMAIN_AUTHENTICATION_POST_WHITELABEL_DOMAINS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/whitelabel/domains",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "automatic_security", location: FieldLocation::Body },
         FieldSpec { snake: "custom_dkim_selector", location: FieldLocation::Body },
         FieldSpec { snake: "custom_spf", location: FieldLocation::Body },
@@ -7004,6 +8097,7 @@ const OP_DOMAIN_AUTHENTICATION_GET_WHITELABEL_DOMAINS_DEFAULT: OpSpec = OpSpec {
     path_template: "/whitelabel/domains/default",
     fields: &[
         FieldSpec { snake: "domain", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7036,6 +8130,7 @@ const OP_DOMAIN_AUTHENTICATION_GET_WHITELABEL_DOMAINS_DOMAIN_ID: OpSpec = OpSpec
     method: "GET",
     path_template: "/whitelabel/domains/{domain_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7046,6 +8141,7 @@ const OP_DOMAIN_AUTHENTICATION_PATCH_WHITELABEL_DOMAINS_DOMAIN_ID: OpSpec = OpSp
     method: "PATCH",
     path_template: "/whitelabel/domains/{domain_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "custom_spf", location: FieldLocation::Body },
         FieldSpec { snake: "default", location: FieldLocation::Body },
     ],
@@ -7058,6 +8154,7 @@ const OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_DOMAIN_ID: OpSpec = OpS
     method: "DELETE",
     path_template: "/whitelabel/domains/{domain_id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7079,6 +8176,7 @@ const OP_DOMAIN_AUTHENTICATION_POST_WHITELABEL_DOMAINS_ID_IPS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/whitelabel/domains/{id}/ips",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "ip", location: FieldLocation::Body },
     ],
     auth: &[
@@ -7090,6 +8188,7 @@ const OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_ID_IPS_IP: OpSpec = OpS
     method: "DELETE",
     path_template: "/whitelabel/domains/{id}/ips/{ip}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7100,6 +8199,7 @@ const OP_DOMAIN_AUTHENTICATION_POST_WHITELABEL_DOMAINS_ID_VALIDATE: OpSpec = OpS
     method: "POST",
     path_template: "/whitelabel/domains/{id}/validate",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7113,11 +8213,13 @@ fn iface_domain_authentication__get_whitelabel_domains_params__to_json(p: &iface
     m.insert("exclude_subusers".into(), match (&p.exclude_subusers) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_domain_authentication__post_whitelabel_domains_params__to_json(p: &iface_domain_authentication::PostWhitelabelDomainsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("automatic_security".into(), match (&p.automatic_security) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("custom_dkim_selector".into(), match (&p.custom_dkim_selector) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_spf".into(), match (&p.custom_spf) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -7132,6 +8234,7 @@ fn iface_domain_authentication__post_whitelabel_domains_params__to_json(p: &ifac
 fn iface_domain_authentication__get_whitelabel_domains_default_params__to_json(p: &iface_domain_authentication::GetWhitelabelDomainsDefaultParams) -> Value {
     let mut m = Map::new();
     m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7147,10 +8250,23 @@ fn iface_domain_authentication__delete_whitelabel_domains_subuser_params__to_jso
     Value::Object(m)
 }
 
+fn iface_domain_authentication__get_whitelabel_domains_domain_id_params__to_json(p: &iface_domain_authentication::GetWhitelabelDomainsDomainIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_domain_authentication__patch_whitelabel_domains_domain_id_params__to_json(p: &iface_domain_authentication::PatchWhitelabelDomainsDomainIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_spf".into(), match (&p.custom_spf) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("default".into(), match (&p.default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__delete_whitelabel_domains_domain_id_params__to_json(p: &iface_domain_authentication::DeleteWhitelabelDomainsDomainIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7162,7 +8278,20 @@ fn iface_domain_authentication__post_whitelabel_domains_domain_id_subuser_params
 
 fn iface_domain_authentication__post_whitelabel_domains_id_ips_params__to_json(p: &iface_domain_authentication::PostWhitelabelDomainsIdIpsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ip".into(), Value::String((&p.ip).clone()));
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__delete_whitelabel_domains_id_ips_ip_params__to_json(p: &iface_domain_authentication::DeleteWhitelabelDomainsIdIpsIpParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domain_authentication__post_whitelabel_domains_id_validate_params__to_json(p: &iface_domain_authentication::PostWhitelabelDomainsIdValidateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7187,15 +8316,17 @@ impl iface_domain_authentication::Guest for crate::Component {
         let json = iface_domain_authentication__delete_whitelabel_domains_subuser_params__to_json(&params);
         dispatch(&OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_SUBUSER, json)
     }
-    fn get_whitelabel_domains_domain_id() -> Result<String, String> {
-        dispatch(&OP_DOMAIN_AUTHENTICATION_GET_WHITELABEL_DOMAINS_DOMAIN_ID, Value::Object(Map::new()))
+    fn get_whitelabel_domains_domain_id(params: iface_domain_authentication::GetWhitelabelDomainsDomainIdParams) -> Result<String, String> {
+        let json = iface_domain_authentication__get_whitelabel_domains_domain_id_params__to_json(&params);
+        dispatch(&OP_DOMAIN_AUTHENTICATION_GET_WHITELABEL_DOMAINS_DOMAIN_ID, json)
     }
     fn patch_whitelabel_domains_domain_id(params: iface_domain_authentication::PatchWhitelabelDomainsDomainIdParams) -> Result<String, String> {
         let json = iface_domain_authentication__patch_whitelabel_domains_domain_id_params__to_json(&params);
         dispatch(&OP_DOMAIN_AUTHENTICATION_PATCH_WHITELABEL_DOMAINS_DOMAIN_ID, json)
     }
-    fn delete_whitelabel_domains_domain_id() -> Result<String, String> {
-        dispatch(&OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_DOMAIN_ID, Value::Object(Map::new()))
+    fn delete_whitelabel_domains_domain_id(params: iface_domain_authentication::DeleteWhitelabelDomainsDomainIdParams) -> Result<String, String> {
+        let json = iface_domain_authentication__delete_whitelabel_domains_domain_id_params__to_json(&params);
+        dispatch(&OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_DOMAIN_ID, json)
     }
     fn post_whitelabel_domains_domain_id_subuser(params: iface_domain_authentication::PostWhitelabelDomainsDomainIdSubuserParams) -> Result<String, String> {
         let json = iface_domain_authentication__post_whitelabel_domains_domain_id_subuser_params__to_json(&params);
@@ -7205,11 +8336,13 @@ impl iface_domain_authentication::Guest for crate::Component {
         let json = iface_domain_authentication__post_whitelabel_domains_id_ips_params__to_json(&params);
         dispatch(&OP_DOMAIN_AUTHENTICATION_POST_WHITELABEL_DOMAINS_ID_IPS, json)
     }
-    fn delete_whitelabel_domains_id_ips_ip() -> Result<String, String> {
-        dispatch(&OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_ID_IPS_IP, Value::Object(Map::new()))
+    fn delete_whitelabel_domains_id_ips_ip(params: iface_domain_authentication::DeleteWhitelabelDomainsIdIpsIpParams) -> Result<String, String> {
+        let json = iface_domain_authentication__delete_whitelabel_domains_id_ips_ip_params__to_json(&params);
+        dispatch(&OP_DOMAIN_AUTHENTICATION_DELETE_WHITELABEL_DOMAINS_ID_IPS_IP, json)
     }
-    fn post_whitelabel_domains_id_validate() -> Result<String, String> {
-        dispatch(&OP_DOMAIN_AUTHENTICATION_POST_WHITELABEL_DOMAINS_ID_VALIDATE, Value::Object(Map::new()))
+    fn post_whitelabel_domains_id_validate(params: iface_domain_authentication::PostWhitelabelDomainsIdValidateParams) -> Result<String, String> {
+        let json = iface_domain_authentication__post_whitelabel_domains_id_validate_params__to_json(&params);
+        dispatch(&OP_DOMAIN_AUTHENTICATION_POST_WHITELABEL_DOMAINS_ID_VALIDATE, json)
     }
 }
 use crate::exports::autostamp::sendgrid::reverse_dns as iface_reverse_dns;
@@ -7221,6 +8354,7 @@ const OP_REVERSE_DNS_GET_WHITELABEL_IPS: OpSpec = OpSpec {
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "ip", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7231,6 +8365,7 @@ const OP_REVERSE_DNS_POST_WHITELABEL_IPS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/whitelabel/ips",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "domain", location: FieldLocation::Body },
         FieldSpec { snake: "ip", location: FieldLocation::Body },
         FieldSpec { snake: "subdomain", location: FieldLocation::Body },
@@ -7244,6 +8379,7 @@ const OP_REVERSE_DNS_GET_WHITELABEL_IPS_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/whitelabel/ips/{id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7254,6 +8390,7 @@ const OP_REVERSE_DNS_DELETE_WHITELABEL_IPS_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/whitelabel/ips/{id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7264,6 +8401,7 @@ const OP_REVERSE_DNS_POST_WHITELABEL_IPS_ID_VALIDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/whitelabel/ips/{id}/validate",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7275,14 +8413,34 @@ fn iface_reverse_dns__get_whitelabel_ips_params__to_json(p: &iface_reverse_dns::
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_reverse_dns__post_whitelabel_ips_params__to_json(p: &iface_reverse_dns::PostWhitelabelIpsParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("domain".into(), Value::String((&p.domain).clone()));
     m.insert("ip".into(), Value::String((&p.ip).clone()));
     m.insert("subdomain".into(), match (&p.subdomain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reverse_dns__get_whitelabel_ips_id_params__to_json(p: &iface_reverse_dns::GetWhitelabelIpsIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reverse_dns__delete_whitelabel_ips_id_params__to_json(p: &iface_reverse_dns::DeleteWhitelabelIpsIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reverse_dns__post_whitelabel_ips_id_validate_params__to_json(p: &iface_reverse_dns::PostWhitelabelIpsIdValidateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7295,14 +8453,17 @@ impl iface_reverse_dns::Guest for crate::Component {
         let json = iface_reverse_dns__post_whitelabel_ips_params__to_json(&params);
         dispatch(&OP_REVERSE_DNS_POST_WHITELABEL_IPS, json)
     }
-    fn get_whitelabel_ips_id() -> Result<String, String> {
-        dispatch(&OP_REVERSE_DNS_GET_WHITELABEL_IPS_ID, Value::Object(Map::new()))
+    fn get_whitelabel_ips_id(params: iface_reverse_dns::GetWhitelabelIpsIdParams) -> Result<String, String> {
+        let json = iface_reverse_dns__get_whitelabel_ips_id_params__to_json(&params);
+        dispatch(&OP_REVERSE_DNS_GET_WHITELABEL_IPS_ID, json)
     }
-    fn delete_whitelabel_ips_id() -> Result<String, String> {
-        dispatch(&OP_REVERSE_DNS_DELETE_WHITELABEL_IPS_ID, Value::Object(Map::new()))
+    fn delete_whitelabel_ips_id(params: iface_reverse_dns::DeleteWhitelabelIpsIdParams) -> Result<String, String> {
+        let json = iface_reverse_dns__delete_whitelabel_ips_id_params__to_json(&params);
+        dispatch(&OP_REVERSE_DNS_DELETE_WHITELABEL_IPS_ID, json)
     }
-    fn post_whitelabel_ips_id_validate() -> Result<String, String> {
-        dispatch(&OP_REVERSE_DNS_POST_WHITELABEL_IPS_ID_VALIDATE, Value::Object(Map::new()))
+    fn post_whitelabel_ips_id_validate(params: iface_reverse_dns::PostWhitelabelIpsIdValidateParams) -> Result<String, String> {
+        let json = iface_reverse_dns__post_whitelabel_ips_id_validate_params__to_json(&params);
+        dispatch(&OP_REVERSE_DNS_POST_WHITELABEL_IPS_ID_VALIDATE, json)
     }
 }
 use crate::exports::autostamp::sendgrid::link_branding as iface_link_branding;
@@ -7312,6 +8473,7 @@ const OP_LINK_BRANDING_GET_WHITELABEL_LINKS: OpSpec = OpSpec {
     path_template: "/whitelabel/links",
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7322,6 +8484,7 @@ const OP_LINK_BRANDING_POST_WHITELABEL_LINKS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/whitelabel/links",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "default", location: FieldLocation::Body },
         FieldSpec { snake: "domain", location: FieldLocation::Body },
         FieldSpec { snake: "subdomain", location: FieldLocation::Body },
@@ -7336,6 +8499,7 @@ const OP_LINK_BRANDING_GET_WHITELABEL_LINKS_DEFAULT: OpSpec = OpSpec {
     path_template: "/whitelabel/links/default",
     fields: &[
         FieldSpec { snake: "domain", location: FieldLocation::Query },
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7368,6 +8532,7 @@ const OP_LINK_BRANDING_GET_WHITELABEL_LINKS_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/whitelabel/links/{id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7378,6 +8543,7 @@ const OP_LINK_BRANDING_PATCH_WHITELABEL_LINKS_ID: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/whitelabel/links/{id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
         FieldSpec { snake: "default", location: FieldLocation::Body },
     ],
     auth: &[
@@ -7389,6 +8555,7 @@ const OP_LINK_BRANDING_DELETE_WHITELABEL_LINKS_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/whitelabel/links/{id}",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7399,6 +8566,7 @@ const OP_LINK_BRANDING_POST_WHITELABEL_LINKS_ID_VALIDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/whitelabel/links/{id}/validate",
     fields: &[
+        FieldSpec { snake: "on_behalf_of", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "Authorization", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -7419,11 +8587,13 @@ const OP_LINK_BRANDING_POST_WHITELABEL_LINKS_LINK_ID_SUBUSER: OpSpec = OpSpec {
 fn iface_link_branding__get_whitelabel_links_params__to_json(p: &iface_link_branding::GetWhitelabelLinksParams) -> Value {
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_link_branding__post_whitelabel_links_params__to_json(p: &iface_link_branding::PostWhitelabelLinksParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default".into(), match (&p.default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("domain".into(), Value::String((&p.domain).clone()));
     m.insert("subdomain".into(), match (&p.subdomain) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7433,6 +8603,7 @@ fn iface_link_branding__post_whitelabel_links_params__to_json(p: &iface_link_bra
 fn iface_link_branding__get_whitelabel_links_default_params__to_json(p: &iface_link_branding::GetWhitelabelLinksDefaultParams) -> Value {
     let mut m = Map::new();
     m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7448,9 +8619,28 @@ fn iface_link_branding__delete_whitelabel_links_subuser_params__to_json(p: &ifac
     Value::Object(m)
 }
 
+fn iface_link_branding__get_whitelabel_links_id_params__to_json(p: &iface_link_branding::GetWhitelabelLinksIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_link_branding__patch_whitelabel_links_id_params__to_json(p: &iface_link_branding::PatchWhitelabelLinksIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("default".into(), match (&p.default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_link_branding__delete_whitelabel_links_id_params__to_json(p: &iface_link_branding::DeleteWhitelabelLinksIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_link_branding__post_whitelabel_links_id_validate_params__to_json(p: &iface_link_branding::PostWhitelabelLinksIdValidateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("on_behalf_of".into(), match (&p.on_behalf_of) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7481,18 +8671,21 @@ impl iface_link_branding::Guest for crate::Component {
         let json = iface_link_branding__delete_whitelabel_links_subuser_params__to_json(&params);
         dispatch(&OP_LINK_BRANDING_DELETE_WHITELABEL_LINKS_SUBUSER, json)
     }
-    fn get_whitelabel_links_id() -> Result<String, String> {
-        dispatch(&OP_LINK_BRANDING_GET_WHITELABEL_LINKS_ID, Value::Object(Map::new()))
+    fn get_whitelabel_links_id(params: iface_link_branding::GetWhitelabelLinksIdParams) -> Result<String, String> {
+        let json = iface_link_branding__get_whitelabel_links_id_params__to_json(&params);
+        dispatch(&OP_LINK_BRANDING_GET_WHITELABEL_LINKS_ID, json)
     }
     fn patch_whitelabel_links_id(params: iface_link_branding::PatchWhitelabelLinksIdParams) -> Result<String, String> {
         let json = iface_link_branding__patch_whitelabel_links_id_params__to_json(&params);
         dispatch(&OP_LINK_BRANDING_PATCH_WHITELABEL_LINKS_ID, json)
     }
-    fn delete_whitelabel_links_id() -> Result<String, String> {
-        dispatch(&OP_LINK_BRANDING_DELETE_WHITELABEL_LINKS_ID, Value::Object(Map::new()))
+    fn delete_whitelabel_links_id(params: iface_link_branding::DeleteWhitelabelLinksIdParams) -> Result<String, String> {
+        let json = iface_link_branding__delete_whitelabel_links_id_params__to_json(&params);
+        dispatch(&OP_LINK_BRANDING_DELETE_WHITELABEL_LINKS_ID, json)
     }
-    fn post_whitelabel_links_id_validate() -> Result<String, String> {
-        dispatch(&OP_LINK_BRANDING_POST_WHITELABEL_LINKS_ID_VALIDATE, Value::Object(Map::new()))
+    fn post_whitelabel_links_id_validate(params: iface_link_branding::PostWhitelabelLinksIdValidateParams) -> Result<String, String> {
+        let json = iface_link_branding__post_whitelabel_links_id_validate_params__to_json(&params);
+        dispatch(&OP_LINK_BRANDING_POST_WHITELABEL_LINKS_ID_VALIDATE, json)
     }
     fn post_whitelabel_links_link_id_subuser(params: iface_link_branding::PostWhitelabelLinksLinkIdSubuserParams) -> Result<String, String> {
         let json = iface_link_branding__post_whitelabel_links_link_id_subuser_params__to_json(&params);

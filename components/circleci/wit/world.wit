@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `apikey` | query `circle-token` |
-package autostamp:circleci@0.2.1;
+package autostamp:circleci@0.3.0;
 
 interface me {
   get-me: func() -> result<string, string>;
@@ -15,6 +15,13 @@ interface me {
 
 
 interface project {
+  enum get-project-username-project-filter-enum {
+    completed,
+    successful,
+    failed,
+    running,
+  }
+
   enum post-project-username-project-checkout-key-body-enum {
     deploy-key,
     github-user-key,
@@ -49,7 +56,16 @@ interface project {
     value: string
   }
 
-  get-project-username-project: func() -> result<string, string>;
+  record get-project-username-project-params {
+    /// The number of builds to return. Maximum 100, defaults to 30.
+    limit: option<s32>,
+    /// The API returns builds starting from this offset, defaults to 0.
+    offset: option<s32>,
+    /// Restricts which builds are returned.
+    /// Set to "completed", "successful", "failed", "running", or defaults to no filter.
+    filter: option<get-project-username-project-filter-enum>
+  }
+  get-project-username-project: func(params: get-project-username-project-params) -> result<string, string>;
 
   record post-project-username-project-params {
     build-parameters: option<build-parameters>,
@@ -109,7 +125,13 @@ interface projects {
 }
 
 interface recent-builds {
-  get-recent-builds: func() -> result<string, string>;
+  record get-recent-builds-params {
+    /// The number of builds to return. Maximum 100, defaults to 30.
+    limit: option<s32>,
+    /// The API returns builds starting from this offset, defaults to 0.
+    offset: option<s32>
+  }
+  get-recent-builds: func(params: get-recent-builds-params) -> result<string, string>;
 
 }
 

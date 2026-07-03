@@ -11,8 +11,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:netlify@0.2.1` |
-| Published version | `0.2.1+netlify-2.16.0` |
+| Package | `autostamp:netlify@0.3.0` |
+| Published version | `0.3.0+netlify-2.16.0` |
 | Tag filter | all tags |
 | Operations generated | 120 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

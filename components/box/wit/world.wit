@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `OAuth2Security` | `Authorization: Bearer <secret>` |
-package autostamp:box-api@0.2.1;
+package autostamp:box-api@0.3.0;
 
 interface authorization {
   enum get-authorize-response-type-enum {

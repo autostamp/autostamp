@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:microsoft@0.2.1` |
-| Published version | `0.2.1+microsoft-2.0` |
+| Package | `autostamp:microsoft@0.3.0` |
+| Published version | `0.3.0+microsoft-2.0` |
 | Tag filter | all tags |
 | Operations generated | 9 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

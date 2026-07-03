@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:linode@0.2.1` |
-| Published version | `0.2.1+linode-4.151.1` |
+| Package | `autostamp:linode@0.3.0` |
+| Published version | `0.3.0+linode-4.151.1` |
 | Tag filter | all tags |
 | Operations generated | 350 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

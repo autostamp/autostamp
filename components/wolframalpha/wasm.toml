@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:wolframalpha"
-version = "0.2.1+wolframalpha-v0.1"
+version = "0.3.0+wolframalpha-v0.1"
 registry = "ghcr.io/autostamp/wolframalpha"
 kind = "component"
 file = "build/wolframalpha.wasm"

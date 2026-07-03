@@ -1,4 +1,4 @@
-package autostamp:polygon@0.2.1;
+package autostamp:polygon@0.3.0;
 
 interface stocks {
   /// Available Companies

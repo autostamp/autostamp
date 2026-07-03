@@ -1,4 +1,12 @@
-package autostamp:languagetool@0.2.1;
+/// ## Authentication
+///
+/// Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+/// Provision these named secrets:
+///
+/// | Secret name | Applied to each request as |
+/// | --- | --- |
+/// | `api-key` | query `apiKey` |
+package autostamp:languagetool@0.3.0;
 
 interface check {
   enum post-check-body-level-enum {
@@ -58,8 +66,6 @@ interface words {
     limit: option<s32>,
     /// Your username as used to log in at languagetool.org.
     username: string,
-    /// <a target='_blank' href='https://languagetool.org/editor/settings/access-tokens'>Your API key</a>
-    api-key: string,
     /// Comma-separated list of dictionaries to include words from; uses special default dictionary if this is unset
     dicts: option<string>
   }

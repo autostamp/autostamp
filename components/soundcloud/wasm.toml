@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:soundcloud"
-version = "0.2.1+soundcloud-1.0.0"
+version = "0.3.0+soundcloud-1.0.0"
 registry = "ghcr.io/autostamp/soundcloud"
 kind = "component"
 file = "build/soundcloud.wasm"

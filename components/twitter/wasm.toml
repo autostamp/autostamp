@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:twitter"
-version = "0.2.1+twitter-2.62"
+version = "0.3.0+twitter-2.62"
 registry = "ghcr.io/autostamp/twitter"
 kind = "component"
 file = "build/twitter.wasm"

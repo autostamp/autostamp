@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `APIKey` | query `apiKey` |
-package autostamp:here@0.2.1;
+package autostamp:here@0.3.0;
 
 interface api-information {
   /// Service health
@@ -19,6 +19,20 @@ interface api-information {
 
 
 interface location {
+  enum post-locate-content-encoding-enum {
+    gzip,
+  }
+
+  enum post-locate-fallback-item-enum {
+    any,
+    area,
+    single-wifi,
+  }
+
+  enum post-locate-desired-item-enum {
+    altitude,
+  }
+
   /// CDMA measurement
   record cdma {
     base-lat: option<base-lat>,
@@ -365,6 +379,19 @@ interface location {
 
   /// Location query
   record post-locate-params {
+    /// Confidence level in percent for the accuracy/uncertainty in the location estimate response. If not specified, the default is 68 (this corresponds to a 68% probability that the true position is within the accuracy/uncertainty radius of the location estimate: the higher the number, the greater the confidence level).
+    confidence: option<s32>,
+    /// Indicates that the data in the body is gzip-encoded.
+    content-encoding: option<post-locate-content-encoding-enum>,
+    /// Acceptable fallback options for cell and WLAN positioning. Values `area` and `any` apply to cell based positioning, and value `singleWifi` applies to WLAN based positioning. Both cell and WLAN options may be specified in the same request. If both `area` and `any` are specified, then `area` is ignored.
+    /// 
+    fallback: option<list<post-locate-fallback-item-enum>>,
+    /// Comma-separated list of additional data fields that the service should include in the response if data is available. The query parameter supports the value `altitude`.
+    desired: option<list<post-locate-desired-item-enum>>,
+    /// ID used for correlating customer requests within HERE services. Used for logging and error reporting. Can be any string, but UUID is recommended. It will be echoed in the response.
+    x-request-id: option<string>,
+    /// Comma-separated list of additional data fields that the service should include in the response. If the data is not available, the response contains an error message. The query parameter supports the value `altitude`.
+    required: option<list<post-locate-desired-item-enum>>,
     /// CDMA cells (CDMA2000)
     cdma: option<list<cdma>>,
     client: option<client-info>,

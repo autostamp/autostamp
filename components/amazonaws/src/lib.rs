@@ -935,7 +935,7 @@ fn iface_finding__list_findings_body_sort__to_json(p: &iface_finding::ListFindin
     Value::Object(m)
 }
 
-fn iface_finding__finding_id__to_json(p: &iface_finding::FindingId) -> Value {
+fn iface_finding__id__to_json(p: &iface_finding::Id) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
@@ -962,7 +962,7 @@ fn iface_finding__update_findings_params__to_json(p: &iface_finding::UpdateFindi
     let mut m = Map::new();
     m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
     m.insert("status".into(), Value::String(iface_finding__update_findings_body_status_enum__to_str(&p.status).into()));
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| iface_finding__finding_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| iface_finding__id__to_json(v)).collect()), None => Value::Null });
     m.insert("resource_arn".into(), match (&p.resource_arn) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)

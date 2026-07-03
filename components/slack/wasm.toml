@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:slack"
-version = "0.2.1+slack-1.7.0"
+version = "0.3.0+slack-1.7.0"
 registry = "ghcr.io/autostamp/slack"
 kind = "component"
 file = "build/slack.wasm"

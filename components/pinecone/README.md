@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:pinecone@0.2.1` |
-| Published version | `0.2.1+pinecone-20230406.1` |
+| Package | `autostamp:pinecone@0.3.0` |
+| Published version | `0.3.0+pinecone-20230406.1` |
 | Tag filter | all tags |
 | Operations generated | 15 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

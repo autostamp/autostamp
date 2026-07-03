@@ -11,8 +11,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:braze@0.2.1` |
-| Published version | `0.2.1+braze-1.0.0` |
+| Package | `autostamp:braze@0.3.0` |
+| Published version | `0.3.0+braze-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 31 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

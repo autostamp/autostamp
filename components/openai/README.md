@@ -11,8 +11,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:openai@0.2.1` |
-| Published version | `0.2.1+openai-1.2.0` |
+| Package | `autostamp:openai@0.3.0` |
+| Published version | `0.3.0+openai-1.2.0` |
 | Tag filter | all tags |
 | Operations generated | 28 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

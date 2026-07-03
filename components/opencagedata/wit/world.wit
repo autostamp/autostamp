@@ -1,4 +1,4 @@
-package autostamp:opencagedata@0.2.1;
+package autostamp:opencagedata@0.3.0;
 
 interface v-version {
   record get-v-version-format-params {

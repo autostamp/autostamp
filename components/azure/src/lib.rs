@@ -284,18 +284,26 @@ use serde_json::{Map, Value};
 
 use crate::exports::autostamp::azure::operations as iface_operations;
 
-const OP_OPERATIONS_OPERATIONS_LIST: OpSpec = OpSpec {
+const OP_OPERATIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/providers/Microsoft.Addons/operations",
     fields: &[
+        FieldSpec { snake: "api_version", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
 
+fn iface_operations__list_op_params__to_json(p: &iface_operations::ListOpParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    Value::Object(m)
+}
+
 impl iface_operations::Guest for crate::Component {
-    fn operations_list() -> Result<String, String> {
-        dispatch(&OP_OPERATIONS_OPERATIONS_LIST, Value::Object(Map::new()))
+    fn list_op(params: iface_operations::ListOpParams) -> Result<String, String> {
+        let json = iface_operations__list_op_params__to_json(&params);
+        dispatch(&OP_OPERATIONS_LIST_OP, json)
     }
 }
 use crate::exports::autostamp::azure::addon_status as iface_addon_status;
@@ -304,14 +312,24 @@ const OP_ADDON_STATUS_SUPPORT_PLAN_TYPES_LIST_INFO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/canonical/listSupportPlanInfo",
     fields: &[
+        FieldSpec { snake: "api_version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_addon_status__support_plan_types_list_info_params__to_json(p: &iface_addon_status::SupportPlanTypesListInfoParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_addon_status::Guest for crate::Component {
-    fn support_plan_types_list_info() -> Result<String, String> {
-        dispatch(&OP_ADDON_STATUS_SUPPORT_PLAN_TYPES_LIST_INFO, Value::Object(Map::new()))
+    fn support_plan_types_list_info(params: iface_addon_status::SupportPlanTypesListInfoParams) -> Result<String, String> {
+        let json = iface_addon_status__support_plan_types_list_info_params__to_json(&params);
+        dispatch(&OP_ADDON_STATUS_SUPPORT_PLAN_TYPES_LIST_INFO, json)
     }
 }
 use crate::exports::autostamp::azure::addon_details as iface_addon_details;
@@ -320,6 +338,10 @@ const OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
     fields: &[
+        FieldSpec { snake: "api_version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
+        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
+        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -329,17 +351,41 @@ const OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_CREATE_OR_UPDATE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
     fields: &[
+        FieldSpec { snake: "api_version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
+        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
+        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_addon_details__support_plan_types_get_params__to_json(p: &iface_addon_details::SupportPlanTypesGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
+    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_addon_details__support_plan_types_create_or_update_params__to_json(p: &iface_addon_details::SupportPlanTypesCreateOrUpdateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
+    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
+    Value::Object(m)
+}
+
 impl iface_addon_details::Guest for crate::Component {
-    fn support_plan_types_get() -> Result<String, String> {
-        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_GET, Value::Object(Map::new()))
+    fn support_plan_types_get(params: iface_addon_details::SupportPlanTypesGetParams) -> Result<String, String> {
+        let json = iface_addon_details__support_plan_types_get_params__to_json(&params);
+        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_GET, json)
     }
-    fn support_plan_types_create_or_update() -> Result<String, String> {
-        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_CREATE_OR_UPDATE, Value::Object(Map::new()))
+    fn support_plan_types_create_or_update(params: iface_addon_details::SupportPlanTypesCreateOrUpdateParams) -> Result<String, String> {
+        let json = iface_addon_details__support_plan_types_create_or_update_params__to_json(&params);
+        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_CREATE_OR_UPDATE, json)
     }
 }
 use crate::exports::autostamp::azure::subscriptions as iface_subscriptions;
@@ -348,14 +394,28 @@ const OP_SUBSCRIPTIONS_SUPPORT_PLAN_TYPES_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
     fields: &[
+        FieldSpec { snake: "api_version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
+        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
+        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_subscriptions__support_plan_types_delete_params__to_json(p: &iface_subscriptions::SupportPlanTypesDeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
+    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
+    Value::Object(m)
+}
+
 impl iface_subscriptions::Guest for crate::Component {
-    fn support_plan_types_delete() -> Result<String, String> {
-        dispatch(&OP_SUBSCRIPTIONS_SUPPORT_PLAN_TYPES_DELETE, Value::Object(Map::new()))
+    fn support_plan_types_delete(params: iface_subscriptions::SupportPlanTypesDeleteParams) -> Result<String, String> {
+        let json = iface_subscriptions__support_plan_types_delete_params__to_json(&params);
+        dispatch(&OP_SUBSCRIPTIONS_SUPPORT_PLAN_TYPES_DELETE, json)
     }
 }
 

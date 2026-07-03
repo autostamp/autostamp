@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:interactivebrokers"
-version = "0.2.1+interactivebrokers-1.0.0"
+version = "0.3.0+interactivebrokers-1.0.0"
 registry = "ghcr.io/autostamp/interactivebrokers"
 kind = "component"
 file = "build/interactivebrokers.wasm"

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:graphhopper"
-version = "0.2.1+graphhopper-1.0.0"
+version = "0.3.0+graphhopper-1.0.0"
 registry = "ghcr.io/autostamp/graphhopper"
 kind = "component"
 file = "build/graphhopper.wasm"

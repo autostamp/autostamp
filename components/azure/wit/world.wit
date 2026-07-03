@@ -1,25 +1,65 @@
-package autostamp:azure@0.2.1;
+package autostamp:azure@0.3.0;
 
 interface operations {
-  operations-list: func() -> result<string, string>;
+  record list-op-params {
+    /// Client API version.
+    api-version: string
+  }
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 
 interface addon-status {
-  support-plan-types-list-info: func() -> result<string, string>;
+  record support-plan-types-list-info-params {
+    /// Client API version.
+    api-version: string,
+    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
+    subscription-id: string
+  }
+  support-plan-types-list-info: func(params: support-plan-types-list-info-params) -> result<string, string>;
 
 }
 
 interface addon-details {
-  support-plan-types-get: func() -> result<string, string>;
+  record support-plan-types-get-params {
+    /// Client API version.
+    api-version: string,
+    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
+    subscription-id: string,
+    /// The support plan type. For now the only valid type is "canonical".
+    provider-name: string,
+    /// The Canonical support plan type.
+    plan-type-name: string
+  }
+  support-plan-types-get: func(params: support-plan-types-get-params) -> result<string, string>;
 
-  support-plan-types-create-or-update: func() -> result<string, string>;
+  record support-plan-types-create-or-update-params {
+    /// Client API version.
+    api-version: string,
+    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
+    subscription-id: string,
+    /// The support plan type. For now the only valid type is "canonical".
+    provider-name: string,
+    /// The Canonical support plan type.
+    plan-type-name: string
+  }
+  support-plan-types-create-or-update: func(params: support-plan-types-create-or-update-params) -> result<string, string>;
 
 }
 
 interface subscriptions {
-  support-plan-types-delete: func() -> result<string, string>;
+  record support-plan-types-delete-params {
+    /// Client API version.
+    api-version: string,
+    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
+    subscription-id: string,
+    /// The support plan type. For now the only valid type is "canonical".
+    provider-name: string,
+    /// The Canonical support plan type.
+    plan-type-name: string
+  }
+  support-plan-types-delete: func(params: support-plan-types-delete-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

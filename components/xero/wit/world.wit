@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `OAuth2` | `Authorization: Bearer <secret>` |
-package autostamp:xero@0.2.1;
+package autostamp:xero@0.3.0;
 
 interface accounting {
   enum account-bank-account-type-enum {
@@ -1480,6 +1480,8 @@ interface accounting {
 
   /// Retrieves the full chart of accounts
   record get-accounts-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -1601,23 +1603,35 @@ interface accounting {
 
   /// Retrieves any spent or received money transactions
   record get-bank-transactions-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
     order: option<string>,
     /// Up to 100 bank transactions will be returned in a single API call with line items details
-    page: option<s32>
+    page: option<s32>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-bank-transactions: func(params: get-bank-transactions-params) -> result<string, string>;
 
   /// Updates or creates one or more spent or received money transaction
   record update-or-create-bank-transactions-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     bank-transactions: option<list<bank-transaction>>
   }
   update-or-create-bank-transactions: func(params: update-or-create-bank-transactions-params) -> result<string, string>;
 
   /// Creates one or more spent or received money transaction
   record create-bank-transactions-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     bank-transactions: option<list<bank-transaction>>
   }
   create-bank-transactions: func(params: create-bank-transactions-params) -> result<string, string>;
@@ -1625,7 +1639,9 @@ interface accounting {
   /// Retrieves a single spent or received money transaction by using a unique bank transaction Id
   record get-bank-transaction-params {
     /// Xero generated unique identifier for a bank transaction
-    bank-transaction-id: string
+    bank-transaction-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-bank-transaction: func(params: get-bank-transaction-params) -> result<string, string>;
 
@@ -1633,6 +1649,8 @@ interface accounting {
   record update-bank-transaction-params {
     /// Xero generated unique identifier for a bank transaction
     bank-transaction-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     bank-transactions: option<list<bank-transaction>>
   }
   update-bank-transaction: func(params: update-bank-transaction-params) -> result<string, string>;
@@ -1701,6 +1719,8 @@ interface accounting {
 
   /// Retrieves all bank transfers
   record get-bank-transfers-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -1783,6 +1803,8 @@ interface accounting {
 
   /// Retrieves either one or many batch payments for invoices
   record get-batch-payments-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -1792,6 +1814,8 @@ interface accounting {
 
   /// Creates one or many batch payments for invoices
   record create-batch-payment-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     batch-payments: option<list<batch-payment>>
   }
   create-batch-payment: func(params: create-batch-payment-params) -> result<string, string>;
@@ -1903,6 +1927,8 @@ interface accounting {
 
   /// Retrieves all contacts in a Xero organisation
   record get-contacts-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -1918,12 +1944,16 @@ interface accounting {
 
   /// Updates or creates one or more contacts in a Xero organisation
   record update-or-create-contacts-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     contacts: option<list<contact>>
   }
   update-or-create-contacts: func(params: update-or-create-contacts-params) -> result<string, string>;
 
   /// Creates multiple contacts (bulk) in a Xero organisation
   record create-contacts-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     contacts: option<list<contact>>
   }
   create-contacts: func(params: create-contacts-params) -> result<string, string>;
@@ -2019,23 +2049,35 @@ interface accounting {
 
   /// Retrieves any credit notes
   record get-credit-notes-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
     order: option<string>,
     /// e.g. page=1 – Up to 100 credit notes will be returned in a single API call with line items shown for each credit note
-    page: option<s32>
+    page: option<s32>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-credit-notes: func(params: get-credit-notes-params) -> result<string, string>;
 
   /// Updates or creates one or more credit notes
   record update-or-create-credit-notes-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     credit-notes: option<list<credit-note>>
   }
   update-or-create-credit-notes: func(params: update-or-create-credit-notes-params) -> result<string, string>;
 
   /// Creates a new credit note
   record create-credit-notes-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     credit-notes: option<list<credit-note>>
   }
   create-credit-notes: func(params: create-credit-notes-params) -> result<string, string>;
@@ -2043,7 +2085,9 @@ interface accounting {
   /// Retrieves a specific credit note using a unique credit note Id
   record get-credit-note-params {
     /// Unique identifier for a Credit Note
-    credit-note-id: string
+    credit-note-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-credit-note: func(params: get-credit-note-params) -> result<string, string>;
 
@@ -2051,6 +2095,8 @@ interface accounting {
   record update-credit-note-params {
     /// Unique identifier for a Credit Note
     credit-note-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     credit-notes: option<list<credit-note>>
   }
   update-credit-note: func(params: update-credit-note-params) -> result<string, string>;
@@ -2059,6 +2105,8 @@ interface accounting {
   record create-credit-note-allocation-params {
     /// Unique identifier for a Credit Note
     credit-note-id: string,
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     allocations: option<list<allocation>>
   }
   create-credit-note-allocation: func(params: create-credit-note-allocation-params) -> result<string, string>;
@@ -2106,7 +2154,9 @@ interface accounting {
     /// Unique identifier for a Credit Note
     credit-note-id: string,
     /// Name of the file you are attaching to Credit Note
-    file-name: string
+    file-name: string,
+    /// Allows an attachment to be seen by the end customer within their online invoice
+    include-online: option<bool>
   }
   create-credit-note-attachment-by-file-name: func(params: create-credit-note-attachment-by-file-name-params) -> result<string, string>;
 
@@ -2151,6 +2201,8 @@ interface accounting {
 
   /// Retrieves employees used in Xero payrun
   record get-employees-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -2160,12 +2212,16 @@ interface accounting {
 
   /// Creates a single new employees used in Xero payrun
   record update-or-create-employees-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     employees: option<list<employee>>
   }
   update-or-create-employees: func(params: update-or-create-employees-params) -> result<string, string>;
 
   /// Creates new employees used in Xero payrun
   record create-employees-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     employees: option<list<employee>>
   }
   create-employees: func(params: create-employees-params) -> result<string, string>;
@@ -2179,6 +2235,8 @@ interface accounting {
 
   /// Retrieves expense claims
   record get-expense-claims-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -2227,6 +2285,8 @@ interface accounting {
 
   /// Retrieves sales invoices or purchase bills
   record get-invoices-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -2244,18 +2304,28 @@ interface accounting {
     /// e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response
     include-archived: option<bool>,
     /// When set to true you'll only retrieve Invoices created by your app
-    created-by-my-app: option<bool>
+    created-by-my-app: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-invoices: func(params: get-invoices-params) -> result<string, string>;
 
   /// Updates or creates one or more sales invoices or purchase bills
   record update-or-create-invoices-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     invoices: option<list<invoice>>
   }
   update-or-create-invoices: func(params: update-or-create-invoices-params) -> result<string, string>;
 
   /// Creates one or more sales invoices or purchase bills
   record create-invoices-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     invoices: option<list<invoice>>
   }
   create-invoices: func(params: create-invoices-params) -> result<string, string>;
@@ -2263,7 +2333,9 @@ interface accounting {
   /// Retrieves a specific sales invoice or purchase bill using a unique invoice Id
   record get-invoice-params {
     /// Unique identifier for an Invoice
-    invoice-id: string
+    invoice-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-invoice: func(params: get-invoice-params) -> result<string, string>;
 
@@ -2271,6 +2343,8 @@ interface accounting {
   record update-invoice-params {
     /// Unique identifier for an Invoice
     invoice-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     invoices: option<list<invoice>>
   }
   update-invoice: func(params: update-invoice-params) -> result<string, string>;
@@ -2318,7 +2392,9 @@ interface accounting {
     /// Unique identifier for an Invoice
     invoice-id: string,
     /// Name of the file you are attaching
-    file-name: string
+    file-name: string,
+    /// Allows an attachment to be seen by the end customer within their online invoice
+    include-online: option<bool>
   }
   create-invoice-attachment-by-file-name: func(params: create-invoice-attachment-by-file-name-params) -> result<string, string>;
 
@@ -2362,21 +2438,33 @@ interface accounting {
 
   /// Retrieves items
   record get-items-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
-    order: option<string>
+    order: option<string>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-items: func(params: get-items-params) -> result<string, string>;
 
   /// Updates or creates one or more items
   record update-or-create-items-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     items: option<list<item>>
   }
   update-or-create-items: func(params: update-or-create-items-params) -> result<string, string>;
 
   /// Creates one or more items
   record create-items-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     items: option<list<item>>
   }
   create-items: func(params: create-items-params) -> result<string, string>;
@@ -2384,7 +2472,9 @@ interface accounting {
   /// Retrieves a specific item using a unique item Id
   record get-item-params {
     /// Unique identifier for an Item
-    item-id: string
+    item-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-item: func(params: get-item-params) -> result<string, string>;
 
@@ -2392,6 +2482,8 @@ interface accounting {
   record update-item-params {
     /// Unique identifier for an Item
     item-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     items: option<list<item>>
   }
   update-item: func(params: update-item-params) -> result<string, string>;
@@ -2420,6 +2512,8 @@ interface accounting {
 
   /// Retrieves journals
   record get-journals-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Offset by a specified journal number. e.g. journals with a JournalNumber greater than the offset will be returned
     offset: option<s32>,
     /// Filter to retrieve journals on a cash basis. Journals are returned on an accrual basis by default.
@@ -2502,6 +2596,8 @@ interface accounting {
 
   /// Retrieves manual journals
   record get-manual-journals-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -2513,12 +2609,16 @@ interface accounting {
 
   /// Updates or creates a single manual journal
   record update-or-create-manual-journals-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     manual-journals: option<list<manual-journal>>
   }
   update-or-create-manual-journals: func(params: update-or-create-manual-journals-params) -> result<string, string>;
 
   /// Creates one or more manual journals
   record create-manual-journals-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     manual-journals: option<list<manual-journal>>
   }
   create-manual-journals: func(params: create-manual-journals-params) -> result<string, string>;
@@ -2615,12 +2715,16 @@ interface accounting {
 
   /// Retrieves overpayments
   record get-overpayments-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
     order: option<string>,
     /// e.g. page=1 – Up to 100 overpayments will be returned in a single API call with line items shown for each overpayment
-    page: option<s32>
+    page: option<s32>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-overpayments: func(params: get-overpayments-params) -> result<string, string>;
 
@@ -2635,6 +2739,8 @@ interface accounting {
   record create-overpayment-allocations-params {
     /// Unique identifier for a Overpayment
     overpayment-id: string,
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     allocations: option<list<allocation>>
   }
   create-overpayment-allocations: func(params: create-overpayment-allocations-params) -> result<string, string>;
@@ -2665,6 +2771,8 @@ interface accounting {
 
   /// Retrieves payments for invoices and credit notes
   record get-payments-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
@@ -2726,6 +2834,8 @@ interface accounting {
 
   /// Creates multiple payments for invoices or credit notes
   record create-payments-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     payments: option<list<payment>>
   }
   create-payments: func(params: create-payments-params) -> result<string, string>;
@@ -2763,12 +2873,16 @@ interface accounting {
 
   /// Retrieves prepayments
   record get-prepayments-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
     order: option<string>,
     /// e.g. page=1 – Up to 100 prepayments will be returned in a single API call with line items shown for each overpayment
-    page: option<s32>
+    page: option<s32>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-prepayments: func(params: get-prepayments-params) -> result<string, string>;
 
@@ -2783,6 +2897,8 @@ interface accounting {
   record create-prepayment-allocations-params {
     /// Unique identifier for Prepayment
     prepayment-id: string,
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     allocations: option<list<allocation>>
   }
   create-prepayment-allocations: func(params: create-prepayment-allocations-params) -> result<string, string>;
@@ -2804,6 +2920,8 @@ interface accounting {
 
   /// Retrieves purchase orders
   record get-purchase-orders-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by purchase order status
     status: option<get-purchase-orders-status-enum>,
     /// Filter by purchase order date (e.g. GET https://.../PurchaseOrders?DateFrom=2015-12-01&DateTo=2015-12-31
@@ -2819,12 +2937,16 @@ interface accounting {
 
   /// Updates or creates one or more purchase orders
   record update-or-create-purchase-orders-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     purchase-orders: option<list<purchase-order>>
   }
   update-or-create-purchase-orders: func(params: update-or-create-purchase-orders-params) -> result<string, string>;
 
   /// Creates one or more purchase orders
   record create-purchase-orders-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     purchase-orders: option<list<purchase-order>>
   }
   create-purchase-orders: func(params: create-purchase-orders-params) -> result<string, string>;
@@ -2922,6 +3044,8 @@ interface accounting {
 
   /// Retrieves sales quotes
   record get-quotes-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter for quotes after a particular date
     date-from: option<string>,
     /// Filter for quotes before a particular date
@@ -2945,12 +3069,16 @@ interface accounting {
 
   /// Updates or creates one or more quotes
   record update-or-create-quotes-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     quotes: option<list<quote>>
   }
   update-or-create-quotes: func(params: update-or-create-quotes-params) -> result<string, string>;
 
   /// Create one or more quotes
   record create-quotes-params {
+    /// If false return 200 OK and mix of successfully created objects and any with validation errors
+    summarize-errors: option<bool>,
     quotes: option<list<quote>>
   }
   create-quotes: func(params: create-quotes-params) -> result<string, string>;
@@ -3041,15 +3169,21 @@ interface accounting {
 
   /// Retrieves draft expense claim receipts for any user
   record get-receipts-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element
-    order: option<string>
+    order: option<string>,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-receipts: func(params: get-receipts-params) -> result<string, string>;
 
   /// Creates draft expense claim receipts for any user
   record create-receipt-params {
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     receipts: option<list<receipt>>
   }
   create-receipt: func(params: create-receipt-params) -> result<string, string>;
@@ -3057,7 +3191,9 @@ interface accounting {
   /// Retrieves a specific draft expense claim receipt by using a unique receipt Id
   record get-receipt-params {
     /// Unique identifier for a Receipt
-    receipt-id: string
+    receipt-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>
   }
   get-receipt: func(params: get-receipt-params) -> result<string, string>;
 
@@ -3065,6 +3201,8 @@ interface accounting {
   record update-receipt-params {
     /// Unique identifier for a Receipt
     receipt-id: string,
+    /// e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts
+    unitdp: option<s32>,
     receipts: option<list<receipt>>
   }
   update-receipt: func(params: update-receipt-params) -> result<string, string>;
@@ -3460,6 +3598,8 @@ interface accounting {
 
   /// Retrieves users
   record get-users-params {
+    /// Only records created or modified since this timestamp will be returned
+    if-modified-since: option<string>,
     /// Filter by an any element
     where: option<string>,
     /// Order by an any element

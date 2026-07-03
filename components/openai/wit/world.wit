@@ -1,4 +1,4 @@
-package autostamp:openai@0.2.1;
+package autostamp:openai@0.3.0;
 
 interface open-ai {
   enum chat-completion-request-message-role-enum {

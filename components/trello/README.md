@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:trello@0.2.1` |
-| Published version | `0.2.1+trello-1.0` |
+| Package | `autostamp:trello@0.3.0` |
+| Published version | `0.3.0+trello-1.0` |
 | Tag filter | all tags |
 | Operations generated | 324 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — **triggered**, 300 fields pruned |

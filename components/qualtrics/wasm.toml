@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:qualtrics"
-version = "0.2.1+qualtrics-0.2"
+version = "0.3.0+qualtrics-0.2"
 registry = "ghcr.io/autostamp/qualtrics"
 kind = "component"
 file = "build/qualtrics.wasm"

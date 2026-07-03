@@ -1,4 +1,4 @@
-package autostamp:netlify@0.2.1;
+package autostamp:netlify@0.3.0;
 
 interface account-membership {
   enum account-setup-period-enum {
@@ -43,7 +43,9 @@ interface account-type {
 interface audit-log {
   record list-account-audit-events-params {
     query: option<string>,
-    log-type: option<string>
+    log-type: option<string>,
+    page: option<s32>,
+    per-page: option<s32>
   }
   list-account-audit-events: func(params: list-account-audit-events-params) -> result<string, string>;
 
@@ -182,7 +184,11 @@ interface build {
 
   notify-build-start: func() -> result<string, string>;
 
-  list-site-builds: func() -> result<string, string>;
+  record list-site-builds-params {
+    page: option<s32>,
+    per-page: option<s32>
+  }
+  list-site-builds: func(params: list-site-builds-params) -> result<string, string>;
 
   record create-site-build-params {
     clear-cache: option<bool>,
@@ -211,7 +217,7 @@ interface deploy-key {
 }
 
 interface deploy {
-  record deploy-files-files {
+  record files-files {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
@@ -221,12 +227,12 @@ interface deploy {
     name: option<string>
   }
 
-  record deploy-files-functions {
+  record files-functions {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
 
-  record deploy-files-functions-config {
+  record files-functions-config {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
@@ -256,18 +262,22 @@ interface deploy {
   }
   unlock-deploy: func(params: unlock-deploy-params) -> result<string, string>;
 
-  list-site-deploys: func() -> result<string, string>;
+  record list-site-deploys-params {
+    page: option<s32>,
+    per-page: option<s32>
+  }
+  list-site-deploys: func(params: list-site-deploys-params) -> result<string, string>;
 
   record create-site-deploy-params {
     title: option<string>,
     async-op: option<bool>,
     branch: option<string>,
     draft: option<bool>,
-    files: option<deploy-files-files>,
+    files: option<files-files>,
     framework: option<string>,
     function-schedules: option<list<function-schedule>>,
-    functions: option<deploy-files-functions>,
-    functions-config: option<deploy-files-functions-config>
+    functions: option<files-functions>,
+    functions-config: option<files-functions-config>
   }
   create-site-deploy: func(params: create-site-deploy-params) -> result<string, string>;
 
@@ -283,11 +293,11 @@ interface deploy {
     async-op: option<bool>,
     branch: option<string>,
     draft: option<bool>,
-    files: option<deploy-files-files>,
+    files: option<files-files>,
     framework: option<string>,
     function-schedules: option<list<function-schedule>>,
-    functions: option<deploy-files-functions>,
-    functions-config: option<deploy-files-functions-config>
+    functions: option<files-functions>,
+    functions-config: option<files-functions-config>
   }
   update-site-deploy: func(params: update-site-deploy-params) -> result<string, string>;
 
@@ -335,6 +345,7 @@ interface function {
     name: string,
     runtime: option<string>,
     size: option<s32>,
+    x-nf-retry-count: option<s32>,
     body: string
   }
   upload-deploy-function: func(params: upload-deploy-function-params) -> result<string, string>;
@@ -416,17 +427,23 @@ interface dns-zone {
 
 interface submission {
   record list-form-submissions-params {
-    form-id: string
+    form-id: string,
+    page: option<s32>,
+    per-page: option<s32>
   }
   list-form-submissions: func(params: list-form-submissions-params) -> result<string, string>;
 
   record list-site-submissions-params {
-    site-id: string
+    site-id: string,
+    page: option<s32>,
+    per-page: option<s32>
   }
   list-site-submissions: func(params: list-site-submissions-params) -> result<string, string>;
 
   record list-form-submission-params {
-    query: option<string>
+    query: option<string>,
+    page: option<s32>,
+    per-page: option<s32>
   }
   list-form-submission: func(params: list-form-submission-params) -> result<string, string>;
 
@@ -521,7 +538,9 @@ interface site {
 
   record list-sites-params {
     name: option<string>,
-    filter: option<list-sites-filter-enum>
+    filter: option<list-sites-filter-enum>,
+    page: option<s32>,
+    per-page: option<s32>
   }
   list-sites: func(params: list-sites-params) -> result<string, string>;
 
@@ -546,7 +565,9 @@ interface site {
 
   record list-sites-for-account-params {
     name: option<string>,
-    account-slug: string
+    account-slug: string,
+    page: option<s32>,
+    per-page: option<s32>
   }
   list-sites-for-account: func(params: list-sites-for-account-params) -> result<string, string>;
 
@@ -707,7 +728,7 @@ interface sni-certificate {
 }
 
 interface split-test {
-  record split-test-setup-branch-tests {
+  record setup-branch-tests {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
@@ -715,14 +736,14 @@ interface split-test {
   get-split-tests: func() -> result<string, string>;
 
   record create-split-test-params {
-    branch-tests: option<split-test-setup-branch-tests>
+    branch-tests: option<setup-branch-tests>
   }
   create-split-test: func(params: create-split-test-params) -> result<string, string>;
 
   get-split-test: func() -> result<string, string>;
 
   record update-split-test-params {
-    branch-tests: option<split-test-setup-branch-tests>
+    branch-tests: option<setup-branch-tests>
   }
   update-split-test: func(params: update-split-test-params) -> result<string, string>;
 

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:klarna"
-version = "0.2.1+klarna-v0"
+version = "0.3.0+klarna-v0"
 registry = "ghcr.io/autostamp/klarna"
 kind = "component"
 file = "build/klarna.wasm"

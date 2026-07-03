@@ -1,4 +1,4 @@
-package autostamp:stormglass@0.2.1;
+package autostamp:stormglass@0.3.0;
 
 interface forecast {
   /// Get hourly forecasts by coordinates

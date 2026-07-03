@@ -288,6 +288,8 @@ const OP_ALBUMS_GET_MULTIPLE_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/albums",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -298,6 +300,8 @@ const OP_ALBUMS_GET_AN_ALBUM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/albums/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -308,6 +312,10 @@ const OP_ALBUMS_GET_AN_ALBUMS_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/albums/{id}/tracks",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -319,6 +327,8 @@ const OP_ALBUMS_GET_NEW_RELEASES: OpSpec = OpSpec {
     path_template: "/browse/new-releases",
     fields: &[
         FieldSpec { snake: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -329,6 +339,9 @@ const OP_ALBUMS_GET_USERS_SAVED_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/albums",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -339,7 +352,7 @@ const OP_ALBUMS_SAVE_ALBUMS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/albums",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -350,7 +363,7 @@ const OP_ALBUMS_REMOVE_ALBUMS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/albums",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -361,46 +374,90 @@ const OP_ALBUMS_CHECK_USERS_SAVED_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/albums/contains",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_albums__get_multiple_albums_params__to_json(p: &iface_albums::GetMultipleAlbumsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__get_an_album_params__to_json(p: &iface_albums::GetAnAlbumParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__get_an_albums_tracks_params__to_json(p: &iface_albums::GetAnAlbumsTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_albums__get_new_releases_params__to_json(p: &iface_albums::GetNewReleasesParams) -> Value {
     let mut m = Map::new();
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__get_users_saved_albums_params__to_json(p: &iface_albums::GetUsersSavedAlbumsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_albums__save_albums_user_params__to_json(p: &iface_albums::SaveAlbumsUserParams) -> Value {
     let mut m = Map::new();
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
 fn iface_albums__remove_albums_user_params__to_json(p: &iface_albums::RemoveAlbumsUserParams) -> Value {
     let mut m = Map::new();
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_albums__check_users_saved_albums_params__to_json(p: &iface_albums::CheckUsersSavedAlbumsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
 impl iface_albums::Guest for crate::Component {
-    fn get_multiple_albums() -> Result<String, String> {
-        dispatch(&OP_ALBUMS_GET_MULTIPLE_ALBUMS, Value::Object(Map::new()))
+    fn get_multiple_albums(params: iface_albums::GetMultipleAlbumsParams) -> Result<String, String> {
+        let json = iface_albums__get_multiple_albums_params__to_json(&params);
+        dispatch(&OP_ALBUMS_GET_MULTIPLE_ALBUMS, json)
     }
-    fn get_an_album() -> Result<String, String> {
-        dispatch(&OP_ALBUMS_GET_AN_ALBUM, Value::Object(Map::new()))
+    fn get_an_album(params: iface_albums::GetAnAlbumParams) -> Result<String, String> {
+        let json = iface_albums__get_an_album_params__to_json(&params);
+        dispatch(&OP_ALBUMS_GET_AN_ALBUM, json)
     }
-    fn get_an_albums_tracks() -> Result<String, String> {
-        dispatch(&OP_ALBUMS_GET_AN_ALBUMS_TRACKS, Value::Object(Map::new()))
+    fn get_an_albums_tracks(params: iface_albums::GetAnAlbumsTracksParams) -> Result<String, String> {
+        let json = iface_albums__get_an_albums_tracks_params__to_json(&params);
+        dispatch(&OP_ALBUMS_GET_AN_ALBUMS_TRACKS, json)
     }
     fn get_new_releases(params: iface_albums::GetNewReleasesParams) -> Result<String, String> {
         let json = iface_albums__get_new_releases_params__to_json(&params);
         dispatch(&OP_ALBUMS_GET_NEW_RELEASES, json)
     }
-    fn get_users_saved_albums() -> Result<String, String> {
-        dispatch(&OP_ALBUMS_GET_USERS_SAVED_ALBUMS, Value::Object(Map::new()))
+    fn get_users_saved_albums(params: iface_albums::GetUsersSavedAlbumsParams) -> Result<String, String> {
+        let json = iface_albums__get_users_saved_albums_params__to_json(&params);
+        dispatch(&OP_ALBUMS_GET_USERS_SAVED_ALBUMS, json)
     }
     fn save_albums_user(params: iface_albums::SaveAlbumsUserParams) -> Result<String, String> {
         let json = iface_albums__save_albums_user_params__to_json(&params);
@@ -410,8 +467,9 @@ impl iface_albums::Guest for crate::Component {
         let json = iface_albums__remove_albums_user_params__to_json(&params);
         dispatch(&OP_ALBUMS_REMOVE_ALBUMS_USER, json)
     }
-    fn check_users_saved_albums() -> Result<String, String> {
-        dispatch(&OP_ALBUMS_CHECK_USERS_SAVED_ALBUMS, Value::Object(Map::new()))
+    fn check_users_saved_albums(params: iface_albums::CheckUsersSavedAlbumsParams) -> Result<String, String> {
+        let json = iface_albums__check_users_saved_albums_params__to_json(&params);
+        dispatch(&OP_ALBUMS_CHECK_USERS_SAVED_ALBUMS, json)
     }
 }
 use crate::exports::autostamp::spotify::artists as iface_artists;
@@ -431,6 +489,7 @@ const OP_ARTISTS_GET_AN_ARTIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -441,6 +500,11 @@ const OP_ARTISTS_GET_AN_ARTISTS_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}/albums",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_groups", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -451,6 +515,7 @@ const OP_ARTISTS_GET_AN_ARTISTS_RELATED_ARTISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}/related-artists",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -461,6 +526,8 @@ const OP_ARTISTS_GET_AN_ARTISTS_TOP_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}/top-tracks",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -473,22 +540,55 @@ fn iface_artists__get_multiple_artists_params__to_json(p: &iface_artists::GetMul
     Value::Object(m)
 }
 
+fn iface_artists__get_an_artist_params__to_json(p: &iface_artists::GetAnArtistParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_artists__get_an_artists_albums_params__to_json(p: &iface_artists::GetAnArtistsAlbumsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("include_groups".into(), match (&p.include_groups) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__get_an_artists_related_artists_params__to_json(p: &iface_artists::GetAnArtistsRelatedArtistsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_artists__get_an_artists_top_tracks_params__to_json(p: &iface_artists::GetAnArtistsTopTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_artists::Guest for crate::Component {
     fn get_multiple_artists(params: iface_artists::GetMultipleArtistsParams) -> Result<String, String> {
         let json = iface_artists__get_multiple_artists_params__to_json(&params);
         dispatch(&OP_ARTISTS_GET_MULTIPLE_ARTISTS, json)
     }
-    fn get_an_artist() -> Result<String, String> {
-        dispatch(&OP_ARTISTS_GET_AN_ARTIST, Value::Object(Map::new()))
+    fn get_an_artist(params: iface_artists::GetAnArtistParams) -> Result<String, String> {
+        let json = iface_artists__get_an_artist_params__to_json(&params);
+        dispatch(&OP_ARTISTS_GET_AN_ARTIST, json)
     }
-    fn get_an_artists_albums() -> Result<String, String> {
-        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_ALBUMS, Value::Object(Map::new()))
+    fn get_an_artists_albums(params: iface_artists::GetAnArtistsAlbumsParams) -> Result<String, String> {
+        let json = iface_artists__get_an_artists_albums_params__to_json(&params);
+        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_ALBUMS, json)
     }
-    fn get_an_artists_related_artists() -> Result<String, String> {
-        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_RELATED_ARTISTS, Value::Object(Map::new()))
+    fn get_an_artists_related_artists(params: iface_artists::GetAnArtistsRelatedArtistsParams) -> Result<String, String> {
+        let json = iface_artists__get_an_artists_related_artists_params__to_json(&params);
+        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_RELATED_ARTISTS, json)
     }
-    fn get_an_artists_top_tracks() -> Result<String, String> {
-        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_TOP_TRACKS, Value::Object(Map::new()))
+    fn get_an_artists_top_tracks(params: iface_artists::GetAnArtistsTopTracksParams) -> Result<String, String> {
+        let json = iface_artists__get_an_artists_top_tracks_params__to_json(&params);
+        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_TOP_TRACKS, json)
     }
 }
 use crate::exports::autostamp::spotify::tracks as iface_tracks;
@@ -530,6 +630,9 @@ const OP_TRACKS_GET_USERS_SAVED_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks",
     fields: &[
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -540,7 +643,7 @@ const OP_TRACKS_SAVE_TRACKS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/tracks",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -551,7 +654,7 @@ const OP_TRACKS_REMOVE_TRACKS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/tracks",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -562,6 +665,7 @@ const OP_TRACKS_CHECK_USERS_SAVED_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks/contains",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -573,6 +677,7 @@ const OP_TRACKS_GET_RECOMMENDATIONS: OpSpec = OpSpec {
     path_template: "/recommendations",
     fields: &[
         FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
         FieldSpec { snake: "seed_artists", location: FieldLocation::Query },
         FieldSpec { snake: "seed_genres", location: FieldLocation::Query },
         FieldSpec { snake: "seed_tracks", location: FieldLocation::Query },
@@ -628,6 +733,8 @@ const OP_TRACKS_GET_SEVERAL_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks",
     fields: &[
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -639,6 +746,7 @@ const OP_TRACKS_GET_TRACK: OpSpec = OpSpec {
     path_template: "/tracks/{id}",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -663,21 +771,36 @@ fn iface_tracks__get_audio_features_params__to_json(p: &iface_tracks::GetAudioFe
     Value::Object(m)
 }
 
+fn iface_tracks__get_users_saved_tracks_params__to_json(p: &iface_tracks::GetUsersSavedTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_tracks__save_tracks_user_params__to_json(p: &iface_tracks::SaveTracksUserParams) -> Value {
     let mut m = Map::new();
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
 fn iface_tracks__remove_tracks_user_params__to_json(p: &iface_tracks::RemoveTracksUserParams) -> Value {
     let mut m = Map::new();
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__check_users_saved_tracks_params__to_json(p: &iface_tracks::CheckUsersSavedTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
 fn iface_tracks__get_recommendations_params__to_json(p: &iface_tracks::GetRecommendationsParams) -> Value {
     let mut m = Map::new();
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("seed_artists".into(), Value::String((&p.seed_artists).clone()));
     m.insert("seed_genres".into(), Value::String((&p.seed_genres).clone()));
     m.insert("seed_tracks".into(), Value::String((&p.seed_tracks).clone()));
@@ -726,9 +849,17 @@ fn iface_tracks__get_recommendations_params__to_json(p: &iface_tracks::GetRecomm
     Value::Object(m)
 }
 
+fn iface_tracks__get_several_tracks_params__to_json(p: &iface_tracks::GetSeveralTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
 fn iface_tracks__get_track_params__to_json(p: &iface_tracks::GetTrackParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -745,8 +876,9 @@ impl iface_tracks::Guest for crate::Component {
         let json = iface_tracks__get_audio_features_params__to_json(&params);
         dispatch(&OP_TRACKS_GET_AUDIO_FEATURES, json)
     }
-    fn get_users_saved_tracks() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_USERS_SAVED_TRACKS, Value::Object(Map::new()))
+    fn get_users_saved_tracks(params: iface_tracks::GetUsersSavedTracksParams) -> Result<String, String> {
+        let json = iface_tracks__get_users_saved_tracks_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_USERS_SAVED_TRACKS, json)
     }
     fn save_tracks_user(params: iface_tracks::SaveTracksUserParams) -> Result<String, String> {
         let json = iface_tracks__save_tracks_user_params__to_json(&params);
@@ -756,15 +888,17 @@ impl iface_tracks::Guest for crate::Component {
         let json = iface_tracks__remove_tracks_user_params__to_json(&params);
         dispatch(&OP_TRACKS_REMOVE_TRACKS_USER, json)
     }
-    fn check_users_saved_tracks() -> Result<String, String> {
-        dispatch(&OP_TRACKS_CHECK_USERS_SAVED_TRACKS, Value::Object(Map::new()))
+    fn check_users_saved_tracks(params: iface_tracks::CheckUsersSavedTracksParams) -> Result<String, String> {
+        let json = iface_tracks__check_users_saved_tracks_params__to_json(&params);
+        dispatch(&OP_TRACKS_CHECK_USERS_SAVED_TRACKS, json)
     }
     fn get_recommendations(params: iface_tracks::GetRecommendationsParams) -> Result<String, String> {
         let json = iface_tracks__get_recommendations_params__to_json(&params);
         dispatch(&OP_TRACKS_GET_RECOMMENDATIONS, json)
     }
-    fn get_several_tracks() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_SEVERAL_TRACKS, Value::Object(Map::new()))
+    fn get_several_tracks(params: iface_tracks::GetSeveralTracksParams) -> Result<String, String> {
+        let json = iface_tracks__get_several_tracks_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_SEVERAL_TRACKS, json)
     }
     fn get_track(params: iface_tracks::GetTrackParams) -> Result<String, String> {
         let json = iface_tracks__get_track_params__to_json(&params);
@@ -777,6 +911,8 @@ const OP_AUDIOBOOKS_GET_MULTIPLE_AUDIOBOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audiobooks",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -787,6 +923,8 @@ const OP_AUDIOBOOKS_GET_AN_AUDIOBOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audiobooks/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -797,6 +935,10 @@ const OP_AUDIOBOOKS_GET_AUDIOBOOK_CHAPTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audiobooks/{id}/chapters",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -807,6 +949,8 @@ const OP_AUDIOBOOKS_GET_USERS_SAVED_AUDIOBOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/audiobooks",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -817,6 +961,7 @@ const OP_AUDIOBOOKS_SAVE_AUDIOBOOKS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/audiobooks",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -827,6 +972,7 @@ const OP_AUDIOBOOKS_REMOVE_AUDIOBOOKS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/audiobooks",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -837,33 +983,89 @@ const OP_AUDIOBOOKS_CHECK_USERS_SAVED_AUDIOBOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/audiobooks/contains",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_audiobooks__get_multiple_audiobooks_params__to_json(p: &iface_audiobooks::GetMultipleAudiobooksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__get_an_audiobook_params__to_json(p: &iface_audiobooks::GetAnAudiobookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__get_audiobook_chapters_params__to_json(p: &iface_audiobooks::GetAudiobookChaptersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__get_users_saved_audiobooks_params__to_json(p: &iface_audiobooks::GetUsersSavedAudiobooksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__save_audiobooks_user_params__to_json(p: &iface_audiobooks::SaveAudiobooksUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_audiobooks__remove_audiobooks_user_params__to_json(p: &iface_audiobooks::RemoveAudiobooksUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_audiobooks__check_users_saved_audiobooks_params__to_json(p: &iface_audiobooks::CheckUsersSavedAudiobooksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
 impl iface_audiobooks::Guest for crate::Component {
-    fn get_multiple_audiobooks() -> Result<String, String> {
-        dispatch(&OP_AUDIOBOOKS_GET_MULTIPLE_AUDIOBOOKS, Value::Object(Map::new()))
+    fn get_multiple_audiobooks(params: iface_audiobooks::GetMultipleAudiobooksParams) -> Result<String, String> {
+        let json = iface_audiobooks__get_multiple_audiobooks_params__to_json(&params);
+        dispatch(&OP_AUDIOBOOKS_GET_MULTIPLE_AUDIOBOOKS, json)
     }
-    fn get_an_audiobook() -> Result<String, String> {
-        dispatch(&OP_AUDIOBOOKS_GET_AN_AUDIOBOOK, Value::Object(Map::new()))
+    fn get_an_audiobook(params: iface_audiobooks::GetAnAudiobookParams) -> Result<String, String> {
+        let json = iface_audiobooks__get_an_audiobook_params__to_json(&params);
+        dispatch(&OP_AUDIOBOOKS_GET_AN_AUDIOBOOK, json)
     }
-    fn get_audiobook_chapters() -> Result<String, String> {
-        dispatch(&OP_AUDIOBOOKS_GET_AUDIOBOOK_CHAPTERS, Value::Object(Map::new()))
+    fn get_audiobook_chapters(params: iface_audiobooks::GetAudiobookChaptersParams) -> Result<String, String> {
+        let json = iface_audiobooks__get_audiobook_chapters_params__to_json(&params);
+        dispatch(&OP_AUDIOBOOKS_GET_AUDIOBOOK_CHAPTERS, json)
     }
-    fn get_users_saved_audiobooks() -> Result<String, String> {
-        dispatch(&OP_AUDIOBOOKS_GET_USERS_SAVED_AUDIOBOOKS, Value::Object(Map::new()))
+    fn get_users_saved_audiobooks(params: iface_audiobooks::GetUsersSavedAudiobooksParams) -> Result<String, String> {
+        let json = iface_audiobooks__get_users_saved_audiobooks_params__to_json(&params);
+        dispatch(&OP_AUDIOBOOKS_GET_USERS_SAVED_AUDIOBOOKS, json)
     }
-    fn save_audiobooks_user() -> Result<String, String> {
-        dispatch(&OP_AUDIOBOOKS_SAVE_AUDIOBOOKS_USER, Value::Object(Map::new()))
+    fn save_audiobooks_user(params: iface_audiobooks::SaveAudiobooksUserParams) -> Result<String, String> {
+        let json = iface_audiobooks__save_audiobooks_user_params__to_json(&params);
+        dispatch(&OP_AUDIOBOOKS_SAVE_AUDIOBOOKS_USER, json)
     }
-    fn remove_audiobooks_user() -> Result<String, String> {
-        dispatch(&OP_AUDIOBOOKS_REMOVE_AUDIOBOOKS_USER, Value::Object(Map::new()))
+    fn remove_audiobooks_user(params: iface_audiobooks::RemoveAudiobooksUserParams) -> Result<String, String> {
+        let json = iface_audiobooks__remove_audiobooks_user_params__to_json(&params);
+        dispatch(&OP_AUDIOBOOKS_REMOVE_AUDIOBOOKS_USER, json)
     }
-    fn check_users_saved_audiobooks() -> Result<String, String> {
-        dispatch(&OP_AUDIOBOOKS_CHECK_USERS_SAVED_AUDIOBOOKS, Value::Object(Map::new()))
+    fn check_users_saved_audiobooks(params: iface_audiobooks::CheckUsersSavedAudiobooksParams) -> Result<String, String> {
+        let json = iface_audiobooks__check_users_saved_audiobooks_params__to_json(&params);
+        dispatch(&OP_AUDIOBOOKS_CHECK_USERS_SAVED_AUDIOBOOKS, json)
     }
 }
 use crate::exports::autostamp::spotify::categories as iface_categories;
@@ -874,6 +1076,8 @@ const OP_CATEGORIES_GET_CATEGORIES: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "country", location: FieldLocation::Query },
         FieldSpec { snake: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -897,6 +1101,8 @@ fn iface_categories__get_categories_params__to_json(p: &iface_categories::GetCat
     let mut m = Map::new();
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -926,6 +1132,8 @@ const OP_PLAYLISTS_GET_A_CATEGORIES_PLAYLISTS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "category_id", location: FieldLocation::Path },
         FieldSpec { snake: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -939,6 +1147,8 @@ const OP_PLAYLISTS_GET_FEATURED_PLAYLISTS: OpSpec = OpSpec {
         FieldSpec { snake: "country", location: FieldLocation::Query },
         FieldSpec { snake: "locale", location: FieldLocation::Query },
         FieldSpec { snake: "timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -949,6 +1159,7 @@ const OP_PLAYLISTS_GET_A_LIST_OF_CURRENT_USERS_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/playlists",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
@@ -960,7 +1171,10 @@ const OP_PLAYLISTS_GET_PLAYLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -971,6 +1185,7 @@ const OP_PLAYLISTS_CHANGE_PLAYLIST_DETAILS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
         FieldSpec { snake: "collaborative", location: FieldLocation::Body },
         FieldSpec { snake: "description", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
@@ -985,6 +1200,7 @@ const OP_PLAYLISTS_GET_PLAYLIST_COVER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/images",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -995,6 +1211,7 @@ const OP_PLAYLISTS_UPLOAD_CUSTOM_PLAYLIST_COVER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}/images",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1005,7 +1222,12 @@ const OP_PLAYLISTS_GET_PLAYLISTS_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
         FieldSpec { snake: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1016,6 +1238,7 @@ const OP_PLAYLISTS_ADD_TRACKS_TO_PLAYLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
         FieldSpec { snake: "position", location: FieldLocation::Query },
         FieldSpec { snake: "uris", location: FieldLocation::Query },
     ],
@@ -1028,6 +1251,7 @@ const OP_PLAYLISTS_REORDER_OR_REPLACE_PLAYLISTS_TRACKS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
         FieldSpec { snake: "uris", location: FieldLocation::Query },
         FieldSpec { snake: "insert_before", location: FieldLocation::Body },
         FieldSpec { snake: "range_length", location: FieldLocation::Body },
@@ -1043,6 +1267,7 @@ const OP_PLAYLISTS_REMOVE_TRACKS_PLAYLIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
         FieldSpec { snake: "snapshot_id", location: FieldLocation::Body },
         FieldSpec { snake: "tracks", location: FieldLocation::Body },
     ],
@@ -1055,6 +1280,8 @@ const OP_PLAYLISTS_GET_LIST_USERS_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/playlists",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
@@ -1066,6 +1293,7 @@ const OP_PLAYLISTS_CREATE_PLAYLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{user_id}/playlists",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
         FieldSpec { snake: "collaborative", location: FieldLocation::Body },
         FieldSpec { snake: "description", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
@@ -1086,6 +1314,8 @@ fn iface_playlists__get_a_categories_playlists_params__to_json(p: &iface_playlis
     let mut m = Map::new();
     m.insert("category_id".into(), Value::String((&p.category_id).clone()));
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1094,23 +1324,30 @@ fn iface_playlists__get_featured_playlists_params__to_json(p: &iface_playlists::
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_playlists__get_a_list_of_current_users_playlists_params__to_json(p: &iface_playlists::GetAListOfCurrentUsersPlaylistsParams) -> Value {
     let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_playlists__get_playlist_params__to_json(p: &iface_playlists::GetPlaylistParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additional_types".into(), match (&p.additional_types) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_playlists__change_playlist_details_params__to_json(p: &iface_playlists::ChangePlaylistDetailsParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("collaborative".into(), match (&p.collaborative) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1118,14 +1355,32 @@ fn iface_playlists__change_playlist_details_params__to_json(p: &iface_playlists:
     Value::Object(m)
 }
 
+fn iface_playlists__get_playlist_cover_params__to_json(p: &iface_playlists::GetPlaylistCoverParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_playlists__upload_custom_playlist_cover_params__to_json(p: &iface_playlists::UploadCustomPlaylistCoverParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_playlists__get_playlists_tracks_params__to_json(p: &iface_playlists::GetPlaylistsTracksParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("additional_types".into(), match (&p.additional_types) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_playlists__add_tracks_to_playlist_params__to_json(p: &iface_playlists::AddTracksToPlaylistParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("position".into(), match (&p.position) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("uris".into(), match (&p.uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -1133,6 +1388,7 @@ fn iface_playlists__add_tracks_to_playlist_params__to_json(p: &iface_playlists::
 
 fn iface_playlists__reorder_or_replace_playlists_tracks_params__to_json(p: &iface_playlists::ReorderOrReplacePlaylistsTracksParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("uris".into(), match (&p.uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("insert_before".into(), match (&p.insert_before) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("range_length".into(), match (&p.range_length) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1143,6 +1399,7 @@ fn iface_playlists__reorder_or_replace_playlists_tracks_params__to_json(p: &ifac
 
 fn iface_playlists__remove_tracks_playlist_params__to_json(p: &iface_playlists::RemoveTracksPlaylistParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("snapshot_id".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tracks".into(), Value::Array((&p.tracks).iter().map(|v| iface_playlists__remove_tracks_playlist_body_tracks_item__to_json(v)).collect()));
     Value::Object(m)
@@ -1150,12 +1407,15 @@ fn iface_playlists__remove_tracks_playlist_params__to_json(p: &iface_playlists::
 
 fn iface_playlists__get_list_users_playlists_params__to_json(p: &iface_playlists::GetListUsersPlaylistsParams) -> Value {
     let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_playlists__create_playlist_params__to_json(p: &iface_playlists::CreatePlaylistParams) -> Value {
     let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     m.insert("collaborative".into(), match (&p.collaborative) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
@@ -1184,11 +1444,13 @@ impl iface_playlists::Guest for crate::Component {
         let json = iface_playlists__change_playlist_details_params__to_json(&params);
         dispatch(&OP_PLAYLISTS_CHANGE_PLAYLIST_DETAILS, json)
     }
-    fn get_playlist_cover() -> Result<String, String> {
-        dispatch(&OP_PLAYLISTS_GET_PLAYLIST_COVER, Value::Object(Map::new()))
+    fn get_playlist_cover(params: iface_playlists::GetPlaylistCoverParams) -> Result<String, String> {
+        let json = iface_playlists__get_playlist_cover_params__to_json(&params);
+        dispatch(&OP_PLAYLISTS_GET_PLAYLIST_COVER, json)
     }
-    fn upload_custom_playlist_cover() -> Result<String, String> {
-        dispatch(&OP_PLAYLISTS_UPLOAD_CUSTOM_PLAYLIST_COVER, Value::Object(Map::new()))
+    fn upload_custom_playlist_cover(params: iface_playlists::UploadCustomPlaylistCoverParams) -> Result<String, String> {
+        let json = iface_playlists__upload_custom_playlist_cover_params__to_json(&params);
+        dispatch(&OP_PLAYLISTS_UPLOAD_CUSTOM_PLAYLIST_COVER, json)
     }
     fn get_playlists_tracks(params: iface_playlists::GetPlaylistsTracksParams) -> Result<String, String> {
         let json = iface_playlists__get_playlists_tracks_params__to_json(&params);
@@ -1221,6 +1483,8 @@ const OP_CHAPTERS_GET_SEVERAL_CHAPTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chapters",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1231,18 +1495,36 @@ const OP_CHAPTERS_GET_A_CHAPTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chapters/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_chapters__get_several_chapters_params__to_json(p: &iface_chapters::GetSeveralChaptersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chapters__get_a_chapter_params__to_json(p: &iface_chapters::GetAChapterParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_chapters::Guest for crate::Component {
-    fn get_several_chapters() -> Result<String, String> {
-        dispatch(&OP_CHAPTERS_GET_SEVERAL_CHAPTERS, Value::Object(Map::new()))
+    fn get_several_chapters(params: iface_chapters::GetSeveralChaptersParams) -> Result<String, String> {
+        let json = iface_chapters__get_several_chapters_params__to_json(&params);
+        dispatch(&OP_CHAPTERS_GET_SEVERAL_CHAPTERS, json)
     }
-    fn get_a_chapter() -> Result<String, String> {
-        dispatch(&OP_CHAPTERS_GET_A_CHAPTER, Value::Object(Map::new()))
+    fn get_a_chapter(params: iface_chapters::GetAChapterParams) -> Result<String, String> {
+        let json = iface_chapters__get_a_chapter_params__to_json(&params);
+        dispatch(&OP_CHAPTERS_GET_A_CHAPTER, json)
     }
 }
 use crate::exports::autostamp::spotify::episodes as iface_episodes;
@@ -1252,6 +1534,7 @@ const OP_EPISODES_GET_MULTIPLE_EPISODES: OpSpec = OpSpec {
     path_template: "/episodes",
     fields: &[
         FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1263,6 +1546,7 @@ const OP_EPISODES_GET_AN_EPISODE: OpSpec = OpSpec {
     path_template: "/episodes/{id}",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1273,6 +1557,9 @@ const OP_EPISODES_GET_USERS_SAVED_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/episodes",
     fields: &[
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1294,7 +1581,7 @@ const OP_EPISODES_REMOVE_EPISODES_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/episodes",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1315,12 +1602,22 @@ const OP_EPISODES_CHECK_USERS_SAVED_EPISODES: OpSpec = OpSpec {
 fn iface_episodes__get_multiple_episodes_params__to_json(p: &iface_episodes::GetMultipleEpisodesParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_episodes__get_an_episode_params__to_json(p: &iface_episodes::GetAnEpisodeParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_episodes__get_users_saved_episodes_params__to_json(p: &iface_episodes::GetUsersSavedEpisodesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1332,7 +1629,7 @@ fn iface_episodes__save_episodes_user_params__to_json(p: &iface_episodes::SaveEp
 
 fn iface_episodes__remove_episodes_user_params__to_json(p: &iface_episodes::RemoveEpisodesUserParams) -> Value {
     let mut m = Map::new();
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
     Value::Object(m)
 }
 
@@ -1351,8 +1648,9 @@ impl iface_episodes::Guest for crate::Component {
         let json = iface_episodes__get_an_episode_params__to_json(&params);
         dispatch(&OP_EPISODES_GET_AN_EPISODE, json)
     }
-    fn get_users_saved_episodes() -> Result<String, String> {
-        dispatch(&OP_EPISODES_GET_USERS_SAVED_EPISODES, Value::Object(Map::new()))
+    fn get_users_saved_episodes(params: iface_episodes::GetUsersSavedEpisodesParams) -> Result<String, String> {
+        let json = iface_episodes__get_users_saved_episodes_params__to_json(&params);
+        dispatch(&OP_EPISODES_GET_USERS_SAVED_EPISODES, json)
     }
     fn save_episodes_user(params: iface_episodes::SaveEpisodesUserParams) -> Result<String, String> {
         let json = iface_episodes__save_episodes_user_params__to_json(&params);
@@ -1451,6 +1749,8 @@ const OP_USERS_GET_USERS_TOP_ARTISTS_AND_TRACKS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "type", location: FieldLocation::Path },
         FieldSpec { snake: "time_range", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1461,6 +1761,7 @@ const OP_USERS_FOLLOW_PLAYLIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}/followers",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
         FieldSpec { snake: "public", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1472,6 +1773,7 @@ const OP_USERS_UNFOLLOW_PLAYLIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/playlists/{playlist_id}/followers",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1482,6 +1784,7 @@ const OP_USERS_CHECK_IF_USER_FOLLOWS_PLAYLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/followers/contains",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
         FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
@@ -1493,6 +1796,7 @@ const OP_USERS_GET_USERS_PROFILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1545,18 +1849,34 @@ fn iface_users__get_users_top_artists_and_tracks_params__to_json(p: &iface_users
     let mut m = Map::new();
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("time_range".into(), match (&p.time_range) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_users__follow_playlist_params__to_json(p: &iface_users::FollowPlaylistParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("public".into(), match (&p.public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__unfollow_playlist_params__to_json(p: &iface_users::UnfollowPlaylistParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     Value::Object(m)
 }
 
 fn iface_users__check_if_user_follows_playlist_params__to_json(p: &iface_users::CheckIfUserFollowsPlaylistParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__get_users_profile_params__to_json(p: &iface_users::GetUsersProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
@@ -1588,15 +1908,17 @@ impl iface_users::Guest for crate::Component {
         let json = iface_users__follow_playlist_params__to_json(&params);
         dispatch(&OP_USERS_FOLLOW_PLAYLIST, json)
     }
-    fn unfollow_playlist() -> Result<String, String> {
-        dispatch(&OP_USERS_UNFOLLOW_PLAYLIST, Value::Object(Map::new()))
+    fn unfollow_playlist(params: iface_users::UnfollowPlaylistParams) -> Result<String, String> {
+        let json = iface_users__unfollow_playlist_params__to_json(&params);
+        dispatch(&OP_USERS_UNFOLLOW_PLAYLIST, json)
     }
     fn check_if_user_follows_playlist(params: iface_users::CheckIfUserFollowsPlaylistParams) -> Result<String, String> {
         let json = iface_users__check_if_user_follows_playlist_params__to_json(&params);
         dispatch(&OP_USERS_CHECK_IF_USER_FOLLOWS_PLAYLIST, json)
     }
-    fn get_users_profile() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_PROFILE, Value::Object(Map::new()))
+    fn get_users_profile(params: iface_users::GetUsersProfileParams) -> Result<String, String> {
+        let json = iface_users__get_users_profile_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_PROFILE, json)
     }
 }
 use crate::exports::autostamp::spotify::player as iface_player;
@@ -1605,6 +1927,8 @@ const OP_PLAYER_GET_INFORMATION_ABOUT_THE_USERS_CURRENT_PLAYBACK: OpSpec = OpSpe
     method: "GET",
     path_template: "/me/player",
     fields: &[
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1627,6 +1951,8 @@ const OP_PLAYER_GET_THE_USERS_CURRENTLY_PLAYING_TRACK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/player/currently-playing",
     fields: &[
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1780,10 +2106,24 @@ fn iface_player__start_a_users_playback_body_offset__to_json(p: &iface_player::S
     Value::Object(m)
 }
 
+fn iface_player__get_information_about_the_users_current_playback_params__to_json(p: &iface_player::GetInformationAboutTheUsersCurrentPlaybackParams) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additional_types".into(), match (&p.additional_types) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_player__transfer_a_users_playback_params__to_json(p: &iface_player::TransferAUsersPlaybackParams) -> Value {
     let mut m = Map::new();
     m.insert("device_ids".into(), Value::Array((&p.device_ids).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("play".into(), match (&p.play) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__get_the_users_currently_playing_track_params__to_json(p: &iface_player::GetTheUsersCurrentlyPlayingTrackParams) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additional_types".into(), match (&p.additional_types) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1859,15 +2199,17 @@ fn iface_player__set_volume_for_users_playback_params__to_json(p: &iface_player:
 }
 
 impl iface_player::Guest for crate::Component {
-    fn get_information_about_the_users_current_playback() -> Result<String, String> {
-        dispatch(&OP_PLAYER_GET_INFORMATION_ABOUT_THE_USERS_CURRENT_PLAYBACK, Value::Object(Map::new()))
+    fn get_information_about_the_users_current_playback(params: iface_player::GetInformationAboutTheUsersCurrentPlaybackParams) -> Result<String, String> {
+        let json = iface_player__get_information_about_the_users_current_playback_params__to_json(&params);
+        dispatch(&OP_PLAYER_GET_INFORMATION_ABOUT_THE_USERS_CURRENT_PLAYBACK, json)
     }
     fn transfer_a_users_playback(params: iface_player::TransferAUsersPlaybackParams) -> Result<String, String> {
         let json = iface_player__transfer_a_users_playback_params__to_json(&params);
         dispatch(&OP_PLAYER_TRANSFER_A_USERS_PLAYBACK, json)
     }
-    fn get_the_users_currently_playing_track() -> Result<String, String> {
-        dispatch(&OP_PLAYER_GET_THE_USERS_CURRENTLY_PLAYING_TRACK, Value::Object(Map::new()))
+    fn get_the_users_currently_playing_track(params: iface_player::GetTheUsersCurrentlyPlayingTrackParams) -> Result<String, String> {
+        let json = iface_player__get_the_users_currently_playing_track_params__to_json(&params);
+        dispatch(&OP_PLAYER_GET_THE_USERS_CURRENTLY_PLAYING_TRACK, json)
     }
     fn get_a_users_available_devices() -> Result<String, String> {
         dispatch(&OP_PLAYER_GET_A_USERS_AVAILABLE_DEVICES, Value::Object(Map::new()))
@@ -1922,6 +2264,8 @@ const OP_SHOWS_GET_USERS_SAVED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/shows",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1932,6 +2276,7 @@ const OP_SHOWS_SAVE_SHOWS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/shows",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1942,6 +2287,8 @@ const OP_SHOWS_REMOVE_SHOWS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/shows",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1952,6 +2299,7 @@ const OP_SHOWS_CHECK_USERS_SAVED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/shows/contains",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1962,6 +2310,8 @@ const OP_SHOWS_GET_MULTIPLE_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows",
     fields: &[
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1972,6 +2322,8 @@ const OP_SHOWS_GET_A_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}",
     fields: &[
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1982,33 +2334,93 @@ const OP_SHOWS_GET_A_SHOWS_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/episodes",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_shows__get_users_saved_shows_params__to_json(p: &iface_shows::GetUsersSavedShowsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shows__save_shows_user_params__to_json(p: &iface_shows::SaveShowsUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_shows__remove_shows_user_params__to_json(p: &iface_shows::RemoveShowsUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shows__check_users_saved_shows_params__to_json(p: &iface_shows::CheckUsersSavedShowsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_shows__get_multiple_shows_params__to_json(p: &iface_shows::GetMultipleShowsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ids".into(), Value::String((&p.ids).clone()));
+    Value::Object(m)
+}
+
+fn iface_shows__get_a_show_params__to_json(p: &iface_shows::GetAShowParams) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_shows__get_a_shows_episodes_params__to_json(p: &iface_shows::GetAShowsEpisodesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_shows::Guest for crate::Component {
-    fn get_users_saved_shows() -> Result<String, String> {
-        dispatch(&OP_SHOWS_GET_USERS_SAVED_SHOWS, Value::Object(Map::new()))
+    fn get_users_saved_shows(params: iface_shows::GetUsersSavedShowsParams) -> Result<String, String> {
+        let json = iface_shows__get_users_saved_shows_params__to_json(&params);
+        dispatch(&OP_SHOWS_GET_USERS_SAVED_SHOWS, json)
     }
-    fn save_shows_user() -> Result<String, String> {
-        dispatch(&OP_SHOWS_SAVE_SHOWS_USER, Value::Object(Map::new()))
+    fn save_shows_user(params: iface_shows::SaveShowsUserParams) -> Result<String, String> {
+        let json = iface_shows__save_shows_user_params__to_json(&params);
+        dispatch(&OP_SHOWS_SAVE_SHOWS_USER, json)
     }
-    fn remove_shows_user() -> Result<String, String> {
-        dispatch(&OP_SHOWS_REMOVE_SHOWS_USER, Value::Object(Map::new()))
+    fn remove_shows_user(params: iface_shows::RemoveShowsUserParams) -> Result<String, String> {
+        let json = iface_shows__remove_shows_user_params__to_json(&params);
+        dispatch(&OP_SHOWS_REMOVE_SHOWS_USER, json)
     }
-    fn check_users_saved_shows() -> Result<String, String> {
-        dispatch(&OP_SHOWS_CHECK_USERS_SAVED_SHOWS, Value::Object(Map::new()))
+    fn check_users_saved_shows(params: iface_shows::CheckUsersSavedShowsParams) -> Result<String, String> {
+        let json = iface_shows__check_users_saved_shows_params__to_json(&params);
+        dispatch(&OP_SHOWS_CHECK_USERS_SAVED_SHOWS, json)
     }
-    fn get_multiple_shows() -> Result<String, String> {
-        dispatch(&OP_SHOWS_GET_MULTIPLE_SHOWS, Value::Object(Map::new()))
+    fn get_multiple_shows(params: iface_shows::GetMultipleShowsParams) -> Result<String, String> {
+        let json = iface_shows__get_multiple_shows_params__to_json(&params);
+        dispatch(&OP_SHOWS_GET_MULTIPLE_SHOWS, json)
     }
-    fn get_a_show() -> Result<String, String> {
-        dispatch(&OP_SHOWS_GET_A_SHOW, Value::Object(Map::new()))
+    fn get_a_show(params: iface_shows::GetAShowParams) -> Result<String, String> {
+        let json = iface_shows__get_a_show_params__to_json(&params);
+        dispatch(&OP_SHOWS_GET_A_SHOW, json)
     }
-    fn get_a_shows_episodes() -> Result<String, String> {
-        dispatch(&OP_SHOWS_GET_A_SHOWS_EPISODES, Value::Object(Map::new()))
+    fn get_a_shows_episodes(params: iface_shows::GetAShowsEpisodesParams) -> Result<String, String> {
+        let json = iface_shows__get_a_shows_episodes_params__to_json(&params);
+        dispatch(&OP_SHOWS_GET_A_SHOWS_EPISODES, json)
     }
 }
 use crate::exports::autostamp::spotify::genres as iface_genres;
@@ -2036,6 +2448,7 @@ const OP_SEARCH_SEARCH: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "q", location: FieldLocation::Query },
         FieldSpec { snake: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "market", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "include_external", location: FieldLocation::Query },
@@ -2067,6 +2480,7 @@ fn iface_search__search_params__to_json(p: &iface_search::SearchParams) -> Value
     let mut m = Map::new();
     m.insert("q".into(), Value::String((&p.q).clone()));
     m.insert("type".into(), Value::Array((&p.type_op).iter().map(|v| Value::String(iface_search__search_type_op_item_enum__to_str(v).into())).collect()));
+    m.insert("market".into(), match (&p.market) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("include_external".into(), match (&p.include_external) { Some(v) => Value::String(iface_search__search_include_external_enum__to_str(v).into()), None => Value::Null });

@@ -1,4 +1,4 @@
-package autostamp:magento@0.2.1;
+package autostamp:magento@0.3.0;
 
 interface addresses-address-id {
   /// addresses/{addressId}
@@ -38,7 +38,7 @@ interface amazon-order-ref {
 
 interface analytics-link {
   /// analytics/link
-  analytics-link-provider-v1-get-get: func() -> result<string, string>;
+  provider-v1-get-get: func() -> result<string, string>;
 
 }
 
@@ -3435,10 +3435,10 @@ interface cms-block {
   }
 
   /// cmsBlock
-  record cms-block-repository-v1-save-post-params {
+  record repository-v1-save-post-params {
     block: cms-data-block-interface
   }
-  cms-block-repository-v1-save-post: func(params: cms-block-repository-v1-save-post-params) -> result<string, string>;
+  repository-v1-save-post: func(params: repository-v1-save-post-params) -> result<string, string>;
 
 }
 
@@ -3551,10 +3551,10 @@ interface cms-page {
   }
 
   /// cmsPage
-  record cms-page-repository-v1-save-post-params {
+  record repository-v1-save-post-params {
     page: cms-data-page-interface
   }
-  cms-page-repository-v1-save-post: func(params: cms-page-repository-v1-save-post-params) -> result<string, string>;
+  repository-v1-save-post: func(params: repository-v1-save-post-params) -> result<string, string>;
 
 }
 
@@ -3649,7 +3649,7 @@ interface cms-page-page-id {
 
 interface company {
   /// Interface for Company entity.
-  record company-data-company-interface {
+  record data-company-interface {
     /// City.
     city: option<string>,
     /// Comment.
@@ -3662,7 +3662,7 @@ interface company {
     country-id: option<string>,
     /// Customer Group Id.
     customer-group-id: s32,
-    extension-attributes: option<company-data-company-extension-interface>,
+    extension-attributes: option<data-company-extension-interface>,
     /// Id.
     id: option<s32>,
     /// Legal name.
@@ -3694,7 +3694,7 @@ interface company {
   }
 
   /// ExtensionInterface class for @see \Magento\Company\Api\Data\CompanyInterface
-  record company-data-company-extension-interface {
+  record data-company-extension-interface {
     applicable-payment-method: option<s32>,
     available-payment-methods: option<string>,
     quote-config: option<negotiable-quote-data-company-quote-config-interface>,
@@ -3717,7 +3717,7 @@ interface company {
   }
 
   /// company/
-  record company-company-repository-v1-get-list-get-params {
+  record company-repository-v1-get-list-get-params {
     /// Field
     search-criteria-filter-groups-v0-filters-v0-field: option<string>,
     /// Value
@@ -3733,13 +3733,13 @@ interface company {
     /// Current page.
     search-criteria-current-page: option<s32>
   }
-  company-company-repository-v1-get-list-get: func(params: company-company-repository-v1-get-list-get-params) -> result<string, string>;
+  company-repository-v1-get-list-get: func(params: company-repository-v1-get-list-get-params) -> result<string, string>;
 
   /// company/
-  record company-company-repository-v1-save-post-params {
-    company: company-data-company-interface
+  record company-repository-v1-save-post-params {
+    company: data-company-interface
   }
-  company-company-repository-v1-save-post: func(params: company-company-repository-v1-save-post-params) -> result<string, string>;
+  company-repository-v1-save-post: func(params: company-repository-v1-save-post-params) -> result<string, string>;
 
 }
 
@@ -3817,7 +3817,7 @@ interface company-role {
   }
 
   /// company/role/
-  record company-role-repository-v1-get-list-get-params {
+  record repository-v1-get-list-get-params {
     /// Field
     search-criteria-filter-groups-v0-filters-v0-field: option<string>,
     /// Value
@@ -3833,13 +3833,13 @@ interface company-role {
     /// Current page.
     search-criteria-current-page: option<s32>
   }
-  company-role-repository-v1-get-list-get: func(params: company-role-repository-v1-get-list-get-params) -> result<string, string>;
+  repository-v1-get-list-get: func(params: repository-v1-get-list-get-params) -> result<string, string>;
 
   /// company/role/
-  record company-role-repository-v1-save-post-params {
+  record repository-v1-save-post-params {
     role: company-data-role-interface
   }
-  company-role-repository-v1-save-post: func(params: company-role-repository-v1-save-post-params) -> result<string, string>;
+  repository-v1-save-post: func(params: repository-v1-save-post-params) -> result<string, string>;
 
 }
 
@@ -6442,7 +6442,7 @@ interface directory-countries-country-id {
 
 interface directory-currency {
   /// directory/currency
-  directory-currency-information-acquirer-v1-get-currency-info-get: func() -> result<string, string>;
+  information-acquirer-v1-get-currency-info-get: func() -> result<string, string>;
 
 }
 
@@ -7919,21 +7919,21 @@ interface hierarchy-id {
 
 interface integration-admin-token {
   /// integration/admin/token
-  record integration-admin-token-service-v1-create-admin-access-token-post-params {
+  record service-v1-create-admin-access-token-post-params {
     password: string,
     username: string
   }
-  integration-admin-token-service-v1-create-admin-access-token-post: func(params: integration-admin-token-service-v1-create-admin-access-token-post-params) -> result<string, string>;
+  service-v1-create-admin-access-token-post: func(params: service-v1-create-admin-access-token-post-params) -> result<string, string>;
 
 }
 
 interface integration-customer-token {
   /// integration/customer/token
-  record integration-customer-token-service-v1-create-customer-access-token-post-params {
+  record service-v1-create-customer-access-token-post-params {
     password: string,
     username: string
   }
-  integration-customer-token-service-v1-create-customer-access-token-post: func(params: integration-customer-token-service-v1-create-customer-access-token-post-params) -> result<string, string>;
+  service-v1-create-customer-access-token-post: func(params: service-v1-create-customer-access-token-post-params) -> result<string, string>;
 
 }
 
@@ -9965,10 +9965,10 @@ interface negotiable-carts-cart-id-totals {
 
 interface negotiable-quote-attachment-content {
   /// negotiableQuote/attachmentContent
-  record negotiable-quote-attachment-content-management-v1-get-get-params {
+  record management-v1-get-get-params {
     attachment-ids: list<s32>
   }
-  negotiable-quote-attachment-content-management-v1-get-get: func(params: negotiable-quote-attachment-content-management-v1-get-get-params) -> result<string, string>;
+  management-v1-get-get: func(params: management-v1-get-get-params) -> result<string, string>;
 
 }
 
@@ -16501,7 +16501,7 @@ interface sales-rules-rule-id {
 
 interface search {
   /// search
-  record search-v1-search-get-params {
+  record v1-search-get-params {
     search-criteria-request-name: option<string>,
     /// Field
     search-criteria-filter-groups-v0-filters-v0-field: option<string>,
@@ -16518,13 +16518,13 @@ interface search {
     /// Current page.
     search-criteria-current-page: option<s32>
   }
-  search-v1-search-get: func(params: search-v1-search-get-params) -> result<string, string>;
+  v1-search-get: func(params: v1-search-get-params) -> result<string, string>;
 
 }
 
 interface shared-catalog {
   /// SharedCatalogInterface interface.
-  record shared-catalog-data-shared-catalog-interface {
+  record data-shared-catalog-interface {
     /// Created time for Shared Catalog.
     created-at: string,
     /// Admin id for Shared Catalog.
@@ -16546,13 +16546,13 @@ interface shared-catalog {
   }
 
   /// sharedCatalog
-  record shared-catalog-shared-catalog-repository-v1-save-post-params {
-    shared-catalog: shared-catalog-data-shared-catalog-interface
+  record shared-catalog-repository-v1-save-post-params {
+    shared-catalog: data-shared-catalog-interface
   }
-  shared-catalog-shared-catalog-repository-v1-save-post: func(params: shared-catalog-shared-catalog-repository-v1-save-post-params) -> result<string, string>;
+  shared-catalog-repository-v1-save-post: func(params: shared-catalog-repository-v1-save-post-params) -> result<string, string>;
 
   /// sharedCatalog/
-  record shared-catalog-shared-catalog-repository-v1-get-list-get-params {
+  record shared-catalog-repository-v1-get-list-get-params {
     /// Field
     search-criteria-filter-groups-v0-filters-v0-field: option<string>,
     /// Value
@@ -16568,7 +16568,7 @@ interface shared-catalog {
     /// Current page.
     search-criteria-current-page: option<s32>
   }
-  shared-catalog-shared-catalog-repository-v1-get-list-get: func(params: shared-catalog-shared-catalog-repository-v1-get-list-get-params) -> result<string, string>;
+  shared-catalog-repository-v1-get-list-get: func(params: shared-catalog-repository-v1-get-list-get-params) -> result<string, string>;
 
 }
 

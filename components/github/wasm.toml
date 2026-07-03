@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:github"
-version = "0.2.1+github-1.1.4"
+version = "0.3.0+github-1.1.4"
 registry = "ghcr.io/autostamp/github"
 kind = "component"
 file = "build/github.wasm"

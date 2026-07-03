@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `basic` | `Authorization: Basic base64(<secret>)` |
 /// | `customer_accessCode` | `Authorization: Bearer <secret>` |
-package autostamp:shutterstock@0.2.1;
+package autostamp:shutterstock@0.3.0;
 
 interface custom-music {
   enum create-audio-render-preset-enum {

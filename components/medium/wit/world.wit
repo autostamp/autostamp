@@ -1,4 +1,4 @@
-package autostamp:medium@0.2.1;
+package autostamp:medium@0.3.0;
 
 interface welcome {
   /// Get Welcome

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:bungie"
-version = "0.2.1+bungie-2.18.0"
+version = "0.3.0+bungie-2.18.0"
 registry = "ghcr.io/autostamp/bungie"
 kind = "component"
 file = "build/bungie.wasm"

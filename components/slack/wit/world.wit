@@ -6,26 +6,26 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `slackAuth` | `Authorization: Bearer <secret>` |
-package autostamp:slack@0.2.1;
+package autostamp:slack@0.3.0;
 
 interface admin-apps {
-  record admin-apps-approve-params {
+  record approve-params {
     /// Authentication token. Requires scope: `admin.apps:write`
     token: string
   }
-  admin-apps-approve: func(params: admin-apps-approve-params) -> result<string, string>;
+  approve: func(params: approve-params) -> result<string, string>;
 
-  record admin-apps-restrict-params {
+  record restrict-params {
     /// Authentication token. Requires scope: `admin.apps:write`
     token: string
   }
-  admin-apps-restrict: func(params: admin-apps-restrict-params) -> result<string, string>;
+  restrict: func(params: restrict-params) -> result<string, string>;
 
 }
 
 
 interface admin-apps-approved {
-  record admin-apps-approved-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.apps:read`
     token: string,
     /// The maximum number of items to return. Must be between 1 - 1000 both inclusive.
@@ -35,12 +35,12 @@ interface admin-apps-approved {
     team-id: option<string>,
     enterprise-id: option<string>
   }
-  admin-apps-approved-list: func(params: admin-apps-approved-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-apps-requests {
-  record admin-apps-requests-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.apps:read`
     token: string,
     /// The maximum number of items to return. Must be between 1 - 1000 both inclusive.
@@ -49,12 +49,12 @@ interface admin-apps-requests {
     cursor: option<string>,
     team-id: option<string>
   }
-  admin-apps-requests-list: func(params: admin-apps-requests-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-apps-restricted {
-  record admin-apps-restricted-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.apps:read`
     token: string,
     /// The maximum number of items to return. Must be between 1 - 1000 both inclusive.
@@ -64,50 +64,50 @@ interface admin-apps-restricted {
     team-id: option<string>,
     enterprise-id: option<string>
   }
-  admin-apps-restricted-list: func(params: admin-apps-restricted-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-conversations {
-  record admin-conversations-archive-params {
+  record archive-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-archive: func(params: admin-conversations-archive-params) -> result<string, string>;
+  archive: func(params: archive-params) -> result<string, string>;
 
-  record admin-conversations-convert-to-private-params {
+  record convert-to-private-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-convert-to-private: func(params: admin-conversations-convert-to-private-params) -> result<string, string>;
+  convert-to-private: func(params: convert-to-private-params) -> result<string, string>;
 
-  record admin-conversations-create-params {
+  record create-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-create: func(params: admin-conversations-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
-  record admin-conversations-delete-params {
+  record delete-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-delete: func(params: admin-conversations-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
-  record admin-conversations-disconnect-shared-params {
+  record disconnect-shared-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-disconnect-shared: func(params: admin-conversations-disconnect-shared-params) -> result<string, string>;
+  disconnect-shared: func(params: disconnect-shared-params) -> result<string, string>;
 
-  record admin-conversations-get-conversation-prefs-params {
+  record get-conversation-prefs-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
     token: string,
     /// The channel to get preferences for.
     channel-id: string
   }
-  admin-conversations-get-conversation-prefs: func(params: admin-conversations-get-conversation-prefs-params) -> result<string, string>;
+  get-conversation-prefs: func(params: get-conversation-prefs-params) -> result<string, string>;
 
-  record admin-conversations-get-teams-params {
+  record get-teams-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
     token: string,
     /// The channel to determine connected workspaces within the organization for.
@@ -117,21 +117,21 @@ interface admin-conversations {
     /// The maximum number of items to return. Must be between 1 - 1000 both inclusive.
     limit: option<s32>
   }
-  admin-conversations-get-teams: func(params: admin-conversations-get-teams-params) -> result<string, string>;
+  get-teams: func(params: get-teams-params) -> result<string, string>;
 
-  record admin-conversations-invite-params {
+  record invite-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-invite: func(params: admin-conversations-invite-params) -> result<string, string>;
+  invite: func(params: invite-params) -> result<string, string>;
 
-  record admin-conversations-rename-params {
+  record rename-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-rename: func(params: admin-conversations-rename-params) -> result<string, string>;
+  rename: func(params: rename-params) -> result<string, string>;
 
-  record admin-conversations-search-params {
+  record search-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
     token: string,
     /// Comma separated string of team IDs, signifying the workspaces to search through.
@@ -149,30 +149,30 @@ interface admin-conversations {
     /// Sort direction. Possible values are `asc` for ascending order like (1, 2, 3) or (a, b, c), and `desc` for descending order like (3, 2, 1) or (c, b, a)
     sort-dir: option<string>
   }
-  admin-conversations-search: func(params: admin-conversations-search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<string, string>;
 
-  record admin-conversations-set-conversation-prefs-params {
+  record set-conversation-prefs-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-set-conversation-prefs: func(params: admin-conversations-set-conversation-prefs-params) -> result<string, string>;
+  set-conversation-prefs: func(params: set-conversation-prefs-params) -> result<string, string>;
 
-  record admin-conversations-set-teams-params {
+  record set-teams-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-set-teams: func(params: admin-conversations-set-teams-params) -> result<string, string>;
+  set-teams: func(params: set-teams-params) -> result<string, string>;
 
-  record admin-conversations-unarchive-params {
+  record unarchive-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
     token: string
   }
-  admin-conversations-unarchive: func(params: admin-conversations-unarchive-params) -> result<string, string>;
+  unarchive: func(params: unarchive-params) -> result<string, string>;
 
 }
 
 interface admin-conversations-ekm {
-  record admin-conversations-ekm-list-original-connected-channel-info-params {
+  record list-original-connected-channel-info-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
     token: string,
     /// A comma-separated list of channels to filter to.
@@ -184,32 +184,32 @@ interface admin-conversations-ekm {
     /// Set `cursor` to `next_cursor` returned by the previous call to list items in the next page.
     cursor: option<string>
   }
-  admin-conversations-ekm-list-original-connected-channel-info: func(params: admin-conversations-ekm-list-original-connected-channel-info-params) -> result<string, string>;
+  list-original-connected-channel-info: func(params: list-original-connected-channel-info-params) -> result<string, string>;
 
 }
 
 interface admin-conversations-restrict-access {
-  admin-conversations-restrict-access-add-group: func() -> result<string, string>;
+  add-group: func() -> result<string, string>;
 
-  record admin-conversations-restrict-access-list-groups-params {
+  record list-groups-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
     token: string,
     channel-id: string,
     /// The workspace where the channel exists. This argument is required for channels only tied to one workspace, and optional for channels that are shared across an organization.
     team-id: option<string>
   }
-  admin-conversations-restrict-access-list-groups: func(params: admin-conversations-restrict-access-list-groups-params) -> result<string, string>;
+  list-groups: func(params: list-groups-params) -> result<string, string>;
 
-  admin-conversations-restrict-access-remove-group: func() -> result<string, string>;
+  remove-group: func() -> result<string, string>;
 
 }
 
 interface admin-emoji {
-  admin-emoji-add: func() -> result<string, string>;
+  add: func() -> result<string, string>;
 
-  admin-emoji-add-alias: func() -> result<string, string>;
+  add-alias: func() -> result<string, string>;
 
-  record admin-emoji-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
     /// Set `cursor` to `next_cursor` returned by the previous call to list items in the next page
@@ -217,28 +217,28 @@ interface admin-emoji {
     /// The maximum number of items to return. Must be between 1 - 1000 both inclusive.
     limit: option<s32>
   }
-  admin-emoji-list: func(params: admin-emoji-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  admin-emoji-remove: func() -> result<string, string>;
+  remove: func() -> result<string, string>;
 
-  admin-emoji-rename: func() -> result<string, string>;
+  rename: func() -> result<string, string>;
 
 }
 
 interface admin-invite-requests {
-  record admin-invite-requests-approve-params {
+  record approve-params {
     /// Authentication token. Requires scope: `admin.invites:write`
     token: string
   }
-  admin-invite-requests-approve: func(params: admin-invite-requests-approve-params) -> result<string, string>;
+  approve: func(params: approve-params) -> result<string, string>;
 
-  record admin-invite-requests-deny-params {
+  record deny-params {
     /// Authentication token. Requires scope: `admin.invites:write`
     token: string
   }
-  admin-invite-requests-deny: func(params: admin-invite-requests-deny-params) -> result<string, string>;
+  deny: func(params: deny-params) -> result<string, string>;
 
-  record admin-invite-requests-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.invites:read`
     token: string,
     /// ID for the workspace where the invite requests were made.
@@ -248,12 +248,12 @@ interface admin-invite-requests {
     /// The number of results that will be returned by the API on each invocation. Must be between 1 - 1000, both inclusive
     limit: option<s32>
   }
-  admin-invite-requests-list: func(params: admin-invite-requests-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-invite-requests-approved {
-  record admin-invite-requests-approved-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.invites:read`
     token: string,
     /// ID for the workspace where the invite requests were made.
@@ -263,12 +263,12 @@ interface admin-invite-requests-approved {
     /// The number of results that will be returned by the API on each invocation. Must be between 1 - 1000, both inclusive
     limit: option<s32>
   }
-  admin-invite-requests-approved-list: func(params: admin-invite-requests-approved-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-invite-requests-denied {
-  record admin-invite-requests-denied-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.invites:read`
     token: string,
     /// ID for the workspace where the invite requests were made.
@@ -278,12 +278,12 @@ interface admin-invite-requests-denied {
     /// The number of results that will be returned by the API on each invocation. Must be between 1 - 1000 both inclusive
     limit: option<s32>
   }
-  admin-invite-requests-denied-list: func(params: admin-invite-requests-denied-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-teams-admins {
-  record admin-teams-admins-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
     /// The maximum number of items to return.
@@ -292,18 +292,18 @@ interface admin-teams-admins {
     cursor: option<string>,
     team-id: string
   }
-  admin-teams-admins-list: func(params: admin-teams-admins-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-teams {
-  record admin-teams-create-params {
+  record create-params {
     /// Authentication token. Requires scope: `admin.teams:write`
     token: string
   }
-  admin-teams-create: func(params: admin-teams-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
-  record admin-teams-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
     /// The maximum number of items to return. Must be between 1 - 100 both inclusive.
@@ -311,12 +311,12 @@ interface admin-teams {
     /// Set `cursor` to `next_cursor` returned by the previous call to list items in the next page.
     cursor: option<string>
   }
-  admin-teams-list: func(params: admin-teams-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-teams-owners {
-  record admin-teams-owners-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
     team-id: string,
@@ -325,56 +325,56 @@ interface admin-teams-owners {
     /// Set `cursor` to `next_cursor` returned by the previous call to list items in the next page.
     cursor: option<string>
   }
-  admin-teams-owners-list: func(params: admin-teams-owners-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface admin-teams-settings {
-  record admin-teams-settings-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
     team-id: string
   }
-  admin-teams-settings-info: func(params: admin-teams-settings-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  admin-teams-settings-set-default-channels: func() -> result<string, string>;
+  set-default-channels: func() -> result<string, string>;
 
-  record admin-teams-settings-set-description-params {
+  record set-description-params {
     /// Authentication token. Requires scope: `admin.teams:write`
     token: string
   }
-  admin-teams-settings-set-description: func(params: admin-teams-settings-set-description-params) -> result<string, string>;
+  set-description: func(params: set-description-params) -> result<string, string>;
 
-  record admin-teams-settings-set-discoverability-params {
+  record set-discoverability-params {
     /// Authentication token. Requires scope: `admin.teams:write`
     token: string
   }
-  admin-teams-settings-set-discoverability: func(params: admin-teams-settings-set-discoverability-params) -> result<string, string>;
+  set-discoverability: func(params: set-discoverability-params) -> result<string, string>;
 
-  admin-teams-settings-set-icon: func() -> result<string, string>;
+  set-icon: func() -> result<string, string>;
 
-  record admin-teams-settings-set-name-params {
+  record set-name-params {
     /// Authentication token. Requires scope: `admin.teams:write`
     token: string
   }
-  admin-teams-settings-set-name: func(params: admin-teams-settings-set-name-params) -> result<string, string>;
+  set-name: func(params: set-name-params) -> result<string, string>;
 
 }
 
 interface admin-usergroups {
-  record admin-usergroups-add-channels-params {
+  record add-channels-params {
     /// Authentication token. Requires scope: `admin.usergroups:write`
     token: string
   }
-  admin-usergroups-add-channels: func(params: admin-usergroups-add-channels-params) -> result<string, string>;
+  add-channels: func(params: add-channels-params) -> result<string, string>;
 
-  record admin-usergroups-add-teams-params {
+  record add-teams-params {
     /// Authentication token. Requires scope: `admin.teams:write`
     token: string
   }
-  admin-usergroups-add-teams: func(params: admin-usergroups-add-teams-params) -> result<string, string>;
+  add-teams: func(params: add-teams-params) -> result<string, string>;
 
-  record admin-usergroups-list-channels-params {
+  record list-channels-params {
     /// Authentication token. Requires scope: `admin.usergroups:read`
     token: string,
     /// ID of the IDP group to list default channels for.
@@ -384,30 +384,30 @@ interface admin-usergroups {
     /// Flag to include or exclude the count of members per channel.
     include-num-members: option<bool>
   }
-  admin-usergroups-list-channels: func(params: admin-usergroups-list-channels-params) -> result<string, string>;
+  list-channels: func(params: list-channels-params) -> result<string, string>;
 
-  record admin-usergroups-remove-channels-params {
+  record remove-channels-params {
     /// Authentication token. Requires scope: `admin.usergroups:write`
     token: string
   }
-  admin-usergroups-remove-channels: func(params: admin-usergroups-remove-channels-params) -> result<string, string>;
+  remove-channels: func(params: remove-channels-params) -> result<string, string>;
 
 }
 
 interface admin-users {
-  record admin-users-assign-params {
+  record assign-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-assign: func(params: admin-users-assign-params) -> result<string, string>;
+  assign: func(params: assign-params) -> result<string, string>;
 
-  record admin-users-invite-params {
+  record invite-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-invite: func(params: admin-users-invite-params) -> result<string, string>;
+  invite: func(params: invite-params) -> result<string, string>;
 
-  record admin-users-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `admin.users:read`
     token: string,
     /// The ID (`T1234`) of the workspace.
@@ -417,86 +417,86 @@ interface admin-users {
     /// Limit for how many users to be retrieved per page
     limit: option<s32>
   }
-  admin-users-list: func(params: admin-users-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record admin-users-remove-params {
+  record remove-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-remove: func(params: admin-users-remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<string, string>;
 
-  record admin-users-set-admin-params {
+  record set-admin-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-set-admin: func(params: admin-users-set-admin-params) -> result<string, string>;
+  set-admin: func(params: set-admin-params) -> result<string, string>;
 
-  record admin-users-set-expiration-params {
+  record set-expiration-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-set-expiration: func(params: admin-users-set-expiration-params) -> result<string, string>;
+  set-expiration: func(params: set-expiration-params) -> result<string, string>;
 
-  record admin-users-set-owner-params {
+  record set-owner-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-set-owner: func(params: admin-users-set-owner-params) -> result<string, string>;
+  set-owner: func(params: set-owner-params) -> result<string, string>;
 
-  record admin-users-set-regular-params {
+  record set-regular-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-set-regular: func(params: admin-users-set-regular-params) -> result<string, string>;
+  set-regular: func(params: set-regular-params) -> result<string, string>;
 
 }
 
 interface admin-users-session {
-  record admin-users-session-invalidate-params {
+  record invalidate-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-session-invalidate: func(params: admin-users-session-invalidate-params) -> result<string, string>;
+  invalidate: func(params: invalidate-params) -> result<string, string>;
 
-  record admin-users-session-reset-params {
+  record reset-params {
     /// Authentication token. Requires scope: `admin.users:write`
     token: string
   }
-  admin-users-session-reset: func(params: admin-users-session-reset-params) -> result<string, string>;
+  reset: func(params: reset-params) -> result<string, string>;
 
 }
 
 interface api {
-  record api-test-params {
+  record test-params {
     /// Error response to return
     error: option<string>,
     /// example property to return
     foo: option<string>
   }
-  api-test: func(params: api-test-params) -> result<string, string>;
+  test: func(params: test-params) -> result<string, string>;
 
 }
 
 interface apps-event-authorizations {
-  record apps-event-authorizations-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `authorizations:read`
     token: string,
     event-context: string,
     cursor: option<string>,
     limit: option<s32>
   }
-  apps-event-authorizations-list: func(params: apps-event-authorizations-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface apps-permissions {
-  record apps-permissions-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `none`
     token: option<string>
   }
-  apps-permissions-info: func(params: apps-permissions-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record apps-permissions-request-params {
+  record request-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// A comma separated list of scopes to request for
@@ -504,12 +504,12 @@ interface apps-permissions {
     /// Token used to trigger the permissions API
     trigger-id: string
   }
-  apps-permissions-request: func(params: apps-permissions-request-params) -> result<string, string>;
+  request: func(params: request-params) -> result<string, string>;
 
 }
 
 interface apps-permissions-resources {
-  record apps-permissions-resources-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
@@ -517,21 +517,21 @@ interface apps-permissions-resources {
     /// The maximum number of items to return.
     limit: option<s32>
   }
-  apps-permissions-resources-list: func(params: apps-permissions-resources-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface apps-permissions-scopes {
-  record apps-permissions-scopes-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: string
   }
-  apps-permissions-scopes-list: func(params: apps-permissions-scopes-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface apps-permissions-users {
-  record apps-permissions-users-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
@@ -539,9 +539,9 @@ interface apps-permissions-users {
     /// The maximum number of items to return.
     limit: option<s32>
   }
-  apps-permissions-users-list: func(params: apps-permissions-users-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record apps-permissions-users-request-params {
+  record request-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// A comma separated list of user scopes to request for
@@ -551,12 +551,12 @@ interface apps-permissions-users {
     /// The user this scope is being requested for
     user: string
   }
-  apps-permissions-users-request: func(params: apps-permissions-users-request-params) -> result<string, string>;
+  request: func(params: request-params) -> result<string, string>;
 
 }
 
 interface apps {
-  record apps-uninstall-params {
+  record uninstall-params {
     /// Authentication token. Requires scope: `none`
     token: option<string>,
     /// Issued when you created your application.
@@ -564,96 +564,96 @@ interface apps {
     /// Issued when you created your application.
     client-secret: option<string>
   }
-  apps-uninstall: func(params: apps-uninstall-params) -> result<string, string>;
+  uninstall: func(params: uninstall-params) -> result<string, string>;
 
 }
 
 interface auth {
-  record auth-revoke-params {
+  record revoke-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// Setting this parameter to `1` triggers a _testing mode_ where the specified token will not actually be revoked.
     test: option<bool>
   }
-  auth-revoke: func(params: auth-revoke-params) -> result<string, string>;
+  revoke: func(params: revoke-params) -> result<string, string>;
 
-  record auth-test-params {
+  record test-params {
     /// Authentication token. Requires scope: `none`
     token: string
   }
-  auth-test: func(params: auth-test-params) -> result<string, string>;
+  test: func(params: test-params) -> result<string, string>;
 
 }
 
 interface bots {
-  record bots-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `users:read`
     token: string,
     /// Bot user to get info on
     bot: option<string>
   }
-  bots-info: func(params: bots-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
 }
 
 interface calls {
-  record calls-add-params {
+  record add-params {
     /// Authentication token. Requires scope: `calls:write`
     token: string
   }
-  calls-add: func(params: calls-add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<string, string>;
 
-  record calls-end-params {
+  record end-params {
     /// Authentication token. Requires scope: `calls:write`
     token: string
   }
-  calls-end: func(params: calls-end-params) -> result<string, string>;
+  end: func(params: end-params) -> result<string, string>;
 
-  record calls-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `calls:read`
     token: string,
     /// `id` of the Call returned by the [`calls.add`](/methods/calls.add) method.
     id: string
   }
-  calls-info: func(params: calls-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record calls-update-params {
+  record update-params {
     /// Authentication token. Requires scope: `calls:write`
     token: string
   }
-  calls-update: func(params: calls-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
 }
 
 interface calls-participants {
-  record calls-participants-add-params {
+  record add-params {
     /// Authentication token. Requires scope: `calls:write`
     token: string
   }
-  calls-participants-add: func(params: calls-participants-add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<string, string>;
 
-  record calls-participants-remove-params {
+  record remove-params {
     /// Authentication token. Requires scope: `calls:write`
     token: string
   }
-  calls-participants-remove: func(params: calls-participants-remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<string, string>;
 
 }
 
 interface chat {
-  record chat-delete-params {
+  record delete-params {
     /// Authentication token. Requires scope: `chat:write`
     token: option<string>
   }
-  chat-delete: func(params: chat-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
-  record chat-delete-scheduled-message-params {
+  record delete-scheduled-message-params {
     /// Authentication token. Requires scope: `chat:write`
     token: string
   }
-  chat-delete-scheduled-message: func(params: chat-delete-scheduled-message-params) -> result<string, string>;
+  delete-scheduled-message: func(params: delete-scheduled-message-params) -> result<string, string>;
 
-  record chat-get-permalink-params {
+  record get-permalink-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// The ID of the conversation or channel containing the message
@@ -661,48 +661,48 @@ interface chat {
     /// A message's `ts` value, uniquely identifying it within a channel
     message-ts: string
   }
-  chat-get-permalink: func(params: chat-get-permalink-params) -> result<string, string>;
+  get-permalink: func(params: get-permalink-params) -> result<string, string>;
 
-  record chat-me-message-params {
+  record me-message-params {
     /// Authentication token. Requires scope: `chat:write`
     token: option<string>
   }
-  chat-me-message: func(params: chat-me-message-params) -> result<string, string>;
+  me-message: func(params: me-message-params) -> result<string, string>;
 
-  record chat-post-ephemeral-params {
+  record post-ephemeral-params {
     /// Authentication token. Requires scope: `chat:write`
     token: string
   }
-  chat-post-ephemeral: func(params: chat-post-ephemeral-params) -> result<string, string>;
+  post-ephemeral: func(params: post-ephemeral-params) -> result<string, string>;
 
-  record chat-post-message-params {
+  record post-message-params {
     /// Authentication token. Requires scope: `chat:write`
     token: string
   }
-  chat-post-message: func(params: chat-post-message-params) -> result<string, string>;
+  post-message: func(params: post-message-params) -> result<string, string>;
 
-  record chat-schedule-message-params {
+  record schedule-message-params {
     /// Authentication token. Requires scope: `chat:write`
     token: option<string>
   }
-  chat-schedule-message: func(params: chat-schedule-message-params) -> result<string, string>;
+  schedule-message: func(params: schedule-message-params) -> result<string, string>;
 
-  record chat-unfurl-params {
+  record unfurl-params {
     /// Authentication token. Requires scope: `links:write`
     token: string
   }
-  chat-unfurl: func(params: chat-unfurl-params) -> result<string, string>;
+  unfurl: func(params: unfurl-params) -> result<string, string>;
 
-  record chat-update-params {
+  record update-params {
     /// Authentication token. Requires scope: `chat:write`
     token: string
   }
-  chat-update: func(params: chat-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
 }
 
 interface chat-scheduled-messages {
-  record chat-scheduled-messages-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: option<string>,
     /// The channel of the scheduled messages
@@ -716,30 +716,30 @@ interface chat-scheduled-messages {
     /// For pagination purposes, this is the `cursor` value returned from a previous call to `chat.scheduledmessages.list` indicating where you want to start this call from.
     cursor: option<string>
   }
-  chat-scheduled-messages-list: func(params: chat-scheduled-messages-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface conversations {
-  record conversations-archive-params {
+  record archive-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-archive: func(params: conversations-archive-params) -> result<string, string>;
+  archive: func(params: archive-params) -> result<string, string>;
 
-  record conversations-close-params {
+  record close-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-close: func(params: conversations-close-params) -> result<string, string>;
+  close: func(params: close-params) -> result<string, string>;
 
-  record conversations-create-params {
+  record create-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-create: func(params: conversations-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
-  record conversations-history-params {
+  record history-params {
     /// Authentication token. Requires scope: `conversations:history`
     token: option<string>,
     /// Conversation ID to fetch history for.
@@ -755,9 +755,9 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  conversations-history: func(params: conversations-history-params) -> result<string, string>;
+  history: func(params: history-params) -> result<string, string>;
 
-  record conversations-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `conversations:read`
     token: option<string>,
     /// Conversation ID to learn more about
@@ -767,33 +767,33 @@ interface conversations {
     /// Set to `true` to include the member count for the specified conversation. Defaults to `false`
     include-num-members: option<bool>
   }
-  conversations-info: func(params: conversations-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record conversations-invite-params {
+  record invite-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-invite: func(params: conversations-invite-params) -> result<string, string>;
+  invite: func(params: invite-params) -> result<string, string>;
 
-  record conversations-join-params {
+  record join-params {
     /// Authentication token. Requires scope: `channels:write`
     token: option<string>
   }
-  conversations-join: func(params: conversations-join-params) -> result<string, string>;
+  join: func(params: join-params) -> result<string, string>;
 
-  record conversations-kick-params {
+  record kick-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-kick: func(params: conversations-kick-params) -> result<string, string>;
+  kick: func(params: kick-params) -> result<string, string>;
 
-  record conversations-leave-params {
+  record leave-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-leave: func(params: conversations-leave-params) -> result<string, string>;
+  leave: func(params: leave-params) -> result<string, string>;
 
-  record conversations-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `conversations:read`
     token: option<string>,
     /// Set to `true` to exclude archived channels from the list
@@ -805,15 +805,15 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  conversations-list: func(params: conversations-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record conversations-mark-params {
+  record mark-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-mark: func(params: conversations-mark-params) -> result<string, string>;
+  mark: func(params: mark-params) -> result<string, string>;
 
-  record conversations-members-params {
+  record members-params {
     /// Authentication token. Requires scope: `conversations:read`
     token: option<string>,
     /// ID of the conversation to retrieve members for
@@ -823,21 +823,21 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  conversations-members: func(params: conversations-members-params) -> result<string, string>;
+  members: func(params: members-params) -> result<string, string>;
 
-  record conversations-open-params {
+  record open-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-open: func(params: conversations-open-params) -> result<string, string>;
+  open: func(params: open-params) -> result<string, string>;
 
-  record conversations-rename-params {
+  record rename-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-rename: func(params: conversations-rename-params) -> result<string, string>;
+  rename: func(params: rename-params) -> result<string, string>;
 
-  record conversations-replies-params {
+  record replies-params {
     /// Authentication token. Requires scope: `conversations:history`
     token: option<string>,
     /// Conversation ID to fetch thread from.
@@ -855,30 +855,30 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  conversations-replies: func(params: conversations-replies-params) -> result<string, string>;
+  replies: func(params: replies-params) -> result<string, string>;
 
-  record conversations-set-purpose-params {
+  record set-purpose-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-set-purpose: func(params: conversations-set-purpose-params) -> result<string, string>;
+  set-purpose: func(params: set-purpose-params) -> result<string, string>;
 
-  record conversations-set-topic-params {
+  record set-topic-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-set-topic: func(params: conversations-set-topic-params) -> result<string, string>;
+  set-topic: func(params: set-topic-params) -> result<string, string>;
 
-  record conversations-unarchive-params {
+  record unarchive-params {
     /// Authentication token. Requires scope: `conversations:write`
     token: option<string>
   }
-  conversations-unarchive: func(params: conversations-unarchive-params) -> result<string, string>;
+  unarchive: func(params: unarchive-params) -> result<string, string>;
 
 }
 
 interface dialog {
-  record dialog-open-params {
+  record open-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// The dialog definition. This must be a JSON-encoded string.
@@ -886,69 +886,69 @@ interface dialog {
     /// Exchange a trigger to post to the user.
     trigger-id: string
   }
-  dialog-open: func(params: dialog-open-params) -> result<string, string>;
+  open: func(params: open-params) -> result<string, string>;
 
 }
 
 interface dnd {
-  record dnd-end-dnd-params {
+  record end-dnd-params {
     /// Authentication token. Requires scope: `dnd:write`
     token: string
   }
-  dnd-end-dnd: func(params: dnd-end-dnd-params) -> result<string, string>;
+  end-dnd: func(params: end-dnd-params) -> result<string, string>;
 
-  record dnd-end-snooze-params {
+  record end-snooze-params {
     /// Authentication token. Requires scope: `dnd:write`
     token: string
   }
-  dnd-end-snooze: func(params: dnd-end-snooze-params) -> result<string, string>;
+  end-snooze: func(params: end-snooze-params) -> result<string, string>;
 
-  record dnd-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `dnd:read`
     token: option<string>,
     /// User to fetch status for (defaults to current user)
     user: option<string>
   }
-  dnd-info: func(params: dnd-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  dnd-set-snooze: func() -> result<string, string>;
+  set-snooze: func() -> result<string, string>;
 
-  record dnd-team-info-params {
+  record team-info-params {
     /// Authentication token. Requires scope: `dnd:read`
     token: option<string>,
     /// Comma-separated list of users to fetch Do Not Disturb status for
     users: option<string>
   }
-  dnd-team-info: func(params: dnd-team-info-params) -> result<string, string>;
+  team-info: func(params: team-info-params) -> result<string, string>;
 
 }
 
 interface emoji {
-  record emoji-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `emoji:read`
     token: string
   }
-  emoji-list: func(params: emoji-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface files-comments {
-  record files-comments-delete-params {
+  record delete-params {
     /// Authentication token. Requires scope: `files:write:user`
     token: option<string>
   }
-  files-comments-delete: func(params: files-comments-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 
 interface files {
-  record files-delete-params {
+  record delete-params {
     /// Authentication token. Requires scope: `files:write:user`
     token: option<string>
   }
-  files-delete: func(params: files-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
-  record files-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `files:read`
     token: option<string>,
     /// Specify a file by providing its ID.
@@ -960,9 +960,9 @@ interface files {
     /// Parameter for pagination. File comments are paginated for a single file. Set `cursor` equal to the `next_cursor` attribute returned by the previous request's `response_metadata`. This parameter is optional, but pagination is mandatory: the default value simply fetches the first "page" of the collection of comments. See [pagination](/docs/pagination) for more details.
     cursor: option<string>
   }
-  files-info: func(params: files-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record files-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `files:read`
     token: option<string>,
     /// Filter files created by a single user.
@@ -980,28 +980,28 @@ interface files {
     /// Show truncated file info for files hidden due to being too old, and the team who owns the file being over the file limit.
     show-files-hidden-by-limit: option<bool>
   }
-  files-list: func(params: files-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record files-revoke-public-url-params {
+  record revoke-public-url-params {
     /// Authentication token. Requires scope: `files:write:user`
     token: option<string>
   }
-  files-revoke-public-url: func(params: files-revoke-public-url-params) -> result<string, string>;
+  revoke-public-url: func(params: revoke-public-url-params) -> result<string, string>;
 
-  record files-shared-public-url-params {
+  record shared-public-url-params {
     /// Authentication token. Requires scope: `files:write:user`
     token: option<string>
   }
-  files-shared-public-url: func(params: files-shared-public-url-params) -> result<string, string>;
+  shared-public-url: func(params: shared-public-url-params) -> result<string, string>;
 
-  files-upload: func() -> result<string, string>;
+  upload: func() -> result<string, string>;
 
 }
 
 interface files-remote {
-  files-remote-add: func() -> result<string, string>;
+  add: func() -> result<string, string>;
 
-  record files-remote-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `remote_files:read`
     token: option<string>,
     /// Specify a file by providing its ID.
@@ -1009,9 +1009,9 @@ interface files-remote {
     /// Creator defined GUID for the file.
     external-id: option<string>
   }
-  files-remote-info: func(params: files-remote-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record files-remote-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `remote_files:read`
     token: option<string>,
     /// Filter files appearing in a specific channel, indicated by its ID.
@@ -1025,11 +1025,11 @@ interface files-remote {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  files-remote-list: func(params: files-remote-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  files-remote-remove: func() -> result<string, string>;
+  remove: func() -> result<string, string>;
 
-  record files-remote-share-params {
+  record share-params {
     /// Authentication token. Requires scope: `remote_files:share`
     token: option<string>,
     /// Specify a file registered with Slack by providing its ID. Either this field or `external_id` or both are required.
@@ -1039,14 +1039,14 @@ interface files-remote {
     /// Comma-separated list of channel IDs where the file will be shared.
     channels: option<string>
   }
-  files-remote-share: func(params: files-remote-share-params) -> result<string, string>;
+  share: func(params: share-params) -> result<string, string>;
 
-  files-remote-update: func() -> result<string, string>;
+  update: func() -> result<string, string>;
 
 }
 
 interface migration {
-  record migration-exchange-params {
+  record exchange-params {
     /// Authentication token. Requires scope: `tokens.basic`
     token: string,
     /// A comma-separated list of user ids, up to 400 per request
@@ -1056,12 +1056,12 @@ interface migration {
     /// Specify `true` to convert `W` global user IDs to workspace-specific `U` IDs. Defaults to `false`.
     to-old: option<bool>
   }
-  migration-exchange: func(params: migration-exchange-params) -> result<string, string>;
+  exchange: func(params: exchange-params) -> result<string, string>;
 
 }
 
 interface oauth {
-  record oauth-access-params {
+  record access-params {
     /// Issued when you created your application.
     client-id: option<string>,
     /// Issued when you created your application.
@@ -1073,9 +1073,9 @@ interface oauth {
     /// Request the user to add your app only to a single channel. Only valid with a [legacy workspace app](https://api.slack.com/legacy-workspace-apps).
     single-channel: option<bool>
   }
-  oauth-access: func(params: oauth-access-params) -> result<string, string>;
+  access: func(params: access-params) -> result<string, string>;
 
-  record oauth-token-params {
+  record token-params {
     /// Issued when you created your application.
     client-id: option<string>,
     /// Issued when you created your application.
@@ -1087,12 +1087,12 @@ interface oauth {
     /// Request the user to add your app only to a single channel.
     single-channel: option<bool>
   }
-  oauth-token: func(params: oauth-token-params) -> result<string, string>;
+  token: func(params: token-params) -> result<string, string>;
 
 }
 
 interface oauth-v2 {
-  record oauth-v2-access-params {
+  record access-params {
     /// Issued when you created your application.
     client-id: option<string>,
     /// Issued when you created your application.
@@ -1102,41 +1102,41 @@ interface oauth-v2 {
     /// This must match the originally submitted URI (if one was sent).
     redirect-uri: option<string>
   }
-  oauth-v2-access: func(params: oauth-v2-access-params) -> result<string, string>;
+  access: func(params: access-params) -> result<string, string>;
 
 }
 
 interface pins {
-  record pins-add-params {
+  record add-params {
     /// Authentication token. Requires scope: `pins:write`
     token: string
   }
-  pins-add: func(params: pins-add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<string, string>;
 
-  record pins-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `pins:read`
     token: string,
     /// Channel to get pinned items for.
     channel: string
   }
-  pins-list: func(params: pins-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record pins-remove-params {
+  record remove-params {
     /// Authentication token. Requires scope: `pins:write`
     token: string
   }
-  pins-remove: func(params: pins-remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<string, string>;
 
 }
 
 interface reactions {
-  record reactions-add-params {
+  record add-params {
     /// Authentication token. Requires scope: `reactions:write`
     token: string
   }
-  reactions-add: func(params: reactions-add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<string, string>;
 
-  record reactions-get-params {
+  record get-params {
     /// Authentication token. Requires scope: `reactions:read`
     token: string,
     /// Channel where the message to get reactions for was posted.
@@ -1150,9 +1150,9 @@ interface reactions {
     /// Timestamp of the message to get reactions for.
     timestamp: option<string>
   }
-  reactions-get: func(params: reactions-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
-  record reactions-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `reactions:read`
     token: string,
     /// Show reactions made by this user. Defaults to the authed user.
@@ -1166,53 +1166,53 @@ interface reactions {
     /// The maximum number of items to return. Fewer than the requested number of items may be returned, even if the end of the list hasn't been reached.
     limit: option<s32>
   }
-  reactions-list: func(params: reactions-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record reactions-remove-params {
+  record remove-params {
     /// Authentication token. Requires scope: `reactions:write`
     token: string
   }
-  reactions-remove: func(params: reactions-remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<string, string>;
 
 }
 
 interface reminders {
-  record reminders-add-params {
+  record add-params {
     /// Authentication token. Requires scope: `reminders:write`
     token: string
   }
-  reminders-add: func(params: reminders-add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<string, string>;
 
-  record reminders-complete-params {
+  record complete-params {
     /// Authentication token. Requires scope: `reminders:write`
     token: option<string>
   }
-  reminders-complete: func(params: reminders-complete-params) -> result<string, string>;
+  complete: func(params: complete-params) -> result<string, string>;
 
-  record reminders-delete-params {
+  record delete-params {
     /// Authentication token. Requires scope: `reminders:write`
     token: option<string>
   }
-  reminders-delete: func(params: reminders-delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<string, string>;
 
-  record reminders-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `reminders:read`
     token: option<string>,
     /// The ID of the reminder
     reminder: option<string>
   }
-  reminders-info: func(params: reminders-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record reminders-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `reminders:read`
     token: option<string>
   }
-  reminders-list: func(params: reminders-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
 }
 
 interface rtm {
-  record rtm-connect-params {
+  record connect-params {
     /// Authentication token. Requires scope: `rtm:stream`
     token: string,
     /// Batch presence deliveries via subscription. Enabling changes the shape of `presence_change` events. See [batch presence](/docs/presence-and-status#batching).
@@ -1220,12 +1220,12 @@ interface rtm {
     /// Only deliver presence events when requested by subscription. See [presence subscriptions](/docs/presence-and-status#subscriptions).
     presence-sub: option<bool>
   }
-  rtm-connect: func(params: rtm-connect-params) -> result<string, string>;
+  connect: func(params: connect-params) -> result<string, string>;
 
 }
 
 interface search {
-  record search-messages-params {
+  record messages-params {
     /// Authentication token. Requires scope: `search:read`
     token: string,
     /// Pass the number of results you want per "page". Maximum of `100`.
@@ -1240,18 +1240,18 @@ interface search {
     /// Change sort direction to ascending (`asc`) or descending (`desc`).
     sort-dir: option<string>
   }
-  search-messages: func(params: search-messages-params) -> result<string, string>;
+  messages: func(params: messages-params) -> result<string, string>;
 
 }
 
 interface stars {
-  record stars-add-params {
+  record add-params {
     /// Authentication token. Requires scope: `stars:write`
     token: string
   }
-  stars-add: func(params: stars-add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<string, string>;
 
-  record stars-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `stars:read`
     token: option<string>,
     count: option<string>,
@@ -1261,18 +1261,18 @@ interface stars {
     /// The maximum number of items to return. Fewer than the requested number of items may be returned, even if the end of the list hasn't been reached.
     limit: option<s32>
   }
-  stars-list: func(params: stars-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record stars-remove-params {
+  record remove-params {
     /// Authentication token. Requires scope: `stars:write`
     token: string
   }
-  stars-remove: func(params: stars-remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<string, string>;
 
 }
 
 interface team {
-  record team-access-logs-params {
+  record access-logs-params {
     /// Authentication token. Requires scope: `admin`
     token: string,
     /// End of time range of logs to include in results (inclusive).
@@ -1280,25 +1280,25 @@ interface team {
     count: option<string>,
     page: option<string>
   }
-  team-access-logs: func(params: team-access-logs-params) -> result<string, string>;
+  access-logs: func(params: access-logs-params) -> result<string, string>;
 
-  record team-billable-info-params {
+  record billable-info-params {
     /// Authentication token. Requires scope: `admin`
     token: string,
     /// A user to retrieve the billable information for. Defaults to all users.
     user: option<string>
   }
-  team-billable-info: func(params: team-billable-info-params) -> result<string, string>;
+  billable-info: func(params: billable-info-params) -> result<string, string>;
 
-  record team-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `team:read`
     token: string,
     /// Team to get info on, if omitted, will return information about the current team. Will only return team that the authenticated token is allowed to see through external shared channels
     team: option<string>
   }
-  team-info: func(params: team-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record team-integration-logs-params {
+  record integration-logs-params {
     /// Authentication token. Requires scope: `admin`
     token: string,
     /// Filter logs to this Slack app. Defaults to all logs.
@@ -1312,41 +1312,41 @@ interface team {
     /// Filter logs generated by this user’s actions. Defaults to all logs.
     user: option<string>
   }
-  team-integration-logs: func(params: team-integration-logs-params) -> result<string, string>;
+  integration-logs: func(params: integration-logs-params) -> result<string, string>;
 
 }
 
 interface team-profile {
-  record team-profile-get-params {
+  record get-params {
     /// Authentication token. Requires scope: `users.profile:read`
     token: string,
     /// Filter by visibility.
     visibility: option<string>
   }
-  team-profile-get: func(params: team-profile-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
 }
 
 interface usergroups {
-  record usergroups-create-params {
+  record create-params {
     /// Authentication token. Requires scope: `usergroups:write`
     token: string
   }
-  usergroups-create: func(params: usergroups-create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<string, string>;
 
-  record usergroups-disable-params {
+  record disable-params {
     /// Authentication token. Requires scope: `usergroups:write`
     token: string
   }
-  usergroups-disable: func(params: usergroups-disable-params) -> result<string, string>;
+  disable: func(params: disable-params) -> result<string, string>;
 
-  record usergroups-enable-params {
+  record enable-params {
     /// Authentication token. Requires scope: `usergroups:write`
     token: string
   }
-  usergroups-enable: func(params: usergroups-enable-params) -> result<string, string>;
+  enable: func(params: enable-params) -> result<string, string>;
 
-  record usergroups-list-params {
+  record list-op-params {
     /// Include the list of users for each User Group.
     include-users: option<bool>,
     /// Authentication token. Requires scope: `usergroups:read`
@@ -1356,18 +1356,18 @@ interface usergroups {
     /// Include disabled User Groups.
     include-disabled: option<bool>
   }
-  usergroups-list: func(params: usergroups-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record usergroups-update-params {
+  record update-params {
     /// Authentication token. Requires scope: `usergroups:write`
     token: string
   }
-  usergroups-update: func(params: usergroups-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
 }
 
 interface usergroups-users {
-  record usergroups-users-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `usergroups:read`
     token: string,
     /// Allow results that involve disabled User Groups.
@@ -1375,18 +1375,18 @@ interface usergroups-users {
     /// The encoded ID of the User Group to update.
     usergroup: string
   }
-  usergroups-users-list: func(params: usergroups-users-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record usergroups-users-update-params {
+  record update-params {
     /// Authentication token. Requires scope: `usergroups:write`
     token: string
   }
-  usergroups-users-update: func(params: usergroups-users-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
 }
 
 interface users {
-  record users-conversations-params {
+  record conversations-params {
     /// Authentication token. Requires scope: `conversations:read`
     token: option<string>,
     /// Browse conversations by a specific user ID's membership. Non-public channels are restricted to those where the calling user shares membership.
@@ -1400,25 +1400,25 @@ interface users {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  users-conversations: func(params: users-conversations-params) -> result<string, string>;
+  conversations: func(params: conversations-params) -> result<string, string>;
 
-  users-delete-photo: func() -> result<string, string>;
+  delete-photo: func() -> result<string, string>;
 
-  record users-get-presence-params {
+  record get-presence-params {
     /// Authentication token. Requires scope: `users:read`
     token: string,
     /// User to get presence info on. Defaults to the authed user.
     user: option<string>
   }
-  users-get-presence: func(params: users-get-presence-params) -> result<string, string>;
+  get-presence: func(params: get-presence-params) -> result<string, string>;
 
-  record users-identity-params {
+  record identity-params {
     /// Authentication token. Requires scope: `identity.basic`
     token: option<string>
   }
-  users-identity: func(params: users-identity-params) -> result<string, string>;
+  identity: func(params: identity-params) -> result<string, string>;
 
-  record users-info-params {
+  record info-params {
     /// Authentication token. Requires scope: `users:read`
     token: string,
     /// Set this to `true` to receive the locale for this user. Defaults to `false`
@@ -1426,9 +1426,9 @@ interface users {
     /// User to get info on
     user: option<string>
   }
-  users-info: func(params: users-info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<string, string>;
 
-  record users-list-params {
+  record list-op-params {
     /// Authentication token. Requires scope: `users:read`
     token: option<string>,
     /// The maximum number of items to return. Fewer than the requested number of items may be returned, even if the end of the users list hasn't been reached. Providing no `limit` value will result in Slack attempting to deliver you the entire result set. If the collection is too large you may experience `limit_required` or HTTP 500 errors.
@@ -1438,34 +1438,34 @@ interface users {
     /// Set this to `true` to receive the locale for users. Defaults to `false`
     include-locale: option<bool>
   }
-  users-list: func(params: users-list-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<string, string>;
 
-  record users-lookup-by-email-params {
+  record lookup-by-email-params {
     /// Authentication token. Requires scope: `users:read.email`
     token: string,
     /// An email address belonging to a user in the workspace
     email: string
   }
-  users-lookup-by-email: func(params: users-lookup-by-email-params) -> result<string, string>;
+  lookup-by-email: func(params: lookup-by-email-params) -> result<string, string>;
 
-  record users-set-active-params {
+  record set-active-params {
     /// Authentication token. Requires scope: `users:write`
     token: string
   }
-  users-set-active: func(params: users-set-active-params) -> result<string, string>;
+  set-active: func(params: set-active-params) -> result<string, string>;
 
-  users-set-photo: func() -> result<string, string>;
+  set-photo: func() -> result<string, string>;
 
-  record users-set-presence-params {
+  record set-presence-params {
     /// Authentication token. Requires scope: `users:write`
     token: string
   }
-  users-set-presence: func(params: users-set-presence-params) -> result<string, string>;
+  set-presence: func(params: set-presence-params) -> result<string, string>;
 
 }
 
 interface users-profile {
-  record users-profile-get-params {
+  record get-params {
     /// Authentication token. Requires scope: `users.profile:read`
     token: string,
     /// Include labels for each ID in custom profile fields
@@ -1473,18 +1473,18 @@ interface users-profile {
     /// User to retrieve profile info for
     user: option<string>
   }
-  users-profile-get: func(params: users-profile-get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<string, string>;
 
-  record users-profile-set-params {
+  record set-params {
     /// Authentication token. Requires scope: `users.profile:write`
     token: string
   }
-  users-profile-set: func(params: users-profile-set-params) -> result<string, string>;
+  set: func(params: set-params) -> result<string, string>;
 
 }
 
 interface views {
-  record views-open-params {
+  record open-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// Exchange a trigger to post to the user.
@@ -1492,9 +1492,9 @@ interface views {
     /// A [view payload](/reference/surfaces/views). This must be a JSON-encoded string.
     view: string
   }
-  views-open: func(params: views-open-params) -> result<string, string>;
+  open: func(params: open-params) -> result<string, string>;
 
-  record views-publish-params {
+  record publish-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// `id` of the user you want publish a view to.
@@ -1504,9 +1504,9 @@ interface views {
     /// A string that represents view state to protect against possible race conditions.
     hash: option<string>
   }
-  views-publish: func(params: views-publish-params) -> result<string, string>;
+  publish: func(params: publish-params) -> result<string, string>;
 
-  record views-push-params {
+  record push-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// Exchange a trigger to post to the user.
@@ -1514,9 +1514,9 @@ interface views {
     /// A [view payload](/reference/surfaces/views). This must be a JSON-encoded string.
     view: string
   }
-  views-push: func(params: views-push-params) -> result<string, string>;
+  push: func(params: push-params) -> result<string, string>;
 
-  record views-update-params {
+  record update-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// A unique identifier of the view to be updated. Either `view_id` or `external_id` is required.
@@ -1528,12 +1528,12 @@ interface views {
     /// A string that represents view state to protect against possible race conditions.
     hash: option<string>
   }
-  views-update: func(params: views-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
 }
 
 interface workflows {
-  record workflows-step-completed-params {
+  record step-completed-params {
     /// Authentication token. Requires scope: `workflow.steps:execute`
     token: string,
     /// Context identifier that maps to the correct workflow step execution.
@@ -1541,9 +1541,9 @@ interface workflows {
     /// Key-value object of outputs from your step. Keys of this object reflect the configured `key` properties of your [`outputs`](/reference/workflows/workflow_step#output) array from your `workflow_step` object.
     outputs: option<string>
   }
-  workflows-step-completed: func(params: workflows-step-completed-params) -> result<string, string>;
+  step-completed: func(params: step-completed-params) -> result<string, string>;
 
-  record workflows-step-failed-params {
+  record step-failed-params {
     /// Authentication token. Requires scope: `workflow.steps:execute`
     token: string,
     /// Context identifier that maps to the correct workflow step execution.
@@ -1551,9 +1551,9 @@ interface workflows {
     /// A JSON-based object with a `message` property that should contain a human readable error message.
     error: string
   }
-  workflows-step-failed: func(params: workflows-step-failed-params) -> result<string, string>;
+  step-failed: func(params: step-failed-params) -> result<string, string>;
 
-  record workflows-update-step-params {
+  record update-step-params {
     /// Authentication token. Requires scope: `workflow.steps:execute`
     token: string,
     /// A context identifier provided with `view_submission` payloads used to call back to `workflows.updateStep`.
@@ -1567,7 +1567,7 @@ interface workflows {
     /// An optional field that can be used to override app image that is shown in the Workflow Builder.
     step-image-url: option<string>
   }
-  workflows-update-step: func(params: workflows-update-step-params) -> result<string, string>;
+  update-step: func(params: update-step-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

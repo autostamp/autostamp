@@ -1,4 +1,4 @@
-package autostamp:mandrillapp@0.2.1;
+package autostamp:mandrillapp@0.3.0;
 
 interface exports {
   record post-exports-activity-json-params {
@@ -188,33 +188,33 @@ interface ips {
 }
 
 interface messages {
-  record messages-send-template-message {
-    attachments: option<list<messages-send-template-message-attachments-item>>,
+  record send-template-message {
+    attachments: option<list<send-template-message-attachments-item>>,
     auto-html: option<string>,
     auto-text: option<string>,
     bcc-address: option<string>,
     from-email: option<string>,
     from-name: option<string>,
-    global-merge-vars: option<list<messages-send-template-message-global-merge-vars-item>>,
+    global-merge-vars: option<list<send-template-message-global-merge-vars-item>>,
     google-analytics-campaign: option<string>,
     google-analytics-domains: option<list<string>>,
-    headers: option<messages-send-template-message-headers>,
+    headers: option<send-template-message-headers>,
     html: option<string>,
-    images: option<list<messages-send-template-message-images-item>>,
+    images: option<list<send-template-message-images-item>>,
     important: option<bool>,
     inline-css: option<string>,
     merge: option<bool>,
-    merge-vars: option<list<messages-send-template-message-merge-vars-item>>,
-    metadata: option<messages-send-template-message-metadata>,
+    merge-vars: option<list<send-template-message-merge-vars-item>>,
+    metadata: option<send-template-message-metadata>,
     preserve-recipients: option<string>,
-    recipient-metadata: option<list<messages-send-template-message-recipient-metadata-item>>,
+    recipient-metadata: option<list<send-template-message-recipient-metadata-item>>,
     return-path-domain: option<string>,
     signing-domain: option<string>,
     subaccount: option<string>,
     subject: option<string>,
     tags: option<list<string>>,
     text: option<string>,
-    to: option<list<messages-send-template-message-to-item>>,
+    to: option<list<send-template-message-to-item>>,
     track-clicks: option<string>,
     track-opens: option<string>,
     tracking-domain: option<string>,
@@ -222,88 +222,88 @@ interface messages {
     view-content-link: option<string>
   }
 
-  record messages-send-template-message-attachments-item {
+  record send-template-message-attachments-item {
     content: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record messages-send-template-message-global-merge-vars-item {
+  record send-template-message-global-merge-vars-item {
     content: option<string>,
     name: option<string>
   }
 
-  record messages-send-template-message-headers {
+  record send-template-message-headers {
     reply-to: option<string>
   }
 
-  record messages-send-template-message-images-item {
+  record send-template-message-images-item {
     content: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record messages-send-template-message-merge-vars-item {
+  record send-template-message-merge-vars-item {
     rcpt: option<string>,
-    vars: option<list<messages-send-template-message-merge-vars-item-vars-item>>
+    vars: option<list<send-template-message-merge-vars-item-vars-item>>
   }
 
-  record messages-send-template-message-merge-vars-item-vars-item {
+  record send-template-message-merge-vars-item-vars-item {
     content: option<string>,
     name: option<string>
   }
 
-  record messages-send-template-message-metadata {
+  record send-template-message-metadata {
     website: option<string>
   }
 
-  record messages-send-template-message-recipient-metadata-item {
+  record send-template-message-recipient-metadata-item {
     rcpt: option<string>,
-    values: option<messages-send-template-message-recipient-metadata-item-values>
+    values: option<send-template-message-recipient-metadata-item-values>
   }
 
-  record messages-send-template-message-recipient-metadata-item-values {
+  record send-template-message-recipient-metadata-item-values {
     user-id: option<s32>
   }
 
-  record messages-send-template-message-to-item {
+  record send-template-message-to-item {
     email: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record messages-send-template-template-content-item {
+  record send-template-template-content-item {
     content: option<string>,
     name: option<string>
   }
 
-  record messages-send-message {
-    attachments: option<list<messages-send-message-attachments-item>>,
+  record send-message {
+    attachments: option<list<send-message-attachments-item>>,
     auto-html: option<string>,
     auto-text: option<string>,
     bcc-address: option<string>,
     from-email: option<string>,
     from-name: option<string>,
-    global-merge-vars: option<list<messages-send-message-global-merge-vars-item>>,
+    global-merge-vars: option<list<send-message-global-merge-vars-item>>,
     google-analytics-campaign: option<string>,
     google-analytics-domains: option<list<string>>,
-    headers: option<messages-send-message-headers>,
+    headers: option<send-message-headers>,
     html: option<string>,
-    images: option<list<messages-send-message-images-item>>,
+    images: option<list<send-message-images-item>>,
     important: option<bool>,
     inline-css: option<string>,
     merge: option<bool>,
-    merge-vars: option<list<messages-send-message-merge-vars-item>>,
-    metadata: option<messages-send-message-metadata>,
+    merge-vars: option<list<send-message-merge-vars-item>>,
+    metadata: option<send-message-metadata>,
     preserve-recipients: option<string>,
-    recipient-metadata: option<list<messages-send-message-recipient-metadata-item>>,
+    recipient-metadata: option<list<send-message-recipient-metadata-item>>,
     return-path-domain: option<string>,
     signing-domain: option<string>,
     subaccount: option<string>,
     subject: option<string>,
     tags: option<list<string>>,
     text: option<string>,
-    to: option<list<messages-send-message-to-item>>,
+    to: option<list<send-message-to-item>>,
     track-clicks: option<string>,
     track-opens: option<string>,
     tracking-domain: option<string>,
@@ -311,51 +311,51 @@ interface messages {
     view-content-link: option<string>
   }
 
-  record messages-send-message-attachments-item {
+  record send-message-attachments-item {
     content: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record messages-send-message-global-merge-vars-item {
+  record send-message-global-merge-vars-item {
     content: option<string>,
     name: option<string>
   }
 
-  record messages-send-message-headers {
+  record send-message-headers {
     reply-to: option<string>
   }
 
-  record messages-send-message-images-item {
+  record send-message-images-item {
     content: option<string>,
     name: option<string>,
     type-op: option<string>
   }
 
-  record messages-send-message-merge-vars-item {
+  record send-message-merge-vars-item {
     rcpt: option<string>,
-    vars: option<list<messages-send-message-merge-vars-item-vars-item>>
+    vars: option<list<send-message-merge-vars-item-vars-item>>
   }
 
-  record messages-send-message-merge-vars-item-vars-item {
+  record send-message-merge-vars-item-vars-item {
     content: option<string>,
     name: option<string>
   }
 
-  record messages-send-message-metadata {
+  record send-message-metadata {
     website: option<string>
   }
 
-  record messages-send-message-recipient-metadata-item {
+  record send-message-recipient-metadata-item {
     rcpt: option<string>,
-    values: option<messages-send-message-recipient-metadata-item-values>
+    values: option<send-message-recipient-metadata-item-values>
   }
 
-  record messages-send-message-recipient-metadata-item-values {
+  record send-message-recipient-metadata-item-values {
     user-id: option<s32>
   }
 
-  record messages-send-message-to-item {
+  record send-message-to-item {
     email: option<string>,
     name: option<string>,
     type-op: option<string>
@@ -437,9 +437,9 @@ interface messages {
     async-op: option<bool>,
     ip-pool: option<string>,
     key: option<string>,
-    message: option<messages-send-template-message>,
+    message: option<send-template-message>,
     send-at: option<string>,
-    template-content: option<list<messages-send-template-template-content-item>>,
+    template-content: option<list<send-template-template-content-item>>,
     template-name: option<string>
   }
   post-messages-send-template-json: func(params: post-messages-send-template-json-params) -> result<string, string>;
@@ -448,7 +448,7 @@ interface messages {
     async-op: option<bool>,
     ip-pool: option<string>,
     key: option<string>,
-    message: option<messages-send-message>,
+    message: option<send-message>,
     send-at: option<string>
   }
   post-messages-send-json: func(params: post-messages-send-json-params) -> result<string, string>;
@@ -636,12 +636,12 @@ interface tags {
 }
 
 interface templates {
-  record templates-render-merge-vars-item {
+  record render-merge-vars-item {
     content: option<string>,
     name: option<string>
   }
 
-  record templates-render-template-content-item {
+  record render-template-content-item {
     content: option<string>,
     name: option<string>
   }
@@ -685,8 +685,8 @@ interface templates {
 
   record post-templates-render-json-params {
     key: option<string>,
-    merge-vars: option<list<templates-render-merge-vars-item>>,
-    template-content: option<list<templates-render-template-content-item>>,
+    merge-vars: option<list<render-merge-vars-item>>,
+    template-content: option<list<render-template-content-item>>,
     template-name: option<string>
   }
   post-templates-render-json: func(params: post-templates-render-json-params) -> result<string, string>;

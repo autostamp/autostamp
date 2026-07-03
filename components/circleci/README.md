@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:circleci@0.2.1` |
-| Published version | `0.2.1+circleci-v1` |
+| Package | `autostamp:circleci@0.3.0` |
+| Published version | `0.3.0+circleci-v1` |
 | Tag filter | all tags |
 | Operations generated | 22 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

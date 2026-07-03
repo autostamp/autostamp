@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `BearerToken` | `Authorization: Bearer <secret>` |
 /// | `OAuth2UserToken` | `Authorization: Bearer <secret>` |
-package autostamp:twitter@0.2.1;
+package autostamp:twitter@0.3.0;
 
 interface compliance {
   enum list-batch-compliance-jobs-type-op-enum {
@@ -22,8 +22,21 @@ interface compliance {
     complete,
   }
 
+  enum list-batch-compliance-jobs-compliance-job-fields-item-enum {
+    created-at,
+    download-expires-at,
+    download-url,
+    id,
+    name,
+    resumable,
+    status,
+    type-op,
+    upload-expires-at,
+    upload-url,
+  }
+
   /// User-provided name for a compliance job.
-  record compliance-job-name {
+  record job-name {
     /// opaque schema; raw JSON
     value: string
   }
@@ -33,13 +46,15 @@ interface compliance {
     /// Type of Compliance Job to list.
     type-op: list-batch-compliance-jobs-type-op-enum,
     /// Status of Compliance Job to list.
-    status: option<list-batch-compliance-jobs-status-enum>
+    status: option<list-batch-compliance-jobs-status-enum>,
+    /// A comma separated list of ComplianceJob fields to display.
+    compliance-job-fields: option<list<list-batch-compliance-jobs-compliance-job-fields-item-enum>>
   }
   list-batch-compliance-jobs: func(params: list-batch-compliance-jobs-params) -> result<string, string>;
 
   /// Create compliance job
   record create-batch-compliance-job-params {
-    name: option<compliance-job-name>,
+    name: option<job-name>,
     /// If true, this endpoint will return a pre-signed URL with resumable uploads enabled.
     resumable: option<bool>,
     /// Type of compliance job to list.
@@ -50,7 +65,9 @@ interface compliance {
   /// Get Compliance Job
   record get-batch-compliance-job-params {
     /// The ID of the Compliance Job to retrieve.
-    id: string
+    id: string,
+    /// A comma separated list of ComplianceJob fields to display.
+    compliance-job-fields: option<list<list-batch-compliance-jobs-compliance-job-fields-item-enum>>
   }
   get-batch-compliance-job: func(params: get-batch-compliance-job-params) -> result<string, string>;
 
@@ -105,6 +122,84 @@ interface direct-messages {
     participants-leave,
   }
 
+  enum get-dm-conversations-with-participant-id-dm-events-dm-event-fields-item-enum {
+    attachments,
+    created-at,
+    dm-conversation-id,
+    event-type,
+    id,
+    participant-ids,
+    referenced-tweets,
+    sender-id,
+    text,
+  }
+
+  enum get-dm-conversations-with-participant-id-dm-events-expansions-item-enum {
+    attachments-media-keys,
+    participant-ids,
+    referenced-tweets-id,
+    sender-id,
+  }
+
+  enum get-dm-conversations-with-participant-id-dm-events-media-fields-item-enum {
+    alt-text,
+    duration-ms,
+    height,
+    media-key,
+    non-public-metrics,
+    organic-metrics,
+    preview-image-url,
+    promoted-metrics,
+    public-metrics,
+    type-op,
+    url,
+    variants,
+    width,
+  }
+
+  enum get-dm-conversations-with-participant-id-dm-events-user-fields-item-enum {
+    created-at,
+    description,
+    entities,
+    id,
+    location,
+    name,
+    pinned-tweet-id,
+    profile-image-url,
+    protected,
+    public-metrics,
+    url,
+    username,
+    verified,
+    verified-type,
+    withheld,
+  }
+
+  enum get-dm-conversations-with-participant-id-dm-events-tweet-fields-item-enum {
+    attachments,
+    author-id,
+    context-annotations,
+    conversation-id,
+    created-at,
+    edit-controls,
+    edit-history-tweet-ids,
+    entities,
+    geo,
+    id,
+    in-reply-to-user-id,
+    lang,
+    non-public-metrics,
+    organic-metrics,
+    possibly-sensitive,
+    promoted-metrics,
+    public-metrics,
+    referenced-tweets,
+    reply-settings,
+    source,
+    text,
+    withheld,
+  }
+
   record create-message-request {
     /// opaque schema; raw JSON
     value: string
@@ -140,7 +235,17 @@ interface direct-messages {
     /// This parameter is used to get a specified 'page' of results.
     pagination-token: option<pagination-token32>,
     /// The set of event_types to include in the results.
-    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>
+    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>,
+    /// A comma separated list of DmEvent fields to display.
+    dm-event-fields: option<list<get-dm-conversations-with-participant-id-dm-events-dm-event-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<get-dm-conversations-with-participant-id-dm-events-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<get-dm-conversations-with-participant-id-dm-events-media-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<get-dm-conversations-with-participant-id-dm-events-user-fields-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<get-dm-conversations-with-participant-id-dm-events-tweet-fields-item-enum>>
   }
   get-dm-conversations-with-participant-id-dm-events: func(params: get-dm-conversations-with-participant-id-dm-events-params) -> result<string, string>;
 
@@ -171,7 +276,17 @@ interface direct-messages {
     /// This parameter is used to get a specified 'page' of results.
     pagination-token: option<pagination-token32>,
     /// The set of event_types to include in the results.
-    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>
+    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>,
+    /// A comma separated list of DmEvent fields to display.
+    dm-event-fields: option<list<get-dm-conversations-with-participant-id-dm-events-dm-event-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<get-dm-conversations-with-participant-id-dm-events-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<get-dm-conversations-with-participant-id-dm-events-media-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<get-dm-conversations-with-participant-id-dm-events-user-fields-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<get-dm-conversations-with-participant-id-dm-events-tweet-fields-item-enum>>
   }
   get-dm-conversations-id-dm-events: func(params: get-dm-conversations-id-dm-events-params) -> result<string, string>;
 
@@ -182,13 +297,56 @@ interface direct-messages {
     /// This parameter is used to get a specified 'page' of results.
     pagination-token: option<pagination-token32>,
     /// The set of event_types to include in the results.
-    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>
+    event-types: option<list<get-dm-conversations-with-participant-id-dm-events-event-types-item-enum>>,
+    /// A comma separated list of DmEvent fields to display.
+    dm-event-fields: option<list<get-dm-conversations-with-participant-id-dm-events-dm-event-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<get-dm-conversations-with-participant-id-dm-events-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<get-dm-conversations-with-participant-id-dm-events-media-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<get-dm-conversations-with-participant-id-dm-events-user-fields-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<get-dm-conversations-with-participant-id-dm-events-tweet-fields-item-enum>>
   }
   get-dm-events: func(params: get-dm-events-params) -> result<string, string>;
 
 }
 
 interface lists {
+  enum list-id-get-list-fields-item-enum {
+    created-at,
+    description,
+    follower-count,
+    id,
+    member-count,
+    name,
+    owner-id,
+    private,
+  }
+
+  enum list-id-get-expansions-item-enum {
+    owner-id,
+  }
+
+  enum list-id-get-user-fields-item-enum {
+    created-at,
+    description,
+    entities,
+    id,
+    location,
+    name,
+    pinned-tweet-id,
+    profile-image-url,
+    protected,
+    public-metrics,
+    url,
+    username,
+    verified,
+    verified-type,
+    withheld,
+  }
+
   /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
   record user-id {
     /// opaque schema; raw JSON
@@ -218,7 +376,13 @@ interface lists {
   /// List lookup by List ID.
   record list-id-get-params {
     /// The ID of the List.
-    id: string
+    id: string,
+    /// A comma separated list of List fields to display.
+    list-fields: option<list<list-id-get-list-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-id-get-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-id-get-user-fields-item-enum>>
   }
   list-id-get: func(params: list-id-get-params) -> result<string, string>;
 
@@ -263,7 +427,13 @@ interface lists {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>
+    pagination-token: option<pagination-token-long>,
+    /// A comma separated list of List fields to display.
+    list-fields: option<list<list-id-get-list-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-id-get-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-id-get-user-fields-item-enum>>
   }
   user-followed-lists: func(params: user-followed-lists-params) -> result<string, string>;
 
@@ -291,7 +461,13 @@ interface lists {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>
+    pagination-token: option<pagination-token-long>,
+    /// A comma separated list of List fields to display.
+    list-fields: option<list<list-id-get-list-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-id-get-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-id-get-user-fields-item-enum>>
   }
   get-user-list-memberships: func(params: get-user-list-memberships-params) -> result<string, string>;
 
@@ -302,14 +478,26 @@ interface lists {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>
+    pagination-token: option<pagination-token-long>,
+    /// A comma separated list of List fields to display.
+    list-fields: option<list<list-id-get-list-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-id-get-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-id-get-user-fields-item-enum>>
   }
   list-user-owned-lists: func(params: list-user-owned-lists-params) -> result<string, string>;
 
   /// Get a User's Pinned Lists
   record list-user-pinned-lists-params {
     /// The ID of the authenticated source User for whom to return results.
-    id: string
+    id: string,
+    /// A comma separated list of List fields to display.
+    list-fields: option<list<list-id-get-list-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-id-get-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-id-get-user-fields-item-enum>>
   }
   list-user-pinned-lists: func(params: list-user-pinned-lists-params) -> result<string, string>;
 
@@ -333,6 +521,53 @@ interface lists {
 }
 
 interface users {
+  enum list-get-followers-user-fields-item-enum {
+    created-at,
+    description,
+    entities,
+    id,
+    location,
+    name,
+    pinned-tweet-id,
+    profile-image-url,
+    protected,
+    public-metrics,
+    url,
+    username,
+    verified,
+    verified-type,
+    withheld,
+  }
+
+  enum list-get-followers-expansions-item-enum {
+    pinned-tweet-id,
+  }
+
+  enum list-get-followers-tweet-fields-item-enum {
+    attachments,
+    author-id,
+    context-annotations,
+    conversation-id,
+    created-at,
+    edit-controls,
+    edit-history-tweet-ids,
+    entities,
+    geo,
+    id,
+    in-reply-to-user-id,
+    lang,
+    non-public-metrics,
+    organic-metrics,
+    possibly-sensitive,
+    promoted-metrics,
+    public-metrics,
+    referenced-tweets,
+    reply-settings,
+    source,
+    text,
+    withheld,
+  }
+
   /// A 'long' pagination token.
   record pagination-token-long {
     /// opaque schema; raw JSON
@@ -364,7 +599,13 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>
+    pagination-token: option<pagination-token-long>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   list-get-followers: func(params: list-get-followers-params) -> result<string, string>;
 
@@ -375,7 +616,13 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token-long>
+    pagination-token: option<pagination-token-long>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   list-get-members: func(params: list-get-members-params) -> result<string, string>;
 
@@ -386,7 +633,13 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>
+    pagination-token: option<pagination-token36>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   tweets-id-liking-users: func(params: tweets-id-liking-users-params) -> result<string, string>;
 
@@ -397,139 +650,291 @@ interface users {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>
+    pagination-token: option<pagination-token36>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   tweets-id-retweeting-users: func(params: tweets-id-retweeting-users-params) -> result<string, string>;
 
   /// User lookup by IDs
   record find-users-by-id-params {
     /// A list of User IDs, comma-separated. You can specify up to 100 IDs.
-    ids: list<user-id>
+    ids: list<user-id>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   find-users-by-id: func(params: find-users-by-id-params) -> result<string, string>;
 
   /// User lookup by usernames
   record find-users-by-username-params {
     /// A list of usernames, comma-separated.
-    usernames: list<string>
+    usernames: list<string>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   find-users-by-username: func(params: find-users-by-username-params) -> result<string, string>;
 
   /// User lookup by username
   record find-user-by-username-params {
     /// A username.
-    username: string
+    username: string,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   find-user-by-username: func(params: find-user-by-username-params) -> result<string, string>;
 
   /// User lookup me
-  find-my-user: func() -> result<string, string>;
+  record find-my-user-params {
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
+  }
+  find-my-user: func(params: find-my-user-params) -> result<string, string>;
 
   /// User lookup by ID
   record find-user-by-id-params {
     /// The ID of the User to lookup.
-    id: string
+    id: string,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
   find-user-by-id: func(params: find-user-by-id-params) -> result<string, string>;
 
   /// Returns User objects that are blocked by provided User ID
-  record users-id-blocking-params {
+  record id-blocking-params {
     /// The ID of the authenticated source User for whom to return results.
     id: string,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>
+    pagination-token: option<pagination-token32>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
-  users-id-blocking: func(params: users-id-blocking-params) -> result<string, string>;
+  id-blocking: func(params: id-blocking-params) -> result<string, string>;
 
   /// Block User by User ID
-  record users-id-block-params {
+  record id-block-params {
     /// The ID of the authenticated source User that is requesting to block the target User.
     id: string,
     target-user-id: user-id
   }
-  users-id-block: func(params: users-id-block-params) -> result<string, string>;
+  id-block: func(params: id-block-params) -> result<string, string>;
 
   /// Followers by User ID
-  record users-id-followers-params {
+  record id-followers-params {
     /// The ID of the User to lookup.
     id: string,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>
+    pagination-token: option<pagination-token32>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
-  users-id-followers: func(params: users-id-followers-params) -> result<string, string>;
+  id-followers: func(params: id-followers-params) -> result<string, string>;
 
   /// Following by User ID
-  record users-id-following-params {
+  record id-following-params {
     /// The ID of the User to lookup.
     id: string,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get a specified 'page' of results.
-    pagination-token: option<pagination-token32>
+    pagination-token: option<pagination-token32>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
-  users-id-following: func(params: users-id-following-params) -> result<string, string>;
+  id-following: func(params: id-following-params) -> result<string, string>;
 
   /// Follow User
-  record users-id-follow-params {
+  record id-follow-params {
     /// The ID of the authenticated source User that is requesting to follow the target User.
     id: string,
     target-user-id: user-id
   }
-  users-id-follow: func(params: users-id-follow-params) -> result<string, string>;
+  id-follow: func(params: id-follow-params) -> result<string, string>;
 
   /// Returns User objects that are muted by the provided User ID
-  record users-id-muting-params {
+  record id-muting-params {
     /// The ID of the authenticated source User for whom to return results.
     id: string,
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token-long>
+    pagination-token: option<pagination-token-long>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<list-get-followers-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<list-get-followers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<list-get-followers-tweet-fields-item-enum>>
   }
-  users-id-muting: func(params: users-id-muting-params) -> result<string, string>;
+  id-muting: func(params: id-muting-params) -> result<string, string>;
 
   /// Mute User by User ID.
-  record users-id-mute-params {
+  record id-mute-params {
     /// The ID of the authenticated source User that is requesting to mute the target User.
     id: string,
     target-user-id: user-id
   }
-  users-id-mute: func(params: users-id-mute-params) -> result<string, string>;
+  id-mute: func(params: id-mute-params) -> result<string, string>;
 
   /// Unblock User by User ID
-  record users-id-unblock-params {
+  record id-unblock-params {
     /// The ID of the authenticated source User that is requesting to unblock the target User.
     source-user-id: string,
     /// The ID of the User that the source User is requesting to unblock.
     target-user-id: string
   }
-  users-id-unblock: func(params: users-id-unblock-params) -> result<string, string>;
+  id-unblock: func(params: id-unblock-params) -> result<string, string>;
 
   /// Unfollow User
-  record users-id-unfollow-params {
+  record id-unfollow-params {
     /// The ID of the authenticated source User that is requesting to unfollow the target User.
     source-user-id: string,
     /// The ID of the User that the source User is requesting to unfollow.
     target-user-id: string
   }
-  users-id-unfollow: func(params: users-id-unfollow-params) -> result<string, string>;
+  id-unfollow: func(params: id-unfollow-params) -> result<string, string>;
 
   /// Unmute User by User ID
-  record users-id-unmute-params {
+  record id-unmute-params {
     /// The ID of the authenticated source User that is requesting to unmute the target User.
     source-user-id: string,
     /// The ID of the User that the source User is requesting to unmute.
     target-user-id: string
   }
-  users-id-unmute: func(params: users-id-unmute-params) -> result<string, string>;
+  id-unmute: func(params: id-unmute-params) -> result<string, string>;
 
 }
 
 interface tweets {
+  enum lists-id-tweets-tweet-fields-item-enum {
+    attachments,
+    author-id,
+    context-annotations,
+    conversation-id,
+    created-at,
+    edit-controls,
+    edit-history-tweet-ids,
+    entities,
+    geo,
+    id,
+    in-reply-to-user-id,
+    lang,
+    non-public-metrics,
+    organic-metrics,
+    possibly-sensitive,
+    promoted-metrics,
+    public-metrics,
+    referenced-tweets,
+    reply-settings,
+    source,
+    text,
+    withheld,
+  }
+
+  enum lists-id-tweets-expansions-item-enum {
+    attachments-media-keys,
+    attachments-poll-ids,
+    author-id,
+    edit-history-tweet-ids,
+    entities-mentions-username,
+    geo-place-id,
+    in-reply-to-user-id,
+    referenced-tweets-id,
+    referenced-tweets-id-author-id,
+  }
+
+  enum lists-id-tweets-media-fields-item-enum {
+    alt-text,
+    duration-ms,
+    height,
+    media-key,
+    non-public-metrics,
+    organic-metrics,
+    preview-image-url,
+    promoted-metrics,
+    public-metrics,
+    type-op,
+    url,
+    variants,
+    width,
+  }
+
+  enum lists-id-tweets-poll-fields-item-enum {
+    duration-minutes,
+    end-datetime,
+    id,
+    options,
+    voting-status,
+  }
+
+  enum lists-id-tweets-user-fields-item-enum {
+    created-at,
+    description,
+    entities,
+    id,
+    location,
+    name,
+    pinned-tweet-id,
+    profile-image-url,
+    protected,
+    public-metrics,
+    url,
+    username,
+    verified,
+    verified-type,
+    withheld,
+  }
+
+  enum lists-id-tweets-place-fields-item-enum {
+    contained-within,
+    country,
+    country-code,
+    full-name,
+    geo,
+    id,
+    name,
+    place-type,
+  }
+
   enum tweet-create-request-poll-reply-settings-enum {
     following,
     mentioned-users,
@@ -541,7 +946,13 @@ interface tweets {
     day,
   }
 
-  enum tweets-fullarchive-search-sort-order-enum {
+  enum tweet-counts-full-archive-search-search-count-fields-item-enum {
+    end,
+    start,
+    tweet-count,
+  }
+
+  enum fullarchive-search-sort-order-enum {
     recency,
     relevancy,
   }
@@ -623,14 +1034,38 @@ interface tweets {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>
+    pagination-token: option<pagination-token36>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   lists-id-tweets: func(params: lists-id-tweets-params) -> result<string, string>;
 
   /// Tweet lookup by Tweet IDs
   record find-tweets-by-id-params {
     /// A comma separated list of Tweet IDs. Up to 100 are allowed in a single request.
-    ids: list<tweet-id>
+    ids: list<tweet-id>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   find-tweets-by-id: func(params: find-tweets-by-id-params) -> result<string, string>;
 
@@ -676,7 +1111,9 @@ interface tweets {
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
     pagination-token: option<pagination-token36>,
     /// The granularity for the search counts results.
-    granularity: option<tweet-counts-full-archive-search-granularity-enum>
+    granularity: option<tweet-counts-full-archive-search-granularity-enum>,
+    /// A comma separated list of SearchCount fields to display.
+    search-count-fields: option<list<tweet-counts-full-archive-search-search-count-fields-item-enum>>
   }
   tweet-counts-full-archive-search: func(params: tweet-counts-full-archive-search-params) -> result<string, string>;
 
@@ -697,7 +1134,9 @@ interface tweets {
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
     pagination-token: option<pagination-token36>,
     /// The granularity for the search counts results.
-    granularity: option<tweet-counts-full-archive-search-granularity-enum>
+    granularity: option<tweet-counts-full-archive-search-granularity-enum>,
+    /// A comma separated list of SearchCount fields to display.
+    search-count-fields: option<list<tweet-counts-full-archive-search-search-count-fields-item-enum>>
   }
   tweet-counts-recent-search: func(params: tweet-counts-recent-search-params) -> result<string, string>;
 
@@ -710,14 +1149,38 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp to which the Tweets will be provided.
     start-time: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided.
-    end-time: option<string>
+    end-time: option<string>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   get-tweets-firehose-stream: func(params: get-tweets-firehose-stream-params) -> result<string, string>;
 
   /// Sample stream
   record sample-stream-params {
     /// The number of minutes of backfill requested.
-    backfill-minutes: option<s32>
+    backfill-minutes: option<s32>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   sample-stream: func(params: sample-stream-params) -> result<string, string>;
 
@@ -730,12 +1193,24 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp to which the Tweets will be provided.
     start-time: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided.
-    end-time: option<string>
+    end-time: option<string>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   get-tweets-sample10-stream: func(params: get-tweets-sample10-stream-params) -> result<string, string>;
 
   /// Full-archive search
-  record tweets-fullarchive-search-params {
+  record fullarchive-search-params {
     /// One query/rule/filter for matching Tweets. Refer to https://t.co/rulelength to identify the max query length.
     query: string,
     /// YYYY-MM-DDTHH:mm:ssZ. The oldest UTC timestamp from which the Tweets will be provided. Timestamp is in second granularity and is inclusive (i.e. 12:00:01 includes the first second of the minute).
@@ -753,12 +1228,24 @@ interface tweets {
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
     pagination-token: option<pagination-token36>,
     /// This order in which to return results.
-    sort-order: option<tweets-fullarchive-search-sort-order-enum>
+    sort-order: option<fullarchive-search-sort-order-enum>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
-  tweets-fullarchive-search: func(params: tweets-fullarchive-search-params) -> result<string, string>;
+  fullarchive-search: func(params: fullarchive-search-params) -> result<string, string>;
 
   /// Recent search
-  record tweets-recent-search-params {
+  record recent-search-params {
     /// One query/rule/filter for matching Tweets. Refer to https://t.co/rulelength to identify the max query length.
     query: string,
     /// YYYY-MM-DDTHH:mm:ssZ. The oldest UTC timestamp from which the Tweets will be provided. Timestamp is in second granularity and is inclusive (i.e. 12:00:01 includes the first second of the minute).
@@ -776,9 +1263,21 @@ interface tweets {
     /// This parameter is used to get the next 'page' of results. The value used with the parameter is pulled directly from the response provided by the API, and should not be modified.
     pagination-token: option<pagination-token36>,
     /// This order in which to return results.
-    sort-order: option<tweets-fullarchive-search-sort-order-enum>
+    sort-order: option<fullarchive-search-sort-order-enum>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
-  tweets-recent-search: func(params: tweets-recent-search-params) -> result<string, string>;
+  recent-search: func(params: recent-search-params) -> result<string, string>;
 
   /// Filtered stream
   record search-stream-params {
@@ -787,7 +1286,19 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided.
     start-time: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided.
-    end-time: option<string>
+    end-time: option<string>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   search-stream: func(params: search-stream-params) -> result<string, string>;
 
@@ -814,7 +1325,19 @@ interface tweets {
   /// Tweet lookup by Tweet ID
   record find-tweet-by-id-params {
     /// A single Tweet ID.
-    id: string
+    id: string,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   find-tweet-by-id: func(params: find-tweet-by-id-params) -> result<string, string>;
 
@@ -834,7 +1357,19 @@ interface tweets {
     /// This parameter is used to get a specified 'page' of results.
     pagination-token: option<pagination-token36>,
     /// The set of entities to exclude (e.g. 'replies' or 'retweets').
-    exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>
+    exclude: option<list<find-tweets-that-quote-a-tweet-exclude-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   find-tweets-that-quote-a-tweet: func(params: find-tweets-that-quote-a-tweet-params) -> result<string, string>;
 
@@ -853,7 +1388,19 @@ interface tweets {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>
+    pagination-token: option<pagination-token36>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   users-id-liked-tweets: func(params: users-id-liked-tweets-params) -> result<string, string>;
 
@@ -889,7 +1436,19 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
     start-time: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided. The until_id parameter takes precedence if it is also specified.
-    end-time: option<string>
+    end-time: option<string>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   users-id-mentions: func(params: users-id-mentions-params) -> result<string, string>;
 
@@ -927,7 +1486,19 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
     start-time: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided. The until_id parameter takes precedence if it is also specified.
-    end-time: option<string>
+    end-time: option<string>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   users-id-timeline: func(params: users-id-timeline-params) -> result<string, string>;
 
@@ -948,7 +1519,19 @@ interface tweets {
     /// YYYY-MM-DDTHH:mm:ssZ. The earliest UTC timestamp from which the Tweets will be provided. The since_id parameter takes precedence if it is also specified.
     start-time: option<string>,
     /// YYYY-MM-DDTHH:mm:ssZ. The latest UTC timestamp to which the Tweets will be provided. The until_id parameter takes precedence if it is also specified.
-    end-time: option<string>
+    end-time: option<string>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<lists-id-tweets-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<lists-id-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<lists-id-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<lists-id-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<lists-id-tweets-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<lists-id-tweets-place-fields-item-enum>>
   }
   users-id-tweets: func(params: users-id-tweets-params) -> result<string, string>;
 
@@ -961,10 +1544,138 @@ interface general {
 }
 
 interface spaces {
+  enum find-spaces-by-ids-space-fields-item-enum {
+    created-at,
+    creator-id,
+    ended-at,
+    host-ids,
+    id,
+    invited-user-ids,
+    is-ticketed,
+    lang,
+    participant-count,
+    scheduled-start,
+    speaker-ids,
+    started-at,
+    state,
+    subscriber-count,
+    title,
+    topic-ids,
+    updated-at,
+  }
+
+  enum find-spaces-by-ids-expansions-item-enum {
+    creator-id,
+    host-ids,
+    invited-user-ids,
+    speaker-ids,
+    topic-ids,
+  }
+
+  enum find-spaces-by-ids-user-fields-item-enum {
+    created-at,
+    description,
+    entities,
+    id,
+    location,
+    name,
+    pinned-tweet-id,
+    profile-image-url,
+    protected,
+    public-metrics,
+    url,
+    username,
+    verified,
+    verified-type,
+    withheld,
+  }
+
+  enum find-spaces-by-ids-topic-fields-item-enum {
+    description,
+    id,
+    name,
+  }
+
   enum search-spaces-state-enum {
     live,
     scheduled,
     all,
+  }
+
+  enum space-buyers-expansions-item-enum {
+    pinned-tweet-id,
+  }
+
+  enum space-buyers-tweet-fields-item-enum {
+    attachments,
+    author-id,
+    context-annotations,
+    conversation-id,
+    created-at,
+    edit-controls,
+    edit-history-tweet-ids,
+    entities,
+    geo,
+    id,
+    in-reply-to-user-id,
+    lang,
+    non-public-metrics,
+    organic-metrics,
+    possibly-sensitive,
+    promoted-metrics,
+    public-metrics,
+    referenced-tweets,
+    reply-settings,
+    source,
+    text,
+    withheld,
+  }
+
+  enum space-tweets-expansions-item-enum {
+    attachments-media-keys,
+    attachments-poll-ids,
+    author-id,
+    edit-history-tweet-ids,
+    entities-mentions-username,
+    geo-place-id,
+    in-reply-to-user-id,
+    referenced-tweets-id,
+    referenced-tweets-id-author-id,
+  }
+
+  enum space-tweets-media-fields-item-enum {
+    alt-text,
+    duration-ms,
+    height,
+    media-key,
+    non-public-metrics,
+    organic-metrics,
+    preview-image-url,
+    promoted-metrics,
+    public-metrics,
+    type-op,
+    url,
+    variants,
+    width,
+  }
+
+  enum space-tweets-poll-fields-item-enum {
+    duration-minutes,
+    end-datetime,
+    id,
+    options,
+    voting-status,
+  }
+
+  enum space-tweets-place-fields-item-enum {
+    contained-within,
+    country,
+    country-code,
+    full-name,
+    geo,
+    id,
+    name,
+    place-type,
   }
 
   /// Unique identifier of this User. This is returned as a string in order to avoid complications with languages and tools that cannot handle large integers.
@@ -982,14 +1693,30 @@ interface spaces {
   /// Space lookup up Space IDs
   record find-spaces-by-ids-params {
     /// The list of Space IDs to return.
-    ids: list<string>
+    ids: list<string>,
+    /// A comma separated list of Space fields to display.
+    space-fields: option<list<find-spaces-by-ids-space-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<find-spaces-by-ids-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<find-spaces-by-ids-user-fields-item-enum>>,
+    /// A comma separated list of Topic fields to display.
+    topic-fields: option<list<find-spaces-by-ids-topic-fields-item-enum>>
   }
   find-spaces-by-ids: func(params: find-spaces-by-ids-params) -> result<string, string>;
 
   /// Space lookup by their creators
   record find-spaces-by-creator-ids-params {
     /// The IDs of Users to search through.
-    user-ids: list<user-id>
+    user-ids: list<user-id>,
+    /// A comma separated list of Space fields to display.
+    space-fields: option<list<find-spaces-by-ids-space-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<find-spaces-by-ids-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<find-spaces-by-ids-user-fields-item-enum>>,
+    /// A comma separated list of Topic fields to display.
+    topic-fields: option<list<find-spaces-by-ids-topic-fields-item-enum>>
   }
   find-spaces-by-creator-ids: func(params: find-spaces-by-creator-ids-params) -> result<string, string>;
 
@@ -1000,14 +1727,30 @@ interface spaces {
     /// The state of Spaces to search for.
     state: option<search-spaces-state-enum>,
     /// The number of results to return.
-    max-results: option<s32>
+    max-results: option<s32>,
+    /// A comma separated list of Space fields to display.
+    space-fields: option<list<find-spaces-by-ids-space-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<find-spaces-by-ids-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<find-spaces-by-ids-user-fields-item-enum>>,
+    /// A comma separated list of Topic fields to display.
+    topic-fields: option<list<find-spaces-by-ids-topic-fields-item-enum>>
   }
   search-spaces: func(params: search-spaces-params) -> result<string, string>;
 
   /// Space lookup by Space ID
   record find-space-by-id-params {
     /// The ID of the Space to be retrieved.
-    id: string
+    id: string,
+    /// A comma separated list of Space fields to display.
+    space-fields: option<list<find-spaces-by-ids-space-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<find-spaces-by-ids-expansions-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<find-spaces-by-ids-user-fields-item-enum>>,
+    /// A comma separated list of Topic fields to display.
+    topic-fields: option<list<find-spaces-by-ids-topic-fields-item-enum>>
   }
   find-space-by-id: func(params: find-space-by-id-params) -> result<string, string>;
 
@@ -1018,7 +1761,13 @@ interface spaces {
     /// This parameter is used to get a specified 'page' of results.
     pagination-token: option<pagination-token32>,
     /// The maximum number of results.
-    max-results: option<s32>
+    max-results: option<s32>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<find-spaces-by-ids-user-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<space-buyers-expansions-item-enum>>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<space-buyers-tweet-fields-item-enum>>
   }
   space-buyers: func(params: space-buyers-params) -> result<string, string>;
 
@@ -1027,13 +1776,115 @@ interface spaces {
     /// The ID of the Space to be retrieved.
     id: string,
     /// The number of Tweets to fetch from the provided space. If not provided, the value will default to the maximum of 100.
-    max-results: option<s32>
+    max-results: option<s32>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<space-buyers-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<space-tweets-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<space-tweets-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<space-tweets-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<find-spaces-by-ids-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<space-tweets-place-fields-item-enum>>
   }
   space-tweets: func(params: space-tweets-params) -> result<string, string>;
 
 }
 
 interface bookmarks {
+  enum get-users-id-bookmarks-tweet-fields-item-enum {
+    attachments,
+    author-id,
+    context-annotations,
+    conversation-id,
+    created-at,
+    edit-controls,
+    edit-history-tweet-ids,
+    entities,
+    geo,
+    id,
+    in-reply-to-user-id,
+    lang,
+    non-public-metrics,
+    organic-metrics,
+    possibly-sensitive,
+    promoted-metrics,
+    public-metrics,
+    referenced-tweets,
+    reply-settings,
+    source,
+    text,
+    withheld,
+  }
+
+  enum get-users-id-bookmarks-expansions-item-enum {
+    attachments-media-keys,
+    attachments-poll-ids,
+    author-id,
+    edit-history-tweet-ids,
+    entities-mentions-username,
+    geo-place-id,
+    in-reply-to-user-id,
+    referenced-tweets-id,
+    referenced-tweets-id-author-id,
+  }
+
+  enum get-users-id-bookmarks-media-fields-item-enum {
+    alt-text,
+    duration-ms,
+    height,
+    media-key,
+    non-public-metrics,
+    organic-metrics,
+    preview-image-url,
+    promoted-metrics,
+    public-metrics,
+    type-op,
+    url,
+    variants,
+    width,
+  }
+
+  enum get-users-id-bookmarks-poll-fields-item-enum {
+    duration-minutes,
+    end-datetime,
+    id,
+    options,
+    voting-status,
+  }
+
+  enum get-users-id-bookmarks-user-fields-item-enum {
+    created-at,
+    description,
+    entities,
+    id,
+    location,
+    name,
+    pinned-tweet-id,
+    profile-image-url,
+    protected,
+    public-metrics,
+    url,
+    username,
+    verified,
+    verified-type,
+    withheld,
+  }
+
+  enum get-users-id-bookmarks-place-fields-item-enum {
+    contained-within,
+    country,
+    country-code,
+    full-name,
+    geo,
+    id,
+    name,
+    place-type,
+  }
+
   /// A base36 pagination token.
   record pagination-token36 {
     /// opaque schema; raw JSON
@@ -1053,7 +1904,19 @@ interface bookmarks {
     /// The maximum number of results.
     max-results: option<s32>,
     /// This parameter is used to get the next 'page' of results.
-    pagination-token: option<pagination-token36>
+    pagination-token: option<pagination-token36>,
+    /// A comma separated list of Tweet fields to display.
+    tweet-fields: option<list<get-users-id-bookmarks-tweet-fields-item-enum>>,
+    /// A comma separated list of fields to expand.
+    expansions: option<list<get-users-id-bookmarks-expansions-item-enum>>,
+    /// A comma separated list of Media fields to display.
+    media-fields: option<list<get-users-id-bookmarks-media-fields-item-enum>>,
+    /// A comma separated list of Poll fields to display.
+    poll-fields: option<list<get-users-id-bookmarks-poll-fields-item-enum>>,
+    /// A comma separated list of User fields to display.
+    user-fields: option<list<get-users-id-bookmarks-user-fields-item-enum>>,
+    /// A comma separated list of Place fields to display.
+    place-fields: option<list<get-users-id-bookmarks-place-fields-item-enum>>
   }
   get-users-id-bookmarks: func(params: get-users-id-bookmarks-params) -> result<string, string>;
 

@@ -302,6 +302,7 @@ const OP_BULK_CREDENTIALS_UPDATE_BULK_TELEPHONY_CREDENTIAL: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/actions/bulk/telephony_credentials",
     fields: &[
+        FieldSpec { snake: "filter_tag", location: FieldLocation::Query },
         FieldSpec { snake: "amount", location: FieldLocation::Body },
         FieldSpec { snake: "connection_id", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
@@ -316,6 +317,7 @@ const OP_BULK_CREDENTIALS_DELETE_BULK_TELEPHONY_CREDENTIAL: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/actions/bulk/telephony_credentials",
     fields: &[
+        FieldSpec { snake: "filter_tag", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -327,6 +329,7 @@ const OP_BULK_CREDENTIALS_BULK_CREDENTIAL_ACTION: OpSpec = OpSpec {
     path_template: "/actions/{action}/telephony_credentials",
     fields: &[
         FieldSpec { snake: "action", location: FieldLocation::Path },
+        FieldSpec { snake: "filter_tag", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -344,6 +347,7 @@ fn iface_bulk_credentials__create_bulk_telephony_credential_params__to_json(p: &
 
 fn iface_bulk_credentials__update_bulk_telephony_credential_params__to_json(p: &iface_bulk_credentials::UpdateBulkTelephonyCredentialParams) -> Value {
     let mut m = Map::new();
+    m.insert("filter_tag".into(), Value::String((&p.filter_tag).clone()));
     m.insert("amount".into(), match (&p.amount) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("connection_id".into(), Value::String((&p.connection_id).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -351,9 +355,16 @@ fn iface_bulk_credentials__update_bulk_telephony_credential_params__to_json(p: &
     Value::Object(m)
 }
 
+fn iface_bulk_credentials__delete_bulk_telephony_credential_params__to_json(p: &iface_bulk_credentials::DeleteBulkTelephonyCredentialParams) -> Value {
+    let mut m = Map::new();
+    m.insert("filter_tag".into(), Value::String((&p.filter_tag).clone()));
+    Value::Object(m)
+}
+
 fn iface_bulk_credentials__bulk_credential_action_params__to_json(p: &iface_bulk_credentials::BulkCredentialActionParams) -> Value {
     let mut m = Map::new();
     m.insert("action".into(), Value::String((&p.action).clone()));
+    m.insert("filter_tag".into(), Value::String((&p.filter_tag).clone()));
     Value::Object(m)
 }
 
@@ -366,8 +377,9 @@ impl iface_bulk_credentials::Guest for crate::Component {
         let json = iface_bulk_credentials__update_bulk_telephony_credential_params__to_json(&params);
         dispatch(&OP_BULK_CREDENTIALS_UPDATE_BULK_TELEPHONY_CREDENTIAL, json)
     }
-    fn delete_bulk_telephony_credential() -> Result<String, String> {
-        dispatch(&OP_BULK_CREDENTIALS_DELETE_BULK_TELEPHONY_CREDENTIAL, Value::Object(Map::new()))
+    fn delete_bulk_telephony_credential(params: iface_bulk_credentials::DeleteBulkTelephonyCredentialParams) -> Result<String, String> {
+        let json = iface_bulk_credentials__delete_bulk_telephony_credential_params__to_json(&params);
+        dispatch(&OP_BULK_CREDENTIALS_DELETE_BULK_TELEPHONY_CREDENTIAL, json)
     }
     fn bulk_credential_action(params: iface_bulk_credentials::BulkCredentialActionParams) -> Result<String, String> {
         let json = iface_bulk_credentials__bulk_credential_action_params__to_json(&params);
@@ -402,10 +414,14 @@ const OP_SIM_CARDS_SIM_CARD_REGISTER: OpSpec = OpSpec {
     ],
 };
 
-const OP_SIM_CARDS_SIM_CARDS_GET: OpSpec = OpSpec {
+const OP_SIM_CARDS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_cards",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "include_sim_card_group", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_sim_card_group_id", location: FieldLocation::Query },
         FieldSpec { snake: "filter_tags", location: FieldLocation::Query },
         FieldSpec { snake: "filter_iccid", location: FieldLocation::Query },
     ],
@@ -429,6 +445,8 @@ const OP_SIM_CARDS_SIM_CARD_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_cards/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_sim_card_group", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -439,9 +457,9 @@ const OP_SIM_CARDS_SIM_CARD_UPDATE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/sim_cards/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "created_at", location: FieldLocation::Body },
         FieldSpec { snake: "iccid", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
         FieldSpec { snake: "imsi", location: FieldLocation::Body },
         FieldSpec { snake: "ipv4", location: FieldLocation::Body },
         FieldSpec { snake: "ipv6", location: FieldLocation::Body },
@@ -461,6 +479,7 @@ const OP_SIM_CARDS_SIM_CARD_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sim_cards/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -471,6 +490,7 @@ const OP_SIM_CARDS_SIM_CARD_DISABLE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sim_cards/{id}/actions/disable",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -481,6 +501,7 @@ const OP_SIM_CARDS_SIM_CARD_ENABLE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sim_cards/{id}/actions/enable",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -491,6 +512,7 @@ const OP_SIM_CARDS_SIM_CARD_SET_STANDBY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sim_cards/{id}/actions/set_standby",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -501,6 +523,8 @@ const OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_cards/{sim_card_id}/network_preferences",
     fields: &[
+        FieldSpec { snake: "sim_card_id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_ota_updates", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -511,6 +535,7 @@ const OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_PUT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sim_cards/{sim_card_id}/network_preferences",
     fields: &[
+        FieldSpec { snake: "sim_card_id", location: FieldLocation::Path },
         FieldSpec { snake: "mobile_operator_networks_preferences", location: FieldLocation::Body },
     ],
     auth: &[
@@ -522,6 +547,7 @@ const OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sim_cards/{sim_card_id}/network_preferences",
     fields: &[
+        FieldSpec { snake: "sim_card_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -532,6 +558,7 @@ const OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_cards/{sim_card_id}/public_ip",
     fields: &[
+        FieldSpec { snake: "sim_card_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -542,6 +569,7 @@ const OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sim_cards/{sim_card_id}/public_ip",
     fields: &[
+        FieldSpec { snake: "sim_card_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -552,6 +580,7 @@ const OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sim_cards/{sim_card_id}/public_ip",
     fields: &[
+        FieldSpec { snake: "sim_card_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -562,6 +591,9 @@ const OP_SIM_CARDS_WIRELESS_CONNECTIVITY_LOGS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_cards/{sim_card_id}/wireless_connectivity_logs",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "sim_card_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -616,8 +648,12 @@ fn iface_sim_cards__sim_card_register_params__to_json(p: &iface_sim_cards::SimCa
     Value::Object(m)
 }
 
-fn iface_sim_cards__sim_cards_get_params__to_json(p: &iface_sim_cards::SimCardsGetParams) -> Value {
+fn iface_sim_cards__get_params__to_json(p: &iface_sim_cards::GetParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("include_sim_card_group".into(), match (&p.include_sim_card_group) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("filter_sim_card_group_id".into(), match (&p.filter_sim_card_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_tags".into(), match (&p.filter_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("filter_iccid".into(), match (&p.filter_iccid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -629,11 +665,18 @@ fn iface_sim_cards__post_validate_registration_codes_params__to_json(p: &iface_s
     Value::Object(m)
 }
 
+fn iface_sim_cards__sim_card_get_params__to_json(p: &iface_sim_cards::SimCardGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("include_sim_card_group".into(), match (&p.include_sim_card_group) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_sim_cards__sim_card_update_params__to_json(p: &iface_sim_cards::SimCardUpdateParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("iccid".into(), match (&p.iccid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("imsi".into(), match (&p.imsi) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ipv4".into(), match (&p.ipv4) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ipv6".into(), match (&p.ipv6) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -646,9 +689,73 @@ fn iface_sim_cards__sim_card_update_params__to_json(p: &iface_sim_cards::SimCard
     Value::Object(m)
 }
 
+fn iface_sim_cards__sim_card_delete_params__to_json(p: &iface_sim_cards::SimCardDeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_disable_params__to_json(p: &iface_sim_cards::SimCardDisableParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_enable_params__to_json(p: &iface_sim_cards::SimCardEnableParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_set_standby_params__to_json(p: &iface_sim_cards::SimCardSetStandbyParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_network_preferences_get_params__to_json(p: &iface_sim_cards::SimCardNetworkPreferencesGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("sim_card_id".into(), Value::String((&p.sim_card_id).clone()));
+    m.insert("include_ota_updates".into(), match (&p.include_ota_updates) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_sim_cards__sim_card_network_preferences_put_params__to_json(p: &iface_sim_cards::SimCardNetworkPreferencesPutParams) -> Value {
     let mut m = Map::new();
+    m.insert("sim_card_id".into(), Value::String((&p.sim_card_id).clone()));
     m.insert("mobile_operator_networks_preferences".into(), match (&p.mobile_operator_networks_preferences) { Some(v) => Value::Array((v).iter().map(|v| iface_sim_cards__mobile_operator_network_preferences_request__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_network_preferences_delete_params__to_json(p: &iface_sim_cards::SimCardNetworkPreferencesDeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("sim_card_id".into(), Value::String((&p.sim_card_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_public_ip_get_params__to_json(p: &iface_sim_cards::SimCardPublicIpGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("sim_card_id".into(), Value::String((&p.sim_card_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_public_ip_post_params__to_json(p: &iface_sim_cards::SimCardPublicIpPostParams) -> Value {
+    let mut m = Map::new();
+    m.insert("sim_card_id".into(), Value::String((&p.sim_card_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__sim_card_public_ip_delete_params__to_json(p: &iface_sim_cards::SimCardPublicIpDeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("sim_card_id".into(), Value::String((&p.sim_card_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_cards__wireless_connectivity_logs_get_params__to_json(p: &iface_sim_cards::WirelessConnectivityLogsGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sim_card_id".into(), Value::String((&p.sim_card_id).clone()));
     Value::Object(m)
 }
 
@@ -661,54 +768,65 @@ impl iface_sim_cards::Guest for crate::Component {
         let json = iface_sim_cards__sim_card_register_params__to_json(&params);
         dispatch(&OP_SIM_CARDS_SIM_CARD_REGISTER, json)
     }
-    fn sim_cards_get(params: iface_sim_cards::SimCardsGetParams) -> Result<String, String> {
-        let json = iface_sim_cards__sim_cards_get_params__to_json(&params);
-        dispatch(&OP_SIM_CARDS_SIM_CARDS_GET, json)
+    fn get(params: iface_sim_cards::GetParams) -> Result<String, String> {
+        let json = iface_sim_cards__get_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_GET, json)
     }
     fn post_validate_registration_codes(params: iface_sim_cards::PostValidateRegistrationCodesParams) -> Result<String, String> {
         let json = iface_sim_cards__post_validate_registration_codes_params__to_json(&params);
         dispatch(&OP_SIM_CARDS_POST_VALIDATE_REGISTRATION_CODES, json)
     }
-    fn sim_card_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_GET, Value::Object(Map::new()))
+    fn sim_card_get(params: iface_sim_cards::SimCardGetParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_get_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_GET, json)
     }
     fn sim_card_update(params: iface_sim_cards::SimCardUpdateParams) -> Result<String, String> {
         let json = iface_sim_cards__sim_card_update_params__to_json(&params);
         dispatch(&OP_SIM_CARDS_SIM_CARD_UPDATE, json)
     }
-    fn sim_card_delete() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_DELETE, Value::Object(Map::new()))
+    fn sim_card_delete(params: iface_sim_cards::SimCardDeleteParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_delete_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_DELETE, json)
     }
-    fn sim_card_disable() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_DISABLE, Value::Object(Map::new()))
+    fn sim_card_disable(params: iface_sim_cards::SimCardDisableParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_disable_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_DISABLE, json)
     }
-    fn sim_card_enable() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_ENABLE, Value::Object(Map::new()))
+    fn sim_card_enable(params: iface_sim_cards::SimCardEnableParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_enable_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_ENABLE, json)
     }
-    fn sim_card_set_standby() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_SET_STANDBY, Value::Object(Map::new()))
+    fn sim_card_set_standby(params: iface_sim_cards::SimCardSetStandbyParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_set_standby_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_SET_STANDBY, json)
     }
-    fn sim_card_network_preferences_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_GET, Value::Object(Map::new()))
+    fn sim_card_network_preferences_get(params: iface_sim_cards::SimCardNetworkPreferencesGetParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_network_preferences_get_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_GET, json)
     }
     fn sim_card_network_preferences_put(params: iface_sim_cards::SimCardNetworkPreferencesPutParams) -> Result<String, String> {
         let json = iface_sim_cards__sim_card_network_preferences_put_params__to_json(&params);
         dispatch(&OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_PUT, json)
     }
-    fn sim_card_network_preferences_delete() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_DELETE, Value::Object(Map::new()))
+    fn sim_card_network_preferences_delete(params: iface_sim_cards::SimCardNetworkPreferencesDeleteParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_network_preferences_delete_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_NETWORK_PREFERENCES_DELETE, json)
     }
-    fn sim_card_public_ip_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_GET, Value::Object(Map::new()))
+    fn sim_card_public_ip_get(params: iface_sim_cards::SimCardPublicIpGetParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_public_ip_get_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_GET, json)
     }
-    fn sim_card_public_ip_post() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_POST, Value::Object(Map::new()))
+    fn sim_card_public_ip_post(params: iface_sim_cards::SimCardPublicIpPostParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_public_ip_post_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_POST, json)
     }
-    fn sim_card_public_ip_delete() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_DELETE, Value::Object(Map::new()))
+    fn sim_card_public_ip_delete(params: iface_sim_cards::SimCardPublicIpDeleteParams) -> Result<String, String> {
+        let json = iface_sim_cards__sim_card_public_ip_delete_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_SIM_CARD_PUBLIC_IP_DELETE, json)
     }
-    fn wireless_connectivity_logs_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARDS_WIRELESS_CONNECTIVITY_LOGS_GET, Value::Object(Map::new()))
+    fn wireless_connectivity_logs_get(params: iface_sim_cards::WirelessConnectivityLogsGetParams) -> Result<String, String> {
+        let json = iface_sim_cards__wireless_connectivity_logs_get_params__to_json(&params);
+        dispatch(&OP_SIM_CARDS_WIRELESS_CONNECTIVITY_LOGS_GET, json)
     }
 }
 use crate::exports::autostamp::telnyx::addresses as iface_addresses;
@@ -717,6 +835,14 @@ const OP_ADDRESSES_FIND_ADDRESSS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/addresses",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_customer_reference_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_customer_reference_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_used_as_emergency", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_street_address_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_book_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -785,6 +911,16 @@ const OP_ADDRESSES_DELETE_ADDRESS: OpSpec = OpSpec {
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_addresses__find_addresss_sort_enum__to_str(e: &iface_addresses::FindAddresssSortEnum) -> &'static str {
+    match e {
+        iface_addresses::FindAddresssSortEnum::CreatedAt => "created_at",
+        iface_addresses::FindAddresssSortEnum::FirstName => "first_name",
+        iface_addresses::FindAddresssSortEnum::LastName => "last_name",
+        iface_addresses::FindAddresssSortEnum::BusinessName => "business_name",
+        iface_addresses::FindAddresssSortEnum::StreetAddress => "street_address",
+    }
+}
 
 fn iface_addresses__address_book__to_json(p: &iface_addresses::AddressBook) -> Value {
     let mut m = Map::new();
@@ -876,6 +1012,19 @@ fn iface_addresses__validate_address__to_json(p: &iface_addresses::ValidateAddre
     Value::Object(m)
 }
 
+fn iface_addresses__find_addresss_params__to_json(p: &iface_addresses::FindAddresssParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_customer_reference_eq".into(), match (&p.filter_customer_reference_eq) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_customer_reference_contains".into(), match (&p.filter_customer_reference_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_used_as_emergency".into(), match (&p.filter_used_as_emergency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_street_address_contains".into(), match (&p.filter_street_address_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_book_eq".into(), match (&p.filter_address_book_eq) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_addresses__find_addresss_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_addresses__create_address_params__to_json(p: &iface_addresses::CreateAddressParams) -> Value {
     let mut m = Map::new();
     m.insert("address_book".into(), match (&p.address_book) { Some(v) => iface_addresses__address_book__to_json(v), None => Value::Null });
@@ -920,8 +1069,9 @@ fn iface_addresses__delete_address_params__to_json(p: &iface_addresses::DeleteAd
 }
 
 impl iface_addresses::Guest for crate::Component {
-    fn find_addresss() -> Result<String, String> {
-        dispatch(&OP_ADDRESSES_FIND_ADDRESSS, Value::Object(Map::new()))
+    fn find_addresss(params: iface_addresses::FindAddresssParams) -> Result<String, String> {
+        let json = iface_addresses__find_addresss_params__to_json(&params);
+        dispatch(&OP_ADDRESSES_FIND_ADDRESSS, json)
     }
     fn create_address(params: iface_addresses::CreateAddressParams) -> Result<String, String> {
         let json = iface_addresses__create_address_params__to_json(&params);
@@ -946,6 +1096,9 @@ const OP_AUTHENTICATION_PROVIDERS_FIND_AUTHENTICATION_PROVIDERS: OpSpec = OpSpec
     method: "GET",
     path_template: "/authentication_providers",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -1005,6 +1158,21 @@ const OP_AUTHENTICATION_PROVIDERS_DELETE_AUTHENTICATION_PROVIDER: OpSpec = OpSpe
     ],
 };
 
+fn iface_authentication_providers__find_authentication_providers_sort_enum__to_str(e: &iface_authentication_providers::FindAuthenticationProvidersSortEnum) -> &'static str {
+    match e {
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::Name => "name",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::NameV2 => "-name",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::ShortName => "short_name",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::ShortNameV2 => "-short_name",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::Active => "active",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::ActiveV2 => "-active",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::CreatedAt => "created_at",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::CreatedAtV2 => "-created_at",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::UpdatedAt => "updated_at",
+        iface_authentication_providers::FindAuthenticationProvidersSortEnum::UpdatedAtV2 => "-updated_at",
+    }
+}
+
 fn iface_authentication_providers__settings_idp_cert_fingerprint_algorithm_enum__to_str(e: &iface_authentication_providers::SettingsIdpCertFingerprintAlgorithmEnum) -> &'static str {
     match e {
         iface_authentication_providers::SettingsIdpCertFingerprintAlgorithmEnum::Sha1 => "sha1",
@@ -1047,6 +1215,14 @@ fn iface_authentication_providers__short_name__to_json(p: &iface_authentication_
     Value::Object(m)
 }
 
+fn iface_authentication_providers__find_authentication_providers_params__to_json(p: &iface_authentication_providers::FindAuthenticationProvidersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_authentication_providers__find_authentication_providers_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_authentication_providers__create_authentication_provider_params__to_json(p: &iface_authentication_providers::CreateAuthenticationProviderParams) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => iface_authentication_providers__active__to_json(v), None => Value::Null });
@@ -1081,8 +1257,9 @@ fn iface_authentication_providers__delete_authentication_provider_params__to_jso
 }
 
 impl iface_authentication_providers::Guest for crate::Component {
-    fn find_authentication_providers() -> Result<String, String> {
-        dispatch(&OP_AUTHENTICATION_PROVIDERS_FIND_AUTHENTICATION_PROVIDERS, Value::Object(Map::new()))
+    fn find_authentication_providers(params: iface_authentication_providers::FindAuthenticationProvidersParams) -> Result<String, String> {
+        let json = iface_authentication_providers__find_authentication_providers_params__to_json(&params);
+        dispatch(&OP_AUTHENTICATION_PROVIDERS_FIND_AUTHENTICATION_PROVIDERS, json)
     }
     fn create_authentication_provider(params: iface_authentication_providers::CreateAuthenticationProviderParams) -> Result<String, String> {
         let json = iface_authentication_providers__create_authentication_provider_params__to_json(&params);
@@ -1245,6 +1422,8 @@ const OP_BILLING_GROUPS_LIST_BILLING_GROUPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/billing_groups",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -1266,6 +1445,7 @@ const OP_BILLING_GROUPS_RETRIEVE_BILLING_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/billing_groups/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -1276,6 +1456,7 @@ const OP_BILLING_GROUPS_UPDATE_BILLING_GROUP_V2: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/billing_groups/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1287,11 +1468,19 @@ const OP_BILLING_GROUPS_DELETE_BILLING_GROUP: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/billing_groups/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_billing_groups__list_billing_groups_params__to_json(p: &iface_billing_groups::ListBillingGroupsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_billing_groups__create_billing_group_params__to_json(p: &iface_billing_groups::CreateBillingGroupParams) -> Value {
     let mut m = Map::new();
@@ -1299,29 +1488,45 @@ fn iface_billing_groups__create_billing_group_params__to_json(p: &iface_billing_
     Value::Object(m)
 }
 
+fn iface_billing_groups__retrieve_billing_group_params__to_json(p: &iface_billing_groups::RetrieveBillingGroupParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_billing_groups__update_billing_group_v2_params__to_json(p: &iface_billing_groups::UpdateBillingGroupV2Params) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_billing_groups__delete_billing_group_params__to_json(p: &iface_billing_groups::DeleteBillingGroupParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_billing_groups::Guest for crate::Component {
-    fn list_billing_groups() -> Result<String, String> {
-        dispatch(&OP_BILLING_GROUPS_LIST_BILLING_GROUPS, Value::Object(Map::new()))
+    fn list_billing_groups(params: iface_billing_groups::ListBillingGroupsParams) -> Result<String, String> {
+        let json = iface_billing_groups__list_billing_groups_params__to_json(&params);
+        dispatch(&OP_BILLING_GROUPS_LIST_BILLING_GROUPS, json)
     }
     fn create_billing_group(params: iface_billing_groups::CreateBillingGroupParams) -> Result<String, String> {
         let json = iface_billing_groups__create_billing_group_params__to_json(&params);
         dispatch(&OP_BILLING_GROUPS_CREATE_BILLING_GROUP, json)
     }
-    fn retrieve_billing_group() -> Result<String, String> {
-        dispatch(&OP_BILLING_GROUPS_RETRIEVE_BILLING_GROUP, Value::Object(Map::new()))
+    fn retrieve_billing_group(params: iface_billing_groups::RetrieveBillingGroupParams) -> Result<String, String> {
+        let json = iface_billing_groups__retrieve_billing_group_params__to_json(&params);
+        dispatch(&OP_BILLING_GROUPS_RETRIEVE_BILLING_GROUP, json)
     }
     fn update_billing_group_v2(params: iface_billing_groups::UpdateBillingGroupV2Params) -> Result<String, String> {
         let json = iface_billing_groups__update_billing_group_v2_params__to_json(&params);
         dispatch(&OP_BILLING_GROUPS_UPDATE_BILLING_GROUP_V2, json)
     }
-    fn delete_billing_group() -> Result<String, String> {
-        dispatch(&OP_BILLING_GROUPS_DELETE_BILLING_GROUP, Value::Object(Map::new()))
+    fn delete_billing_group(params: iface_billing_groups::DeleteBillingGroupParams) -> Result<String, String> {
+        let json = iface_billing_groups__delete_billing_group_params__to_json(&params);
+        dispatch(&OP_BILLING_GROUPS_DELETE_BILLING_GROUP, json)
     }
 }
 use crate::exports::autostamp::telnyx::call_control_applications as iface_call_control_applications;
@@ -1330,6 +1535,11 @@ const OP_CALL_CONTROL_APPLICATIONS_LIST_CALL_CONTROL_APPLICATIONS: OpSpec = OpSp
     method: "GET",
     path_template: "/call_control_applications",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_application_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_outbound_voice_profile_id", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -1403,6 +1613,14 @@ const OP_CALL_CONTROL_APPLICATIONS_DELETE_CALL_CONTROL_APPLICATION: OpSpec = OpS
     ],
 };
 
+fn iface_call_control_applications__list_call_control_applications_sort_enum__to_str(e: &iface_call_control_applications::ListCallControlApplicationsSortEnum) -> &'static str {
+    match e {
+        iface_call_control_applications::ListCallControlApplicationsSortEnum::CreatedAt => "created_at",
+        iface_call_control_applications::ListCallControlApplicationsSortEnum::ConnectionName => "connection_name",
+        iface_call_control_applications::ListCallControlApplicationsSortEnum::Active => "active",
+    }
+}
+
 fn iface_call_control_applications__create_call_control_application_request_anchorsite_override_enum__to_str(e: &iface_call_control_applications::CreateCallControlApplicationRequestAnchorsiteOverrideEnum) -> &'static str {
     match e {
         iface_call_control_applications::CreateCallControlApplicationRequestAnchorsiteOverrideEnum::Latency => "\"Latency\"",
@@ -1446,6 +1664,16 @@ fn iface_call_control_applications__call_control_application_outbound__to_json(p
     let mut m = Map::new();
     m.insert("channel_limit".into(), match (&p.channel_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("outbound_voice_profile_id".into(), match (&p.outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_call_control_applications__list_call_control_applications_params__to_json(p: &iface_call_control_applications::ListCallControlApplicationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_application_name_contains".into(), match (&p.filter_application_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_outbound_voice_profile_id".into(), match (&p.filter_outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_call_control_applications__list_call_control_applications_sort_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1497,8 +1725,9 @@ fn iface_call_control_applications__delete_call_control_application_params__to_j
 }
 
 impl iface_call_control_applications::Guest for crate::Component {
-    fn list_call_control_applications() -> Result<String, String> {
-        dispatch(&OP_CALL_CONTROL_APPLICATIONS_LIST_CALL_CONTROL_APPLICATIONS, Value::Object(Map::new()))
+    fn list_call_control_applications(params: iface_call_control_applications::ListCallControlApplicationsParams) -> Result<String, String> {
+        let json = iface_call_control_applications__list_call_control_applications_params__to_json(&params);
+        dispatch(&OP_CALL_CONTROL_APPLICATIONS_LIST_CALL_CONTROL_APPLICATIONS, json)
     }
     fn create_call_control_application(params: iface_call_control_applications::CreateCallControlApplicationParams) -> Result<String, String> {
         let json = iface_call_control_applications__create_call_control_application_params__to_json(&params);
@@ -1523,15 +1752,57 @@ const OP_DEBUGGING_LIST_CALL_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/call_events",
     fields: &[
+        FieldSpec { snake: "filter_call_leg_id", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_call_session_id", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_status", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_type", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_event_timestamp_gt", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_event_timestamp_gte", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_event_timestamp_lt", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_event_timestamp_lte", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_event_timestamp_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_debugging__list_call_events_filter_status_enum__to_str(e: &iface_debugging::ListCallEventsFilterStatusEnum) -> &'static str {
+    match e {
+        iface_debugging::ListCallEventsFilterStatusEnum::Delivered => "delivered",
+        iface_debugging::ListCallEventsFilterStatusEnum::Failed => "failed",
+    }
+}
+
+fn iface_debugging__list_call_events_filter_type_enum__to_str(e: &iface_debugging::ListCallEventsFilterTypeEnum) -> &'static str {
+    match e {
+        iface_debugging::ListCallEventsFilterTypeEnum::Command => "command",
+        iface_debugging::ListCallEventsFilterTypeEnum::Webhook => "webhook",
+    }
+}
+
+fn iface_debugging__list_call_events_params__to_json(p: &iface_debugging::ListCallEventsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("filter_call_leg_id".into(), match (&p.filter_call_leg_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_call_session_id".into(), match (&p.filter_call_session_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String(iface_debugging__list_call_events_filter_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String(iface_debugging__list_call_events_filter_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filter_event_timestamp_gt".into(), match (&p.filter_event_timestamp_gt) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_event_timestamp_gte".into(), match (&p.filter_event_timestamp_gte) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_event_timestamp_lt".into(), match (&p.filter_event_timestamp_lt) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_event_timestamp_lte".into(), match (&p.filter_event_timestamp_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_event_timestamp_eq".into(), match (&p.filter_event_timestamp_eq) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_debugging::Guest for crate::Component {
-    fn list_call_events() -> Result<String, String> {
-        dispatch(&OP_DEBUGGING_LIST_CALL_EVENTS, Value::Object(Map::new()))
+    fn list_call_events(params: iface_debugging::ListCallEventsParams) -> Result<String, String> {
+        let json = iface_debugging__list_call_events_params__to_json(&params);
+        dispatch(&OP_DEBUGGING_LIST_CALL_EVENTS, json)
     }
 }
 use crate::exports::autostamp::telnyx::call_commands as iface_call_commands;
@@ -1569,6 +1840,7 @@ const OP_CALL_COMMANDS_CALL_ANSWER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/answer",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "billing_group_id", location: FieldLocation::Body },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
@@ -1584,7 +1856,7 @@ const OP_CALL_COMMANDS_CALL_BRIDGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/bridge",
     fields: &[
-        FieldSpec { snake: "call_control_id", location: FieldLocation::Body },
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "park_after_unbridge", location: FieldLocation::Body },
@@ -1599,6 +1871,7 @@ const OP_CALL_COMMANDS_CALL_ENQUEUE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/enqueue",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "max_size", location: FieldLocation::Body },
@@ -1614,6 +1887,7 @@ const OP_CALL_COMMANDS_CALL_FORK_START: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/fork_start",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "rx", location: FieldLocation::Body },
@@ -1630,6 +1904,7 @@ const OP_CALL_COMMANDS_CALL_FORK_STOP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/fork_stop",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1642,6 +1917,7 @@ const OP_CALL_COMMANDS_CALL_GATHER_STOP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/gather_stop",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1654,6 +1930,7 @@ const OP_CALL_COMMANDS_CALL_GATHER_USING_AUDIO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/gather_using_audio",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "audio_url", location: FieldLocation::Body },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
@@ -1677,6 +1954,7 @@ const OP_CALL_COMMANDS_CALL_GATHER_USING_SPEAK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/gather_using_speak",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "inter_digit_timeout_millis", location: FieldLocation::Body },
@@ -1702,6 +1980,7 @@ const OP_CALL_COMMANDS_CALL_HANGUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/hangup",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1714,6 +1993,7 @@ const OP_CALL_COMMANDS_LEAVE_QUEUE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/leave_queue",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1726,6 +2006,7 @@ const OP_CALL_COMMANDS_CALL_PLAYBACK_START: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/playback_start",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "audio_url", location: FieldLocation::Body },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
@@ -1744,6 +2025,7 @@ const OP_CALL_COMMANDS_CALL_PLAYBACK_STOP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/playback_stop",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "stop", location: FieldLocation::Body },
@@ -1757,6 +2039,7 @@ const OP_CALL_COMMANDS_CALL_RECORD_PAUSE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/record_pause",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1769,6 +2052,7 @@ const OP_CALL_COMMANDS_CALL_RECORD_RESUME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/record_resume",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1781,6 +2065,7 @@ const OP_CALL_COMMANDS_CALL_RECORD_START: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/record_start",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "channels", location: FieldLocation::Body },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
@@ -1797,6 +2082,7 @@ const OP_CALL_COMMANDS_CALL_RECORD_STOP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/record_stop",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1809,6 +2095,7 @@ const OP_CALL_COMMANDS_CALL_REFER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/refer",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "custom_headers", location: FieldLocation::Body },
@@ -1825,6 +2112,7 @@ const OP_CALL_COMMANDS_CALL_REJECT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/reject",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "cause", location: FieldLocation::Body },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
@@ -1838,6 +2126,7 @@ const OP_CALL_COMMANDS_CALL_SEND_DTMF: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/send_dtmf",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "digits", location: FieldLocation::Body },
@@ -1852,6 +2141,7 @@ const OP_CALL_COMMANDS_CALL_SPEAK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/speak",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "language", location: FieldLocation::Body },
@@ -1870,6 +2160,7 @@ const OP_CALL_COMMANDS_CALL_TRANSCRIPTION_START: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/transcription_start",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
         FieldSpec { snake: "language", location: FieldLocation::Body },
@@ -1883,6 +2174,7 @@ const OP_CALL_COMMANDS_CALL_TRANSCRIPTION_STOP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/transcription_stop",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "client_state", location: FieldLocation::Body },
         FieldSpec { snake: "command_id", location: FieldLocation::Body },
     ],
@@ -1895,6 +2187,7 @@ const OP_CALL_COMMANDS_CALL_TRANSFER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls/{call_control_id}/actions/transfer",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
         FieldSpec { snake: "answering_machine_detection", location: FieldLocation::Body },
         FieldSpec { snake: "answering_machine_detection_config", location: FieldLocation::Body },
         FieldSpec { snake: "audio_url", location: FieldLocation::Body },
@@ -2098,6 +2391,7 @@ fn iface_call_commands__call_dial_params__to_json(p: &iface_call_commands::CallD
 
 fn iface_call_commands__call_answer_params__to_json(p: &iface_call_commands::CallAnswerParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("billing_group_id".into(), match (&p.billing_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2118,6 +2412,7 @@ fn iface_call_commands__call_bridge_params__to_json(p: &iface_call_commands::Cal
 
 fn iface_call_commands__call_enqueue_params__to_json(p: &iface_call_commands::CallEnqueueParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_size".into(), match (&p.max_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -2128,6 +2423,7 @@ fn iface_call_commands__call_enqueue_params__to_json(p: &iface_call_commands::Ca
 
 fn iface_call_commands__call_fork_start_params__to_json(p: &iface_call_commands::CallForkStartParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("rx".into(), match (&p.rx) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2139,6 +2435,7 @@ fn iface_call_commands__call_fork_start_params__to_json(p: &iface_call_commands:
 
 fn iface_call_commands__call_fork_stop_params__to_json(p: &iface_call_commands::CallForkStopParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2146,6 +2443,7 @@ fn iface_call_commands__call_fork_stop_params__to_json(p: &iface_call_commands::
 
 fn iface_call_commands__call_gather_stop_params__to_json(p: &iface_call_commands::CallGatherStopParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2153,6 +2451,7 @@ fn iface_call_commands__call_gather_stop_params__to_json(p: &iface_call_commands
 
 fn iface_call_commands__call_gather_using_audio_params__to_json(p: &iface_call_commands::CallGatherUsingAudioParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("audio_url".into(), match (&p.audio_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2171,6 +2470,7 @@ fn iface_call_commands__call_gather_using_audio_params__to_json(p: &iface_call_c
 
 fn iface_call_commands__call_gather_using_speak_params__to_json(p: &iface_call_commands::CallGatherUsingSpeakParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("inter_digit_timeout_millis".into(), match (&p.inter_digit_timeout_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -2191,6 +2491,7 @@ fn iface_call_commands__call_gather_using_speak_params__to_json(p: &iface_call_c
 
 fn iface_call_commands__call_hangup_params__to_json(p: &iface_call_commands::CallHangupParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2198,6 +2499,7 @@ fn iface_call_commands__call_hangup_params__to_json(p: &iface_call_commands::Cal
 
 fn iface_call_commands__leave_queue_params__to_json(p: &iface_call_commands::LeaveQueueParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2205,6 +2507,7 @@ fn iface_call_commands__leave_queue_params__to_json(p: &iface_call_commands::Lea
 
 fn iface_call_commands__call_playback_start_params__to_json(p: &iface_call_commands::CallPlaybackStartParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("audio_url".into(), match (&p.audio_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2218,6 +2521,7 @@ fn iface_call_commands__call_playback_start_params__to_json(p: &iface_call_comma
 
 fn iface_call_commands__call_playback_stop_params__to_json(p: &iface_call_commands::CallPlaybackStopParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("stop".into(), match (&p.stop) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2226,6 +2530,7 @@ fn iface_call_commands__call_playback_stop_params__to_json(p: &iface_call_comman
 
 fn iface_call_commands__call_record_pause_params__to_json(p: &iface_call_commands::CallRecordPauseParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2233,6 +2538,7 @@ fn iface_call_commands__call_record_pause_params__to_json(p: &iface_call_command
 
 fn iface_call_commands__call_record_resume_params__to_json(p: &iface_call_commands::CallRecordResumeParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2240,6 +2546,7 @@ fn iface_call_commands__call_record_resume_params__to_json(p: &iface_call_comman
 
 fn iface_call_commands__call_record_start_params__to_json(p: &iface_call_commands::CallRecordStartParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("channels".into(), Value::String(iface_call_commands__start_recording_request_channels_enum__to_str(&p.channels).into()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2251,6 +2558,7 @@ fn iface_call_commands__call_record_start_params__to_json(p: &iface_call_command
 
 fn iface_call_commands__call_record_stop_params__to_json(p: &iface_call_commands::CallRecordStopParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2258,6 +2566,7 @@ fn iface_call_commands__call_record_stop_params__to_json(p: &iface_call_commands
 
 fn iface_call_commands__call_refer_params__to_json(p: &iface_call_commands::CallReferParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_headers".into(), match (&p.custom_headers) { Some(v) => Value::Array((v).iter().map(|v| iface_call_commands__custom_sip_header__to_json(v)).collect()), None => Value::Null });
@@ -2269,6 +2578,7 @@ fn iface_call_commands__call_refer_params__to_json(p: &iface_call_commands::Call
 
 fn iface_call_commands__call_reject_params__to_json(p: &iface_call_commands::CallRejectParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("cause".into(), Value::String(iface_call_commands__reject_request_cause_enum__to_str(&p.cause).into()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2277,6 +2587,7 @@ fn iface_call_commands__call_reject_params__to_json(p: &iface_call_commands::Cal
 
 fn iface_call_commands__call_send_dtmf_params__to_json(p: &iface_call_commands::CallSendDtmfParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("digits".into(), Value::String((&p.digits).clone()));
@@ -2286,6 +2597,7 @@ fn iface_call_commands__call_send_dtmf_params__to_json(p: &iface_call_commands::
 
 fn iface_call_commands__call_speak_params__to_json(p: &iface_call_commands::CallSpeakParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("language".into(), Value::String(iface_call_commands__gather_using_speak_request_language_enum__to_str(&p.language).into()));
@@ -2299,6 +2611,7 @@ fn iface_call_commands__call_speak_params__to_json(p: &iface_call_commands::Call
 
 fn iface_call_commands__call_transcription_start_params__to_json(p: &iface_call_commands::CallTranscriptionStartParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_call_commands__transcription_start_request_language_enum__to_str(v).into()), None => Value::Null });
@@ -2307,6 +2620,7 @@ fn iface_call_commands__call_transcription_start_params__to_json(p: &iface_call_
 
 fn iface_call_commands__call_transcription_stop_params__to_json(p: &iface_call_commands::CallTranscriptionStopParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("client_state".into(), match (&p.client_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("command_id".into(), match (&p.command_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2314,6 +2628,7 @@ fn iface_call_commands__call_transcription_stop_params__to_json(p: &iface_call_c
 
 fn iface_call_commands__call_transfer_params__to_json(p: &iface_call_commands::CallTransferParams) -> Value {
     let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     m.insert("answering_machine_detection".into(), match (&p.answering_machine_detection) { Some(v) => Value::String(iface_call_commands__call_request_answering_machine_detection_enum__to_str(v).into()), None => Value::Null });
     m.insert("answering_machine_detection_config".into(), match (&p.answering_machine_detection_config) { Some(v) => iface_call_commands__transfer_call_request_answering_machine_detection_config__to_json(v), None => Value::Null });
     m.insert("audio_url".into(), match (&p.audio_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2438,15 +2753,23 @@ const OP_CALL_INFORMATION_RETRIEVE_CALL_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calls/{call_control_id}",
     fields: &[
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_call_information__retrieve_call_status_params__to_json(p: &iface_call_information::RetrieveCallStatusParams) -> Value {
+    let mut m = Map::new();
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_call_information::Guest for crate::Component {
-    fn retrieve_call_status() -> Result<String, String> {
-        dispatch(&OP_CALL_INFORMATION_RETRIEVE_CALL_STATUS, Value::Object(Map::new()))
+    fn retrieve_call_status(params: iface_call_information::RetrieveCallStatusParams) -> Result<String, String> {
+        let json = iface_call_information__retrieve_call_status_params__to_json(&params);
+        dispatch(&OP_CALL_INFORMATION_RETRIEVE_CALL_STATUS, json)
     }
 }
 use crate::exports::autostamp::telnyx::number_orders as iface_number_orders;
@@ -2545,6 +2868,8 @@ const OP_NUMBER_ORDERS_LIST_NUMBER_ORDERS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_phone_numbers_count", location: FieldLocation::Query },
         FieldSpec { snake: "filter_customer_reference", location: FieldLocation::Query },
         FieldSpec { snake: "filter_requirements_met", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -2733,6 +3058,8 @@ fn iface_number_orders__list_number_orders_params__to_json(p: &iface_number_orde
     m.insert("filter_phone_numbers_count".into(), match (&p.filter_phone_numbers_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_customer_reference".into(), match (&p.filter_customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_requirements_met".into(), match (&p.filter_requirements_met) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2859,6 +3186,9 @@ const OP_CONFERENCE_COMMANDS_LIST_CONFERENCES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conferences",
     fields: &[
+        FieldSpec { snake: "filter_name", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -2893,6 +3223,8 @@ const OP_CONFERENCE_COMMANDS_LIST_CONFERENCE_PARTICIPANTS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_muted", location: FieldLocation::Query },
         FieldSpec { snake: "filter_on_hold", location: FieldLocation::Query },
         FieldSpec { snake: "filter_whispering", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3196,6 +3528,14 @@ fn iface_conference_commands__loopcount__to_json(p: &iface_conference_commands::
     Value::Object(m)
 }
 
+fn iface_conference_commands__list_conferences_params__to_json(p: &iface_conference_commands::ListConferencesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("filter_name".into(), match (&p.filter_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_conference_commands__create_conference_params__to_json(p: &iface_conference_commands::CreateConferenceParams) -> Value {
     let mut m = Map::new();
     m.insert("beep_enabled".into(), match (&p.beep_enabled) { Some(v) => Value::String(iface_conference_commands__create_conference_request_beep_enabled_enum__to_str(v).into()), None => Value::Null });
@@ -3217,6 +3557,8 @@ fn iface_conference_commands__list_conference_participants_params__to_json(p: &i
     m.insert("filter_muted".into(), match (&p.filter_muted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("filter_on_hold".into(), match (&p.filter_on_hold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("filter_whispering".into(), match (&p.filter_whispering) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3362,8 +3704,9 @@ fn iface_conference_commands__conference_update_params__to_json(p: &iface_confer
 }
 
 impl iface_conference_commands::Guest for crate::Component {
-    fn list_conferences() -> Result<String, String> {
-        dispatch(&OP_CONFERENCE_COMMANDS_LIST_CONFERENCES, Value::Object(Map::new()))
+    fn list_conferences(params: iface_conference_commands::ListConferencesParams) -> Result<String, String> {
+        let json = iface_conference_commands__list_conferences_params__to_json(&params);
+        dispatch(&OP_CONFERENCE_COMMANDS_LIST_CONFERENCES, json)
     }
     fn create_conference(params: iface_conference_commands::CreateConferenceParams) -> Result<String, String> {
         let json = iface_conference_commands__create_conference_params__to_json(&params);
@@ -3436,6 +3779,11 @@ const OP_CONNECTIONS_LIST_CONNECTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/connections",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_connection_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_outbound_voice_profile_id", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3453,6 +3801,24 @@ const OP_CONNECTIONS_RETRIEVE_CONNECTION: OpSpec = OpSpec {
     ],
 };
 
+fn iface_connections__list_connections_sort_enum__to_str(e: &iface_connections::ListConnectionsSortEnum) -> &'static str {
+    match e {
+        iface_connections::ListConnectionsSortEnum::CreatedAt => "created_at",
+        iface_connections::ListConnectionsSortEnum::ConnectionName => "connection_name",
+        iface_connections::ListConnectionsSortEnum::Active => "active",
+    }
+}
+
+fn iface_connections__list_connections_params__to_json(p: &iface_connections::ListConnectionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_connection_name_contains".into(), match (&p.filter_connection_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_outbound_voice_profile_id".into(), match (&p.filter_outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_connections__list_connections_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_connections__retrieve_connection_params__to_json(p: &iface_connections::RetrieveConnectionParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -3460,8 +3826,9 @@ fn iface_connections__retrieve_connection_params__to_json(p: &iface_connections:
 }
 
 impl iface_connections::Guest for crate::Component {
-    fn list_connections() -> Result<String, String> {
-        dispatch(&OP_CONNECTIONS_LIST_CONNECTIONS, Value::Object(Map::new()))
+    fn list_connections(params: iface_connections::ListConnectionsParams) -> Result<String, String> {
+        let json = iface_connections__list_connections_params__to_json(&params);
+        dispatch(&OP_CONNECTIONS_LIST_CONNECTIONS, json)
     }
     fn retrieve_connection(params: iface_connections::RetrieveConnectionParams) -> Result<String, String> {
         let json = iface_connections__retrieve_connection_params__to_json(&params);
@@ -3474,6 +3841,11 @@ const OP_CREDENTIAL_CONNECTIONS_LIST_CREDENTIAL_CONNECTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/credential_connections",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_connection_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_outbound_outbound_voice_profile_id", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3558,6 +3930,14 @@ const OP_CREDENTIAL_CONNECTIONS_DELETE_CREDENTIAL_CONNECTION: OpSpec = OpSpec {
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_credential_connections__list_credential_connections_sort_enum__to_str(e: &iface_credential_connections::ListCredentialConnectionsSortEnum) -> &'static str {
+    match e {
+        iface_credential_connections::ListCredentialConnectionsSortEnum::CreatedAt => "created_at",
+        iface_credential_connections::ListCredentialConnectionsSortEnum::ConnectionName => "connection_name",
+        iface_credential_connections::ListCredentialConnectionsSortEnum::Active => "active",
+    }
+}
 
 fn iface_credential_connections__credential_inbound_ani_number_format_enum__to_str(e: &iface_credential_connections::CredentialInboundAniNumberFormatEnum) -> &'static str {
     match e {
@@ -3673,6 +4053,16 @@ fn iface_credential_connections__connection_rtcp_settings__to_json(p: &iface_cre
     Value::Object(m)
 }
 
+fn iface_credential_connections__list_credential_connections_params__to_json(p: &iface_credential_connections::ListCredentialConnectionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_connection_name_contains".into(), match (&p.filter_connection_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_outbound_outbound_voice_profile_id".into(), match (&p.filter_outbound_outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_credential_connections__list_credential_connections_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_credential_connections__create_credential_connection_params__to_json(p: &iface_credential_connections::CreateCredentialConnectionParams) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -3733,8 +4123,9 @@ fn iface_credential_connections__delete_credential_connection_params__to_json(p:
 }
 
 impl iface_credential_connections::Guest for crate::Component {
-    fn list_credential_connections() -> Result<String, String> {
-        dispatch(&OP_CREDENTIAL_CONNECTIONS_LIST_CREDENTIAL_CONNECTIONS, Value::Object(Map::new()))
+    fn list_credential_connections(params: iface_credential_connections::ListCredentialConnectionsParams) -> Result<String, String> {
+        let json = iface_credential_connections__list_credential_connections_params__to_json(&params);
+        dispatch(&OP_CREDENTIAL_CONNECTIONS_LIST_CREDENTIAL_CONNECTIONS, json)
     }
     fn create_credential_connection(params: iface_credential_connections::CreateCredentialConnectionParams) -> Result<String, String> {
         let json = iface_credential_connections__create_credential_connection_params__to_json(&params);
@@ -3755,7 +4146,7 @@ impl iface_credential_connections::Guest for crate::Component {
 }
 use crate::exports::autostamp::telnyx::detail_records as iface_detail_records;
 
-const OP_DETAIL_RECORDS_DETAIL_RECORDS_SEARCH: OpSpec = OpSpec {
+const OP_DETAIL_RECORDS_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/detail_records",
     fields: &[
@@ -3771,7 +4162,7 @@ const OP_DETAIL_RECORDS_DETAIL_RECORDS_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-fn iface_detail_records__detail_records_search_params__to_json(p: &iface_detail_records::DetailRecordsSearchParams) -> Value {
+fn iface_detail_records__search_params__to_json(p: &iface_detail_records::SearchParams) -> Value {
     let mut m = Map::new();
     m.insert("filter_record_type".into(), Value::String((&p.filter_record_type).clone()));
     m.insert("filter_date_range".into(), match (&p.filter_date_range) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3783,9 +4174,9 @@ fn iface_detail_records__detail_records_search_params__to_json(p: &iface_detail_
 }
 
 impl iface_detail_records::Guest for crate::Component {
-    fn detail_records_search(params: iface_detail_records::DetailRecordsSearchParams) -> Result<String, String> {
-        let json = iface_detail_records__detail_records_search_params__to_json(&params);
-        dispatch(&OP_DETAIL_RECORDS_DETAIL_RECORDS_SEARCH, json)
+    fn search(params: iface_detail_records::SearchParams) -> Result<String, String> {
+        let json = iface_detail_records__search_params__to_json(&params);
+        dispatch(&OP_DETAIL_RECORDS_SEARCH, json)
     }
 }
 use crate::exports::autostamp::telnyx::documents as iface_documents;
@@ -3794,6 +4185,11 @@ const OP_DOCUMENTS_LIST_DOCUMENT_LINKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/document_links",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_document_id", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_linked_record_type", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_linked_resource_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3804,6 +4200,8 @@ const OP_DOCUMENTS_LIST_DOCUMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/documents",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3825,6 +4223,7 @@ const OP_DOCUMENTS_RETRIEVE_DOCUMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/documents/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3835,6 +4234,7 @@ const OP_DOCUMENTS_UPDATE_DOCUMENT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/documents/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "value", location: FieldLocation::Body },
     ],
     auth: &[
@@ -3846,6 +4246,7 @@ const OP_DOCUMENTS_DELETE_DOCUMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/documents/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3856,11 +4257,29 @@ const OP_DOCUMENTS_DOWNLOAD_DOC_SERVICE_DOCUMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/documents/{id}/download",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_documents__list_document_links_params__to_json(p: &iface_documents::ListDocumentLinksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_document_id".into(), match (&p.filter_document_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_linked_record_type".into(), match (&p.filter_linked_record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_linked_resource_id".into(), match (&p.filter_linked_resource_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_documents__list_documents_params__to_json(p: &iface_documents::ListDocumentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_documents__create_document_params__to_json(p: &iface_documents::CreateDocumentParams) -> Value {
     let mut m = Map::new();
@@ -3868,35 +4287,59 @@ fn iface_documents__create_document_params__to_json(p: &iface_documents::CreateD
     Value::Object(m)
 }
 
+fn iface_documents__retrieve_document_params__to_json(p: &iface_documents::RetrieveDocumentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_documents__update_document_params__to_json(p: &iface_documents::UpdateDocumentParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
 }
 
+fn iface_documents__delete_document_params__to_json(p: &iface_documents::DeleteDocumentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_documents__download_doc_service_document_params__to_json(p: &iface_documents::DownloadDocServiceDocumentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_documents::Guest for crate::Component {
-    fn list_document_links() -> Result<String, String> {
-        dispatch(&OP_DOCUMENTS_LIST_DOCUMENT_LINKS, Value::Object(Map::new()))
+    fn list_document_links(params: iface_documents::ListDocumentLinksParams) -> Result<String, String> {
+        let json = iface_documents__list_document_links_params__to_json(&params);
+        dispatch(&OP_DOCUMENTS_LIST_DOCUMENT_LINKS, json)
     }
-    fn list_documents() -> Result<String, String> {
-        dispatch(&OP_DOCUMENTS_LIST_DOCUMENTS, Value::Object(Map::new()))
+    fn list_documents(params: iface_documents::ListDocumentsParams) -> Result<String, String> {
+        let json = iface_documents__list_documents_params__to_json(&params);
+        dispatch(&OP_DOCUMENTS_LIST_DOCUMENTS, json)
     }
     fn create_document(params: iface_documents::CreateDocumentParams) -> Result<String, String> {
         let json = iface_documents__create_document_params__to_json(&params);
         dispatch(&OP_DOCUMENTS_CREATE_DOCUMENT, json)
     }
-    fn retrieve_document() -> Result<String, String> {
-        dispatch(&OP_DOCUMENTS_RETRIEVE_DOCUMENT, Value::Object(Map::new()))
+    fn retrieve_document(params: iface_documents::RetrieveDocumentParams) -> Result<String, String> {
+        let json = iface_documents__retrieve_document_params__to_json(&params);
+        dispatch(&OP_DOCUMENTS_RETRIEVE_DOCUMENT, json)
     }
     fn update_document(params: iface_documents::UpdateDocumentParams) -> Result<String, String> {
         let json = iface_documents__update_document_params__to_json(&params);
         dispatch(&OP_DOCUMENTS_UPDATE_DOCUMENT, json)
     }
-    fn delete_document() -> Result<String, String> {
-        dispatch(&OP_DOCUMENTS_DELETE_DOCUMENT, Value::Object(Map::new()))
+    fn delete_document(params: iface_documents::DeleteDocumentParams) -> Result<String, String> {
+        let json = iface_documents__delete_document_params__to_json(&params);
+        dispatch(&OP_DOCUMENTS_DELETE_DOCUMENT, json)
     }
-    fn download_doc_service_document() -> Result<String, String> {
-        dispatch(&OP_DOCUMENTS_DOWNLOAD_DOC_SERVICE_DOCUMENT, Value::Object(Map::new()))
+    fn download_doc_service_document(params: iface_documents::DownloadDocServiceDocumentParams) -> Result<String, String> {
+        let json = iface_documents__download_doc_service_document_params__to_json(&params);
+        dispatch(&OP_DOCUMENTS_DOWNLOAD_DOC_SERVICE_DOCUMENT, json)
     }
 }
 use crate::exports::autostamp::telnyx::programmable_fax_applications as iface_programmable_fax_applications;
@@ -3905,6 +4348,11 @@ const OP_PROGRAMMABLE_FAX_APPLICATIONS_LIST_FAX_APPLICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fax_applications",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_application_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_outbound_voice_profile_id", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3933,6 +4381,7 @@ const OP_PROGRAMMABLE_FAX_APPLICATIONS_GET_FAX_APPLICATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fax_applications/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -3943,6 +4392,7 @@ const OP_PROGRAMMABLE_FAX_APPLICATIONS_UPDATE_FAX_APPLICATION: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/fax_applications/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "active", location: FieldLocation::Body },
         FieldSpec { snake: "anchorsite_override", location: FieldLocation::Body },
         FieldSpec { snake: "application_name", location: FieldLocation::Body },
@@ -3961,11 +4411,20 @@ const OP_PROGRAMMABLE_FAX_APPLICATIONS_DELETE_FAX_APPLICATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/fax_applications/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_programmable_fax_applications__list_fax_applications_sort_enum__to_str(e: &iface_programmable_fax_applications::ListFaxApplicationsSortEnum) -> &'static str {
+    match e {
+        iface_programmable_fax_applications::ListFaxApplicationsSortEnum::CreatedAt => "created_at",
+        iface_programmable_fax_applications::ListFaxApplicationsSortEnum::ConnectionName => "connection_name",
+        iface_programmable_fax_applications::ListFaxApplicationsSortEnum::Active => "active",
+    }
+}
 
 fn iface_programmable_fax_applications__create_fax_application_request_inbound_sip_subdomain_receive_settings_enum__to_str(e: &iface_programmable_fax_applications::CreateFaxApplicationRequestInboundSipSubdomainReceiveSettingsEnum) -> &'static str {
     match e {
@@ -4046,6 +4505,16 @@ fn iface_programmable_fax_applications__update_fax_application_request_outbound_
     Value::Object(m)
 }
 
+fn iface_programmable_fax_applications__list_fax_applications_params__to_json(p: &iface_programmable_fax_applications::ListFaxApplicationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_application_name_contains".into(), match (&p.filter_application_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_outbound_voice_profile_id".into(), match (&p.filter_outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_programmable_fax_applications__list_fax_applications_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_programmable_fax_applications__create_fax_application_params__to_json(p: &iface_programmable_fax_applications::CreateFaxApplicationParams) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => iface_programmable_fax_applications__connection_active__to_json(v), None => Value::Null });
@@ -4059,8 +4528,15 @@ fn iface_programmable_fax_applications__create_fax_application_params__to_json(p
     Value::Object(m)
 }
 
+fn iface_programmable_fax_applications__get_fax_application_params__to_json(p: &iface_programmable_fax_applications::GetFaxApplicationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_programmable_fax_applications__update_fax_application_params__to_json(p: &iface_programmable_fax_applications::UpdateFaxApplicationParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("active".into(), match (&p.active) { Some(v) => iface_programmable_fax_applications__connection_active__to_json(v), None => Value::Null });
     m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_programmable_fax_applications__anchorsite_override__to_json(v), None => Value::Null });
     m.insert("application_name".into(), iface_programmable_fax_applications__application_name__to_json(&p.application_name));
@@ -4072,23 +4548,32 @@ fn iface_programmable_fax_applications__update_fax_application_params__to_json(p
     Value::Object(m)
 }
 
+fn iface_programmable_fax_applications__delete_fax_application_params__to_json(p: &iface_programmable_fax_applications::DeleteFaxApplicationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_programmable_fax_applications::Guest for crate::Component {
-    fn list_fax_applications() -> Result<String, String> {
-        dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_LIST_FAX_APPLICATIONS, Value::Object(Map::new()))
+    fn list_fax_applications(params: iface_programmable_fax_applications::ListFaxApplicationsParams) -> Result<String, String> {
+        let json = iface_programmable_fax_applications__list_fax_applications_params__to_json(&params);
+        dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_LIST_FAX_APPLICATIONS, json)
     }
     fn create_fax_application(params: iface_programmable_fax_applications::CreateFaxApplicationParams) -> Result<String, String> {
         let json = iface_programmable_fax_applications__create_fax_application_params__to_json(&params);
         dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_CREATE_FAX_APPLICATION, json)
     }
-    fn get_fax_application() -> Result<String, String> {
-        dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_GET_FAX_APPLICATION, Value::Object(Map::new()))
+    fn get_fax_application(params: iface_programmable_fax_applications::GetFaxApplicationParams) -> Result<String, String> {
+        let json = iface_programmable_fax_applications__get_fax_application_params__to_json(&params);
+        dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_GET_FAX_APPLICATION, json)
     }
     fn update_fax_application(params: iface_programmable_fax_applications::UpdateFaxApplicationParams) -> Result<String, String> {
         let json = iface_programmable_fax_applications__update_fax_application_params__to_json(&params);
         dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_UPDATE_FAX_APPLICATION, json)
     }
-    fn delete_fax_application() -> Result<String, String> {
-        dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_DELETE_FAX_APPLICATION, Value::Object(Map::new()))
+    fn delete_fax_application(params: iface_programmable_fax_applications::DeleteFaxApplicationParams) -> Result<String, String> {
+        let json = iface_programmable_fax_applications__delete_fax_application_params__to_json(&params);
+        dispatch(&OP_PROGRAMMABLE_FAX_APPLICATIONS_DELETE_FAX_APPLICATION, json)
     }
 }
 use crate::exports::autostamp::telnyx::programmable_fax_commands as iface_programmable_fax_commands;
@@ -4232,6 +4717,10 @@ const OP_FQDN_CONNECTIONS_LIST_FQDN_CONNECTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fqdn_connections",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_connection_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -4310,6 +4799,14 @@ const OP_FQDN_CONNECTIONS_DELETE_FQDN_CONNECTION: OpSpec = OpSpec {
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_fqdn_connections__list_fqdn_connections_sort_enum__to_str(e: &iface_fqdn_connections::ListFqdnConnectionsSortEnum) -> &'static str {
+    match e {
+        iface_fqdn_connections::ListFqdnConnectionsSortEnum::CreatedAt => "created_at",
+        iface_fqdn_connections::ListFqdnConnectionsSortEnum::ConnectionName => "connection_name",
+        iface_fqdn_connections::ListFqdnConnectionsSortEnum::Active => "active",
+    }
+}
 
 fn iface_fqdn_connections__inbound_fqdn_ani_number_format_enum__to_str(e: &iface_fqdn_connections::InboundFqdnAniNumberFormatEnum) -> &'static str {
     match e {
@@ -4410,6 +4907,15 @@ fn iface_fqdn_connections__fqdn_connection_transport_protocol__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_fqdn_connections__list_fqdn_connections_params__to_json(p: &iface_fqdn_connections::ListFqdnConnectionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_connection_name_contains".into(), match (&p.filter_connection_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_fqdn_connections__list_fqdn_connections_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_fqdn_connections__create_fqdn_connection_params__to_json(p: &iface_fqdn_connections::CreateFqdnConnectionParams) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -4464,8 +4970,9 @@ fn iface_fqdn_connections__delete_fqdn_connection_params__to_json(p: &iface_fqdn
 }
 
 impl iface_fqdn_connections::Guest for crate::Component {
-    fn list_fqdn_connections() -> Result<String, String> {
-        dispatch(&OP_FQDN_CONNECTIONS_LIST_FQDN_CONNECTIONS, Value::Object(Map::new()))
+    fn list_fqdn_connections(params: iface_fqdn_connections::ListFqdnConnectionsParams) -> Result<String, String> {
+        let json = iface_fqdn_connections__list_fqdn_connections_params__to_json(&params);
+        dispatch(&OP_FQDN_CONNECTIONS_LIST_FQDN_CONNECTIONS, json)
     }
     fn create_fqdn_connection(params: iface_fqdn_connections::CreateFqdnConnectionParams) -> Result<String, String> {
         let json = iface_fqdn_connections__create_fqdn_connection_params__to_json(&params);
@@ -4490,6 +4997,8 @@ const OP_FQD_NS_LIST_FQDNS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fqdns",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_connection_id", location: FieldLocation::Query },
         FieldSpec { snake: "filter_fqdn", location: FieldLocation::Query },
         FieldSpec { snake: "filter_port", location: FieldLocation::Query },
@@ -4518,6 +5027,7 @@ const OP_FQD_NS_RETRIEVE_FQDN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fqdns/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -4528,6 +5038,7 @@ const OP_FQD_NS_UPDATE_FQDN: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/fqdns/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "connection_id", location: FieldLocation::Body },
         FieldSpec { snake: "dns_record_type", location: FieldLocation::Body },
         FieldSpec { snake: "fqdn", location: FieldLocation::Body },
@@ -4542,6 +5053,7 @@ const OP_FQD_NS_DELETE_FQDN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/fqdns/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -4550,6 +5062,8 @@ const OP_FQD_NS_DELETE_FQDN: OpSpec = OpSpec {
 
 fn iface_fqd_ns__list_fqdns_params__to_json(p: &iface_fqd_ns::ListFqdnsParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_connection_id".into(), match (&p.filter_connection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_fqdn".into(), match (&p.filter_fqdn) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_port".into(), match (&p.filter_port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -4566,12 +5080,25 @@ fn iface_fqd_ns__create_fqdn_params__to_json(p: &iface_fqd_ns::CreateFqdnParams)
     Value::Object(m)
 }
 
+fn iface_fqd_ns__retrieve_fqdn_params__to_json(p: &iface_fqd_ns::RetrieveFqdnParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_fqd_ns__update_fqdn_params__to_json(p: &iface_fqd_ns::UpdateFqdnParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("connection_id".into(), match (&p.connection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("dns_record_type".into(), match (&p.dns_record_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("fqdn".into(), match (&p.fqdn) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_fqd_ns__delete_fqdn_params__to_json(p: &iface_fqd_ns::DeleteFqdnParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
@@ -4584,15 +5111,17 @@ impl iface_fqd_ns::Guest for crate::Component {
         let json = iface_fqd_ns__create_fqdn_params__to_json(&params);
         dispatch(&OP_FQD_NS_CREATE_FQDN, json)
     }
-    fn retrieve_fqdn() -> Result<String, String> {
-        dispatch(&OP_FQD_NS_RETRIEVE_FQDN, Value::Object(Map::new()))
+    fn retrieve_fqdn(params: iface_fqd_ns::RetrieveFqdnParams) -> Result<String, String> {
+        let json = iface_fqd_ns__retrieve_fqdn_params__to_json(&params);
+        dispatch(&OP_FQD_NS_RETRIEVE_FQDN, json)
     }
     fn update_fqdn(params: iface_fqd_ns::UpdateFqdnParams) -> Result<String, String> {
         let json = iface_fqd_ns__update_fqdn_params__to_json(&params);
         dispatch(&OP_FQD_NS_UPDATE_FQDN, json)
     }
-    fn delete_fqdn() -> Result<String, String> {
-        dispatch(&OP_FQD_NS_DELETE_FQDN, Value::Object(Map::new()))
+    fn delete_fqdn(params: iface_fqd_ns::DeleteFqdnParams) -> Result<String, String> {
+        let json = iface_fqd_ns__delete_fqdn_params__to_json(&params);
+        dispatch(&OP_FQD_NS_DELETE_FQDN, json)
     }
 }
 use crate::exports::autostamp::telnyx::inventory_level as iface_inventory_level;
@@ -4676,6 +5205,11 @@ const OP_IP_CONNECTIONS_LIST_IP_CONNECTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ip_connections",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_connection_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_outbound_outbound_voice_profile_id", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -4756,6 +5290,14 @@ const OP_IP_CONNECTIONS_DELETE_IP_CONNECTION: OpSpec = OpSpec {
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_ip_connections__list_ip_connections_sort_enum__to_str(e: &iface_ip_connections::ListIpConnectionsSortEnum) -> &'static str {
+    match e {
+        iface_ip_connections::ListIpConnectionsSortEnum::CreatedAt => "created_at",
+        iface_ip_connections::ListIpConnectionsSortEnum::ConnectionName => "connection_name",
+        iface_ip_connections::ListIpConnectionsSortEnum::Active => "active",
+    }
+}
 
 fn iface_ip_connections__create_inbound_ip_request_ani_number_format_enum__to_str(e: &iface_ip_connections::CreateInboundIpRequestAniNumberFormatEnum) -> &'static str {
     match e {
@@ -4930,6 +5472,16 @@ fn iface_ip_connections__inbound_ip__to_json(p: &iface_ip_connections::InboundIp
     Value::Object(m)
 }
 
+fn iface_ip_connections__list_ip_connections_params__to_json(p: &iface_ip_connections::ListIpConnectionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_connection_name_contains".into(), match (&p.filter_connection_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_outbound_outbound_voice_profile_id".into(), match (&p.filter_outbound_outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_ip_connections__list_ip_connections_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_ip_connections__create_ip_connection_params__to_json(p: &iface_ip_connections::CreateIpConnectionParams) -> Value {
     let mut m = Map::new();
     m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -4986,8 +5538,9 @@ fn iface_ip_connections__delete_ip_connection_params__to_json(p: &iface_ip_conne
 }
 
 impl iface_ip_connections::Guest for crate::Component {
-    fn list_ip_connections() -> Result<String, String> {
-        dispatch(&OP_IP_CONNECTIONS_LIST_IP_CONNECTIONS, Value::Object(Map::new()))
+    fn list_ip_connections(params: iface_ip_connections::ListIpConnectionsParams) -> Result<String, String> {
+        let json = iface_ip_connections__list_ip_connections_params__to_json(&params);
+        dispatch(&OP_IP_CONNECTIONS_LIST_IP_CONNECTIONS, json)
     }
     fn create_ip_connection(params: iface_ip_connections::CreateIpConnectionParams) -> Result<String, String> {
         let json = iface_ip_connections__create_ip_connection_params__to_json(&params);
@@ -5012,6 +5565,8 @@ const OP_I_PS_LIST_IPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ips",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_connection_id", location: FieldLocation::Query },
         FieldSpec { snake: "filter_ip_address", location: FieldLocation::Query },
         FieldSpec { snake: "filter_port", location: FieldLocation::Query },
@@ -5038,6 +5593,7 @@ const OP_I_PS_RETRIEVE_IP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ips/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5048,6 +5604,7 @@ const OP_I_PS_UPDATE_IP: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/ips/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "connection_id", location: FieldLocation::Body },
         FieldSpec { snake: "ip_address", location: FieldLocation::Body },
         FieldSpec { snake: "port", location: FieldLocation::Body },
@@ -5061,6 +5618,7 @@ const OP_I_PS_DELETE_IP: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/ips/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5069,6 +5627,8 @@ const OP_I_PS_DELETE_IP: OpSpec = OpSpec {
 
 fn iface_i_ps__list_ips_params__to_json(p: &iface_i_ps::ListIpsParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_connection_id".into(), match (&p.filter_connection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_ip_address".into(), match (&p.filter_ip_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_port".into(), match (&p.filter_port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -5083,11 +5643,24 @@ fn iface_i_ps__create_ip_params__to_json(p: &iface_i_ps::CreateIpParams) -> Valu
     Value::Object(m)
 }
 
+fn iface_i_ps__retrieve_ip_params__to_json(p: &iface_i_ps::RetrieveIpParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_i_ps__update_ip_params__to_json(p: &iface_i_ps::UpdateIpParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("connection_id".into(), match (&p.connection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ip_address".into(), Value::String((&p.ip_address).clone()));
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_i_ps__delete_ip_params__to_json(p: &iface_i_ps::DeleteIpParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
@@ -5100,15 +5673,17 @@ impl iface_i_ps::Guest for crate::Component {
         let json = iface_i_ps__create_ip_params__to_json(&params);
         dispatch(&OP_I_PS_CREATE_IP, json)
     }
-    fn retrieve_ip() -> Result<String, String> {
-        dispatch(&OP_I_PS_RETRIEVE_IP, Value::Object(Map::new()))
+    fn retrieve_ip(params: iface_i_ps::RetrieveIpParams) -> Result<String, String> {
+        let json = iface_i_ps__retrieve_ip_params__to_json(&params);
+        dispatch(&OP_I_PS_RETRIEVE_IP, json)
     }
     fn update_ip(params: iface_i_ps::UpdateIpParams) -> Result<String, String> {
         let json = iface_i_ps__update_ip_params__to_json(&params);
         dispatch(&OP_I_PS_UPDATE_IP, json)
     }
-    fn delete_ip() -> Result<String, String> {
-        dispatch(&OP_I_PS_DELETE_IP, Value::Object(Map::new()))
+    fn delete_ip(params: iface_i_ps::DeleteIpParams) -> Result<String, String> {
+        let json = iface_i_ps__delete_ip_params__to_json(&params);
+        dispatch(&OP_I_PS_DELETE_IP, json)
     }
 }
 use crate::exports::autostamp::telnyx::reports as iface_reports;
@@ -5129,6 +5704,7 @@ const OP_REPORTS_RETRIEVE_LEDGER_BILLING_GROUP_REPORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ledger_billing_group_reports/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5142,13 +5718,20 @@ fn iface_reports__create_ledger_billing_group_report_params__to_json(p: &iface_r
     Value::Object(m)
 }
 
+fn iface_reports__retrieve_ledger_billing_group_report_params__to_json(p: &iface_reports::RetrieveLedgerBillingGroupReportParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_reports::Guest for crate::Component {
     fn create_ledger_billing_group_report(params: iface_reports::CreateLedgerBillingGroupReportParams) -> Result<String, String> {
         let json = iface_reports__create_ledger_billing_group_report_params__to_json(&params);
         dispatch(&OP_REPORTS_CREATE_LEDGER_BILLING_GROUP_REPORT, json)
     }
-    fn retrieve_ledger_billing_group_report() -> Result<String, String> {
-        dispatch(&OP_REPORTS_RETRIEVE_LEDGER_BILLING_GROUP_REPORT, Value::Object(Map::new()))
+    fn retrieve_ledger_billing_group_report(params: iface_reports::RetrieveLedgerBillingGroupReportParams) -> Result<String, String> {
+        let json = iface_reports__retrieve_ledger_billing_group_report_params__to_json(&params);
+        dispatch(&OP_REPORTS_RETRIEVE_LEDGER_BILLING_GROUP_REPORT, json)
     }
 }
 use crate::exports::autostamp::telnyx::managed_accounts as iface_managed_accounts;
@@ -5157,6 +5740,11 @@ const OP_MANAGED_ACCOUNTS_LIST_MANAGED_ACCOUNTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/managed_accounts",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_email_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_email_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5209,6 +5797,23 @@ const OP_MANAGED_ACCOUNTS_ENABLE_MANAGED_ACCOUNT: OpSpec = OpSpec {
     ],
 };
 
+fn iface_managed_accounts__list_managed_accounts_sort_enum__to_str(e: &iface_managed_accounts::ListManagedAccountsSortEnum) -> &'static str {
+    match e {
+        iface_managed_accounts::ListManagedAccountsSortEnum::CreatedAt => "created_at",
+        iface_managed_accounts::ListManagedAccountsSortEnum::Email => "email",
+    }
+}
+
+fn iface_managed_accounts__list_managed_accounts_params__to_json(p: &iface_managed_accounts::ListManagedAccountsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_email_contains".into(), match (&p.filter_email_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_email_eq".into(), match (&p.filter_email_eq) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_managed_accounts__list_managed_accounts_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_managed_accounts__create_managed_account_params__to_json(p: &iface_managed_accounts::CreateManagedAccountParams) -> Value {
     let mut m = Map::new();
     m.insert("business_name".into(), Value::String((&p.business_name).clone()));
@@ -5236,8 +5841,9 @@ fn iface_managed_accounts__enable_managed_account_params__to_json(p: &iface_mana
 }
 
 impl iface_managed_accounts::Guest for crate::Component {
-    fn list_managed_accounts() -> Result<String, String> {
-        dispatch(&OP_MANAGED_ACCOUNTS_LIST_MANAGED_ACCOUNTS, Value::Object(Map::new()))
+    fn list_managed_accounts(params: iface_managed_accounts::ListManagedAccountsParams) -> Result<String, String> {
+        let json = iface_managed_accounts__list_managed_accounts_params__to_json(&params);
+        dispatch(&OP_MANAGED_ACCOUNTS_LIST_MANAGED_ACCOUNTS, json)
     }
     fn create_managed_account(params: iface_managed_accounts::CreateManagedAccountParams) -> Result<String, String> {
         let json = iface_managed_accounts__create_managed_account_params__to_json(&params);
@@ -5285,6 +5891,7 @@ const OP_MEDIA_STORAGE_API_GET_MEDIA: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/{media_name}",
     fields: &[
+        FieldSpec { snake: "media_name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5295,6 +5902,7 @@ const OP_MEDIA_STORAGE_API_UPDATE_MEDIA: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/media/{media_name}",
     fields: &[
+        FieldSpec { snake: "media_name", location: FieldLocation::Path },
         FieldSpec { snake: "media_url", location: FieldLocation::Body },
         FieldSpec { snake: "ttl_secs", location: FieldLocation::Body },
     ],
@@ -5307,6 +5915,7 @@ const OP_MEDIA_STORAGE_API_DELETE_MEDIA: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/media/{media_name}",
     fields: &[
+        FieldSpec { snake: "media_name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5317,6 +5926,7 @@ const OP_MEDIA_STORAGE_API_DOWNLOAD_MEDIA: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/{media_name}/download",
     fields: &[
+        FieldSpec { snake: "media_name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5331,10 +5941,29 @@ fn iface_media_storage_api__create_media_params__to_json(p: &iface_media_storage
     Value::Object(m)
 }
 
+fn iface_media_storage_api__get_media_params__to_json(p: &iface_media_storage_api::GetMediaParams) -> Value {
+    let mut m = Map::new();
+    m.insert("media_name".into(), Value::String((&p.media_name).clone()));
+    Value::Object(m)
+}
+
 fn iface_media_storage_api__update_media_params__to_json(p: &iface_media_storage_api::UpdateMediaParams) -> Value {
     let mut m = Map::new();
+    m.insert("media_name".into(), Value::String((&p.media_name).clone()));
     m.insert("media_url".into(), match (&p.media_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ttl_secs".into(), match (&p.ttl_secs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media_storage_api__delete_media_params__to_json(p: &iface_media_storage_api::DeleteMediaParams) -> Value {
+    let mut m = Map::new();
+    m.insert("media_name".into(), Value::String((&p.media_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_media_storage_api__download_media_params__to_json(p: &iface_media_storage_api::DownloadMediaParams) -> Value {
+    let mut m = Map::new();
+    m.insert("media_name".into(), Value::String((&p.media_name).clone()));
     Value::Object(m)
 }
 
@@ -5346,18 +5975,21 @@ impl iface_media_storage_api::Guest for crate::Component {
         let json = iface_media_storage_api__create_media_params__to_json(&params);
         dispatch(&OP_MEDIA_STORAGE_API_CREATE_MEDIA, json)
     }
-    fn get_media() -> Result<String, String> {
-        dispatch(&OP_MEDIA_STORAGE_API_GET_MEDIA, Value::Object(Map::new()))
+    fn get_media(params: iface_media_storage_api::GetMediaParams) -> Result<String, String> {
+        let json = iface_media_storage_api__get_media_params__to_json(&params);
+        dispatch(&OP_MEDIA_STORAGE_API_GET_MEDIA, json)
     }
     fn update_media(params: iface_media_storage_api::UpdateMediaParams) -> Result<String, String> {
         let json = iface_media_storage_api__update_media_params__to_json(&params);
         dispatch(&OP_MEDIA_STORAGE_API_UPDATE_MEDIA, json)
     }
-    fn delete_media() -> Result<String, String> {
-        dispatch(&OP_MEDIA_STORAGE_API_DELETE_MEDIA, Value::Object(Map::new()))
+    fn delete_media(params: iface_media_storage_api::DeleteMediaParams) -> Result<String, String> {
+        let json = iface_media_storage_api__delete_media_params__to_json(&params);
+        dispatch(&OP_MEDIA_STORAGE_API_DELETE_MEDIA, json)
     }
-    fn download_media() -> Result<String, String> {
-        dispatch(&OP_MEDIA_STORAGE_API_DOWNLOAD_MEDIA, Value::Object(Map::new()))
+    fn download_media(params: iface_media_storage_api::DownloadMediaParams) -> Result<String, String> {
+        let json = iface_media_storage_api__download_media_params__to_json(&params);
+        dispatch(&OP_MEDIA_STORAGE_API_DOWNLOAD_MEDIA, json)
     }
 }
 use crate::exports::autostamp::telnyx::mdr_search_beta as iface_mdr_search_beta;
@@ -5668,6 +6300,8 @@ const OP_MESSAGING_HOSTED_NUMBER_LIST_MESSAGING_HOSTED_NUMBER_ORDER: OpSpec = Op
     method: "GET",
     path_template: "/messaging_hosted_number_orders",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5719,6 +6353,13 @@ const OP_MESSAGING_HOSTED_NUMBER_DELETE_MESSAGING_HOSTED_NUMBER: OpSpec = OpSpec
     ],
 };
 
+fn iface_messaging_hosted_number__list_messaging_hosted_number_order_params__to_json(p: &iface_messaging_hosted_number::ListMessagingHostedNumberOrderParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_messaging_hosted_number__create_messaging_hosted_number_order_params__to_json(p: &iface_messaging_hosted_number::CreateMessagingHostedNumberOrderParams) -> Value {
     let mut m = Map::new();
     m.insert("messaging_profile_id".into(), match (&p.messaging_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5745,8 +6386,9 @@ fn iface_messaging_hosted_number__delete_messaging_hosted_number_params__to_json
 }
 
 impl iface_messaging_hosted_number::Guest for crate::Component {
-    fn list_messaging_hosted_number_order() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_HOSTED_NUMBER_LIST_MESSAGING_HOSTED_NUMBER_ORDER, Value::Object(Map::new()))
+    fn list_messaging_hosted_number_order(params: iface_messaging_hosted_number::ListMessagingHostedNumberOrderParams) -> Result<String, String> {
+        let json = iface_messaging_hosted_number__list_messaging_hosted_number_order_params__to_json(&params);
+        dispatch(&OP_MESSAGING_HOSTED_NUMBER_LIST_MESSAGING_HOSTED_NUMBER_ORDER, json)
     }
     fn create_messaging_hosted_number_order(params: iface_messaging_hosted_number::CreateMessagingHostedNumberOrderParams) -> Result<String, String> {
         let json = iface_messaging_hosted_number__create_messaging_hosted_number_order_params__to_json(&params);
@@ -5771,6 +6413,10 @@ const OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_METRICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/messaging_profile_metrics",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "time_frame", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5781,6 +6427,8 @@ const OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/messaging_profiles",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5808,6 +6456,7 @@ const OP_MESSAGING_PROFILES_RETRIEVE_MESSAGING_PROFILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/messaging_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5818,9 +6467,9 @@ const OP_MESSAGING_PROFILES_UPDATE_MESSAGING_PROFILE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/messaging_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "created_at", location: FieldLocation::Body },
         FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
         FieldSpec { snake: "number_pool_settings", location: FieldLocation::Body },
         FieldSpec { snake: "record_type", location: FieldLocation::Body },
@@ -5841,6 +6490,7 @@ const OP_MESSAGING_PROFILES_DELETE_MESSAGING_PROFILE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/messaging_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5851,6 +6501,8 @@ const OP_MESSAGING_PROFILES_RETRIEVE_MESSAGING_PROFILE_DETAILED_METRICS: OpSpec 
     method: "GET",
     path_template: "/messaging_profiles/{id}/metrics",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "time_frame", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5861,6 +6513,9 @@ const OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_PHONE_NUMBERS: OpSpec = OpSpe
     method: "GET",
     path_template: "/messaging_profiles/{id}/phone_numbers",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -5871,11 +6526,25 @@ const OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_SHORT_CODES: OpSpec = OpSpec 
     method: "GET",
     path_template: "/messaging_profiles/{id}/short_codes",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_messaging_profiles__list_messaging_profile_metrics_time_frame_enum__to_str(e: &iface_messaging_profiles::ListMessagingProfileMetricsTimeFrameEnum) -> &'static str {
+    match e {
+        iface_messaging_profiles::ListMessagingProfileMetricsTimeFrameEnum::V1h => "1h",
+        iface_messaging_profiles::ListMessagingProfileMetricsTimeFrameEnum::V3h => "3h",
+        iface_messaging_profiles::ListMessagingProfileMetricsTimeFrameEnum::V24h => "24h",
+        iface_messaging_profiles::ListMessagingProfileMetricsTimeFrameEnum::V3d => "3d",
+        iface_messaging_profiles::ListMessagingProfileMetricsTimeFrameEnum::V7d => "7d",
+        iface_messaging_profiles::ListMessagingProfileMetricsTimeFrameEnum::V30d => "30d",
+    }
+}
 
 fn iface_messaging_profiles__create_messaging_profile_request_webhook_api_version_enum__to_str(e: &iface_messaging_profiles::CreateMessagingProfileRequestWebhookApiVersionEnum) -> &'static str {
     match e {
@@ -5910,6 +6579,22 @@ fn iface_messaging_profiles__url_shortener_settings__to_json(p: &iface_messaging
     Value::Object(m)
 }
 
+fn iface_messaging_profiles__list_messaging_profile_metrics_params__to_json(p: &iface_messaging_profiles::ListMessagingProfileMetricsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("time_frame".into(), match (&p.time_frame) { Some(v) => Value::String(iface_messaging_profiles__list_messaging_profile_metrics_time_frame_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_messaging_profiles__list_messaging_profiles_params__to_json(p: &iface_messaging_profiles::ListMessagingProfilesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_messaging_profiles__create_messaging_profile_params__to_json(p: &iface_messaging_profiles::CreateMessagingProfileParams) -> Value {
     let mut m = Map::new();
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -5922,11 +6607,17 @@ fn iface_messaging_profiles__create_messaging_profile_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_messaging_profiles__retrieve_messaging_profile_params__to_json(p: &iface_messaging_profiles::RetrieveMessagingProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_messaging_profiles__update_messaging_profile_params__to_json(p: &iface_messaging_profiles::UpdateMessagingProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("number_pool_settings".into(), match (&p.number_pool_settings) { Some(v) => iface_messaging_profiles__number_pool_settings__to_json(v), None => Value::Null });
     m.insert("record_type".into(), match (&p.record_type) { Some(v) => Value::String(iface_messaging_profiles__update_messaging_profile_request_record_type_enum__to_str(v).into()), None => Value::Null });
@@ -5940,35 +6631,71 @@ fn iface_messaging_profiles__update_messaging_profile_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_messaging_profiles__delete_messaging_profile_params__to_json(p: &iface_messaging_profiles::DeleteMessagingProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_messaging_profiles__retrieve_messaging_profile_detailed_metrics_params__to_json(p: &iface_messaging_profiles::RetrieveMessagingProfileDetailedMetricsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("time_frame".into(), match (&p.time_frame) { Some(v) => Value::String(iface_messaging_profiles__list_messaging_profile_metrics_time_frame_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_messaging_profiles__list_messaging_profile_phone_numbers_params__to_json(p: &iface_messaging_profiles::ListMessagingProfilePhoneNumbersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_messaging_profiles__list_messaging_profile_short_codes_params__to_json(p: &iface_messaging_profiles::ListMessagingProfileShortCodesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_messaging_profiles::Guest for crate::Component {
-    fn list_messaging_profile_metrics() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_METRICS, Value::Object(Map::new()))
+    fn list_messaging_profile_metrics(params: iface_messaging_profiles::ListMessagingProfileMetricsParams) -> Result<String, String> {
+        let json = iface_messaging_profiles__list_messaging_profile_metrics_params__to_json(&params);
+        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_METRICS, json)
     }
-    fn list_messaging_profiles() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILES, Value::Object(Map::new()))
+    fn list_messaging_profiles(params: iface_messaging_profiles::ListMessagingProfilesParams) -> Result<String, String> {
+        let json = iface_messaging_profiles__list_messaging_profiles_params__to_json(&params);
+        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILES, json)
     }
     fn create_messaging_profile(params: iface_messaging_profiles::CreateMessagingProfileParams) -> Result<String, String> {
         let json = iface_messaging_profiles__create_messaging_profile_params__to_json(&params);
         dispatch(&OP_MESSAGING_PROFILES_CREATE_MESSAGING_PROFILE, json)
     }
-    fn retrieve_messaging_profile() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_PROFILES_RETRIEVE_MESSAGING_PROFILE, Value::Object(Map::new()))
+    fn retrieve_messaging_profile(params: iface_messaging_profiles::RetrieveMessagingProfileParams) -> Result<String, String> {
+        let json = iface_messaging_profiles__retrieve_messaging_profile_params__to_json(&params);
+        dispatch(&OP_MESSAGING_PROFILES_RETRIEVE_MESSAGING_PROFILE, json)
     }
     fn update_messaging_profile(params: iface_messaging_profiles::UpdateMessagingProfileParams) -> Result<String, String> {
         let json = iface_messaging_profiles__update_messaging_profile_params__to_json(&params);
         dispatch(&OP_MESSAGING_PROFILES_UPDATE_MESSAGING_PROFILE, json)
     }
-    fn delete_messaging_profile() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_PROFILES_DELETE_MESSAGING_PROFILE, Value::Object(Map::new()))
+    fn delete_messaging_profile(params: iface_messaging_profiles::DeleteMessagingProfileParams) -> Result<String, String> {
+        let json = iface_messaging_profiles__delete_messaging_profile_params__to_json(&params);
+        dispatch(&OP_MESSAGING_PROFILES_DELETE_MESSAGING_PROFILE, json)
     }
-    fn retrieve_messaging_profile_detailed_metrics() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_PROFILES_RETRIEVE_MESSAGING_PROFILE_DETAILED_METRICS, Value::Object(Map::new()))
+    fn retrieve_messaging_profile_detailed_metrics(params: iface_messaging_profiles::RetrieveMessagingProfileDetailedMetricsParams) -> Result<String, String> {
+        let json = iface_messaging_profiles__retrieve_messaging_profile_detailed_metrics_params__to_json(&params);
+        dispatch(&OP_MESSAGING_PROFILES_RETRIEVE_MESSAGING_PROFILE_DETAILED_METRICS, json)
     }
-    fn list_messaging_profile_phone_numbers() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_PHONE_NUMBERS, Value::Object(Map::new()))
+    fn list_messaging_profile_phone_numbers(params: iface_messaging_profiles::ListMessagingProfilePhoneNumbersParams) -> Result<String, String> {
+        let json = iface_messaging_profiles__list_messaging_profile_phone_numbers_params__to_json(&params);
+        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_PHONE_NUMBERS, json)
     }
-    fn list_messaging_profile_short_codes() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_SHORT_CODES, Value::Object(Map::new()))
+    fn list_messaging_profile_short_codes(params: iface_messaging_profiles::ListMessagingProfileShortCodesParams) -> Result<String, String> {
+        let json = iface_messaging_profiles__list_messaging_profile_short_codes_params__to_json(&params);
+        dispatch(&OP_MESSAGING_PROFILES_LIST_MESSAGING_PROFILE_SHORT_CODES, json)
     }
 }
 use crate::exports::autostamp::telnyx::messaging_url_domains as iface_messaging_url_domains;
@@ -5977,23 +6704,35 @@ const OP_MESSAGING_URL_DOMAINS_LIST_MESSAGING_URL_DOMAINS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/messaging_url_domains",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_messaging_url_domains__list_messaging_url_domains_params__to_json(p: &iface_messaging_url_domains::ListMessagingUrlDomainsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_messaging_url_domains::Guest for crate::Component {
-    fn list_messaging_url_domains() -> Result<String, String> {
-        dispatch(&OP_MESSAGING_URL_DOMAINS_LIST_MESSAGING_URL_DOMAINS, Value::Object(Map::new()))
+    fn list_messaging_url_domains(params: iface_messaging_url_domains::ListMessagingUrlDomainsParams) -> Result<String, String> {
+        let json = iface_messaging_url_domains__list_messaging_url_domains_params__to_json(&params);
+        dispatch(&OP_MESSAGING_URL_DOMAINS_LIST_MESSAGING_URL_DOMAINS, json)
     }
 }
 use crate::exports::autostamp::telnyx::mobile_operator_networks as iface_mobile_operator_networks;
 
-const OP_MOBILE_OPERATOR_NETWORKS_MOBILE_OPERATOR_NETWORKS_GET: OpSpec = OpSpec {
+const OP_MOBILE_OPERATOR_NETWORKS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mobile_operator_networks",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_name_starts_with", location: FieldLocation::Query },
         FieldSpec { snake: "filter_name_contains", location: FieldLocation::Query },
         FieldSpec { snake: "filter_name_ends_with", location: FieldLocation::Query },
@@ -6007,8 +6746,10 @@ const OP_MOBILE_OPERATOR_NETWORKS_MOBILE_OPERATOR_NETWORKS_GET: OpSpec = OpSpec 
     ],
 };
 
-fn iface_mobile_operator_networks__mobile_operator_networks_get_params__to_json(p: &iface_mobile_operator_networks::MobileOperatorNetworksGetParams) -> Value {
+fn iface_mobile_operator_networks__get_params__to_json(p: &iface_mobile_operator_networks::GetParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_name_starts_with".into(), match (&p.filter_name_starts_with) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_name_contains".into(), match (&p.filter_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_name_ends_with".into(), match (&p.filter_name_ends_with) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -6020,9 +6761,9 @@ fn iface_mobile_operator_networks__mobile_operator_networks_get_params__to_json(
 }
 
 impl iface_mobile_operator_networks::Guest for crate::Component {
-    fn mobile_operator_networks_get(params: iface_mobile_operator_networks::MobileOperatorNetworksGetParams) -> Result<String, String> {
-        let json = iface_mobile_operator_networks__mobile_operator_networks_get_params__to_json(&params);
-        dispatch(&OP_MOBILE_OPERATOR_NETWORKS_MOBILE_OPERATOR_NETWORKS_GET, json)
+    fn get(params: iface_mobile_operator_networks::GetParams) -> Result<String, String> {
+        let json = iface_mobile_operator_networks__get_params__to_json(&params);
+        dispatch(&OP_MOBILE_OPERATOR_NETWORKS_GET, json)
     }
 }
 use crate::exports::autostamp::telnyx::notifications as iface_notifications;
@@ -6031,6 +6772,9 @@ const OP_NOTIFICATIONS_LIST_NOTIFICATION_CHANNELS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_channels",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_channel_type_id_eq", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6057,6 +6801,7 @@ const OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_CHANNEL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_channels/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6067,10 +6812,10 @@ const OP_NOTIFICATIONS_UPDATE_NOTIFICATION_CHANNEL: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/notification_channels/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "channel_destination", location: FieldLocation::Body },
         FieldSpec { snake: "channel_type_id", location: FieldLocation::Body },
         FieldSpec { snake: "created_at", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
         FieldSpec { snake: "notification_profile_id", location: FieldLocation::Body },
         FieldSpec { snake: "updated_at", location: FieldLocation::Body },
     ],
@@ -6083,6 +6828,7 @@ const OP_NOTIFICATIONS_DELETE_NOTIFICATION_CHANNEL: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/notification_channels/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6093,6 +6839,9 @@ const OP_NOTIFICATIONS_FIND_NOTIFICATIONS_EVENTS_CONDITIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_event_conditions",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_associated_record_type_eq", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6103,6 +6852,8 @@ const OP_NOTIFICATIONS_FIND_NOTIFICATIONS_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_events",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6113,6 +6864,8 @@ const OP_NOTIFICATIONS_FIND_NOTIFICATIONS_PROFILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_profiles",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6137,6 +6890,7 @@ const OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_PROFILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6147,8 +6901,8 @@ const OP_NOTIFICATIONS_UPDATE_NOTIFICATION_PROFILE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/notification_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "created_at", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
         FieldSpec { snake: "updated_at", location: FieldLocation::Body },
     ],
@@ -6161,6 +6915,7 @@ const OP_NOTIFICATIONS_DELETE_NOTIFICATION_PROFILE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/notification_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6171,6 +6926,13 @@ const OP_NOTIFICATIONS_LIST_NOTIFICATION_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_settings",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_notification_profile_id_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_notification_channel_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_notification_event_condition_id_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_associated_record_type_eq", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_status_eq", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6201,6 +6963,7 @@ const OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_SETTING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notification_settings/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6211,11 +6974,21 @@ const OP_NOTIFICATIONS_DELETE_NOTIFICATION_SETTING: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/notification_settings/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_notifications__list_notification_channels_filter_channel_type_id_eq_enum__to_str(e: &iface_notifications::ListNotificationChannelsFilterChannelTypeIdEqEnum) -> &'static str {
+    match e {
+        iface_notifications::ListNotificationChannelsFilterChannelTypeIdEqEnum::Webhook => "webhook",
+        iface_notifications::ListNotificationChannelsFilterChannelTypeIdEqEnum::Sms => "sms",
+        iface_notifications::ListNotificationChannelsFilterChannelTypeIdEqEnum::Email => "email",
+        iface_notifications::ListNotificationChannelsFilterChannelTypeIdEqEnum::Voice => "voice",
+    }
+}
 
 fn iface_notifications__notification_channel_channel_type_id_enum__to_str(e: &iface_notifications::NotificationChannelChannelTypeIdEnum) -> &'static str {
     match e {
@@ -6226,16 +6999,23 @@ fn iface_notifications__notification_channel_channel_type_id_enum__to_str(e: &if
     }
 }
 
-fn iface_notifications__notification_setting_status_enum__to_str(e: &iface_notifications::NotificationSettingStatusEnum) -> &'static str {
+fn iface_notifications__find_notifications_events_conditions_filter_associated_record_type_eq_enum__to_str(e: &iface_notifications::FindNotificationsEventsConditionsFilterAssociatedRecordTypeEqEnum) -> &'static str {
     match e {
-        iface_notifications::NotificationSettingStatusEnum::Enabled => "enabled",
-        iface_notifications::NotificationSettingStatusEnum::EnableReceived => "enable-received",
-        iface_notifications::NotificationSettingStatusEnum::EnablePending => "enable-pending",
-        iface_notifications::NotificationSettingStatusEnum::EnableSubmtited => "enable-submtited",
-        iface_notifications::NotificationSettingStatusEnum::DeleteReceived => "delete-received",
-        iface_notifications::NotificationSettingStatusEnum::DeletePending => "delete-pending",
-        iface_notifications::NotificationSettingStatusEnum::DeleteSubmitted => "delete-submitted",
-        iface_notifications::NotificationSettingStatusEnum::Deleted => "deleted",
+        iface_notifications::FindNotificationsEventsConditionsFilterAssociatedRecordTypeEqEnum::Account => "account",
+        iface_notifications::FindNotificationsEventsConditionsFilterAssociatedRecordTypeEqEnum::PhoneNumber => "phone_number",
+    }
+}
+
+fn iface_notifications__list_notification_settings_filter_status_eq_enum__to_str(e: &iface_notifications::ListNotificationSettingsFilterStatusEqEnum) -> &'static str {
+    match e {
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::Enabled => "enabled",
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::EnableReceived => "enable-received",
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::EnablePending => "enable-pending",
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::EnableSubmtited => "enable-submtited",
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::DeleteReceived => "delete-received",
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::DeletePending => "delete-pending",
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::DeleteSubmitted => "delete-submitted",
+        iface_notifications::ListNotificationSettingsFilterStatusEqEnum::Deleted => "deleted",
     }
 }
 
@@ -6243,6 +7023,14 @@ fn iface_notifications__notification_setting_parameters_item__to_json(p: &iface_
     let mut m = Map::new();
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_notifications__list_notification_channels_params__to_json(p: &iface_notifications::ListNotificationChannelsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_channel_type_id_eq".into(), match (&p.filter_channel_type_id_eq) { Some(v) => Value::String(iface_notifications__list_notification_channels_filter_channel_type_id_eq_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6257,14 +7045,48 @@ fn iface_notifications__create_notification_channels_params__to_json(p: &iface_n
     Value::Object(m)
 }
 
+fn iface_notifications__retrieve_notification_channel_params__to_json(p: &iface_notifications::RetrieveNotificationChannelParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_notifications__update_notification_channel_params__to_json(p: &iface_notifications::UpdateNotificationChannelParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("channel_destination".into(), match (&p.channel_destination) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("channel_type_id".into(), match (&p.channel_type_id) { Some(v) => Value::String(iface_notifications__notification_channel_channel_type_id_enum__to_str(v).into()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("notification_profile_id".into(), match (&p.notification_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_notifications__delete_notification_channel_params__to_json(p: &iface_notifications::DeleteNotificationChannelParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_notifications__find_notifications_events_conditions_params__to_json(p: &iface_notifications::FindNotificationsEventsConditionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_associated_record_type_eq".into(), match (&p.filter_associated_record_type_eq) { Some(v) => Value::String(iface_notifications__find_notifications_events_conditions_filter_associated_record_type_eq_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_notifications__find_notifications_events_params__to_json(p: &iface_notifications::FindNotificationsEventsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_notifications__find_notifications_profiles_params__to_json(p: &iface_notifications::FindNotificationsProfilesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6277,12 +7099,36 @@ fn iface_notifications__create_notification_profile_params__to_json(p: &iface_no
     Value::Object(m)
 }
 
+fn iface_notifications__retrieve_notification_profile_params__to_json(p: &iface_notifications::RetrieveNotificationProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_notifications__update_notification_profile_params__to_json(p: &iface_notifications::UpdateNotificationProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_notifications__delete_notification_profile_params__to_json(p: &iface_notifications::DeleteNotificationProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_notifications__list_notification_settings_params__to_json(p: &iface_notifications::ListNotificationSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_notification_profile_id_eq".into(), match (&p.filter_notification_profile_id_eq) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_notification_channel_eq".into(), match (&p.filter_notification_channel_eq) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_notification_event_condition_id_eq".into(), match (&p.filter_notification_event_condition_id_eq) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_associated_record_type_eq".into(), match (&p.filter_associated_record_type_eq) { Some(v) => Value::String(iface_notifications__find_notifications_events_conditions_filter_associated_record_type_eq_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filter_status_eq".into(), match (&p.filter_status_eq) { Some(v) => Value::String(iface_notifications__list_notification_settings_filter_status_eq_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6296,64 +7142,87 @@ fn iface_notifications__create_notification_setting_params__to_json(p: &iface_no
     m.insert("notification_event_condition_id".into(), match (&p.notification_event_condition_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("notification_profile_id".into(), match (&p.notification_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parameters".into(), match (&p.parameters) { Some(v) => Value::Array((v).iter().map(|v| iface_notifications__notification_setting_parameters_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_notifications__notification_setting_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_notifications__list_notification_settings_filter_status_eq_enum__to_str(v).into()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_notifications__retrieve_notification_setting_params__to_json(p: &iface_notifications::RetrieveNotificationSettingParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_notifications__delete_notification_setting_params__to_json(p: &iface_notifications::DeleteNotificationSettingParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_notifications::Guest for crate::Component {
-    fn list_notification_channels() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_LIST_NOTIFICATION_CHANNELS, Value::Object(Map::new()))
+    fn list_notification_channels(params: iface_notifications::ListNotificationChannelsParams) -> Result<String, String> {
+        let json = iface_notifications__list_notification_channels_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_LIST_NOTIFICATION_CHANNELS, json)
     }
     fn create_notification_channels(params: iface_notifications::CreateNotificationChannelsParams) -> Result<String, String> {
         let json = iface_notifications__create_notification_channels_params__to_json(&params);
         dispatch(&OP_NOTIFICATIONS_CREATE_NOTIFICATION_CHANNELS, json)
     }
-    fn retrieve_notification_channel() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_CHANNEL, Value::Object(Map::new()))
+    fn retrieve_notification_channel(params: iface_notifications::RetrieveNotificationChannelParams) -> Result<String, String> {
+        let json = iface_notifications__retrieve_notification_channel_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_CHANNEL, json)
     }
     fn update_notification_channel(params: iface_notifications::UpdateNotificationChannelParams) -> Result<String, String> {
         let json = iface_notifications__update_notification_channel_params__to_json(&params);
         dispatch(&OP_NOTIFICATIONS_UPDATE_NOTIFICATION_CHANNEL, json)
     }
-    fn delete_notification_channel() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_DELETE_NOTIFICATION_CHANNEL, Value::Object(Map::new()))
+    fn delete_notification_channel(params: iface_notifications::DeleteNotificationChannelParams) -> Result<String, String> {
+        let json = iface_notifications__delete_notification_channel_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_DELETE_NOTIFICATION_CHANNEL, json)
     }
-    fn find_notifications_events_conditions() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_FIND_NOTIFICATIONS_EVENTS_CONDITIONS, Value::Object(Map::new()))
+    fn find_notifications_events_conditions(params: iface_notifications::FindNotificationsEventsConditionsParams) -> Result<String, String> {
+        let json = iface_notifications__find_notifications_events_conditions_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_FIND_NOTIFICATIONS_EVENTS_CONDITIONS, json)
     }
-    fn find_notifications_events() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_FIND_NOTIFICATIONS_EVENTS, Value::Object(Map::new()))
+    fn find_notifications_events(params: iface_notifications::FindNotificationsEventsParams) -> Result<String, String> {
+        let json = iface_notifications__find_notifications_events_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_FIND_NOTIFICATIONS_EVENTS, json)
     }
-    fn find_notifications_profiles() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_FIND_NOTIFICATIONS_PROFILES, Value::Object(Map::new()))
+    fn find_notifications_profiles(params: iface_notifications::FindNotificationsProfilesParams) -> Result<String, String> {
+        let json = iface_notifications__find_notifications_profiles_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_FIND_NOTIFICATIONS_PROFILES, json)
     }
     fn create_notification_profile(params: iface_notifications::CreateNotificationProfileParams) -> Result<String, String> {
         let json = iface_notifications__create_notification_profile_params__to_json(&params);
         dispatch(&OP_NOTIFICATIONS_CREATE_NOTIFICATION_PROFILE, json)
     }
-    fn retrieve_notification_profile() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_PROFILE, Value::Object(Map::new()))
+    fn retrieve_notification_profile(params: iface_notifications::RetrieveNotificationProfileParams) -> Result<String, String> {
+        let json = iface_notifications__retrieve_notification_profile_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_PROFILE, json)
     }
     fn update_notification_profile(params: iface_notifications::UpdateNotificationProfileParams) -> Result<String, String> {
         let json = iface_notifications__update_notification_profile_params__to_json(&params);
         dispatch(&OP_NOTIFICATIONS_UPDATE_NOTIFICATION_PROFILE, json)
     }
-    fn delete_notification_profile() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_DELETE_NOTIFICATION_PROFILE, Value::Object(Map::new()))
+    fn delete_notification_profile(params: iface_notifications::DeleteNotificationProfileParams) -> Result<String, String> {
+        let json = iface_notifications__delete_notification_profile_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_DELETE_NOTIFICATION_PROFILE, json)
     }
-    fn list_notification_settings() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_LIST_NOTIFICATION_SETTINGS, Value::Object(Map::new()))
+    fn list_notification_settings(params: iface_notifications::ListNotificationSettingsParams) -> Result<String, String> {
+        let json = iface_notifications__list_notification_settings_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_LIST_NOTIFICATION_SETTINGS, json)
     }
     fn create_notification_setting(params: iface_notifications::CreateNotificationSettingParams) -> Result<String, String> {
         let json = iface_notifications__create_notification_setting_params__to_json(&params);
         dispatch(&OP_NOTIFICATIONS_CREATE_NOTIFICATION_SETTING, json)
     }
-    fn retrieve_notification_setting() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_SETTING, Value::Object(Map::new()))
+    fn retrieve_notification_setting(params: iface_notifications::RetrieveNotificationSettingParams) -> Result<String, String> {
+        let json = iface_notifications__retrieve_notification_setting_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_RETRIEVE_NOTIFICATION_SETTING, json)
     }
-    fn delete_notification_setting() -> Result<String, String> {
-        dispatch(&OP_NOTIFICATIONS_DELETE_NOTIFICATION_SETTING, Value::Object(Map::new()))
+    fn delete_notification_setting(params: iface_notifications::DeleteNotificationSettingParams) -> Result<String, String> {
+        let json = iface_notifications__delete_notification_setting_params__to_json(&params);
+        dispatch(&OP_NOTIFICATIONS_DELETE_NOTIFICATION_SETTING, json)
     }
 }
 use crate::exports::autostamp::telnyx::number_block_orders as iface_number_block_orders;
@@ -6366,6 +7235,8 @@ const OP_NUMBER_BLOCK_ORDERS_LIST_NUMBER_BLOCK_ORDERS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_created_at_gt", location: FieldLocation::Query },
         FieldSpec { snake: "filter_created_at_lt", location: FieldLocation::Query },
         FieldSpec { snake: "filter_phone_numbers_starting_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6420,6 +7291,8 @@ fn iface_number_block_orders__list_number_block_orders_params__to_json(p: &iface
     m.insert("filter_created_at_gt".into(), match (&p.filter_created_at_gt) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_created_at_lt".into(), match (&p.filter_created_at_lt) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_numbers_starting_number".into(), match (&p.filter_phone_numbers_starting_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6467,15 +7340,32 @@ const OP_NUMBER_LOOKUP_NUMBER_LOOKUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/number_lookup/{phone_number}",
     fields: &[
+        FieldSpec { snake: "phone_number", location: FieldLocation::Path },
+        FieldSpec { snake: "type", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_number_lookup__number_lookup_type_op_enum__to_str(e: &iface_number_lookup::NumberLookupTypeOpEnum) -> &'static str {
+    match e {
+        iface_number_lookup::NumberLookupTypeOpEnum::Carrier => "carrier",
+        iface_number_lookup::NumberLookupTypeOpEnum::CallerName => "caller-name",
+    }
+}
+
+fn iface_number_lookup__number_lookup_params__to_json(p: &iface_number_lookup::NumberLookupParams) -> Value {
+    let mut m = Map::new();
+    m.insert("phone_number".into(), Value::String((&p.phone_number).clone()));
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_number_lookup__number_lookup_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_number_lookup::Guest for crate::Component {
-    fn number_lookup() -> Result<String, String> {
-        dispatch(&OP_NUMBER_LOOKUP_NUMBER_LOOKUP, Value::Object(Map::new()))
+    fn number_lookup(params: iface_number_lookup::NumberLookupParams) -> Result<String, String> {
+        let json = iface_number_lookup__number_lookup_params__to_json(&params);
+        dispatch(&OP_NUMBER_LOOKUP_NUMBER_LOOKUP, json)
     }
 }
 use crate::exports::autostamp::telnyx::number_order_documents as iface_number_order_documents;
@@ -6487,6 +7377,8 @@ const OP_NUMBER_ORDER_DOCUMENTS_LIST_NUMBER_ORDER_DOCUMENTS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_requirement_id", location: FieldLocation::Query },
         FieldSpec { snake: "filter_created_at_gt", location: FieldLocation::Query },
         FieldSpec { snake: "filter_created_at_lt", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6552,6 +7444,8 @@ fn iface_number_order_documents__list_number_order_documents_params__to_json(p: 
     m.insert("filter_requirement_id".into(), match (&p.filter_requirement_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_created_at_gt".into(), match (&p.filter_created_at_gt) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_created_at_lt".into(), match (&p.filter_created_at_lt) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6615,6 +7509,8 @@ const OP_NUMBER_RESERVATIONS_LIST_NUMBER_RESERVATIONS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_created_at_lt", location: FieldLocation::Query },
         FieldSpec { snake: "filter_phone_numbers_phone_number", location: FieldLocation::Query },
         FieldSpec { snake: "filter_customer_reference", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6687,6 +7583,8 @@ fn iface_number_reservations__list_number_reservations_params__to_json(p: &iface
     m.insert("filter_created_at_lt".into(), match (&p.filter_created_at_lt) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_numbers_phone_number".into(), match (&p.filter_phone_numbers_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_customer_reference".into(), match (&p.filter_customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6734,10 +7632,13 @@ impl iface_number_reservations::Guest for crate::Component {
 }
 use crate::exports::autostamp::telnyx::ota_updates as iface_ota_updates;
 
-const OP_OTA_UPDATES_OTA_UPDATES_LIST: OpSpec = OpSpec {
+const OP_OTA_UPDATES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ota_updates",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_status", location: FieldLocation::Query },
         FieldSpec { snake: "filter_sim_card_id", location: FieldLocation::Query },
         FieldSpec { snake: "filter_type", location: FieldLocation::Query },
     ],
@@ -6750,32 +7651,51 @@ const OP_OTA_UPDATES_OTA_UPDATE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/ota_updates/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
-fn iface_ota_updates__ota_updates_list_filter_type_enum__to_str(e: &iface_ota_updates::OtaUpdatesListFilterTypeEnum) -> &'static str {
+fn iface_ota_updates__list_op_filter_status_enum__to_str(e: &iface_ota_updates::ListOpFilterStatusEnum) -> &'static str {
     match e {
-        iface_ota_updates::OtaUpdatesListFilterTypeEnum::SimCardNetworkPreferences => "sim_card_network_preferences",
+        iface_ota_updates::ListOpFilterStatusEnum::InProgress => "in-progress",
+        iface_ota_updates::ListOpFilterStatusEnum::Completed => "completed",
+        iface_ota_updates::ListOpFilterStatusEnum::Failed => "failed",
     }
 }
 
-fn iface_ota_updates__ota_updates_list_params__to_json(p: &iface_ota_updates::OtaUpdatesListParams) -> Value {
+fn iface_ota_updates__list_op_filter_type_enum__to_str(e: &iface_ota_updates::ListOpFilterTypeEnum) -> &'static str {
+    match e {
+        iface_ota_updates::ListOpFilterTypeEnum::SimCardNetworkPreferences => "sim_card_network_preferences",
+    }
+}
+
+fn iface_ota_updates__list_op_params__to_json(p: &iface_ota_updates::ListOpParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String(iface_ota_updates__list_op_filter_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("filter_sim_card_id".into(), match (&p.filter_sim_card_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String(iface_ota_updates__ota_updates_list_filter_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String(iface_ota_updates__list_op_filter_type_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ota_updates__ota_update_get_params__to_json(p: &iface_ota_updates::OtaUpdateGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_ota_updates::Guest for crate::Component {
-    fn ota_updates_list(params: iface_ota_updates::OtaUpdatesListParams) -> Result<String, String> {
-        let json = iface_ota_updates__ota_updates_list_params__to_json(&params);
-        dispatch(&OP_OTA_UPDATES_OTA_UPDATES_LIST, json)
+    fn list_op(params: iface_ota_updates::ListOpParams) -> Result<String, String> {
+        let json = iface_ota_updates__list_op_params__to_json(&params);
+        dispatch(&OP_OTA_UPDATES_LIST_OP, json)
     }
-    fn ota_update_get() -> Result<String, String> {
-        dispatch(&OP_OTA_UPDATES_OTA_UPDATE_GET, Value::Object(Map::new()))
+    fn ota_update_get(params: iface_ota_updates::OtaUpdateGetParams) -> Result<String, String> {
+        let json = iface_ota_updates__ota_update_get_params__to_json(&params);
+        dispatch(&OP_OTA_UPDATES_OTA_UPDATE_GET, json)
     }
 }
 use crate::exports::autostamp::telnyx::outbound_voice_profiles as iface_outbound_voice_profiles;
@@ -6784,6 +7704,10 @@ const OP_OUTBOUND_VOICE_PROFILES_LIST_OUTBOUND_VOICE_PROFILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/outbound_voice_profiles",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6817,6 +7741,7 @@ const OP_OUTBOUND_VOICE_PROFILES_RETRIEVE_OUTBOUND_VOICE_PROFILE: OpSpec = OpSpe
     method: "GET",
     path_template: "/outbound_voice_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -6827,6 +7752,7 @@ const OP_OUTBOUND_VOICE_PROFILES_UPDATE_OUTBOUND_VOICE_PROFILE: OpSpec = OpSpec 
     method: "PATCH",
     path_template: "/outbound_voice_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "billing_group_id", location: FieldLocation::Body },
         FieldSpec { snake: "call_recording", location: FieldLocation::Body },
         FieldSpec { snake: "concurrent_call_limit", location: FieldLocation::Body },
@@ -6850,11 +7776,29 @@ const OP_OUTBOUND_VOICE_PROFILES_DELETE_OUTBOUND_VOICE_PROFILE: OpSpec = OpSpec 
     method: "DELETE",
     path_template: "/outbound_voice_profiles/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_outbound_voice_profiles__list_outbound_voice_profiles_sort_enum__to_str(e: &iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum) -> &'static str {
+    match e {
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::Enabled => "enabled",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::EnabledV2 => "-enabled",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::CreatedAt => "created_at",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::CreatedAtV2 => "-created_at",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::Name => "name",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::NameV2 => "-name",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::ServicePlan => "service_plan",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::ServicePlanV2 => "-service_plan",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::TrafficType => "traffic_type",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::TrafficTypeV2 => "-traffic_type",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::UsagePaymentMethod => "usage_payment_method",
+        iface_outbound_voice_profiles::ListOutboundVoiceProfilesSortEnum::UsagePaymentMethodV2 => "-usage_payment_method",
+    }
+}
 
 fn iface_outbound_voice_profiles__outbound_call_recording_call_recording_channels_enum__to_str(e: &iface_outbound_voice_profiles::OutboundCallRecordingCallRecordingChannelsEnum) -> &'static str {
     match e {
@@ -6905,6 +7849,15 @@ fn iface_outbound_voice_profiles__usage_payment_method__to_json(p: &iface_outbou
     Value::Object(m)
 }
 
+fn iface_outbound_voice_profiles__list_outbound_voice_profiles_params__to_json(p: &iface_outbound_voice_profiles::ListOutboundVoiceProfilesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_name_contains".into(), match (&p.filter_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_outbound_voice_profiles__list_outbound_voice_profiles_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_outbound_voice_profiles__create_outbound_voice_profile_params__to_json(p: &iface_outbound_voice_profiles::CreateOutboundVoiceProfileParams) -> Value {
     let mut m = Map::new();
     m.insert("billing_group_id".into(), match (&p.billing_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -6923,8 +7876,15 @@ fn iface_outbound_voice_profiles__create_outbound_voice_profile_params__to_json(
     Value::Object(m)
 }
 
+fn iface_outbound_voice_profiles__retrieve_outbound_voice_profile_params__to_json(p: &iface_outbound_voice_profiles::RetrieveOutboundVoiceProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_outbound_voice_profiles__update_outbound_voice_profile_params__to_json(p: &iface_outbound_voice_profiles::UpdateOutboundVoiceProfileParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("billing_group_id".into(), match (&p.billing_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("call_recording".into(), match (&p.call_recording) { Some(v) => iface_outbound_voice_profiles__outbound_call_recording__to_json(v), None => Value::Null });
     m.insert("concurrent_call_limit".into(), match (&p.concurrent_call_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -6941,23 +7901,32 @@ fn iface_outbound_voice_profiles__update_outbound_voice_profile_params__to_json(
     Value::Object(m)
 }
 
+fn iface_outbound_voice_profiles__delete_outbound_voice_profile_params__to_json(p: &iface_outbound_voice_profiles::DeleteOutboundVoiceProfileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_outbound_voice_profiles::Guest for crate::Component {
-    fn list_outbound_voice_profiles() -> Result<String, String> {
-        dispatch(&OP_OUTBOUND_VOICE_PROFILES_LIST_OUTBOUND_VOICE_PROFILES, Value::Object(Map::new()))
+    fn list_outbound_voice_profiles(params: iface_outbound_voice_profiles::ListOutboundVoiceProfilesParams) -> Result<String, String> {
+        let json = iface_outbound_voice_profiles__list_outbound_voice_profiles_params__to_json(&params);
+        dispatch(&OP_OUTBOUND_VOICE_PROFILES_LIST_OUTBOUND_VOICE_PROFILES, json)
     }
     fn create_outbound_voice_profile(params: iface_outbound_voice_profiles::CreateOutboundVoiceProfileParams) -> Result<String, String> {
         let json = iface_outbound_voice_profiles__create_outbound_voice_profile_params__to_json(&params);
         dispatch(&OP_OUTBOUND_VOICE_PROFILES_CREATE_OUTBOUND_VOICE_PROFILE, json)
     }
-    fn retrieve_outbound_voice_profile() -> Result<String, String> {
-        dispatch(&OP_OUTBOUND_VOICE_PROFILES_RETRIEVE_OUTBOUND_VOICE_PROFILE, Value::Object(Map::new()))
+    fn retrieve_outbound_voice_profile(params: iface_outbound_voice_profiles::RetrieveOutboundVoiceProfileParams) -> Result<String, String> {
+        let json = iface_outbound_voice_profiles__retrieve_outbound_voice_profile_params__to_json(&params);
+        dispatch(&OP_OUTBOUND_VOICE_PROFILES_RETRIEVE_OUTBOUND_VOICE_PROFILE, json)
     }
     fn update_outbound_voice_profile(params: iface_outbound_voice_profiles::UpdateOutboundVoiceProfileParams) -> Result<String, String> {
         let json = iface_outbound_voice_profiles__update_outbound_voice_profile_params__to_json(&params);
         dispatch(&OP_OUTBOUND_VOICE_PROFILES_UPDATE_OUTBOUND_VOICE_PROFILE, json)
     }
-    fn delete_outbound_voice_profile() -> Result<String, String> {
-        dispatch(&OP_OUTBOUND_VOICE_PROFILES_DELETE_OUTBOUND_VOICE_PROFILE, Value::Object(Map::new()))
+    fn delete_outbound_voice_profile(params: iface_outbound_voice_profiles::DeleteOutboundVoiceProfileParams) -> Result<String, String> {
+        let json = iface_outbound_voice_profiles__delete_outbound_voice_profile_params__to_json(&params);
+        dispatch(&OP_OUTBOUND_VOICE_PROFILES_DELETE_OUTBOUND_VOICE_PROFILE, json)
     }
 }
 use crate::exports::autostamp::telnyx::number_blocks_background_jobs as iface_number_blocks_background_jobs;
@@ -6968,6 +7937,8 @@ const OP_NUMBER_BLOCKS_BACKGROUND_JOBS_LIST_PHONE_NUMBER_BLOCKS_JOBS: OpSpec = O
     fields: &[
         FieldSpec { snake: "filter_type", location: FieldLocation::Query },
         FieldSpec { snake: "filter_status", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
@@ -7022,6 +7993,8 @@ fn iface_number_blocks_background_jobs__list_phone_number_blocks_jobs_params__to
     let mut m = Map::new();
     m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String(iface_number_blocks_background_jobs__list_phone_number_blocks_jobs_filter_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String(iface_number_blocks_background_jobs__list_phone_number_blocks_jobs_filter_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_number_blocks_background_jobs__list_phone_number_blocks_jobs_sort_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
@@ -7058,6 +8031,8 @@ const OP_NUMBER_CONFIGURATIONS_LIST_PHONE_NUMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone_numbers",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_tag", location: FieldLocation::Query },
         FieldSpec { snake: "filter_phone_number", location: FieldLocation::Query },
         FieldSpec { snake: "filter_status", location: FieldLocation::Query },
@@ -7080,6 +8055,8 @@ const OP_NUMBER_CONFIGURATIONS_LIST_PHONE_NUMBERS_WITH_MESSAGING_SETTINGS: OpSpe
     method: "GET",
     path_template: "/phone_numbers/messaging",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7090,6 +8067,8 @@ const OP_NUMBER_CONFIGURATIONS_LIST_PHONE_NUMBERS_WITH_VOICE_SETTINGS: OpSpec = 
     method: "GET",
     path_template: "/phone_numbers/voice",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_phone_number", location: FieldLocation::Query },
         FieldSpec { snake: "filter_connection_name_contains", location: FieldLocation::Query },
         FieldSpec { snake: "filter_customer_reference", location: FieldLocation::Query },
@@ -7105,6 +8084,7 @@ const OP_NUMBER_CONFIGURATIONS_RETRIEVE_PHONE_NUMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone_numbers/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7115,11 +8095,11 @@ const OP_NUMBER_CONFIGURATIONS_UPDATE_PHONE_NUMBER: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/phone_numbers/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "billing_group_id", location: FieldLocation::Body },
         FieldSpec { snake: "connection_id", location: FieldLocation::Body },
         FieldSpec { snake: "customer_reference", location: FieldLocation::Body },
         FieldSpec { snake: "external_pin", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
         FieldSpec { snake: "number_level_routing", location: FieldLocation::Body },
         FieldSpec { snake: "tags", location: FieldLocation::Body },
     ],
@@ -7132,6 +8112,7 @@ const OP_NUMBER_CONFIGURATIONS_DELETE_PHONE_NUMBER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/phone_numbers/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7142,6 +8123,7 @@ const OP_NUMBER_CONFIGURATIONS_ENABLE_EMERGENCY_PHONE_NUMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/phone_numbers/{id}/actions/enable_emergency",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "emergency_address_id", location: FieldLocation::Body },
         FieldSpec { snake: "emergency_enabled", location: FieldLocation::Body },
     ],
@@ -7178,6 +8160,7 @@ const OP_NUMBER_CONFIGURATIONS_RETRIEVE_PHONE_NUMBER_WITH_VOICE_SETTINGS: OpSpec
     method: "GET",
     path_template: "/phone_numbers/{id}/voice",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7188,6 +8171,7 @@ const OP_NUMBER_CONFIGURATIONS_UPDATE_PHONE_NUMBER_WITH_VOICE_SETTINGS: OpSpec =
     method: "PATCH",
     path_template: "/phone_numbers/{id}/voice",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "call_forwarding", location: FieldLocation::Body },
         FieldSpec { snake: "call_recording", location: FieldLocation::Body },
         FieldSpec { snake: "cnam_listing", location: FieldLocation::Body },
@@ -7300,6 +8284,8 @@ fn iface_number_configurations__media_features__to_json(p: &iface_number_configu
 
 fn iface_number_configurations__list_phone_numbers_params__to_json(p: &iface_number_configurations::ListPhoneNumbersParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_tag".into(), match (&p.filter_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_number".into(), match (&p.filter_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String(iface_number_configurations__list_phone_numbers_filter_status_enum__to_str(v).into()), None => Value::Null });
@@ -7315,8 +8301,17 @@ fn iface_number_configurations__list_phone_numbers_params__to_json(p: &iface_num
     Value::Object(m)
 }
 
+fn iface_number_configurations__list_phone_numbers_with_messaging_settings_params__to_json(p: &iface_number_configurations::ListPhoneNumbersWithMessagingSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_number_configurations__list_phone_numbers_with_voice_settings_params__to_json(p: &iface_number_configurations::ListPhoneNumbersWithVoiceSettingsParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_phone_number".into(), match (&p.filter_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_connection_name_contains".into(), match (&p.filter_connection_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_customer_reference".into(), match (&p.filter_customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7325,20 +8320,33 @@ fn iface_number_configurations__list_phone_numbers_with_voice_settings_params__t
     Value::Object(m)
 }
 
+fn iface_number_configurations__retrieve_phone_number_params__to_json(p: &iface_number_configurations::RetrievePhoneNumberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_number_configurations__update_phone_number_params__to_json(p: &iface_number_configurations::UpdatePhoneNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("billing_group_id".into(), match (&p.billing_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("connection_id".into(), match (&p.connection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("customer_reference".into(), match (&p.customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("external_pin".into(), match (&p.external_pin) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("number_level_routing".into(), match (&p.number_level_routing) { Some(v) => Value::String(iface_number_configurations__update_phone_number_request_number_level_routing_enum__to_str(v).into()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_number_configurations__delete_phone_number_params__to_json(p: &iface_number_configurations::DeletePhoneNumberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_number_configurations__enable_emergency_phone_number_params__to_json(p: &iface_number_configurations::EnableEmergencyPhoneNumberParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("emergency_address_id".into(), Value::String((&p.emergency_address_id).clone()));
     m.insert("emergency_enabled".into(), Value::Bool(*(&p.emergency_enabled)));
     Value::Object(m)
@@ -7358,8 +8366,15 @@ fn iface_number_configurations__update_phone_number_with_messaging_settings_para
     Value::Object(m)
 }
 
+fn iface_number_configurations__retrieve_phone_number_with_voice_settings_params__to_json(p: &iface_number_configurations::RetrievePhoneNumberWithVoiceSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_number_configurations__update_phone_number_with_voice_settings_params__to_json(p: &iface_number_configurations::UpdatePhoneNumberWithVoiceSettingsParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("call_forwarding".into(), match (&p.call_forwarding) { Some(v) => iface_number_configurations__call_forwarding__to_json(v), None => Value::Null });
     m.insert("call_recording".into(), match (&p.call_recording) { Some(v) => iface_number_configurations__call_recording__to_json(v), None => Value::Null });
     m.insert("cnam_listing".into(), match (&p.cnam_listing) { Some(v) => iface_number_configurations__cnam_listing__to_json(v), None => Value::Null });
@@ -7375,22 +8390,25 @@ impl iface_number_configurations::Guest for crate::Component {
         let json = iface_number_configurations__list_phone_numbers_params__to_json(&params);
         dispatch(&OP_NUMBER_CONFIGURATIONS_LIST_PHONE_NUMBERS, json)
     }
-    fn list_phone_numbers_with_messaging_settings() -> Result<String, String> {
-        dispatch(&OP_NUMBER_CONFIGURATIONS_LIST_PHONE_NUMBERS_WITH_MESSAGING_SETTINGS, Value::Object(Map::new()))
+    fn list_phone_numbers_with_messaging_settings(params: iface_number_configurations::ListPhoneNumbersWithMessagingSettingsParams) -> Result<String, String> {
+        let json = iface_number_configurations__list_phone_numbers_with_messaging_settings_params__to_json(&params);
+        dispatch(&OP_NUMBER_CONFIGURATIONS_LIST_PHONE_NUMBERS_WITH_MESSAGING_SETTINGS, json)
     }
     fn list_phone_numbers_with_voice_settings(params: iface_number_configurations::ListPhoneNumbersWithVoiceSettingsParams) -> Result<String, String> {
         let json = iface_number_configurations__list_phone_numbers_with_voice_settings_params__to_json(&params);
         dispatch(&OP_NUMBER_CONFIGURATIONS_LIST_PHONE_NUMBERS_WITH_VOICE_SETTINGS, json)
     }
-    fn retrieve_phone_number() -> Result<String, String> {
-        dispatch(&OP_NUMBER_CONFIGURATIONS_RETRIEVE_PHONE_NUMBER, Value::Object(Map::new()))
+    fn retrieve_phone_number(params: iface_number_configurations::RetrievePhoneNumberParams) -> Result<String, String> {
+        let json = iface_number_configurations__retrieve_phone_number_params__to_json(&params);
+        dispatch(&OP_NUMBER_CONFIGURATIONS_RETRIEVE_PHONE_NUMBER, json)
     }
     fn update_phone_number(params: iface_number_configurations::UpdatePhoneNumberParams) -> Result<String, String> {
         let json = iface_number_configurations__update_phone_number_params__to_json(&params);
         dispatch(&OP_NUMBER_CONFIGURATIONS_UPDATE_PHONE_NUMBER, json)
     }
-    fn delete_phone_number() -> Result<String, String> {
-        dispatch(&OP_NUMBER_CONFIGURATIONS_DELETE_PHONE_NUMBER, Value::Object(Map::new()))
+    fn delete_phone_number(params: iface_number_configurations::DeletePhoneNumberParams) -> Result<String, String> {
+        let json = iface_number_configurations__delete_phone_number_params__to_json(&params);
+        dispatch(&OP_NUMBER_CONFIGURATIONS_DELETE_PHONE_NUMBER, json)
     }
     fn enable_emergency_phone_number(params: iface_number_configurations::EnableEmergencyPhoneNumberParams) -> Result<String, String> {
         let json = iface_number_configurations__enable_emergency_phone_number_params__to_json(&params);
@@ -7404,8 +8422,9 @@ impl iface_number_configurations::Guest for crate::Component {
         let json = iface_number_configurations__update_phone_number_with_messaging_settings_params__to_json(&params);
         dispatch(&OP_NUMBER_CONFIGURATIONS_UPDATE_PHONE_NUMBER_WITH_MESSAGING_SETTINGS, json)
     }
-    fn retrieve_phone_number_with_voice_settings() -> Result<String, String> {
-        dispatch(&OP_NUMBER_CONFIGURATIONS_RETRIEVE_PHONE_NUMBER_WITH_VOICE_SETTINGS, Value::Object(Map::new()))
+    fn retrieve_phone_number_with_voice_settings(params: iface_number_configurations::RetrievePhoneNumberWithVoiceSettingsParams) -> Result<String, String> {
+        let json = iface_number_configurations__retrieve_phone_number_with_voice_settings_params__to_json(&params);
+        dispatch(&OP_NUMBER_CONFIGURATIONS_RETRIEVE_PHONE_NUMBER_WITH_VOICE_SETTINGS, json)
     }
     fn update_phone_number_with_voice_settings(params: iface_number_configurations::UpdatePhoneNumberWithVoiceSettingsParams) -> Result<String, String> {
         let json = iface_number_configurations__update_phone_number_with_voice_settings_params__to_json(&params);
@@ -7418,6 +8437,8 @@ const OP_CSV_DOWNLOADS_LIST_CSV_DOWNLOADS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone_numbers/csv_downloads",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7445,6 +8466,13 @@ const OP_CSV_DOWNLOADS_RETRIEVE_CSV_DOWNLOAD: OpSpec = OpSpec {
     ],
 };
 
+fn iface_csv_downloads__list_csv_downloads_params__to_json(p: &iface_csv_downloads::ListCsvDownloadsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_csv_downloads__retrieve_csv_download_params__to_json(p: &iface_csv_downloads::RetrieveCsvDownloadParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -7452,8 +8480,9 @@ fn iface_csv_downloads__retrieve_csv_download_params__to_json(p: &iface_csv_down
 }
 
 impl iface_csv_downloads::Guest for crate::Component {
-    fn list_csv_downloads() -> Result<String, String> {
-        dispatch(&OP_CSV_DOWNLOADS_LIST_CSV_DOWNLOADS, Value::Object(Map::new()))
+    fn list_csv_downloads(params: iface_csv_downloads::ListCsvDownloadsParams) -> Result<String, String> {
+        let json = iface_csv_downloads__list_csv_downloads_params__to_json(&params);
+        dispatch(&OP_CSV_DOWNLOADS_LIST_CSV_DOWNLOADS, json)
     }
     fn create_csv_download() -> Result<String, String> {
         dispatch(&OP_CSV_DOWNLOADS_CREATE_CSV_DOWNLOAD, Value::Object(Map::new()))
@@ -7508,6 +8537,8 @@ const OP_NUMBER_BACKGROUND_JOBS_LIST_PHONE_NUMBERS_JOBS: OpSpec = OpSpec {
     path_template: "/phone_numbers/jobs",
     fields: &[
         FieldSpec { snake: "filter_type", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
@@ -7583,6 +8614,8 @@ fn iface_number_background_jobs__list_phone_numbers_jobs_sort_enum__to_str(e: &i
 fn iface_number_background_jobs__list_phone_numbers_jobs_params__to_json(p: &iface_number_background_jobs::ListPhoneNumbersJobsParams) -> Value {
     let mut m = Map::new();
     m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String(iface_number_background_jobs__list_phone_numbers_jobs_filter_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_number_background_jobs__list_phone_numbers_jobs_sort_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
@@ -7671,6 +8704,10 @@ const OP_PORTING_ORDER_LIST_PORTING_ORDERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/porting_orders",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "include_phone_numbers", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_status", location: FieldLocation::Query },
         FieldSpec { snake: "filter_customer_reference", location: FieldLocation::Query },
         FieldSpec { snake: "filter_phone_numbers_country_code", location: FieldLocation::Query },
         FieldSpec { snake: "filter_phone_numbers_carrier_name", location: FieldLocation::Query },
@@ -7712,6 +8749,8 @@ const OP_PORTING_ORDER_GET_PORTING_ORDER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/porting_orders/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_phone_numbers", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7722,6 +8761,7 @@ const OP_PORTING_ORDER_UPDATE_PORTING_ORDER_V2: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/porting_orders/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "activation_settings", location: FieldLocation::Body },
         FieldSpec { snake: "customer_reference", location: FieldLocation::Body },
         FieldSpec { snake: "end_user", location: FieldLocation::Body },
@@ -7740,6 +8780,7 @@ const OP_PORTING_ORDER_DELETE_PORTING_ORDER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/porting_orders/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7750,6 +8791,7 @@ const OP_PORTING_ORDER_ACTIVATE_PORTING_ORDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/porting_orders/{id}/actions/activate",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7760,6 +8802,7 @@ const OP_PORTING_ORDER_CANCEL_PORTING_ORDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/porting_orders/{id}/actions/cancel",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7770,6 +8813,7 @@ const OP_PORTING_ORDER_CONFIRM_PORTING_ORDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/porting_orders/{id}/actions/confirm",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7780,6 +8824,9 @@ const OP_PORTING_ORDER_LIST_PORTING_ORDERS_ACTIVATION_JOBS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/porting_orders/{id}/activation_jobs",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7790,6 +8837,8 @@ const OP_PORTING_ORDER_GET_PORTING_ORDERS_ACTIVATION_JOB: OpSpec = OpSpec {
     method: "GET",
     path_template: "/porting_orders/{id}/activation_jobs/{activation_job_id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "activation_job_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7800,6 +8849,9 @@ const OP_PORTING_ORDER_LIST_PORTING_ORDERS_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/porting_orders/{id}/comments",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7810,6 +8862,7 @@ const OP_PORTING_ORDER_CREATE_PORTING_ORDER_COMMENT_V2: OpSpec = OpSpec {
     method: "POST",
     path_template: "/porting_orders/{id}/comments",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -7821,6 +8874,7 @@ const OP_PORTING_ORDER_GET_PORTING_ORDER_LOA_TEMPLATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/porting_orders/{id}/loa_template",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7831,6 +8885,12 @@ const OP_PORTING_ORDER_GET_PORTING_PHONE_NUMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/porting_phone_numbers",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_porting_order_id", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_phone_number", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_activation_status", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_portability_status", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -7846,7 +8906,7 @@ fn iface_porting_order__list_porting_orders_sort_enum__to_str(e: &iface_porting_
     }
 }
 
-fn iface_porting_order__porting_order_type__to_json(p: &iface_porting_order::PortingOrderType) -> Value {
+fn iface_porting_order__type_op__to_json(p: &iface_porting_order::TypeOp) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
@@ -7860,12 +8920,12 @@ fn iface_porting_order__update_porting_order_activation_settings__to_json(p: &if
 
 fn iface_porting_order__porting_end_user__to_json(p: &iface_porting_order::PortingEndUser) -> Value {
     let mut m = Map::new();
-    m.insert("admin".into(), match (&p.admin) { Some(v) => iface_porting_order__porting_order_end_user_admin__to_json(v), None => Value::Null });
-    m.insert("location".into(), match (&p.location) { Some(v) => iface_porting_order__porting_order_end_user_location__to_json(v), None => Value::Null });
+    m.insert("admin".into(), match (&p.admin) { Some(v) => iface_porting_order__end_user_admin__to_json(v), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_porting_order__end_user_location__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_porting_order__porting_order_end_user_admin__to_json(p: &iface_porting_order::PortingOrderEndUserAdmin) -> Value {
+fn iface_porting_order__end_user_admin__to_json(p: &iface_porting_order::EndUserAdmin) -> Value {
     let mut m = Map::new();
     m.insert("account_number".into(), match (&p.account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("auth_person_name".into(), match (&p.auth_person_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7877,7 +8937,7 @@ fn iface_porting_order__porting_order_end_user_admin__to_json(p: &iface_porting_
     Value::Object(m)
 }
 
-fn iface_porting_order__porting_order_end_user_location__to_json(p: &iface_porting_order::PortingOrderEndUserLocation) -> Value {
+fn iface_porting_order__end_user_location__to_json(p: &iface_porting_order::EndUserLocation) -> Value {
     let mut m = Map::new();
     m.insert("administrative_area".into(), match (&p.administrative_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7888,11 +8948,11 @@ fn iface_porting_order__porting_order_end_user_location__to_json(p: &iface_porti
     Value::Object(m)
 }
 
-fn iface_porting_order__porting_order_misc__to_json(p: &iface_porting_order::PortingOrderMisc) -> Value {
+fn iface_porting_order__misc__to_json(p: &iface_porting_order::Misc) -> Value {
     let mut m = Map::new();
     m.insert("new_billing_phone_number".into(), match (&p.new_billing_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("remaining_numbers_action".into(), match (&p.remaining_numbers_action) { Some(v) => iface_porting_order__remaining_numbers_action__to_json(v), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_porting_order__porting_order_type__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_porting_order__type_op__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7902,7 +8962,7 @@ fn iface_porting_order__remaining_numbers_action__to_json(p: &iface_porting_orde
     Value::Object(m)
 }
 
-fn iface_porting_order__porting_order_phone_number_configuration__to_json(p: &iface_porting_order::PortingOrderPhoneNumberConfiguration) -> Value {
+fn iface_porting_order__phone_number_configuration__to_json(p: &iface_porting_order::PhoneNumberConfiguration) -> Value {
     let mut m = Map::new();
     m.insert("connection_id".into(), match (&p.connection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("emergency_address_id".into(), match (&p.emergency_address_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7918,19 +8978,35 @@ fn iface_porting_order__update_porting_order_requirement__to_json(p: &iface_port
     Value::Object(m)
 }
 
-fn iface_porting_order__porting_order_user_feedback__to_json(p: &iface_porting_order::PortingOrderUserFeedback) -> Value {
+fn iface_porting_order__user_feedback__to_json(p: &iface_porting_order::UserFeedback) -> Value {
     let mut m = Map::new();
     m.insert("user_comment".into(), match (&p.user_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("user_rating".into(), match (&p.user_rating) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_porting_order__activation_status__to_json(p: &iface_porting_order::ActivationStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_porting_order__portability_status__to_json(p: &iface_porting_order::PortabilityStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_porting_order__list_porting_orders_params__to_json(p: &iface_porting_order::ListPortingOrdersParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("include_phone_numbers".into(), match (&p.include_phone_numbers) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_customer_reference".into(), match (&p.filter_customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_numbers_country_code".into(), match (&p.filter_phone_numbers_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_phone_numbers_carrier_name".into(), match (&p.filter_phone_numbers_carrier_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("filter_misc_type".into(), match (&p.filter_misc_type) { Some(v) => iface_porting_order__porting_order_type__to_json(v), None => Value::Null });
+    m.insert("filter_misc_type".into(), match (&p.filter_misc_type) { Some(v) => iface_porting_order__type_op__to_json(v), None => Value::Null });
     m.insert("filter_end_user_admin_entity_name".into(), match (&p.filter_end_user_admin_entity_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_end_user_admin_auth_person_name".into(), match (&p.filter_end_user_admin_auth_person_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_activation_settings_fast_port_eligible".into(), match (&p.filter_activation_settings_fast_port_eligible) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -7946,22 +9022,95 @@ fn iface_porting_order__create_porting_order_v2_params__to_json(p: &iface_portin
     Value::Object(m)
 }
 
+fn iface_porting_order__get_porting_order_params__to_json(p: &iface_porting_order::GetPortingOrderParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("include_phone_numbers".into(), match (&p.include_phone_numbers) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_porting_order__update_porting_order_v2_params__to_json(p: &iface_porting_order::UpdatePortingOrderV2Params) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("activation_settings".into(), match (&p.activation_settings) { Some(v) => iface_porting_order__update_porting_order_activation_settings__to_json(v), None => Value::Null });
     m.insert("customer_reference".into(), match (&p.customer_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_user".into(), match (&p.end_user) { Some(v) => iface_porting_order__porting_end_user__to_json(v), None => Value::Null });
-    m.insert("misc".into(), match (&p.misc) { Some(v) => iface_porting_order__porting_order_misc__to_json(v), None => Value::Null });
-    m.insert("phone_number_configuration".into(), match (&p.phone_number_configuration) { Some(v) => iface_porting_order__porting_order_phone_number_configuration__to_json(v), None => Value::Null });
+    m.insert("misc".into(), match (&p.misc) { Some(v) => iface_porting_order__misc__to_json(v), None => Value::Null });
+    m.insert("phone_number_configuration".into(), match (&p.phone_number_configuration) { Some(v) => iface_porting_order__phone_number_configuration__to_json(v), None => Value::Null });
     m.insert("requirements".into(), match (&p.requirements) { Some(v) => Value::Array((v).iter().map(|v| iface_porting_order__update_porting_order_requirement__to_json(v)).collect()), None => Value::Null });
-    m.insert("user_feedback".into(), match (&p.user_feedback) { Some(v) => iface_porting_order__porting_order_user_feedback__to_json(v), None => Value::Null });
+    m.insert("user_feedback".into(), match (&p.user_feedback) { Some(v) => iface_porting_order__user_feedback__to_json(v), None => Value::Null });
     m.insert("webhook_url".into(), match (&p.webhook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_porting_order__delete_porting_order_params__to_json(p: &iface_porting_order::DeletePortingOrderParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_porting_order__activate_porting_order_params__to_json(p: &iface_porting_order::ActivatePortingOrderParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_porting_order__cancel_porting_order_params__to_json(p: &iface_porting_order::CancelPortingOrderParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_porting_order__confirm_porting_order_params__to_json(p: &iface_porting_order::ConfirmPortingOrderParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_porting_order__list_porting_orders_activation_jobs_params__to_json(p: &iface_porting_order::ListPortingOrdersActivationJobsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_porting_order__get_porting_orders_activation_job_params__to_json(p: &iface_porting_order::GetPortingOrdersActivationJobParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("activation_job_id".into(), Value::String((&p.activation_job_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_porting_order__list_porting_orders_comments_params__to_json(p: &iface_porting_order::ListPortingOrdersCommentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_porting_order__create_porting_order_comment_v2_params__to_json(p: &iface_porting_order::CreatePortingOrderCommentV2Params) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_porting_order__get_porting_order_loa_template_params__to_json(p: &iface_porting_order::GetPortingOrderLoaTemplateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_porting_order__get_porting_phone_numbers_params__to_json(p: &iface_porting_order::GetPortingPhoneNumbersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_porting_order_id".into(), match (&p.filter_porting_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_phone_number".into(), match (&p.filter_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_activation_status".into(), match (&p.filter_activation_status) { Some(v) => iface_porting_order__activation_status__to_json(v), None => Value::Null });
+    m.insert("filter_portability_status".into(), match (&p.filter_portability_status) { Some(v) => iface_porting_order__portability_status__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -7977,43 +9126,53 @@ impl iface_porting_order::Guest for crate::Component {
     fn list_porting_orders_exception_types() -> Result<String, String> {
         dispatch(&OP_PORTING_ORDER_LIST_PORTING_ORDERS_EXCEPTION_TYPES, Value::Object(Map::new()))
     }
-    fn get_porting_order() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_GET_PORTING_ORDER, Value::Object(Map::new()))
+    fn get_porting_order(params: iface_porting_order::GetPortingOrderParams) -> Result<String, String> {
+        let json = iface_porting_order__get_porting_order_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_GET_PORTING_ORDER, json)
     }
     fn update_porting_order_v2(params: iface_porting_order::UpdatePortingOrderV2Params) -> Result<String, String> {
         let json = iface_porting_order__update_porting_order_v2_params__to_json(&params);
         dispatch(&OP_PORTING_ORDER_UPDATE_PORTING_ORDER_V2, json)
     }
-    fn delete_porting_order() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_DELETE_PORTING_ORDER, Value::Object(Map::new()))
+    fn delete_porting_order(params: iface_porting_order::DeletePortingOrderParams) -> Result<String, String> {
+        let json = iface_porting_order__delete_porting_order_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_DELETE_PORTING_ORDER, json)
     }
-    fn activate_porting_order() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_ACTIVATE_PORTING_ORDER, Value::Object(Map::new()))
+    fn activate_porting_order(params: iface_porting_order::ActivatePortingOrderParams) -> Result<String, String> {
+        let json = iface_porting_order__activate_porting_order_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_ACTIVATE_PORTING_ORDER, json)
     }
-    fn cancel_porting_order() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_CANCEL_PORTING_ORDER, Value::Object(Map::new()))
+    fn cancel_porting_order(params: iface_porting_order::CancelPortingOrderParams) -> Result<String, String> {
+        let json = iface_porting_order__cancel_porting_order_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_CANCEL_PORTING_ORDER, json)
     }
-    fn confirm_porting_order() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_CONFIRM_PORTING_ORDER, Value::Object(Map::new()))
+    fn confirm_porting_order(params: iface_porting_order::ConfirmPortingOrderParams) -> Result<String, String> {
+        let json = iface_porting_order__confirm_porting_order_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_CONFIRM_PORTING_ORDER, json)
     }
-    fn list_porting_orders_activation_jobs() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_LIST_PORTING_ORDERS_ACTIVATION_JOBS, Value::Object(Map::new()))
+    fn list_porting_orders_activation_jobs(params: iface_porting_order::ListPortingOrdersActivationJobsParams) -> Result<String, String> {
+        let json = iface_porting_order__list_porting_orders_activation_jobs_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_LIST_PORTING_ORDERS_ACTIVATION_JOBS, json)
     }
-    fn get_porting_orders_activation_job() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_GET_PORTING_ORDERS_ACTIVATION_JOB, Value::Object(Map::new()))
+    fn get_porting_orders_activation_job(params: iface_porting_order::GetPortingOrdersActivationJobParams) -> Result<String, String> {
+        let json = iface_porting_order__get_porting_orders_activation_job_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_GET_PORTING_ORDERS_ACTIVATION_JOB, json)
     }
-    fn list_porting_orders_comments() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_LIST_PORTING_ORDERS_COMMENTS, Value::Object(Map::new()))
+    fn list_porting_orders_comments(params: iface_porting_order::ListPortingOrdersCommentsParams) -> Result<String, String> {
+        let json = iface_porting_order__list_porting_orders_comments_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_LIST_PORTING_ORDERS_COMMENTS, json)
     }
     fn create_porting_order_comment_v2(params: iface_porting_order::CreatePortingOrderCommentV2Params) -> Result<String, String> {
         let json = iface_porting_order__create_porting_order_comment_v2_params__to_json(&params);
         dispatch(&OP_PORTING_ORDER_CREATE_PORTING_ORDER_COMMENT_V2, json)
     }
-    fn get_porting_order_loa_template() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_GET_PORTING_ORDER_LOA_TEMPLATE, Value::Object(Map::new()))
+    fn get_porting_order_loa_template(params: iface_porting_order::GetPortingOrderLoaTemplateParams) -> Result<String, String> {
+        let json = iface_porting_order__get_porting_order_loa_template_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_GET_PORTING_ORDER_LOA_TEMPLATE, json)
     }
-    fn get_porting_phone_numbers() -> Result<String, String> {
-        dispatch(&OP_PORTING_ORDER_GET_PORTING_PHONE_NUMBERS, Value::Object(Map::new()))
+    fn get_porting_phone_numbers(params: iface_porting_order::GetPortingPhoneNumbersParams) -> Result<String, String> {
+        let json = iface_porting_order__get_porting_phone_numbers_params__to_json(&params);
+        dispatch(&OP_PORTING_ORDER_GET_PORTING_PHONE_NUMBERS, json)
     }
 }
 use crate::exports::autostamp::telnyx::number_portout as iface_number_portout;
@@ -8025,6 +9184,8 @@ const OP_NUMBER_PORTOUT_LIST_PORTOUT_REQUEST: OpSpec = OpSpec {
         FieldSpec { snake: "filter_carrier_name", location: FieldLocation::Query },
         FieldSpec { snake: "filter_spid", location: FieldLocation::Query },
         FieldSpec { snake: "filter_status", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8093,6 +9254,8 @@ fn iface_number_portout__list_portout_request_params__to_json(p: &iface_number_p
     m.insert("filter_carrier_name".into(), match (&p.filter_carrier_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_spid".into(), match (&p.filter_spid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String(iface_number_portout__list_portout_request_filter_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8150,6 +9313,8 @@ const OP_PRIVATE_WIRELESS_GATEWAYS_GET_PRIVATE_WIRELESS_GATEWAYS: OpSpec = OpSpe
     method: "GET",
     path_template: "/private_wireless_gateways",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_name", location: FieldLocation::Query },
         FieldSpec { snake: "filter_ip_range", location: FieldLocation::Query },
         FieldSpec { snake: "filter_region_code", location: FieldLocation::Query },
@@ -8177,6 +9342,7 @@ const OP_PRIVATE_WIRELESS_GATEWAYS_GET_PRIVATE_WIRELESS_GATEWAY: OpSpec = OpSpec
     method: "GET",
     path_template: "/private_wireless_gateways/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8187,6 +9353,7 @@ const OP_PRIVATE_WIRELESS_GATEWAYS_DELETE_PRIVATE_WIRELESS_GATEWAY: OpSpec = OpS
     method: "DELETE",
     path_template: "/private_wireless_gateways/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8195,6 +9362,8 @@ const OP_PRIVATE_WIRELESS_GATEWAYS_DELETE_PRIVATE_WIRELESS_GATEWAY: OpSpec = OpS
 
 fn iface_private_wireless_gateways__get_private_wireless_gateways_params__to_json(p: &iface_private_wireless_gateways::GetPrivateWirelessGatewaysParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_name".into(), match (&p.filter_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_ip_range".into(), match (&p.filter_ip_range) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_region_code".into(), match (&p.filter_region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -8210,6 +9379,18 @@ fn iface_private_wireless_gateways__create_private_wireless_gateway_params__to_j
     Value::Object(m)
 }
 
+fn iface_private_wireless_gateways__get_private_wireless_gateway_params__to_json(p: &iface_private_wireless_gateways::GetPrivateWirelessGatewayParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_private_wireless_gateways__delete_private_wireless_gateway_params__to_json(p: &iface_private_wireless_gateways::DeletePrivateWirelessGatewayParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_private_wireless_gateways::Guest for crate::Component {
     fn get_private_wireless_gateways(params: iface_private_wireless_gateways::GetPrivateWirelessGatewaysParams) -> Result<String, String> {
         let json = iface_private_wireless_gateways__get_private_wireless_gateways_params__to_json(&params);
@@ -8219,11 +9400,13 @@ impl iface_private_wireless_gateways::Guest for crate::Component {
         let json = iface_private_wireless_gateways__create_private_wireless_gateway_params__to_json(&params);
         dispatch(&OP_PRIVATE_WIRELESS_GATEWAYS_CREATE_PRIVATE_WIRELESS_GATEWAY, json)
     }
-    fn get_private_wireless_gateway() -> Result<String, String> {
-        dispatch(&OP_PRIVATE_WIRELESS_GATEWAYS_GET_PRIVATE_WIRELESS_GATEWAY, Value::Object(Map::new()))
+    fn get_private_wireless_gateway(params: iface_private_wireless_gateways::GetPrivateWirelessGatewayParams) -> Result<String, String> {
+        let json = iface_private_wireless_gateways__get_private_wireless_gateway_params__to_json(&params);
+        dispatch(&OP_PRIVATE_WIRELESS_GATEWAYS_GET_PRIVATE_WIRELESS_GATEWAY, json)
     }
-    fn delete_private_wireless_gateway() -> Result<String, String> {
-        dispatch(&OP_PRIVATE_WIRELESS_GATEWAYS_DELETE_PRIVATE_WIRELESS_GATEWAY, Value::Object(Map::new()))
+    fn delete_private_wireless_gateway(params: iface_private_wireless_gateways::DeletePrivateWirelessGatewayParams) -> Result<String, String> {
+        let json = iface_private_wireless_gateways__delete_private_wireless_gateway_params__to_json(&params);
+        dispatch(&OP_PRIVATE_WIRELESS_GATEWAYS_DELETE_PRIVATE_WIRELESS_GATEWAY, json)
     }
 }
 use crate::exports::autostamp::telnyx::queue_commands as iface_queue_commands;
@@ -8244,6 +9427,8 @@ const OP_QUEUE_COMMANDS_LIST_QUEUE_CALLS: OpSpec = OpSpec {
     path_template: "/queues/{queue_name}/calls",
     fields: &[
         FieldSpec { snake: "queue_name", location: FieldLocation::Path },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8255,6 +9440,7 @@ const OP_QUEUE_COMMANDS_RETRIEVE_CALL_FROM_QUEUE: OpSpec = OpSpec {
     path_template: "/queues/{queue_name}/calls/{call_control_id}",
     fields: &[
         FieldSpec { snake: "queue_name", location: FieldLocation::Path },
+        FieldSpec { snake: "call_control_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8270,12 +9456,15 @@ fn iface_queue_commands__retrieve_call_queue_params__to_json(p: &iface_queue_com
 fn iface_queue_commands__list_queue_calls_params__to_json(p: &iface_queue_commands::ListQueueCallsParams) -> Value {
     let mut m = Map::new();
     m.insert("queue_name".into(), Value::String((&p.queue_name).clone()));
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_queue_commands__retrieve_call_from_queue_params__to_json(p: &iface_queue_commands::RetrieveCallFromQueueParams) -> Value {
     let mut m = Map::new();
     m.insert("queue_name".into(), Value::String((&p.queue_name).clone()));
+    m.insert("call_control_id".into(), Value::String((&p.call_control_id).clone()));
     Value::Object(m)
 }
 
@@ -8302,6 +9491,8 @@ const OP_RECORDINGS_COMMANDS_LIST_RECORDINGS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_conference_id", location: FieldLocation::Query },
         FieldSpec { snake: "filter_created_at_gte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_created_at_lte", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8324,6 +9515,8 @@ fn iface_recordings_commands__list_recordings_params__to_json(p: &iface_recordin
     m.insert("filter_conference_id".into(), match (&p.filter_conference_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_created_at_gte".into(), match (&p.filter_created_at_gte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_created_at_lte".into(), match (&p.filter_created_at_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8770,6 +9963,8 @@ const OP_REQUIREMENT_TYPES_DOC_REQS_LIST_REQUIREMENT_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/requirement_types",
     fields: &[
+        FieldSpec { snake: "filter_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8780,18 +9975,42 @@ const OP_REQUIREMENT_TYPES_DOC_REQS_RETRIEVE_REQUIREMENT_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/requirement_types/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
-impl iface_requirement_types::Guest for crate::Component {
-    fn doc_reqs_list_requirement_types() -> Result<String, String> {
-        dispatch(&OP_REQUIREMENT_TYPES_DOC_REQS_LIST_REQUIREMENT_TYPES, Value::Object(Map::new()))
+fn iface_requirement_types__doc_reqs_list_requirement_types_sort_enum__to_str(e: &iface_requirement_types::DocReqsListRequirementTypesSortEnum) -> &'static str {
+    match e {
+        iface_requirement_types::DocReqsListRequirementTypesSortEnum::CreatedAt => "created_at",
+        iface_requirement_types::DocReqsListRequirementTypesSortEnum::Name => "name",
+        iface_requirement_types::DocReqsListRequirementTypesSortEnum::UpdatedAt => "updated_at",
     }
-    fn doc_reqs_retrieve_requirement_type() -> Result<String, String> {
-        dispatch(&OP_REQUIREMENT_TYPES_DOC_REQS_RETRIEVE_REQUIREMENT_TYPE, Value::Object(Map::new()))
+}
+
+fn iface_requirement_types__doc_reqs_list_requirement_types_params__to_json(p: &iface_requirement_types::DocReqsListRequirementTypesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("filter_name_contains".into(), match (&p.filter_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_requirement_types__doc_reqs_list_requirement_types_sort_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_requirement_types__doc_reqs_retrieve_requirement_type_params__to_json(p: &iface_requirement_types::DocReqsRetrieveRequirementTypeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+impl iface_requirement_types::Guest for crate::Component {
+    fn doc_reqs_list_requirement_types(params: iface_requirement_types::DocReqsListRequirementTypesParams) -> Result<String, String> {
+        let json = iface_requirement_types__doc_reqs_list_requirement_types_params__to_json(&params);
+        dispatch(&OP_REQUIREMENT_TYPES_DOC_REQS_LIST_REQUIREMENT_TYPES, json)
+    }
+    fn doc_reqs_retrieve_requirement_type(params: iface_requirement_types::DocReqsRetrieveRequirementTypeParams) -> Result<String, String> {
+        let json = iface_requirement_types__doc_reqs_retrieve_requirement_type_params__to_json(&params);
+        dispatch(&OP_REQUIREMENT_TYPES_DOC_REQS_RETRIEVE_REQUIREMENT_TYPE, json)
     }
 }
 use crate::exports::autostamp::telnyx::requirements as iface_requirements;
@@ -8800,6 +10019,12 @@ const OP_REQUIREMENTS_LIST_REQUIREMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/requirements",
     fields: &[
+        FieldSpec { snake: "filter_country_code", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_phone_number_type", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_action", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8810,18 +10035,62 @@ const OP_REQUIREMENTS_DOC_REQS_RETRIEVE_DOCUMENT_REQUIREMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/requirements/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
-impl iface_requirements::Guest for crate::Component {
-    fn list_requirements() -> Result<String, String> {
-        dispatch(&OP_REQUIREMENTS_LIST_REQUIREMENTS, Value::Object(Map::new()))
+fn iface_requirements__list_requirements_filter_phone_number_type_enum__to_str(e: &iface_requirements::ListRequirementsFilterPhoneNumberTypeEnum) -> &'static str {
+    match e {
+        iface_requirements::ListRequirementsFilterPhoneNumberTypeEnum::Local => "local",
+        iface_requirements::ListRequirementsFilterPhoneNumberTypeEnum::National => "national",
+        iface_requirements::ListRequirementsFilterPhoneNumberTypeEnum::TollFree => "toll-free",
     }
-    fn doc_reqs_retrieve_document_requirements() -> Result<String, String> {
-        dispatch(&OP_REQUIREMENTS_DOC_REQS_RETRIEVE_DOCUMENT_REQUIREMENTS, Value::Object(Map::new()))
+}
+
+fn iface_requirements__list_requirements_filter_action_enum__to_str(e: &iface_requirements::ListRequirementsFilterActionEnum) -> &'static str {
+    match e {
+        iface_requirements::ListRequirementsFilterActionEnum::Ordering => "ordering",
+        iface_requirements::ListRequirementsFilterActionEnum::Porting => "porting",
+    }
+}
+
+fn iface_requirements__list_requirements_sort_enum__to_str(e: &iface_requirements::ListRequirementsSortEnum) -> &'static str {
+    match e {
+        iface_requirements::ListRequirementsSortEnum::Action => "action",
+        iface_requirements::ListRequirementsSortEnum::CountryCode => "country_code",
+        iface_requirements::ListRequirementsSortEnum::Locality => "locality",
+        iface_requirements::ListRequirementsSortEnum::PhoneNumberType => "phone_number_type",
+    }
+}
+
+fn iface_requirements__list_requirements_params__to_json(p: &iface_requirements::ListRequirementsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("filter_country_code".into(), match (&p.filter_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_phone_number_type".into(), match (&p.filter_phone_number_type) { Some(v) => Value::String(iface_requirements__list_requirements_filter_phone_number_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filter_action".into(), match (&p.filter_action) { Some(v) => Value::String(iface_requirements__list_requirements_filter_action_enum__to_str(v).into()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_requirements__list_requirements_sort_enum__to_str(v).into()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_requirements__doc_reqs_retrieve_document_requirements_params__to_json(p: &iface_requirements::DocReqsRetrieveDocumentRequirementsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+impl iface_requirements::Guest for crate::Component {
+    fn list_requirements(params: iface_requirements::ListRequirementsParams) -> Result<String, String> {
+        let json = iface_requirements__list_requirements_params__to_json(&params);
+        dispatch(&OP_REQUIREMENTS_LIST_REQUIREMENTS, json)
+    }
+    fn doc_reqs_retrieve_document_requirements(params: iface_requirements::DocReqsRetrieveDocumentRequirementsParams) -> Result<String, String> {
+        let json = iface_requirements__doc_reqs_retrieve_document_requirements_params__to_json(&params);
+        dispatch(&OP_REQUIREMENTS_DOC_REQS_RETRIEVE_DOCUMENT_REQUIREMENTS, json)
     }
 }
 use crate::exports::autostamp::telnyx::room_participants as iface_room_participants;
@@ -8841,6 +10110,8 @@ const OP_ROOM_PARTICIPANTS_LIST_ROOM_PARTICIPANTS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_date_left_at_lte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_context", location: FieldLocation::Query },
         FieldSpec { snake: "filter_session_id", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8871,6 +10142,8 @@ fn iface_room_participants__list_room_participants_params__to_json(p: &iface_roo
     m.insert("filter_date_left_at_lte".into(), match (&p.filter_date_left_at_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_context".into(), match (&p.filter_context) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_session_id".into(), match (&p.filter_session_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8908,6 +10181,8 @@ const OP_ROOM_SESSIONS_LIST_ROOM_SESSIONS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_room_id", location: FieldLocation::Query },
         FieldSpec { snake: "filter_active", location: FieldLocation::Query },
         FieldSpec { snake: "include_participants", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8941,6 +10216,8 @@ const OP_ROOM_SESSIONS_NESTED_LIST_ROOM_PARTICIPANTS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_date_left_at_gte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_date_left_at_lte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_context", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -8961,6 +10238,8 @@ fn iface_room_sessions__list_room_sessions_params__to_json(p: &iface_room_sessio
     m.insert("filter_room_id".into(), match (&p.filter_room_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_active".into(), match (&p.filter_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("include_participants".into(), match (&p.include_participants) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8984,6 +10263,8 @@ fn iface_room_sessions__nested_list_room_participants_params__to_json(p: &iface_
     m.insert("filter_date_left_at_gte".into(), match (&p.filter_date_left_at_gte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_date_left_at_lte".into(), match (&p.filter_date_left_at_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_context".into(), match (&p.filter_context) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9015,6 +10296,8 @@ const OP_ROOMS_LIST_ROOMS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_date_updated_at_lte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_unique_name", location: FieldLocation::Query },
         FieldSpec { snake: "include_sessions", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9072,6 +10355,8 @@ const OP_ROOMS_NESTED_LIST_ROOM_SESSIONS: OpSpec = OpSpec {
         FieldSpec { snake: "filter_date_ended_at_lte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_active", location: FieldLocation::Query },
         FieldSpec { snake: "include_participants", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9088,6 +10373,8 @@ fn iface_rooms__list_rooms_params__to_json(p: &iface_rooms::ListRoomsParams) -> 
     m.insert("filter_date_updated_at_lte".into(), match (&p.filter_date_updated_at_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_unique_name".into(), match (&p.filter_unique_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("include_sessions".into(), match (&p.include_sessions) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9125,6 +10412,8 @@ fn iface_rooms__nested_list_room_sessions_params__to_json(p: &iface_rooms::Neste
     m.insert("filter_date_ended_at_lte".into(), match (&p.filter_date_ended_at_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_active".into(), match (&p.filter_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("include_participants".into(), match (&p.include_participants) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9209,6 +10498,8 @@ const OP_SHORT_CODES_LIST_SHORT_CODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/short_codes",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_messaging_profile_id", location: FieldLocation::Query },
     ],
     auth: &[
@@ -9220,6 +10511,7 @@ const OP_SHORT_CODES_RETRIEVE_SHORT_CODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/short_codes/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9230,6 +10522,7 @@ const OP_SHORT_CODES_UPDATE_SHORT_CODE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/short_codes/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "messaging_profile_id", location: FieldLocation::Body },
     ],
     auth: &[
@@ -9239,12 +10532,21 @@ const OP_SHORT_CODES_UPDATE_SHORT_CODE: OpSpec = OpSpec {
 
 fn iface_short_codes__list_short_codes_params__to_json(p: &iface_short_codes::ListShortCodesParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_messaging_profile_id".into(), match (&p.filter_messaging_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_short_codes__retrieve_short_code_params__to_json(p: &iface_short_codes::RetrieveShortCodeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_short_codes__update_short_code_params__to_json(p: &iface_short_codes::UpdateShortCodeParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("messaging_profile_id".into(), Value::String((&p.messaging_profile_id).clone()));
     Value::Object(m)
 }
@@ -9254,8 +10556,9 @@ impl iface_short_codes::Guest for crate::Component {
         let json = iface_short_codes__list_short_codes_params__to_json(&params);
         dispatch(&OP_SHORT_CODES_LIST_SHORT_CODES, json)
     }
-    fn retrieve_short_code() -> Result<String, String> {
-        dispatch(&OP_SHORT_CODES_RETRIEVE_SHORT_CODE, Value::Object(Map::new()))
+    fn retrieve_short_code(params: iface_short_codes::RetrieveShortCodeParams) -> Result<String, String> {
+        let json = iface_short_codes__retrieve_short_code_params__to_json(&params);
+        dispatch(&OP_SHORT_CODES_RETRIEVE_SHORT_CODE, json)
     }
     fn update_short_code(params: iface_short_codes::UpdateShortCodeParams) -> Result<String, String> {
         let json = iface_short_codes__update_short_code_params__to_json(&params);
@@ -9264,10 +10567,14 @@ impl iface_short_codes::Guest for crate::Component {
 }
 use crate::exports::autostamp::telnyx::sim_card_group_actions as iface_sim_card_group_actions;
 
-const OP_SIM_CARD_GROUP_ACTIONS_SIM_CARD_GROUP_ACTIONS_GET: OpSpec = OpSpec {
+const OP_SIM_CARD_GROUP_ACTIONS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_card_group_actions",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_sim_card_group_id", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_status", location: FieldLocation::Query },
         FieldSpec { snake: "filter_type", location: FieldLocation::Query },
     ],
     auth: &[
@@ -9279,40 +10586,62 @@ const OP_SIM_CARD_GROUP_ACTIONS_SIM_CARD_GROUP_ACTION_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_card_group_actions/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
-fn iface_sim_card_group_actions__sim_card_group_actions_get_filter_type_enum__to_str(e: &iface_sim_card_group_actions::SimCardGroupActionsGetFilterTypeEnum) -> &'static str {
+fn iface_sim_card_group_actions__get_filter_status_enum__to_str(e: &iface_sim_card_group_actions::GetFilterStatusEnum) -> &'static str {
     match e {
-        iface_sim_card_group_actions::SimCardGroupActionsGetFilterTypeEnum::SetPrivateWirelessGateway => "set_private_wireless_gateway",
-        iface_sim_card_group_actions::SimCardGroupActionsGetFilterTypeEnum::RemovePrivateWirelessGateway => "remove_private_wireless_gateway",
+        iface_sim_card_group_actions::GetFilterStatusEnum::InProgress => "in-progress",
+        iface_sim_card_group_actions::GetFilterStatusEnum::Completed => "completed",
+        iface_sim_card_group_actions::GetFilterStatusEnum::Failed => "failed",
     }
 }
 
-fn iface_sim_card_group_actions__sim_card_group_actions_get_params__to_json(p: &iface_sim_card_group_actions::SimCardGroupActionsGetParams) -> Value {
+fn iface_sim_card_group_actions__get_filter_type_enum__to_str(e: &iface_sim_card_group_actions::GetFilterTypeEnum) -> &'static str {
+    match e {
+        iface_sim_card_group_actions::GetFilterTypeEnum::SetPrivateWirelessGateway => "set_private_wireless_gateway",
+        iface_sim_card_group_actions::GetFilterTypeEnum::RemovePrivateWirelessGateway => "remove_private_wireless_gateway",
+    }
+}
+
+fn iface_sim_card_group_actions__get_params__to_json(p: &iface_sim_card_group_actions::GetParams) -> Value {
     let mut m = Map::new();
-    m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String(iface_sim_card_group_actions__sim_card_group_actions_get_filter_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_sim_card_group_id".into(), match (&p.filter_sim_card_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String(iface_sim_card_group_actions__get_filter_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String(iface_sim_card_group_actions__get_filter_type_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sim_card_group_actions__sim_card_group_action_get_params__to_json(p: &iface_sim_card_group_actions::SimCardGroupActionGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_sim_card_group_actions::Guest for crate::Component {
-    fn sim_card_group_actions_get(params: iface_sim_card_group_actions::SimCardGroupActionsGetParams) -> Result<String, String> {
-        let json = iface_sim_card_group_actions__sim_card_group_actions_get_params__to_json(&params);
-        dispatch(&OP_SIM_CARD_GROUP_ACTIONS_SIM_CARD_GROUP_ACTIONS_GET, json)
+    fn get(params: iface_sim_card_group_actions::GetParams) -> Result<String, String> {
+        let json = iface_sim_card_group_actions__get_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_GROUP_ACTIONS_GET, json)
     }
-    fn sim_card_group_action_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARD_GROUP_ACTIONS_SIM_CARD_GROUP_ACTION_GET, Value::Object(Map::new()))
+    fn sim_card_group_action_get(params: iface_sim_card_group_actions::SimCardGroupActionGetParams) -> Result<String, String> {
+        let json = iface_sim_card_group_actions__sim_card_group_action_get_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_GROUP_ACTIONS_SIM_CARD_GROUP_ACTION_GET, json)
     }
 }
 use crate::exports::autostamp::telnyx::sim_card_groups as iface_sim_card_groups;
 
-const OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_GET_ALL: OpSpec = OpSpec {
+const OP_SIM_CARD_GROUPS_GET_ALL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_card_groups",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_name", location: FieldLocation::Query },
     ],
     auth: &[
@@ -9320,7 +10649,7 @@ const OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_GET_ALL: OpSpec = OpSpec {
     ],
 };
 
-const OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_POST: OpSpec = OpSpec {
+const OP_SIM_CARD_GROUPS_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sim_card_groups",
     fields: &[
@@ -9332,10 +10661,11 @@ const OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_POST: OpSpec = OpSpec {
     ],
 };
 
-const OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_GET: OpSpec = OpSpec {
+const OP_SIM_CARD_GROUPS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_card_groups/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9346,6 +10676,7 @@ const OP_SIM_CARD_GROUPS_SIM_CARD_GROUP_UPDATE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/sim_card_groups/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "data_limit", location: FieldLocation::Body },
         FieldSpec { snake: "name", location: FieldLocation::Body },
     ],
@@ -9358,6 +10689,7 @@ const OP_SIM_CARD_GROUPS_SIM_CARD_GROUP_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sim_card_groups/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9368,6 +10700,7 @@ const OP_SIM_CARD_GROUPS_REMOVE_SIM_CARD_GROUP_PRIVATE_WIRELESS_GATEWAY: OpSpec 
     method: "POST",
     path_template: "/sim_card_groups/{id}/actions/remove_private_wireless_gateway",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9378,6 +10711,7 @@ const OP_SIM_CARD_GROUPS_SET_SIM_CARD_GROUP_PRIVATE_WIRELESS_GATEWAY: OpSpec = O
     method: "POST",
     path_template: "/sim_card_groups/{id}/actions/set_private_wireless_gateway",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "private_wireless_gateway_id", location: FieldLocation::Body },
     ],
     auth: &[
@@ -9385,53 +10719,78 @@ const OP_SIM_CARD_GROUPS_SET_SIM_CARD_GROUP_PRIVATE_WIRELESS_GATEWAY: OpSpec = O
     ],
 };
 
-fn iface_sim_card_groups__sim_card_groups_get_all_params__to_json(p: &iface_sim_card_groups::SimCardGroupsGetAllParams) -> Value {
+fn iface_sim_card_groups__get_all_params__to_json(p: &iface_sim_card_groups::GetAllParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_name".into(), match (&p.filter_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_sim_card_groups__sim_card_groups_post_params__to_json(p: &iface_sim_card_groups::SimCardGroupsPostParams) -> Value {
+fn iface_sim_card_groups__post_params__to_json(p: &iface_sim_card_groups::PostParams) -> Value {
     let mut m = Map::new();
     m.insert("data_limit".into(), match (&p.data_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
+fn iface_sim_card_groups__get_params__to_json(p: &iface_sim_card_groups::GetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_sim_card_groups__sim_card_group_update_params__to_json(p: &iface_sim_card_groups::SimCardGroupUpdateParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("data_limit".into(), match (&p.data_limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_sim_card_groups__sim_card_group_delete_params__to_json(p: &iface_sim_card_groups::SimCardGroupDeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_sim_card_groups__remove_sim_card_group_private_wireless_gateway_params__to_json(p: &iface_sim_card_groups::RemoveSimCardGroupPrivateWirelessGatewayParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_sim_card_groups__set_sim_card_group_private_wireless_gateway_params__to_json(p: &iface_sim_card_groups::SetSimCardGroupPrivateWirelessGatewayParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("private_wireless_gateway_id".into(), Value::String((&p.private_wireless_gateway_id).clone()));
     Value::Object(m)
 }
 
 impl iface_sim_card_groups::Guest for crate::Component {
-    fn sim_card_groups_get_all(params: iface_sim_card_groups::SimCardGroupsGetAllParams) -> Result<String, String> {
-        let json = iface_sim_card_groups__sim_card_groups_get_all_params__to_json(&params);
-        dispatch(&OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_GET_ALL, json)
+    fn get_all(params: iface_sim_card_groups::GetAllParams) -> Result<String, String> {
+        let json = iface_sim_card_groups__get_all_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_GROUPS_GET_ALL, json)
     }
-    fn sim_card_groups_post(params: iface_sim_card_groups::SimCardGroupsPostParams) -> Result<String, String> {
-        let json = iface_sim_card_groups__sim_card_groups_post_params__to_json(&params);
-        dispatch(&OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_POST, json)
+    fn post(params: iface_sim_card_groups::PostParams) -> Result<String, String> {
+        let json = iface_sim_card_groups__post_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_GROUPS_POST, json)
     }
-    fn sim_card_groups_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARD_GROUPS_SIM_CARD_GROUPS_GET, Value::Object(Map::new()))
+    fn get(params: iface_sim_card_groups::GetParams) -> Result<String, String> {
+        let json = iface_sim_card_groups__get_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_GROUPS_GET, json)
     }
     fn sim_card_group_update(params: iface_sim_card_groups::SimCardGroupUpdateParams) -> Result<String, String> {
         let json = iface_sim_card_groups__sim_card_group_update_params__to_json(&params);
         dispatch(&OP_SIM_CARD_GROUPS_SIM_CARD_GROUP_UPDATE, json)
     }
-    fn sim_card_group_delete() -> Result<String, String> {
-        dispatch(&OP_SIM_CARD_GROUPS_SIM_CARD_GROUP_DELETE, Value::Object(Map::new()))
+    fn sim_card_group_delete(params: iface_sim_card_groups::SimCardGroupDeleteParams) -> Result<String, String> {
+        let json = iface_sim_card_groups__sim_card_group_delete_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_GROUPS_SIM_CARD_GROUP_DELETE, json)
     }
-    fn remove_sim_card_group_private_wireless_gateway() -> Result<String, String> {
-        dispatch(&OP_SIM_CARD_GROUPS_REMOVE_SIM_CARD_GROUP_PRIVATE_WIRELESS_GATEWAY, Value::Object(Map::new()))
+    fn remove_sim_card_group_private_wireless_gateway(params: iface_sim_card_groups::RemoveSimCardGroupPrivateWirelessGatewayParams) -> Result<String, String> {
+        let json = iface_sim_card_groups__remove_sim_card_group_private_wireless_gateway_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_GROUPS_REMOVE_SIM_CARD_GROUP_PRIVATE_WIRELESS_GATEWAY, json)
     }
     fn set_sim_card_group_private_wireless_gateway(params: iface_sim_card_groups::SetSimCardGroupPrivateWirelessGatewayParams) -> Result<String, String> {
         let json = iface_sim_card_groups__set_sim_card_group_private_wireless_gateway_params__to_json(&params);
@@ -9440,7 +10799,7 @@ impl iface_sim_card_groups::Guest for crate::Component {
 }
 use crate::exports::autostamp::telnyx::sim_card_orders as iface_sim_card_orders;
 
-const OP_SIM_CARD_ORDERS_SIM_CARD_ORDERS_PREVIEW: OpSpec = OpSpec {
+const OP_SIM_CARD_ORDERS_PREVIEW: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sim_card_order_preview",
     fields: &[
@@ -9452,17 +10811,31 @@ const OP_SIM_CARD_ORDERS_SIM_CARD_ORDERS_PREVIEW: OpSpec = OpSpec {
     ],
 };
 
-const OP_SIM_CARD_ORDERS_SIM_CARD_ORDERS_GET: OpSpec = OpSpec {
+const OP_SIM_CARD_ORDERS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_card_orders",
     fields: &[
+        FieldSpec { snake: "filter_created_at", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_updated_at", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_quantity", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_cost_amount", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_cost_currency", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_id", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_street_address", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_extended_address", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_locality", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_administrative_area", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_country_code", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_address_postal_code", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_SIM_CARD_ORDERS_SIM_CARD_ORDERS_POST: OpSpec = OpSpec {
+const OP_SIM_CARD_ORDERS_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sim_card_orders",
     fields: &[
@@ -9478,40 +10851,68 @@ const OP_SIM_CARD_ORDERS_SIM_CARD_ORDER_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sim_card_orders/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
 
-fn iface_sim_card_orders__sim_card_orders_preview_params__to_json(p: &iface_sim_card_orders::SimCardOrdersPreviewParams) -> Value {
+fn iface_sim_card_orders__preview_params__to_json(p: &iface_sim_card_orders::PreviewParams) -> Value {
     let mut m = Map::new();
     m.insert("address_id".into(), Value::String((&p.address_id).clone()));
     m.insert("quantity".into(), Value::Number(serde_json::Number::from(*(&p.quantity))));
     Value::Object(m)
 }
 
-fn iface_sim_card_orders__sim_card_orders_post_params__to_json(p: &iface_sim_card_orders::SimCardOrdersPostParams) -> Value {
+fn iface_sim_card_orders__get_params__to_json(p: &iface_sim_card_orders::GetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("filter_created_at".into(), match (&p.filter_created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_updated_at".into(), match (&p.filter_updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_quantity".into(), match (&p.filter_quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_cost_amount".into(), match (&p.filter_cost_amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_cost_currency".into(), match (&p.filter_cost_currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_id".into(), match (&p.filter_address_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_street_address".into(), match (&p.filter_address_street_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_extended_address".into(), match (&p.filter_address_extended_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_locality".into(), match (&p.filter_address_locality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_administrative_area".into(), match (&p.filter_address_administrative_area) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_country_code".into(), match (&p.filter_address_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_address_postal_code".into(), match (&p.filter_address_postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sim_card_orders__post_params__to_json(p: &iface_sim_card_orders::PostParams) -> Value {
     let mut m = Map::new();
     m.insert("address_id".into(), Value::String((&p.address_id).clone()));
     m.insert("quantity".into(), Value::Number(serde_json::Number::from(*(&p.quantity))));
+    Value::Object(m)
+}
+
+fn iface_sim_card_orders__sim_card_order_get_params__to_json(p: &iface_sim_card_orders::SimCardOrderGetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 impl iface_sim_card_orders::Guest for crate::Component {
-    fn sim_card_orders_preview(params: iface_sim_card_orders::SimCardOrdersPreviewParams) -> Result<String, String> {
-        let json = iface_sim_card_orders__sim_card_orders_preview_params__to_json(&params);
-        dispatch(&OP_SIM_CARD_ORDERS_SIM_CARD_ORDERS_PREVIEW, json)
+    fn preview(params: iface_sim_card_orders::PreviewParams) -> Result<String, String> {
+        let json = iface_sim_card_orders__preview_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_ORDERS_PREVIEW, json)
     }
-    fn sim_card_orders_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARD_ORDERS_SIM_CARD_ORDERS_GET, Value::Object(Map::new()))
+    fn get(params: iface_sim_card_orders::GetParams) -> Result<String, String> {
+        let json = iface_sim_card_orders__get_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_ORDERS_GET, json)
     }
-    fn sim_card_orders_post(params: iface_sim_card_orders::SimCardOrdersPostParams) -> Result<String, String> {
-        let json = iface_sim_card_orders__sim_card_orders_post_params__to_json(&params);
-        dispatch(&OP_SIM_CARD_ORDERS_SIM_CARD_ORDERS_POST, json)
+    fn post(params: iface_sim_card_orders::PostParams) -> Result<String, String> {
+        let json = iface_sim_card_orders__post_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_ORDERS_POST, json)
     }
-    fn sim_card_order_get() -> Result<String, String> {
-        dispatch(&OP_SIM_CARD_ORDERS_SIM_CARD_ORDER_GET, Value::Object(Map::new()))
+    fn sim_card_order_get(params: iface_sim_card_orders::SimCardOrderGetParams) -> Result<String, String> {
+        let json = iface_sim_card_orders__sim_card_order_get_params__to_json(&params);
+        dispatch(&OP_SIM_CARD_ORDERS_SIM_CARD_ORDER_GET, json)
     }
 }
 use crate::exports::autostamp::telnyx::credentials as iface_credentials;
@@ -9520,6 +10921,13 @@ const OP_CREDENTIALS_FIND_TELEPHONY_CREDENTIALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/telephony_credentials",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_tag", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_name", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_status", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_resource_id", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_sip_username", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9544,6 +10952,8 @@ const OP_CREDENTIALS_LIST_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/telephony_credentials/tags",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9599,12 +11009,31 @@ const OP_CREDENTIALS_TELEPHONY_CREDENTIAL_ACTION: OpSpec = OpSpec {
     ],
 };
 
+fn iface_credentials__find_telephony_credentials_params__to_json(p: &iface_credentials::FindTelephonyCredentialsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter_tag".into(), match (&p.filter_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_name".into(), match (&p.filter_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_status".into(), match (&p.filter_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_resource_id".into(), match (&p.filter_resource_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_sip_username".into(), match (&p.filter_sip_username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_credentials__create_telephony_credential_params__to_json(p: &iface_credentials::CreateTelephonyCredentialParams) -> Value {
     let mut m = Map::new();
     m.insert("connection_id".into(), Value::String((&p.connection_id).clone()));
     m.insert("expires_at".into(), match (&p.expires_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_credentials__list_tags_params__to_json(p: &iface_credentials::ListTagsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9638,15 +11067,17 @@ fn iface_credentials__telephony_credential_action_params__to_json(p: &iface_cred
 }
 
 impl iface_credentials::Guest for crate::Component {
-    fn find_telephony_credentials() -> Result<String, String> {
-        dispatch(&OP_CREDENTIALS_FIND_TELEPHONY_CREDENTIALS, Value::Object(Map::new()))
+    fn find_telephony_credentials(params: iface_credentials::FindTelephonyCredentialsParams) -> Result<String, String> {
+        let json = iface_credentials__find_telephony_credentials_params__to_json(&params);
+        dispatch(&OP_CREDENTIALS_FIND_TELEPHONY_CREDENTIALS, json)
     }
     fn create_telephony_credential(params: iface_credentials::CreateTelephonyCredentialParams) -> Result<String, String> {
         let json = iface_credentials__create_telephony_credential_params__to_json(&params);
         dispatch(&OP_CREDENTIALS_CREATE_TELEPHONY_CREDENTIAL, json)
     }
-    fn list_tags() -> Result<String, String> {
-        dispatch(&OP_CREDENTIALS_LIST_TAGS, Value::Object(Map::new()))
+    fn list_tags(params: iface_credentials::ListTagsParams) -> Result<String, String> {
+        let json = iface_credentials__list_tags_params__to_json(&params);
+        dispatch(&OP_CREDENTIALS_LIST_TAGS, json)
     }
     fn get_telephony_credential(params: iface_credentials::GetTelephonyCredentialParams) -> Result<String, String> {
         let json = iface_credentials__get_telephony_credential_params__to_json(&params);
@@ -9696,7 +11127,11 @@ const OP_TE_XML_APPLICATIONS_FIND_TEXML_APPLICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/texml_applications",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
         FieldSpec { snake: "filter_friendly_name_contains", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_outbound_voice_profile_id", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9730,6 +11165,7 @@ const OP_TE_XML_APPLICATIONS_GET_TEXML_APPLICATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/texml_applications/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -9740,6 +11176,7 @@ const OP_TE_XML_APPLICATIONS_UPDATE_TEXML_APPLICATION: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/texml_applications/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "active", location: FieldLocation::Body },
         FieldSpec { snake: "anchorsite_override", location: FieldLocation::Body },
         FieldSpec { snake: "dtmf_type", location: FieldLocation::Body },
@@ -9763,11 +11200,20 @@ const OP_TE_XML_APPLICATIONS_DELETE_TEXML_APPLICATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/texml_applications/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_te_xml_applications__find_texml_applications_sort_enum__to_str(e: &iface_te_xml_applications::FindTexmlApplicationsSortEnum) -> &'static str {
+    match e {
+        iface_te_xml_applications::FindTexmlApplicationsSortEnum::CreatedAt => "created_at",
+        iface_te_xml_applications::FindTexmlApplicationsSortEnum::ConnectionName => "connection_name",
+        iface_te_xml_applications::FindTexmlApplicationsSortEnum::Active => "active",
+    }
+}
 
 fn iface_te_xml_applications__create_texml_application_request_inbound_sip_subdomain_receive_settings_enum__to_str(e: &iface_te_xml_applications::CreateTexmlApplicationRequestInboundSipSubdomainReceiveSettingsEnum) -> &'static str {
     match e {
@@ -9857,7 +11303,11 @@ fn iface_te_xml_applications__update_texml_application_request_outbound__to_json
 
 fn iface_te_xml_applications__find_texml_applications_params__to_json(p: &iface_te_xml_applications::FindTexmlApplicationsParams) -> Value {
     let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("filter_friendly_name_contains".into(), match (&p.filter_friendly_name_contains) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_outbound_voice_profile_id".into(), match (&p.filter_outbound_voice_profile_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String(iface_te_xml_applications__find_texml_applications_sort_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -9879,8 +11329,15 @@ fn iface_te_xml_applications__create_texml_application_params__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_te_xml_applications__get_texml_application_params__to_json(p: &iface_te_xml_applications::GetTexmlApplicationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 fn iface_te_xml_applications__update_texml_application_params__to_json(p: &iface_te_xml_applications::UpdateTexmlApplicationParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("active".into(), match (&p.active) { Some(v) => iface_te_xml_applications__connection_active__to_json(v), None => Value::Null });
     m.insert("anchorsite_override".into(), match (&p.anchorsite_override) { Some(v) => iface_te_xml_applications__anchorsite_override__to_json(v), None => Value::Null });
     m.insert("dtmf_type".into(), match (&p.dtmf_type) { Some(v) => iface_te_xml_applications__dtmf_type__to_json(v), None => Value::Null });
@@ -9897,6 +11354,12 @@ fn iface_te_xml_applications__update_texml_application_params__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_te_xml_applications__delete_texml_application_params__to_json(p: &iface_te_xml_applications::DeleteTexmlApplicationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_te_xml_applications::Guest for crate::Component {
     fn find_texml_applications(params: iface_te_xml_applications::FindTexmlApplicationsParams) -> Result<String, String> {
         let json = iface_te_xml_applications__find_texml_applications_params__to_json(&params);
@@ -9906,15 +11369,17 @@ impl iface_te_xml_applications::Guest for crate::Component {
         let json = iface_te_xml_applications__create_texml_application_params__to_json(&params);
         dispatch(&OP_TE_XML_APPLICATIONS_CREATE_TEXML_APPLICATION, json)
     }
-    fn get_texml_application() -> Result<String, String> {
-        dispatch(&OP_TE_XML_APPLICATIONS_GET_TEXML_APPLICATION, Value::Object(Map::new()))
+    fn get_texml_application(params: iface_te_xml_applications::GetTexmlApplicationParams) -> Result<String, String> {
+        let json = iface_te_xml_applications__get_texml_application_params__to_json(&params);
+        dispatch(&OP_TE_XML_APPLICATIONS_GET_TEXML_APPLICATION, json)
     }
     fn update_texml_application(params: iface_te_xml_applications::UpdateTexmlApplicationParams) -> Result<String, String> {
         let json = iface_te_xml_applications__update_texml_application_params__to_json(&params);
         dispatch(&OP_TE_XML_APPLICATIONS_UPDATE_TEXML_APPLICATION, json)
     }
-    fn delete_texml_application() -> Result<String, String> {
-        dispatch(&OP_TE_XML_APPLICATIONS_DELETE_TEXML_APPLICATION, Value::Object(Map::new()))
+    fn delete_texml_application(params: iface_te_xml_applications::DeleteTexmlApplicationParams) -> Result<String, String> {
+        let json = iface_te_xml_applications__delete_texml_application_params__to_json(&params);
+        dispatch(&OP_TE_XML_APPLICATIONS_DELETE_TEXML_APPLICATION, json)
     }
 }
 use crate::exports::autostamp::telnyx::verify as iface_verify;
@@ -9930,7 +11395,7 @@ const OP_VERIFY_LIST_VERIFICATIONS: OpSpec = OpSpec {
     ],
 };
 
-const OP_VERIFY_VERIFY_VERIFICATION_CODE: OpSpec = OpSpec {
+const OP_VERIFY_VERIFICATION_CODE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/verifications/by_phone_number/{phone_number}/actions/verify",
     fields: &[
@@ -10182,7 +11647,7 @@ fn iface_verify__list_verifications_params__to_json(p: &iface_verify::ListVerifi
     Value::Object(m)
 }
 
-fn iface_verify__verify_verification_code_params__to_json(p: &iface_verify::VerifyVerificationCodeParams) -> Value {
+fn iface_verify__verification_code_params__to_json(p: &iface_verify::VerificationCodeParams) -> Value {
     let mut m = Map::new();
     m.insert("phone_number".into(), Value::String((&p.phone_number).clone()));
     m.insert("code".into(), Value::String((&p.code).clone()));
@@ -10293,9 +11758,9 @@ impl iface_verify::Guest for crate::Component {
         let json = iface_verify__list_verifications_params__to_json(&params);
         dispatch(&OP_VERIFY_LIST_VERIFICATIONS, json)
     }
-    fn verify_verification_code(params: iface_verify::VerifyVerificationCodeParams) -> Result<String, String> {
-        let json = iface_verify__verify_verification_code_params__to_json(&params);
-        dispatch(&OP_VERIFY_VERIFY_VERIFICATION_CODE, json)
+    fn verification_code(params: iface_verify::VerificationCodeParams) -> Result<String, String> {
+        let json = iface_verify__verification_code_params__to_json(&params);
+        dispatch(&OP_VERIFY_VERIFICATION_CODE, json)
     }
     fn create_verification_call(params: iface_verify::CreateVerificationCallParams) -> Result<String, String> {
         let json = iface_verify__create_verification_call_params__to_json(&params);
@@ -10355,6 +11820,8 @@ const OP_WEBHOOKS_GET_WEBHOOK_DELIVERIES: OpSpec = OpSpec {
         FieldSpec { snake: "filter_started_at_lte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_finished_at_gte", location: FieldLocation::Query },
         FieldSpec { snake: "filter_finished_at_lte", location: FieldLocation::Query },
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -10388,6 +11855,8 @@ fn iface_webhooks__get_webhook_deliveries_params__to_json(p: &iface_webhooks::Ge
     m.insert("filter_started_at_lte".into(), match (&p.filter_started_at_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_finished_at_gte".into(), match (&p.filter_finished_at_gte) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter_finished_at_lte".into(), match (&p.filter_finished_at_lte) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -10949,6 +12418,8 @@ const OP_REPORTING_GET_WDR_REPORTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/wireless/detail_records_reports",
     fields: &[
+        FieldSpec { snake: "page_number", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -10971,6 +12442,7 @@ const OP_REPORTING_GET_WDR_REPORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/wireless/detail_records_reports/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
@@ -10981,11 +12453,19 @@ const OP_REPORTING_DELETE_WDR_REPORT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/wireless/detail_records_reports/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "BearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_reporting__get_wdr_reports_params__to_json(p: &iface_reporting::GetWdrReportsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_number".into(), match (&p.page_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_reporting__create_wdr_report_params__to_json(p: &iface_reporting::CreateWdrReportParams) -> Value {
     let mut m = Map::new();
@@ -10994,19 +12474,34 @@ fn iface_reporting__create_wdr_report_params__to_json(p: &iface_reporting::Creat
     Value::Object(m)
 }
 
+fn iface_reporting__get_wdr_report_params__to_json(p: &iface_reporting::GetWdrReportParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_reporting__delete_wdr_report_params__to_json(p: &iface_reporting::DeleteWdrReportParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
 impl iface_reporting::Guest for crate::Component {
-    fn get_wdr_reports() -> Result<String, String> {
-        dispatch(&OP_REPORTING_GET_WDR_REPORTS, Value::Object(Map::new()))
+    fn get_wdr_reports(params: iface_reporting::GetWdrReportsParams) -> Result<String, String> {
+        let json = iface_reporting__get_wdr_reports_params__to_json(&params);
+        dispatch(&OP_REPORTING_GET_WDR_REPORTS, json)
     }
     fn create_wdr_report(params: iface_reporting::CreateWdrReportParams) -> Result<String, String> {
         let json = iface_reporting__create_wdr_report_params__to_json(&params);
         dispatch(&OP_REPORTING_CREATE_WDR_REPORT, json)
     }
-    fn get_wdr_report() -> Result<String, String> {
-        dispatch(&OP_REPORTING_GET_WDR_REPORT, Value::Object(Map::new()))
+    fn get_wdr_report(params: iface_reporting::GetWdrReportParams) -> Result<String, String> {
+        let json = iface_reporting__get_wdr_report_params__to_json(&params);
+        dispatch(&OP_REPORTING_GET_WDR_REPORT, json)
     }
-    fn delete_wdr_report() -> Result<String, String> {
-        dispatch(&OP_REPORTING_DELETE_WDR_REPORT, Value::Object(Map::new()))
+    fn delete_wdr_report(params: iface_reporting::DeleteWdrReportParams) -> Result<String, String> {
+        let json = iface_reporting__delete_wdr_report_params__to_json(&params);
+        dispatch(&OP_REPORTING_DELETE_WDR_REPORT, json)
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:trello"
-version = "0.2.1+trello-1.0"
+version = "0.3.0+trello-1.0"
 registry = "ghcr.io/autostamp/trello"
 kind = "component"
 file = "build/trello.wasm"

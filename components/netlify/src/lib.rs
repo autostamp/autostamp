@@ -413,6 +413,8 @@ const OP_AUDIT_LOG_LIST_ACCOUNT_AUDIT_EVENTS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "log_type", location: FieldLocation::Query },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -422,6 +424,8 @@ fn iface_audit_log__list_account_audit_events_params__to_json(p: &iface_audit_lo
     let mut m = Map::new();
     m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("log_type".into(), match (&p.log_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -699,6 +703,8 @@ const OP_BUILD_LIST_SITE_BUILDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/builds",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -724,6 +730,13 @@ const OP_BUILD_GET_ACCOUNT_BUILD_STATUS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_build__list_site_builds_params__to_json(p: &iface_build::ListSiteBuildsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_build__create_site_build_params__to_json(p: &iface_build::CreateSiteBuildParams) -> Value {
     let mut m = Map::new();
     m.insert("clear_cache".into(), match (&p.clear_cache) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -738,8 +751,9 @@ impl iface_build::Guest for crate::Component {
     fn notify_build_start() -> Result<String, String> {
         dispatch(&OP_BUILD_NOTIFY_BUILD_START, Value::Object(Map::new()))
     }
-    fn list_site_builds() -> Result<String, String> {
-        dispatch(&OP_BUILD_LIST_SITE_BUILDS, Value::Object(Map::new()))
+    fn list_site_builds(params: iface_build::ListSiteBuildsParams) -> Result<String, String> {
+        let json = iface_build__list_site_builds_params__to_json(&params);
+        dispatch(&OP_BUILD_LIST_SITE_BUILDS, json)
     }
     fn create_site_build(params: iface_build::CreateSiteBuildParams) -> Result<String, String> {
         let json = iface_build__create_site_build_params__to_json(&params);
@@ -873,6 +887,8 @@ const OP_DEPLOY_LIST_SITE_DEPLOYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/deploys",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -957,7 +973,7 @@ const OP_DEPLOY_ROLLBACK_SITE_DEPLOY: OpSpec = OpSpec {
     ],
 };
 
-fn iface_deploy__deploy_files_files__to_json(p: &iface_deploy::DeployFilesFiles) -> Value {
+fn iface_deploy__files_files__to_json(p: &iface_deploy::FilesFiles) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -970,13 +986,13 @@ fn iface_deploy__function_schedule__to_json(p: &iface_deploy::FunctionSchedule) 
     Value::Object(m)
 }
 
-fn iface_deploy__deploy_files_functions__to_json(p: &iface_deploy::DeployFilesFunctions) -> Value {
+fn iface_deploy__files_functions__to_json(p: &iface_deploy::FilesFunctions) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_deploy__deploy_files_functions_config__to_json(p: &iface_deploy::DeployFilesFunctionsConfig) -> Value {
+fn iface_deploy__files_functions_config__to_json(p: &iface_deploy::FilesFunctionsConfig) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -1012,17 +1028,24 @@ fn iface_deploy__unlock_deploy_params__to_json(p: &iface_deploy::UnlockDeployPar
     Value::Object(m)
 }
 
+fn iface_deploy__list_site_deploys_params__to_json(p: &iface_deploy::ListSiteDeploysParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_deploy__create_site_deploy_params__to_json(p: &iface_deploy::CreateSiteDeployParams) -> Value {
     let mut m = Map::new();
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("async".into(), match (&p.async_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("files".into(), match (&p.files) { Some(v) => iface_deploy__deploy_files_files__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => iface_deploy__files_files__to_json(v), None => Value::Null });
     m.insert("framework".into(), match (&p.framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("function_schedules".into(), match (&p.function_schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_deploy__function_schedule__to_json(v)).collect()), None => Value::Null });
-    m.insert("functions".into(), match (&p.functions) { Some(v) => iface_deploy__deploy_files_functions__to_json(v), None => Value::Null });
-    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => iface_deploy__deploy_files_functions_config__to_json(v), None => Value::Null });
+    m.insert("functions".into(), match (&p.functions) { Some(v) => iface_deploy__files_functions__to_json(v), None => Value::Null });
+    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => iface_deploy__files_functions_config__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1040,11 +1063,11 @@ fn iface_deploy__update_site_deploy_params__to_json(p: &iface_deploy::UpdateSite
     m.insert("async".into(), match (&p.async_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("files".into(), match (&p.files) { Some(v) => iface_deploy__deploy_files_files__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => iface_deploy__files_files__to_json(v), None => Value::Null });
     m.insert("framework".into(), match (&p.framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("function_schedules".into(), match (&p.function_schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_deploy__function_schedule__to_json(v)).collect()), None => Value::Null });
-    m.insert("functions".into(), match (&p.functions) { Some(v) => iface_deploy__deploy_files_functions__to_json(v), None => Value::Null });
-    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => iface_deploy__deploy_files_functions_config__to_json(v), None => Value::Null });
+    m.insert("functions".into(), match (&p.functions) { Some(v) => iface_deploy__files_functions__to_json(v), None => Value::Null });
+    m.insert("functions_config".into(), match (&p.functions_config) { Some(v) => iface_deploy__files_functions_config__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1083,8 +1106,9 @@ impl iface_deploy::Guest for crate::Component {
         let json = iface_deploy__unlock_deploy_params__to_json(&params);
         dispatch(&OP_DEPLOY_UNLOCK_DEPLOY, json)
     }
-    fn list_site_deploys() -> Result<String, String> {
-        dispatch(&OP_DEPLOY_LIST_SITE_DEPLOYS, Value::Object(Map::new()))
+    fn list_site_deploys(params: iface_deploy::ListSiteDeploysParams) -> Result<String, String> {
+        let json = iface_deploy__list_site_deploys_params__to_json(&params);
+        dispatch(&OP_DEPLOY_LIST_SITE_DEPLOYS, json)
     }
     fn create_site_deploy(params: iface_deploy::CreateSiteDeployParams) -> Result<String, String> {
         let json = iface_deploy__create_site_deploy_params__to_json(&params);
@@ -1192,6 +1216,7 @@ const OP_FUNCTION_UPLOAD_DEPLOY_FUNCTION: OpSpec = OpSpec {
         FieldSpec { snake: "name", location: FieldLocation::Path },
         FieldSpec { snake: "runtime", location: FieldLocation::Query },
         FieldSpec { snake: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "x_nf_retry_count", location: FieldLocation::Header },
         FieldSpec { snake: "body", location: FieldLocation::Body },
     ],
     auth: &[
@@ -1204,6 +1229,7 @@ fn iface_function__upload_deploy_function_params__to_json(p: &iface_function::Up
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("runtime".into(), match (&p.runtime) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("x_nf_retry_count".into(), match (&p.x_nf_retry_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
@@ -1487,6 +1513,8 @@ const OP_SUBMISSION_LIST_FORM_SUBMISSIONS: OpSpec = OpSpec {
     path_template: "/forms/{form_id}/submissions",
     fields: &[
         FieldSpec { snake: "form_id", location: FieldLocation::Path },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1497,6 +1525,8 @@ const OP_SUBMISSION_LIST_SITE_SUBMISSIONS: OpSpec = OpSpec {
     path_template: "/sites/{site_id}/submissions",
     fields: &[
         FieldSpec { snake: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1507,6 +1537,8 @@ const OP_SUBMISSION_LIST_FORM_SUBMISSION: OpSpec = OpSpec {
     path_template: "/submissions/{submission_id}",
     fields: &[
         FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1524,18 +1556,24 @@ const OP_SUBMISSION_DELETE_SUBMISSION: OpSpec = OpSpec {
 fn iface_submission__list_form_submissions_params__to_json(p: &iface_submission::ListFormSubmissionsParams) -> Value {
     let mut m = Map::new();
     m.insert("form_id".into(), Value::String((&p.form_id).clone()));
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_submission__list_site_submissions_params__to_json(p: &iface_submission::ListSiteSubmissionsParams) -> Value {
     let mut m = Map::new();
     m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_submission__list_form_submission_params__to_json(p: &iface_submission::ListFormSubmissionParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1822,6 +1860,8 @@ const OP_SITE_LIST_SITES: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "name", location: FieldLocation::Query },
         FieldSpec { snake: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1881,6 +1921,8 @@ const OP_SITE_LIST_SITES_FOR_ACCOUNT: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "name", location: FieldLocation::Query },
         FieldSpec { snake: "account_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1910,6 +1952,8 @@ fn iface_site__list_sites_params__to_json(p: &iface_site::ListSitesParams) -> Va
     let mut m = Map::new();
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String(iface_site__list_sites_filter_enum__to_str(v).into()), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1930,6 +1974,8 @@ fn iface_site__list_sites_for_account_params__to_json(p: &iface_site::ListSitesF
     let mut m = Map::new();
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account_slug".into(), Value::String((&p.account_slug).clone()));
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2548,7 +2594,7 @@ const OP_SPLIT_TEST_DISABLE_SPLIT_TEST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_split_test__split_test_setup_branch_tests__to_json(p: &iface_split_test::SplitTestSetupBranchTests) -> Value {
+fn iface_split_test__setup_branch_tests__to_json(p: &iface_split_test::SetupBranchTests) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2556,13 +2602,13 @@ fn iface_split_test__split_test_setup_branch_tests__to_json(p: &iface_split_test
 
 fn iface_split_test__create_split_test_params__to_json(p: &iface_split_test::CreateSplitTestParams) -> Value {
     let mut m = Map::new();
-    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__split_test_setup_branch_tests__to_json(v), None => Value::Null });
+    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__setup_branch_tests__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_split_test__update_split_test_params__to_json(p: &iface_split_test::UpdateSplitTestParams) -> Value {
     let mut m = Map::new();
-    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__split_test_setup_branch_tests__to_json(v), None => Value::Null });
+    m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__setup_branch_tests__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 

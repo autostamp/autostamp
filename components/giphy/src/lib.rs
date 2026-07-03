@@ -288,6 +288,7 @@ const OP_GIFS_GET_GIFS_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs",
     fields: &[
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -298,6 +299,8 @@ const OP_GIFS_RANDOM_GIF: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/random",
     fields: &[
+        FieldSpec { snake: "tag", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -308,6 +311,11 @@ const OP_GIFS_SEARCH_GIFS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/search",
     fields: &[
+        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -318,6 +326,7 @@ const OP_GIFS_TRANSLATE_GIF: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/translate",
     fields: &[
+        FieldSpec { snake: "s", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -328,6 +337,9 @@ const OP_GIFS_TRENDING_GIFS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/trending",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -338,30 +350,80 @@ const OP_GIFS_GET_GIF_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/{gif_id}",
     fields: &[
+        FieldSpec { snake: "gif_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
     ],
 };
 
+fn iface_gifs__get_gifs_by_id_params__to_json(p: &iface_gifs::GetGifsByIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__random_gif_params__to_json(p: &iface_gifs::RandomGifParams) -> Value {
+    let mut m = Map::new();
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__search_gifs_params__to_json(p: &iface_gifs::SearchGifsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("q".into(), Value::String((&p.q).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__translate_gif_params__to_json(p: &iface_gifs::TranslateGifParams) -> Value {
+    let mut m = Map::new();
+    m.insert("s".into(), Value::String((&p.s).clone()));
+    Value::Object(m)
+}
+
+fn iface_gifs__trending_gifs_params__to_json(p: &iface_gifs::TrendingGifsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__get_gif_by_id_params__to_json(p: &iface_gifs::GetGifByIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("gif_id".into(), Value::String((&p.gif_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_gifs::Guest for crate::Component {
-    fn get_gifs_by_id() -> Result<String, String> {
-        dispatch(&OP_GIFS_GET_GIFS_BY_ID, Value::Object(Map::new()))
+    fn get_gifs_by_id(params: iface_gifs::GetGifsByIdParams) -> Result<String, String> {
+        let json = iface_gifs__get_gifs_by_id_params__to_json(&params);
+        dispatch(&OP_GIFS_GET_GIFS_BY_ID, json)
     }
-    fn random_gif() -> Result<String, String> {
-        dispatch(&OP_GIFS_RANDOM_GIF, Value::Object(Map::new()))
+    fn random_gif(params: iface_gifs::RandomGifParams) -> Result<String, String> {
+        let json = iface_gifs__random_gif_params__to_json(&params);
+        dispatch(&OP_GIFS_RANDOM_GIF, json)
     }
-    fn search_gifs() -> Result<String, String> {
-        dispatch(&OP_GIFS_SEARCH_GIFS, Value::Object(Map::new()))
+    fn search_gifs(params: iface_gifs::SearchGifsParams) -> Result<String, String> {
+        let json = iface_gifs__search_gifs_params__to_json(&params);
+        dispatch(&OP_GIFS_SEARCH_GIFS, json)
     }
-    fn translate_gif() -> Result<String, String> {
-        dispatch(&OP_GIFS_TRANSLATE_GIF, Value::Object(Map::new()))
+    fn translate_gif(params: iface_gifs::TranslateGifParams) -> Result<String, String> {
+        let json = iface_gifs__translate_gif_params__to_json(&params);
+        dispatch(&OP_GIFS_TRANSLATE_GIF, json)
     }
-    fn trending_gifs() -> Result<String, String> {
-        dispatch(&OP_GIFS_TRENDING_GIFS, Value::Object(Map::new()))
+    fn trending_gifs(params: iface_gifs::TrendingGifsParams) -> Result<String, String> {
+        let json = iface_gifs__trending_gifs_params__to_json(&params);
+        dispatch(&OP_GIFS_TRENDING_GIFS, json)
     }
-    fn get_gif_by_id() -> Result<String, String> {
-        dispatch(&OP_GIFS_GET_GIF_BY_ID, Value::Object(Map::new()))
+    fn get_gif_by_id(params: iface_gifs::GetGifByIdParams) -> Result<String, String> {
+        let json = iface_gifs__get_gif_by_id_params__to_json(&params);
+        dispatch(&OP_GIFS_GET_GIF_BY_ID, json)
     }
 }
 use crate::exports::autostamp::giphy::stickers as iface_stickers;
@@ -370,6 +432,8 @@ const OP_STICKERS_RANDOM_STICKER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/random",
     fields: &[
+        FieldSpec { snake: "tag", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -380,6 +444,11 @@ const OP_STICKERS_SEARCH_STICKERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/search",
     fields: &[
+        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -390,6 +459,7 @@ const OP_STICKERS_TRANSLATE_STICKER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/translate",
     fields: &[
+        FieldSpec { snake: "s", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -400,24 +470,62 @@ const OP_STICKERS_TRENDING_STICKERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/trending",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
     ],
 };
 
+fn iface_stickers__random_sticker_params__to_json(p: &iface_stickers::RandomStickerParams) -> Value {
+    let mut m = Map::new();
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__search_stickers_params__to_json(p: &iface_stickers::SearchStickersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("q".into(), Value::String((&p.q).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__translate_sticker_params__to_json(p: &iface_stickers::TranslateStickerParams) -> Value {
+    let mut m = Map::new();
+    m.insert("s".into(), Value::String((&p.s).clone()));
+    Value::Object(m)
+}
+
+fn iface_stickers__trending_stickers_params__to_json(p: &iface_stickers::TrendingStickersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_stickers::Guest for crate::Component {
-    fn random_sticker() -> Result<String, String> {
-        dispatch(&OP_STICKERS_RANDOM_STICKER, Value::Object(Map::new()))
+    fn random_sticker(params: iface_stickers::RandomStickerParams) -> Result<String, String> {
+        let json = iface_stickers__random_sticker_params__to_json(&params);
+        dispatch(&OP_STICKERS_RANDOM_STICKER, json)
     }
-    fn search_stickers() -> Result<String, String> {
-        dispatch(&OP_STICKERS_SEARCH_STICKERS, Value::Object(Map::new()))
+    fn search_stickers(params: iface_stickers::SearchStickersParams) -> Result<String, String> {
+        let json = iface_stickers__search_stickers_params__to_json(&params);
+        dispatch(&OP_STICKERS_SEARCH_STICKERS, json)
     }
-    fn translate_sticker() -> Result<String, String> {
-        dispatch(&OP_STICKERS_TRANSLATE_STICKER, Value::Object(Map::new()))
+    fn translate_sticker(params: iface_stickers::TranslateStickerParams) -> Result<String, String> {
+        let json = iface_stickers__translate_sticker_params__to_json(&params);
+        dispatch(&OP_STICKERS_TRANSLATE_STICKER, json)
     }
-    fn trending_stickers() -> Result<String, String> {
-        dispatch(&OP_STICKERS_TRENDING_STICKERS, Value::Object(Map::new()))
+    fn trending_stickers(params: iface_stickers::TrendingStickersParams) -> Result<String, String> {
+        let json = iface_stickers__trending_stickers_params__to_json(&params);
+        dispatch(&OP_STICKERS_TRENDING_STICKERS, json)
     }
 }
 

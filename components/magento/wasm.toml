@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:magento"
-version = "0.2.1+magento-2.2.10"
+version = "0.3.0+magento-2.2.10"
 registry = "ghcr.io/autostamp/magento"
 kind = "component"
 file = "build/magento.wasm"
