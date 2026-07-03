@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:linode"
-version = "0.2.1+linode-4.151.1"
+version = "0.3.0+linode-4.151.1"
 registry = "ghcr.io/autostamp/linode"
 kind = "component"
 file = "build/linode.wasm"

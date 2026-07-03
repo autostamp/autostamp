@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:adobe@0.2.1` |
-| Published version | `0.2.1+adobe-3.7.1-pre.0` |
+| Package | `autostamp:adobe@0.3.0` |
+| Published version | `0.3.0+adobe-3.7.1-pre.0` |
 | Tag filter | all tags |
 | Operations generated | 48 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

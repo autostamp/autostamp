@@ -284,7 +284,7 @@ use serde_json::{Map, Value};
 
 use crate::exports::autostamp::lufthansa::baggage as iface_baggage;
 
-const OP_BAGGAGE_BAGGAGE_TRIP_AND_CONTACT: OpSpec = OpSpec {
+const OP_BAGGAGE_TRIP_AND_CONTACT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/baggage/baggagetripandcontact/{search_id}",
     fields: &[
@@ -296,7 +296,7 @@ const OP_BAGGAGE_BAGGAGE_TRIP_AND_CONTACT: OpSpec = OpSpec {
     ],
 };
 
-fn iface_baggage__baggage_trip_and_contact_params__to_json(p: &iface_baggage::BaggageTripAndContactParams) -> Value {
+fn iface_baggage__trip_and_contact_params__to_json(p: &iface_baggage::TripAndContactParams) -> Value {
     let mut m = Map::new();
     m.insert("search_id".into(), Value::String((&p.search_id).clone()));
     m.insert("accept".into(), Value::String((&p.accept).clone()));
@@ -304,9 +304,9 @@ fn iface_baggage__baggage_trip_and_contact_params__to_json(p: &iface_baggage::Ba
 }
 
 impl iface_baggage::Guest for crate::Component {
-    fn baggage_trip_and_contact(params: iface_baggage::BaggageTripAndContactParams) -> Result<String, String> {
-        let json = iface_baggage__baggage_trip_and_contact_params__to_json(&params);
-        dispatch(&OP_BAGGAGE_BAGGAGE_TRIP_AND_CONTACT, json)
+    fn trip_and_contact(params: iface_baggage::TripAndContactParams) -> Result<String, String> {
+        let json = iface_baggage__trip_and_contact_params__to_json(&params);
+        dispatch(&OP_BAGGAGE_TRIP_AND_CONTACT, json)
     }
 }
 use crate::exports::autostamp::lufthansa::offers as iface_offers;

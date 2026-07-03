@@ -1,4 +1,4 @@
-package autostamp:telegram@0.2.1;
+package autostamp:telegram@0.3.0;
 
 interface add-sticker-to-set {
   post-add-sticker-to-set: func() -> result<string, string>;

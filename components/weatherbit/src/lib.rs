@@ -291,9 +291,9 @@ const OP_ALERTS_GET_ALERTS_LAT_LAT_LON_LON: OpSpec = OpSpec {
         FieldSpec { snake: "lat", location: FieldLocation::Path },
         FieldSpec { snake: "lon", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -302,7 +302,6 @@ fn iface_alerts__get_alerts_lat_lat_lon_lon_params__to_json(p: &iface_alerts::Ge
     m.insert("lat".into(), Value::String((&p.lat).clone()));
     m.insert("lon".into(), Value::String((&p.lon).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -319,16 +318,15 @@ const OP_BULK_DOWNLOADS_GET_BULK_FILES_FILE: OpSpec = OpSpec {
     path_template: "/bulk/files/{file}",
     fields: &[
         FieldSpec { snake: "file", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
 fn iface_bulk_downloads__get_bulk_files_file_params__to_json(p: &iface_bulk_downloads::GetBulkFilesFileParams) -> Value {
     let mut m = Map::new();
     m.insert("file".into(), Value::String((&p.file).clone()));
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -348,9 +346,9 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY: O
         FieldSpec { snake: "state", location: FieldLocation::Query },
         FieldSpec { snake: "country", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -360,9 +358,9 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_ID_CITY_ID: OpSpec = Op
     fields: &[
         FieldSpec { snake: "city_id", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -373,9 +371,9 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_LAT_LAT_LON_LON: OpSpec = Op
         FieldSpec { snake: "lat", location: FieldLocation::Path },
         FieldSpec { snake: "lon", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -386,9 +384,9 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_POSTAL_CODE_POSTAL_CODE: OpS
         FieldSpec { snake: "postal_code", location: FieldLocation::Path },
         FieldSpec { snake: "country", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -398,7 +396,6 @@ fn iface_current_air_quality__get_current_airquality_city_city_country_country_p
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country".into(), Value::String((&p.country).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -406,7 +403,6 @@ fn iface_current_air_quality__get_current_airquality_city_id_city_id_params__to_
     let mut m = Map::new();
     m.insert("city_id".into(), Value::String((&p.city_id).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -415,7 +411,6 @@ fn iface_current_air_quality__get_current_airquality_lat_lat_lon_lon_params__to_
     m.insert("lat".into(), Value::String((&p.lat).clone()));
     m.insert("lon".into(), Value::String((&p.lon).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -424,7 +419,6 @@ fn iface_current_air_quality__get_current_airquality_postal_code_postal_code_par
     m.insert("postal_code".into(), Value::String((&p.postal_code).clone()));
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -457,9 +451,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITIES_CITIES: OpSpec = OpSpec {
         FieldSpec { snake: "marine", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -475,9 +469,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_CITY_COUNTRY_COUNTRY: OpSpec = Op
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -491,9 +485,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_ID_CITY_ID: OpSpec = OpSpec {
         FieldSpec { snake: "marine", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -508,9 +502,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_LAT_LAT_LON_LON: OpSpec = OpSpec {
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -522,9 +516,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_POINTS_POINTS: OpSpec = OpSpec {
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -539,9 +533,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_POSTAL_CODE_POSTAL_CODE: OpSpec = OpSp
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -554,9 +548,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATION_STATION: OpSpec = OpSpec {
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -568,9 +562,9 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATIONS_STATIONS: OpSpec = OpSpec {
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -638,7 +632,6 @@ fn iface_current_weather_data__get_current_cities_cities_params__to_json(p: &ifa
     m.insert("marine".into(), match (&p.marine) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_marine_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -652,7 +645,6 @@ fn iface_current_weather_data__get_current_city_city_country_country_params__to_
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -664,7 +656,6 @@ fn iface_current_weather_data__get_current_city_id_city_id_params__to_json(p: &i
     m.insert("marine".into(), match (&p.marine) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_marine_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -677,7 +668,6 @@ fn iface_current_weather_data__get_current_lat_lat_lon_lon_params__to_json(p: &i
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -687,7 +677,6 @@ fn iface_current_weather_data__get_current_points_points_params__to_json(p: &ifa
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -700,7 +689,6 @@ fn iface_current_weather_data__get_current_postal_code_postal_code_params__to_js
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -711,7 +699,6 @@ fn iface_current_weather_data__get_current_station_station_params__to_json(p: &i
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -721,7 +708,6 @@ fn iface_current_weather_data__get_current_stations_stations_params__to_json(p: 
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_current_weather_data__get_current_cities_cities_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -770,9 +756,9 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY:
         FieldSpec { snake: "country", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -783,9 +769,9 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_ID_CITY_ID: OpSpec = 
         FieldSpec { snake: "city_id", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -796,10 +782,10 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_LAT_LAT_LON_LON: OpSpec = 
         FieldSpec { snake: "lat", location: FieldLocation::Path },
         FieldSpec { snake: "lon", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -811,9 +797,9 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_POSTAL_CODE_POSTAL_CODE: O
         FieldSpec { snake: "country", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -824,7 +810,6 @@ fn iface_air_quality_forecast__get_forecast_airquality_city_city_country_country
     m.insert("country".into(), Value::String((&p.country).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -833,7 +818,6 @@ fn iface_air_quality_forecast__get_forecast_airquality_city_id_city_id_params__t
     m.insert("city_id".into(), Value::String((&p.city_id).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -842,7 +826,6 @@ fn iface_air_quality_forecast__get_forecast_airquality_lat_lat_lon_lon_params__t
     m.insert("lat".into(), Value::String((&p.lat).clone()));
     m.insert("lon".into(), Value::String((&p.lon).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
@@ -853,7 +836,6 @@ fn iface_air_quality_forecast__get_forecast_airquality_postal_code_postal_code_p
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -888,9 +870,9 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_CITY_COUNTRY_COUNTRY: Op
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -903,9 +885,9 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_ID_CITY_ID: OpSpec = OpS
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -919,9 +901,9 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_LAT_LAT_LON_LON: OpSpec = OpS
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -935,9 +917,9 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_POSTAL_CODE_POSTAL_CODE: OpSp
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -995,7 +977,6 @@ fn iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_pa
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1006,7 +987,6 @@ fn iface_v16_day_daily_forecast__get_forecast_daily_city_id_city_id_params__to_j
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1018,7 +998,6 @@ fn iface_v16_day_daily_forecast__get_forecast_daily_lat_lat_lon_lon_params__to_j
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1030,7 +1009,6 @@ fn iface_v16_day_daily_forecast__get_forecast_daily_postal_code_postal_code_para
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1064,9 +1042,9 @@ const OP_FORECAST_DEGREE_DAY_API_GET_FORECAST_ENERGY_LAT_LAT_LON_LON: OpSpec = O
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "tp", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1092,7 +1070,6 @@ fn iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon_params__to
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("tp".into(), match (&p.tp) { Some(v) => Value::String(iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon_tp_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1115,9 +1092,9 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_CITY_COUNTRY_COUNTRY
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1130,9 +1107,9 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_ID_CITY_ID: OpSpec =
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1145,10 +1122,10 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_LAT_LAT_LON_LON: OpSpec =
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1162,9 +1139,9 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_POSTAL_CODE_POSTAL_CODE: 
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
         FieldSpec { snake: "hours", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1222,7 +1199,6 @@ fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_countr
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1233,7 +1209,6 @@ fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_id_city_id_params__
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1244,7 +1219,6 @@ fn iface_v240_hour_hourly_forecast__get_forecast_hourly_lat_lat_lon_lon_params__
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
@@ -1257,7 +1231,6 @@ fn iface_v240_hour_hourly_forecast__get_forecast_hourly_postal_code_postal_code_
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1289,9 +1262,9 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY
         FieldSpec { snake: "state", location: FieldLocation::Query },
         FieldSpec { snake: "country", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1301,9 +1274,9 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_ID_CITY_ID: OpSpec =
     fields: &[
         FieldSpec { snake: "city_id", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1314,9 +1287,9 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_LAT_LAT_LON_LON: OpSpec =
         FieldSpec { snake: "lat", location: FieldLocation::Path },
         FieldSpec { snake: "lon", location: FieldLocation::Path },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1327,9 +1300,9 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_POSTAL_CODE_POSTAL_CODE: 
         FieldSpec { snake: "postal_code", location: FieldLocation::Path },
         FieldSpec { snake: "country", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1339,7 +1312,6 @@ fn iface_historical_air_quality__get_history_airquality_city_city_country_countr
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country".into(), Value::String((&p.country).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1347,7 +1319,6 @@ fn iface_historical_air_quality__get_history_airquality_city_id_city_id_params__
     let mut m = Map::new();
     m.insert("city_id".into(), Value::String((&p.city_id).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1356,7 +1327,6 @@ fn iface_historical_air_quality__get_history_airquality_lat_lat_lon_lon_params__
     m.insert("lat".into(), Value::String((&p.lat).clone()));
     m.insert("lon".into(), Value::String((&p.lon).clone()));
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1365,7 +1335,6 @@ fn iface_historical_air_quality__get_history_airquality_postal_code_postal_code_
     m.insert("postal_code".into(), Value::String((&p.postal_code).clone()));
     m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1401,9 +1370,9 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_CITY_COUNTRY_COUNT
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1417,9 +1386,9 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_ID_CITY_ID: OpSpec
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1434,9 +1403,9 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_LAT_LAT_LON_LON: OpSpec
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1451,9 +1420,9 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_POSTAL_CODE_POSTAL_CODE
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1467,9 +1436,9 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_STATION_STATION: OpSpec
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1528,7 +1497,6 @@ fn iface_daily_historical_weather_data__get_history_daily_city_city_country_coun
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1540,7 +1508,6 @@ fn iface_daily_historical_weather_data__get_history_daily_city_id_city_id_params
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1553,7 +1520,6 @@ fn iface_daily_historical_weather_data__get_history_daily_lat_lat_lon_lon_params
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1566,7 +1532,6 @@ fn iface_daily_historical_weather_data__get_history_daily_postal_code_postal_cod
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1578,7 +1543,6 @@ fn iface_daily_historical_weather_data__get_history_daily_station_station_params
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_daily_historical_weather_data__get_history_daily_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1618,9 +1582,9 @@ const OP_HISTORICAL_DEGREE_DAY_API_GET_HISTORY_ENERGY_LAT_LAT_LON_LON: OpSpec = 
         FieldSpec { snake: "threshold", location: FieldLocation::Query },
         FieldSpec { snake: "units", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1649,7 +1613,6 @@ fn iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon_params__t
     m.insert("threshold".into(), match (&p.threshold) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("units".into(), match (&p.units) { Some(v) => Value::String(iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon_units_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1674,9 +1637,9 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_CITY_COUNTRY_COU
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1691,9 +1654,9 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_ID_CITY_ID: OpSp
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1709,9 +1672,9 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_LAT_LAT_LON_LON: OpSp
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1727,9 +1690,9 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_POSTAL_CODE_POSTAL_CO
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1744,9 +1707,9 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_STATION_STATION: OpSp
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1813,7 +1776,6 @@ fn iface_hourly_historical_weather_data__get_history_hourly_city_city_country_co
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1826,7 +1788,6 @@ fn iface_hourly_historical_weather_data__get_history_hourly_city_id_city_id_para
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1840,7 +1801,6 @@ fn iface_hourly_historical_weather_data__get_history_hourly_lat_lat_lon_lon_para
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1854,7 +1814,6 @@ fn iface_hourly_historical_weather_data__get_history_hourly_postal_code_postal_c
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1867,7 +1826,6 @@ fn iface_hourly_historical_weather_data__get_history_hourly_station_station_para
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -1908,9 +1866,9 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_CITY_COUN
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1925,9 +1883,9 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_ID_CITY_I
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1943,9 +1901,9 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_LAT_LAT_LON_LO
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1961,9 +1919,9 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_POSTAL_CODE_PO
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -1978,9 +1936,9 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_STATION_STATIO
         FieldSpec { snake: "lang", location: FieldLocation::Query },
         FieldSpec { snake: "tz", location: FieldLocation::Query },
         FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
 
@@ -2047,7 +2005,6 @@ fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_cou
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -2060,7 +2017,6 @@ fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_id_city_
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -2074,7 +2030,6 @@ fn iface_sub_hourly_historical_weather_data__get_history_subhourly_lat_lat_lon_l
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -2088,7 +2043,6 @@ fn iface_sub_hourly_historical_weather_data__get_history_subhourly_postal_code_p
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 
@@ -2101,7 +2055,6 @@ fn iface_sub_hourly_historical_weather_data__get_history_subhourly_station_stati
     m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_lang_enum__to_str(v).into()), None => Value::Null });
     m.insert("tz".into(), match (&p.tz) { Some(v) => Value::String(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_tz_enum__to_str(v).into()), None => Value::Null });
     m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("key".into(), Value::String((&p.key).clone()));
     Value::Object(m)
 }
 

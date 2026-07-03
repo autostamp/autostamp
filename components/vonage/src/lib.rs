@@ -288,6 +288,7 @@ const OP_API_ACCOUNT_CTRL_GET_ACCOUNT_SERVICES_BY_ACCOUNT_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/accounts/{account_id}",
     fields: &[
+        FieldSpec { snake: "account_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "bearerAuth", kind: AuthKind::Bearer },
@@ -298,6 +299,7 @@ const OP_API_ACCOUNT_CTRL_GET_LOCATIONS_BY_ACCOUNT_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/accounts/{account_id}/locations",
     fields: &[
+        FieldSpec { snake: "account_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "bearerAuth", kind: AuthKind::Bearer },
@@ -308,6 +310,7 @@ const OP_API_ACCOUNT_CTRL_GET_LOCATION_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/accounts/{account_id}/locations/{location_id}",
     fields: &[
+        FieldSpec { snake: "account_id", location: FieldLocation::Path },
         FieldSpec { snake: "location_id", location: FieldLocation::Path },
     ],
     auth: &[
@@ -315,18 +318,33 @@ const OP_API_ACCOUNT_CTRL_GET_LOCATION_BY_ID: OpSpec = OpSpec {
     ],
 };
 
+fn iface_api__account_ctrl_get_account_services_by_account_id_params__to_json(p: &iface_api::AccountCtrlGetAccountServicesByAccountIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__account_ctrl_get_locations_by_account_id_params__to_json(p: &iface_api::AccountCtrlGetLocationsByAccountIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_api__account_ctrl_get_location_by_id_params__to_json(p: &iface_api::AccountCtrlGetLocationByIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
     m.insert("location_id".into(), Value::String((&p.location_id).clone()));
     Value::Object(m)
 }
 
 impl iface_api::Guest for crate::Component {
-    fn account_ctrl_get_account_services_by_account_id() -> Result<String, String> {
-        dispatch(&OP_API_ACCOUNT_CTRL_GET_ACCOUNT_SERVICES_BY_ACCOUNT_ID, Value::Object(Map::new()))
+    fn account_ctrl_get_account_services_by_account_id(params: iface_api::AccountCtrlGetAccountServicesByAccountIdParams) -> Result<String, String> {
+        let json = iface_api__account_ctrl_get_account_services_by_account_id_params__to_json(&params);
+        dispatch(&OP_API_ACCOUNT_CTRL_GET_ACCOUNT_SERVICES_BY_ACCOUNT_ID, json)
     }
-    fn account_ctrl_get_locations_by_account_id() -> Result<String, String> {
-        dispatch(&OP_API_ACCOUNT_CTRL_GET_LOCATIONS_BY_ACCOUNT_ID, Value::Object(Map::new()))
+    fn account_ctrl_get_locations_by_account_id(params: iface_api::AccountCtrlGetLocationsByAccountIdParams) -> Result<String, String> {
+        let json = iface_api__account_ctrl_get_locations_by_account_id_params__to_json(&params);
+        dispatch(&OP_API_ACCOUNT_CTRL_GET_LOCATIONS_BY_ACCOUNT_ID, json)
     }
     fn account_ctrl_get_location_by_id(params: iface_api::AccountCtrlGetLocationByIdParams) -> Result<String, String> {
         let json = iface_api__account_ctrl_get_location_by_id_params__to_json(&params);

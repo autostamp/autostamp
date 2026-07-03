@@ -305,6 +305,9 @@ const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/project/{username}/{project}",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
@@ -491,6 +494,15 @@ const OP_PROJECT_GET_PROJECT_USERNAME_PROJECT_BUILD_NUM_TESTS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_project__get_project_username_project_filter_enum__to_str(e: &iface_project::GetProjectUsernameProjectFilterEnum) -> &'static str {
+    match e {
+        iface_project::GetProjectUsernameProjectFilterEnum::Completed => "completed",
+        iface_project::GetProjectUsernameProjectFilterEnum::Successful => "successful",
+        iface_project::GetProjectUsernameProjectFilterEnum::Failed => "failed",
+        iface_project::GetProjectUsernameProjectFilterEnum::Running => "running",
+    }
+}
+
 fn iface_project__post_project_username_project_checkout_key_body_enum__to_str(e: &iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum) -> &'static str {
     match e {
         iface_project::PostProjectUsernameProjectCheckoutKeyBodyEnum::DeployKey => "deploy-key",
@@ -528,6 +540,14 @@ fn iface_project__tag__to_json(p: &iface_project::Tag) -> Value {
     Value::Object(m)
 }
 
+fn iface_project__get_project_username_project_params__to_json(p: &iface_project::GetProjectUsernameProjectParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String(iface_project__get_project_username_project_filter_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_project__post_project_username_project_params__to_json(p: &iface_project::PostProjectUsernameProjectParams) -> Value {
     let mut m = Map::new();
     m.insert("build_parameters".into(), match (&p.build_parameters) { Some(v) => iface_project__build_parameters__to_json(v), None => Value::Null });
@@ -554,8 +574,9 @@ fn iface_project__post_project_username_project_tree_branch_params__to_json(p: &
 }
 
 impl iface_project::Guest for crate::Component {
-    fn get_project_username_project() -> Result<String, String> {
-        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT, Value::Object(Map::new()))
+    fn get_project_username_project(params: iface_project::GetProjectUsernameProjectParams) -> Result<String, String> {
+        let json = iface_project__get_project_username_project_params__to_json(&params);
+        dispatch(&OP_PROJECT_GET_PROJECT_USERNAME_PROJECT, json)
     }
     fn post_project_username_project(params: iface_project::PostProjectUsernameProjectParams) -> Result<String, String> {
         let json = iface_project__post_project_username_project_params__to_json(&params);
@@ -635,15 +656,25 @@ const OP_RECENT_BUILDS_GET_RECENT_BUILDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recent-builds",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("circle-token") },
     ],
 };
 
+fn iface_recent_builds__get_recent_builds_params__to_json(p: &iface_recent_builds::GetRecentBuildsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_recent_builds::Guest for crate::Component {
-    fn get_recent_builds() -> Result<String, String> {
-        dispatch(&OP_RECENT_BUILDS_GET_RECENT_BUILDS, Value::Object(Map::new()))
+    fn get_recent_builds(params: iface_recent_builds::GetRecentBuildsParams) -> Result<String, String> {
+        let json = iface_recent_builds__get_recent_builds_params__to_json(&params);
+        dispatch(&OP_RECENT_BUILDS_GET_RECENT_BUILDS, json)
     }
 }
 use crate::exports::autostamp::circleci::user as iface_user;

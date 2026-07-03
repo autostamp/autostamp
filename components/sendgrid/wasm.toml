@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:sendgrid"
-version = "0.2.1+sendgrid-1.0.0"
+version = "0.3.0+sendgrid-1.0.0"
 registry = "ghcr.io/autostamp/sendgrid"
 kind = "component"
 file = "build/sendgrid.wasm"

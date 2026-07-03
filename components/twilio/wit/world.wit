@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `accountSid_authToken` | `Authorization: Basic base64(<secret>)` |
-package autostamp:twilio@0.2.1;
+package autostamp:twilio@0.3.0;
 
 interface api20100401-account {
   record account-enum-status {

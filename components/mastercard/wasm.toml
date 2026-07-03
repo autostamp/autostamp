@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:mastercard"
-version = "0.2.1+mastercard-1.0"
+version = "0.3.0+mastercard-1.0"
 registry = "ghcr.io/autostamp/mastercard"
 kind = "component"
 file = "build/mastercard.wasm"

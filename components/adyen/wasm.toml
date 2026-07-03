@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:adyen"
-version = "0.2.1+adyen-3"
+version = "0.3.0+adyen-3"
 registry = "ghcr.io/autostamp/adyen"
 kind = "component"
 file = "build/adyen.wasm"

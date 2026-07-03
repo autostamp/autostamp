@@ -1,4 +1,4 @@
-package autostamp:amadeus@0.2.1;
+package autostamp:amadeus@0.3.0;
 
 interface shopping {
   enum get-flight-offers-travel-class-enum {
@@ -44,7 +44,11 @@ interface shopping {
   get-flight-offers: func(params: get-flight-offers-params) -> result<string, string>;
 
   /// Return list of Flight Offers based on posted searching criteria.
-  search-flight-offers: func() -> result<string, string>;
+  record search-flight-offers-params {
+    /// the HTTP method to apply
+    x-http-method-override: string
+  }
+  search-flight-offers: func(params: search-flight-offers-params) -> result<string, string>;
 
 }
 

@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `jwtAuth` | `Authorization: Bearer <secret>` |
-package autostamp:nordigen@0.2.1;
+package autostamp:nordigen@0.3.0;
 
 interface premium {
   record retrieve-account-transactions-v2-params {
@@ -213,7 +213,7 @@ interface payments {
 
   retrieve-all-payment-creditor-accounts: func() -> result<string, string>;
 
-  record payments-creditors-list-params {
+  record creditors-list-params {
     account: option<string>,
     address-country: option<string>,
     agent: option<string>,
@@ -225,9 +225,9 @@ interface payments {
     offset: option<s32>,
     type-op: option<string>
   }
-  payments-creditors-list: func(params: payments-creditors-list-params) -> result<string, string>;
+  creditors-list: func(params: creditors-list-params) -> result<string, string>;
 
-  record payments-creditors-create-params {
+  record creditors-create-params {
     /// Creditor account type identifier
     account: string,
     address-country: option<address-country-enum>,
@@ -249,17 +249,17 @@ interface payments {
     /// 
     type-op: option<string>
   }
-  payments-creditors-create: func(params: payments-creditors-create-params) -> result<string, string>;
+  creditors-create: func(params: creditors-create-params) -> result<string, string>;
 
-  record payments-creditors-retrieve-params {
+  record creditors-retrieve-params {
     id: string
   }
-  payments-creditors-retrieve: func(params: payments-creditors-retrieve-params) -> result<string, string>;
+  creditors-retrieve: func(params: creditors-retrieve-params) -> result<string, string>;
 
-  record payments-creditors-destroy-params {
+  record creditors-destroy-params {
     id: string
   }
-  payments-creditors-destroy: func(params: payments-creditors-destroy-params) -> result<string, string>;
+  creditors-destroy: func(params: creditors-destroy-params) -> result<string, string>;
 
   record list-minimum-required-fields-for-institution-params {
     institution-id: string
@@ -276,7 +276,7 @@ interface payments {
   }
   delete-periodic-payment: func(params: delete-periodic-payment-params) -> result<string, string>;
 
-  record payments-submit-create-params {
+  record submit-create-params {
     id: string,
     /// Registered creditor account
     creditor-account: option<string>,
@@ -297,7 +297,7 @@ interface payments {
     /// Redirect URL to your application after payment is done
     redirect: string
   }
-  payments-submit-create: func(params: payments-submit-create-params) -> result<string, string>;
+  submit-create: func(params: submit-create-params) -> result<string, string>;
 
 }
 

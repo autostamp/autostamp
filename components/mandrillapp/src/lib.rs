@@ -1067,34 +1067,34 @@ const OP_MESSAGES_POST_MESSAGES_SEND_JSON: OpSpec = OpSpec {
     ],
 };
 
-fn iface_messages__messages_send_template_message__to_json(p: &iface_messages::MessagesSendTemplateMessage) -> Value {
+fn iface_messages__send_template_message__to_json(p: &iface_messages::SendTemplateMessage) -> Value {
     let mut m = Map::new();
-    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_message_attachments_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_message_attachments_item__to_json(v)).collect()), None => Value::Null });
     m.insert("auto_html".into(), match (&p.auto_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("auto_text".into(), match (&p.auto_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bcc_address".into(), match (&p.bcc_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from_email".into(), match (&p.from_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from_name".into(), match (&p.from_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("global_merge_vars".into(), match (&p.global_merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_message_global_merge_vars_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("global_merge_vars".into(), match (&p.global_merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_message_global_merge_vars_item__to_json(v)).collect()), None => Value::Null });
     m.insert("google_analytics_campaign".into(), match (&p.google_analytics_campaign) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("google_analytics_domains".into(), match (&p.google_analytics_domains) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_messages__messages_send_template_message_headers__to_json(v), None => Value::Null });
+    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_messages__send_template_message_headers__to_json(v), None => Value::Null });
     m.insert("html".into(), match (&p.html) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_message_images_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_message_images_item__to_json(v)).collect()), None => Value::Null });
     m.insert("important".into(), match (&p.important) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("inline_css".into(), match (&p.inline_css) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("merge".into(), match (&p.merge) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_vars".into(), match (&p.merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_message_merge_vars_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_messages__messages_send_template_message_metadata__to_json(v), None => Value::Null });
+    m.insert("merge_vars".into(), match (&p.merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_message_merge_vars_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_messages__send_template_message_metadata__to_json(v), None => Value::Null });
     m.insert("preserve_recipients".into(), match (&p.preserve_recipients) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("recipient_metadata".into(), match (&p.recipient_metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_message_recipient_metadata_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("recipient_metadata".into(), match (&p.recipient_metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_message_recipient_metadata_item__to_json(v)).collect()), None => Value::Null });
     m.insert("return_path_domain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("signing_domain".into(), match (&p.signing_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subaccount".into(), match (&p.subaccount) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("to".into(), match (&p.to) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_message_to_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("to".into(), match (&p.to) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_message_to_item__to_json(v)).collect()), None => Value::Null });
     m.insert("track_clicks".into(), match (&p.track_clicks) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("track_opens".into(), match (&p.track_opens) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tracking_domain".into(), match (&p.tracking_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1103,7 +1103,7 @@ fn iface_messages__messages_send_template_message__to_json(p: &iface_messages::M
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_attachments_item__to_json(p: &iface_messages::MessagesSendTemplateMessageAttachmentsItem) -> Value {
+fn iface_messages__send_template_message_attachments_item__to_json(p: &iface_messages::SendTemplateMessageAttachmentsItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1111,20 +1111,20 @@ fn iface_messages__messages_send_template_message_attachments_item__to_json(p: &
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_global_merge_vars_item__to_json(p: &iface_messages::MessagesSendTemplateMessageGlobalMergeVarsItem) -> Value {
+fn iface_messages__send_template_message_global_merge_vars_item__to_json(p: &iface_messages::SendTemplateMessageGlobalMergeVarsItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_headers__to_json(p: &iface_messages::MessagesSendTemplateMessageHeaders) -> Value {
+fn iface_messages__send_template_message_headers__to_json(p: &iface_messages::SendTemplateMessageHeaders) -> Value {
     let mut m = Map::new();
     m.insert("reply_to".into(), match (&p.reply_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_images_item__to_json(p: &iface_messages::MessagesSendTemplateMessageImagesItem) -> Value {
+fn iface_messages__send_template_message_images_item__to_json(p: &iface_messages::SendTemplateMessageImagesItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1132,40 +1132,40 @@ fn iface_messages__messages_send_template_message_images_item__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_merge_vars_item__to_json(p: &iface_messages::MessagesSendTemplateMessageMergeVarsItem) -> Value {
+fn iface_messages__send_template_message_merge_vars_item__to_json(p: &iface_messages::SendTemplateMessageMergeVarsItem) -> Value {
     let mut m = Map::new();
     m.insert("rcpt".into(), match (&p.rcpt) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("vars".into(), match (&p.vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_message_merge_vars_item_vars_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("vars".into(), match (&p.vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_message_merge_vars_item_vars_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_merge_vars_item_vars_item__to_json(p: &iface_messages::MessagesSendTemplateMessageMergeVarsItemVarsItem) -> Value {
+fn iface_messages__send_template_message_merge_vars_item_vars_item__to_json(p: &iface_messages::SendTemplateMessageMergeVarsItemVarsItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_metadata__to_json(p: &iface_messages::MessagesSendTemplateMessageMetadata) -> Value {
+fn iface_messages__send_template_message_metadata__to_json(p: &iface_messages::SendTemplateMessageMetadata) -> Value {
     let mut m = Map::new();
     m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_recipient_metadata_item__to_json(p: &iface_messages::MessagesSendTemplateMessageRecipientMetadataItem) -> Value {
+fn iface_messages__send_template_message_recipient_metadata_item__to_json(p: &iface_messages::SendTemplateMessageRecipientMetadataItem) -> Value {
     let mut m = Map::new();
     m.insert("rcpt".into(), match (&p.rcpt) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_messages__messages_send_template_message_recipient_metadata_item_values__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => iface_messages__send_template_message_recipient_metadata_item_values__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_recipient_metadata_item_values__to_json(p: &iface_messages::MessagesSendTemplateMessageRecipientMetadataItemValues) -> Value {
+fn iface_messages__send_template_message_recipient_metadata_item_values__to_json(p: &iface_messages::SendTemplateMessageRecipientMetadataItemValues) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_message_to_item__to_json(p: &iface_messages::MessagesSendTemplateMessageToItem) -> Value {
+fn iface_messages__send_template_message_to_item__to_json(p: &iface_messages::SendTemplateMessageToItem) -> Value {
     let mut m = Map::new();
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1173,41 +1173,41 @@ fn iface_messages__messages_send_template_message_to_item__to_json(p: &iface_mes
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_template_template_content_item__to_json(p: &iface_messages::MessagesSendTemplateTemplateContentItem) -> Value {
+fn iface_messages__send_template_template_content_item__to_json(p: &iface_messages::SendTemplateTemplateContentItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message__to_json(p: &iface_messages::MessagesSendMessage) -> Value {
+fn iface_messages__send_message__to_json(p: &iface_messages::SendMessage) -> Value {
     let mut m = Map::new();
-    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_message_attachments_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_attachments_item__to_json(v)).collect()), None => Value::Null });
     m.insert("auto_html".into(), match (&p.auto_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("auto_text".into(), match (&p.auto_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("bcc_address".into(), match (&p.bcc_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from_email".into(), match (&p.from_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from_name".into(), match (&p.from_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("global_merge_vars".into(), match (&p.global_merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_message_global_merge_vars_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("global_merge_vars".into(), match (&p.global_merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_global_merge_vars_item__to_json(v)).collect()), None => Value::Null });
     m.insert("google_analytics_campaign".into(), match (&p.google_analytics_campaign) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("google_analytics_domains".into(), match (&p.google_analytics_domains) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_messages__messages_send_message_headers__to_json(v), None => Value::Null });
+    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_messages__send_message_headers__to_json(v), None => Value::Null });
     m.insert("html".into(), match (&p.html) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_message_images_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_images_item__to_json(v)).collect()), None => Value::Null });
     m.insert("important".into(), match (&p.important) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("inline_css".into(), match (&p.inline_css) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("merge".into(), match (&p.merge) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("merge_vars".into(), match (&p.merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_message_merge_vars_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_messages__messages_send_message_metadata__to_json(v), None => Value::Null });
+    m.insert("merge_vars".into(), match (&p.merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_merge_vars_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_messages__send_message_metadata__to_json(v), None => Value::Null });
     m.insert("preserve_recipients".into(), match (&p.preserve_recipients) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("recipient_metadata".into(), match (&p.recipient_metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_message_recipient_metadata_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("recipient_metadata".into(), match (&p.recipient_metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_recipient_metadata_item__to_json(v)).collect()), None => Value::Null });
     m.insert("return_path_domain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("signing_domain".into(), match (&p.signing_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subaccount".into(), match (&p.subaccount) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("to".into(), match (&p.to) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_message_to_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("to".into(), match (&p.to) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_to_item__to_json(v)).collect()), None => Value::Null });
     m.insert("track_clicks".into(), match (&p.track_clicks) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("track_opens".into(), match (&p.track_opens) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tracking_domain".into(), match (&p.tracking_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1216,7 +1216,7 @@ fn iface_messages__messages_send_message__to_json(p: &iface_messages::MessagesSe
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_attachments_item__to_json(p: &iface_messages::MessagesSendMessageAttachmentsItem) -> Value {
+fn iface_messages__send_message_attachments_item__to_json(p: &iface_messages::SendMessageAttachmentsItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1224,20 +1224,20 @@ fn iface_messages__messages_send_message_attachments_item__to_json(p: &iface_mes
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_global_merge_vars_item__to_json(p: &iface_messages::MessagesSendMessageGlobalMergeVarsItem) -> Value {
+fn iface_messages__send_message_global_merge_vars_item__to_json(p: &iface_messages::SendMessageGlobalMergeVarsItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_headers__to_json(p: &iface_messages::MessagesSendMessageHeaders) -> Value {
+fn iface_messages__send_message_headers__to_json(p: &iface_messages::SendMessageHeaders) -> Value {
     let mut m = Map::new();
     m.insert("reply_to".into(), match (&p.reply_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_images_item__to_json(p: &iface_messages::MessagesSendMessageImagesItem) -> Value {
+fn iface_messages__send_message_images_item__to_json(p: &iface_messages::SendMessageImagesItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1245,40 +1245,40 @@ fn iface_messages__messages_send_message_images_item__to_json(p: &iface_messages
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_merge_vars_item__to_json(p: &iface_messages::MessagesSendMessageMergeVarsItem) -> Value {
+fn iface_messages__send_message_merge_vars_item__to_json(p: &iface_messages::SendMessageMergeVarsItem) -> Value {
     let mut m = Map::new();
     m.insert("rcpt".into(), match (&p.rcpt) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("vars".into(), match (&p.vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_message_merge_vars_item_vars_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("vars".into(), match (&p.vars) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_message_merge_vars_item_vars_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_merge_vars_item_vars_item__to_json(p: &iface_messages::MessagesSendMessageMergeVarsItemVarsItem) -> Value {
+fn iface_messages__send_message_merge_vars_item_vars_item__to_json(p: &iface_messages::SendMessageMergeVarsItemVarsItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_metadata__to_json(p: &iface_messages::MessagesSendMessageMetadata) -> Value {
+fn iface_messages__send_message_metadata__to_json(p: &iface_messages::SendMessageMetadata) -> Value {
     let mut m = Map::new();
     m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_recipient_metadata_item__to_json(p: &iface_messages::MessagesSendMessageRecipientMetadataItem) -> Value {
+fn iface_messages__send_message_recipient_metadata_item__to_json(p: &iface_messages::SendMessageRecipientMetadataItem) -> Value {
     let mut m = Map::new();
     m.insert("rcpt".into(), match (&p.rcpt) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("values".into(), match (&p.values) { Some(v) => iface_messages__messages_send_message_recipient_metadata_item_values__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => iface_messages__send_message_recipient_metadata_item_values__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_recipient_metadata_item_values__to_json(p: &iface_messages::MessagesSendMessageRecipientMetadataItemValues) -> Value {
+fn iface_messages__send_message_recipient_metadata_item_values__to_json(p: &iface_messages::SendMessageRecipientMetadataItemValues) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_messages__messages_send_message_to_item__to_json(p: &iface_messages::MessagesSendMessageToItem) -> Value {
+fn iface_messages__send_message_to_item__to_json(p: &iface_messages::SendMessageToItem) -> Value {
     let mut m = Map::new();
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1372,9 +1372,9 @@ fn iface_messages__post_messages_send_template_json_params__to_json(p: &iface_me
     m.insert("async".into(), match (&p.async_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ip_pool".into(), match (&p.ip_pool) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("message".into(), match (&p.message) { Some(v) => iface_messages__messages_send_template_message__to_json(v), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_messages__send_template_message__to_json(v), None => Value::Null });
     m.insert("send_at".into(), match (&p.send_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("template_content".into(), match (&p.template_content) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__messages_send_template_template_content_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("template_content".into(), match (&p.template_content) { Some(v) => Value::Array((v).iter().map(|v| iface_messages__send_template_template_content_item__to_json(v)).collect()), None => Value::Null });
     m.insert("template_name".into(), match (&p.template_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1384,7 +1384,7 @@ fn iface_messages__post_messages_send_json_params__to_json(p: &iface_messages::P
     m.insert("async".into(), match (&p.async_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ip_pool".into(), match (&p.ip_pool) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("message".into(), match (&p.message) { Some(v) => iface_messages__messages_send_message__to_json(v), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_messages__send_message__to_json(v), None => Value::Null });
     m.insert("send_at".into(), match (&p.send_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -2151,14 +2151,14 @@ const OP_TEMPLATES_POST_TEMPLATES_UPDATE_JSON: OpSpec = OpSpec {
     ],
 };
 
-fn iface_templates__templates_render_merge_vars_item__to_json(p: &iface_templates::TemplatesRenderMergeVarsItem) -> Value {
+fn iface_templates__render_merge_vars_item__to_json(p: &iface_templates::RenderMergeVarsItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_templates__templates_render_template_content_item__to_json(p: &iface_templates::TemplatesRenderTemplateContentItem) -> Value {
+fn iface_templates__render_template_content_item__to_json(p: &iface_templates::RenderTemplateContentItem) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2210,8 +2210,8 @@ fn iface_templates__post_templates_publish_json_params__to_json(p: &iface_templa
 fn iface_templates__post_templates_render_json_params__to_json(p: &iface_templates::PostTemplatesRenderJsonParams) -> Value {
     let mut m = Map::new();
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("merge_vars".into(), match (&p.merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_templates__templates_render_merge_vars_item__to_json(v)).collect()), None => Value::Null });
-    m.insert("template_content".into(), match (&p.template_content) { Some(v) => Value::Array((v).iter().map(|v| iface_templates__templates_render_template_content_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("merge_vars".into(), match (&p.merge_vars) { Some(v) => Value::Array((v).iter().map(|v| iface_templates__render_merge_vars_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("template_content".into(), match (&p.template_content) { Some(v) => Value::Array((v).iter().map(|v| iface_templates__render_template_content_item__to_json(v)).collect()), None => Value::Null });
     m.insert("template_name".into(), match (&p.template_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }

@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:spoonacular@0.2.1` |
-| Published version | `0.2.1+spoonacular-1.1` |
+| Package | `autostamp:spoonacular@0.3.0` |
+| Published version | `0.3.0+spoonacular-1.1` |
 | Tag filter | all tags |
 | Operations generated | 99 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

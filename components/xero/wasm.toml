@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:xero"
-version = "0.2.1+xero-2.9.4"
+version = "0.3.0+xero-2.9.4"
 registry = "ghcr.io/autostamp/xero"
 kind = "component"
 file = "build/xero.wasm"

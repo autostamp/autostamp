@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:openfigi"
-version = "0.2.1+openfigi-1.4.0"
+version = "0.3.0+openfigi-1.4.0"
 registry = "ghcr.io/autostamp/openfigi"
 kind = "component"
 file = "build/openfigi.wasm"

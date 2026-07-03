@@ -1,4 +1,4 @@
-package autostamp:openfigi@0.2.1;
+package autostamp:openfigi@0.3.0;
 
 interface mapping {
   record post-mapping-params {

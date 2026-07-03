@@ -1,4 +1,4 @@
-package autostamp:googleapis@0.2.1;
+package autostamp:googleapis@0.3.0;
 
 interface violating-sites {
   abusiveexperiencereport-violating-sites-list: func() -> result<string, string>;

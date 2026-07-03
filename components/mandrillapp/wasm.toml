@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:mandrillapp"
-version = "0.2.1+mandrillapp-1.0"
+version = "0.3.0+mandrillapp-1.0"
 registry = "ghcr.io/autostamp/mandrillapp"
 kind = "component"
 file = "build/mandrillapp.wasm"

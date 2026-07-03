@@ -1,4 +1,4 @@
-package autostamp:google@0.2.1;
+package autostamp:google@0.3.0;
 
 interface accounts {
   enum display-name-disapproval-reason-disapproval-reason-enum {

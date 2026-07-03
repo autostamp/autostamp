@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `Client_Credentials` | `Authorization: Bearer <secret>` |
 /// | `OAuth` | `Authorization: Bearer <secret>` |
-package autostamp:zoom@0.2.1;
+package autostamp:zoom@0.3.0;
 
 interface accounts {
   enum account-create-body-options-pay-mode-enum {
@@ -373,12 +373,12 @@ interface phone {
     disable,
   }
 
-  enum phone-user-call-logs-type-op-enum {
+  enum user-call-logs-type-op-enum {
     all,
     missed,
   }
 
-  enum phone-user-voice-mails-status-enum {
+  enum user-voice-mails-status-enum {
     all,
     read,
     unread,
@@ -797,11 +797,11 @@ interface phone {
   list-phone-users: func(params: list-phone-users-params) -> result<string, string>;
 
   /// Get user's profile
-  record phone-user-params {
+  record user-params {
     /// The user ID or email address of the user. For user-level apps, pass `me` as the value for userId.
     user-id: string
   }
-  phone-user: func(params: phone-user-params) -> result<string, string>;
+  user: func(params: user-params) -> result<string, string>;
 
   /// Update user's profile
   record update-user-profile-params {
@@ -813,7 +813,7 @@ interface phone {
   update-user-profile: func(params: update-user-profile-params) -> result<string, string>;
 
   /// Get user's call logs
-  record phone-user-call-logs-params {
+  record user-call-logs-params {
     /// The user ID or email address of the user. For user-level apps, pass `me` as the value for userId.
     user-id: string,
     /// The number of records returned within a single API call.
@@ -822,7 +822,7 @@ interface phone {
     from-op: string,
     /// End date.
     to: string,
-    type-op: option<phone-user-call-logs-type-op-enum>,
+    type-op: option<user-call-logs-type-op-enum>,
     /// The next page token is used to paginate through large result sets. A next page token will be returned whenever the set of available results exceeds the current page size. The expiration period for this token is 15 minutes.
     next-page-token: option<string>,
     /// Filter API responses to include call logs of only the phone number defined in this field.
@@ -830,7 +830,7 @@ interface phone {
     /// Enables you to sort call logs by start or end time. Choose the sort time value. Values include `startTime` or `endTime`.
     time-type: option<account-call-logs-time-type-enum>
   }
-  phone-user-call-logs: func(params: phone-user-call-logs-params) -> result<string, string>;
+  user-call-logs: func(params: user-call-logs-params) -> result<string, string>;
 
   /// Delete a user's call log
   record delete-call-log-params {
@@ -870,7 +870,7 @@ interface phone {
   unassign-phone-number: func(params: unassign-phone-number-params) -> result<string, string>;
 
   /// Get user's recordings
-  record phone-user-recordings-params {
+  record user-recordings-params {
     /// The user ID or email address of the user. For user-level apps, pass `me` as the value for userId.
     user-id: string,
     /// The number of records returned within a single API call.
@@ -882,14 +882,14 @@ interface phone {
     /// End date.
     to: string
   }
-  phone-user-recordings: func(params: phone-user-recordings-params) -> result<string, string>;
+  user-recordings: func(params: user-recordings-params) -> result<string, string>;
 
   /// Get user's settings
-  record phone-user-settings-params {
+  record user-settings-params {
     /// The user ID or email address of the user. For user-level apps, pass `me` as the value for userId.
     user-id: string
   }
-  phone-user-settings: func(params: phone-user-settings-params) -> result<string, string>;
+  user-settings: func(params: user-settings-params) -> result<string, string>;
 
   /// Set up shared access
   record add-user-setting-params {
@@ -925,13 +925,13 @@ interface phone {
   delete-user-setting: func(params: delete-user-setting-params) -> result<string, string>;
 
   /// Get user's voicemails
-  record phone-user-voice-mails-params {
+  record user-voice-mails-params {
     /// The user ID or email address of the user. For user-level apps, pass `me` as the value for userId.
     user-id: string,
     /// The number of records returned within a single API call.
     page-size: option<s32>,
     /// Status of the voice mail
-    status: option<phone-user-voice-mails-status-enum>,
+    status: option<user-voice-mails-status-enum>,
     /// The next page token is used to paginate through large result sets. A next page token will be returned whenever the set of available results exceeds the current page size. The expiration period for this token is 15 minutes.
     next-page-token: option<string>,
     /// Start date for the query in 'yyyy-mm-dd' format. The date range defined by the "from" and "to" parameters should only be one month as the response includes only one month worth of voicemail data. The month defined should fall within the last six months.
@@ -939,7 +939,7 @@ interface phone {
     /// End date.
     to: string
   }
-  phone-user-voice-mails: func(params: phone-user-voice-mails-params) -> result<string, string>;
+  user-voice-mails: func(params: user-voice-mails-params) -> result<string, string>;
 
   /// Delete a voicemail
   record delete-voicemail-params {
@@ -2297,7 +2297,7 @@ interface chatbot-messages {
 
 interface im-chat {
   /// Get IM chat sessions
-  record im-chat-sessions-params {
+  record sessions-params {
     /// Start date in 'yyyy-mm-dd' format. The date range defined by the "from" and "to" parameters should only be one month as the report includes only one month worth of data at once.
     from-op: string,
     /// End date.
@@ -2307,10 +2307,10 @@ interface im-chat {
     /// The next page token is used to paginate through large result sets. A next page token will be returned whenever the set of available results exceeds the current page size. The expiration period for this token is 15 minutes.
     next-page-token: option<string>
   }
-  im-chat-sessions: func(params: im-chat-sessions-params) -> result<string, string>;
+  sessions: func(params: sessions-params) -> result<string, string>;
 
   /// Get IM chat messages
-  record im-chat-messages-params {
+  record messages-params {
     /// IM chat session ID.
     session-id: string,
     /// Start date in 'yyyy-mm-dd' format. The date range defined by the "from" and "to" parameters should only be one month as the report includes only one month worth of data at once.
@@ -2322,7 +2322,7 @@ interface im-chat {
     /// The next page token is used to paginate through large result sets. A next page token will be returned whenever the set of available results exceeds the current page size. The expiration period for this token is 15 minutes.
     next-page-token: option<string>
   }
-  im-chat-messages: func(params: im-chat-messages-params) -> result<string, string>;
+  messages: func(params: messages-params) -> result<string, string>;
 
   /// Send IM messages
   record sendimmessages-params {
@@ -5156,7 +5156,7 @@ interface tracking-field {
 }
 
 interface tsp {
-  enum tsp-update-body-tsp-bridge-enum {
+  enum update-body-tsp-bridge-enum {
     us-tsp-tb,
     eu-tsp-tb,
   }
@@ -5194,7 +5194,7 @@ interface tsp {
   tsp: func() -> result<string, string>;
 
   /// Update account's TSP information
-  record tsp-update-params {
+  record update-params {
     /// Control restriction on account users adding a TSP number outside of account's dial in numbers.
     dial-in-number-unrestricted: option<bool>,
     /// Enable 3rd party audio conferencing for account users
@@ -5204,13 +5204,13 @@ interface tsp {
     /// Control restriction on account users being able to modify their TSP credentials.
     modify-credential-forbidden: option<bool>,
     /// Telephony bridge
-    tsp-bridge: option<tsp-update-body-tsp-bridge-enum>,
+    tsp-bridge: option<update-body-tsp-bridge-enum>,
     /// Enable TSP feature for account. This has to be enabled to use any other tsp settings/features.
     tsp-enabled: option<bool>,
     /// 3rd party audio conferencing provider
     tsp-provider: option<string>
   }
-  tsp-update: func(params: tsp-update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<string, string>;
 
   /// List user's TSP accounts
   record user-ts-ps-params {
@@ -5230,18 +5230,18 @@ interface tsp {
     /// Leader PIN: numeric value, length is less than 16.
     leader-pin: string,
     /// Telephony bridge
-    tsp-bridge: option<tsp-update-body-tsp-bridge-enum>
+    tsp-bridge: option<update-body-tsp-bridge-enum>
   }
   user-tsp-create: func(params: user-tsp-create-params) -> result<string, string>;
 
   /// Set global dial-in URL for a TSP user
-  record tsp-url-update-params {
+  record url-update-params {
     /// The userId or email address of the user.
     user-id: string,
     /// The global dial-in URL for a TSP enabled account. The URL must be valid with a max-length of 512 characters.
     audio-url: option<string>
   }
-  tsp-url-update: func(params: tsp-url-update-params) -> result<string, string>;
+  url-update: func(params: url-update-params) -> result<string, string>;
 
   /// Get a user's TSP account
   record user-tsp-params {
@@ -5265,7 +5265,7 @@ interface tsp {
     /// Leader PIN: numeric value, length is less than 16.
     leader-pin: string,
     /// Telephony bridge
-    tsp-bridge: option<tsp-update-body-tsp-bridge-enum>
+    tsp-bridge: option<update-body-tsp-bridge-enum>
   }
   user-tsp-update: func(params: user-tsp-update-params) -> result<string, string>;
 

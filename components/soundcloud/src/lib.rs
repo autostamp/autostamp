@@ -288,6 +288,10 @@ const OP_OAUTH_GET_CONNECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/connect",
     fields: &[
+        FieldSpec { snake: "redirect_uri", location: FieldLocation::Query },
+        FieldSpec { snake: "response_type", location: FieldLocation::Query },
+        FieldSpec { snake: "scope", location: FieldLocation::Query },
+        FieldSpec { snake: "state", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -305,9 +309,27 @@ const OP_OAUTH_POST_OAUTH2_TOKEN: OpSpec = OpSpec {
     ],
 };
 
+fn iface_oauth__get_connect_response_type_enum__to_str(e: &iface_oauth::GetConnectResponseTypeEnum) -> &'static str {
+    match e {
+        iface_oauth::GetConnectResponseTypeEnum::Code => "code",
+        iface_oauth::GetConnectResponseTypeEnum::Token => "token",
+        iface_oauth::GetConnectResponseTypeEnum::CodeAndToken => "code_and_token",
+    }
+}
+
+fn iface_oauth__get_connect_params__to_json(p: &iface_oauth::GetConnectParams) -> Value {
+    let mut m = Map::new();
+    m.insert("redirect_uri".into(), Value::String((&p.redirect_uri).clone()));
+    m.insert("response_type".into(), Value::String(iface_oauth__get_connect_response_type_enum__to_str(&p.response_type).into()));
+    m.insert("scope".into(), Value::String((&p.scope).clone()));
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_oauth::Guest for crate::Component {
-    fn get_connect() -> Result<String, String> {
-        dispatch(&OP_OAUTH_GET_CONNECT, Value::Object(Map::new()))
+    fn get_connect(params: iface_oauth::GetConnectParams) -> Result<String, String> {
+        let json = iface_oauth__get_connect_params__to_json(&params);
+        dispatch(&OP_OAUTH_GET_CONNECT, json)
     }
     fn post_oauth2_token() -> Result<String, String> {
         dispatch(&OP_OAUTH_POST_OAUTH2_TOKEN, Value::Object(Map::new()))
@@ -319,6 +341,7 @@ const OP_LIKES_POST_LIKES_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/likes/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -329,6 +352,7 @@ const OP_LIKES_DELETE_LIKES_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/likes/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -339,6 +363,7 @@ const OP_LIKES_POST_LIKES_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/likes/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -349,24 +374,53 @@ const OP_LIKES_DELETE_LIKES_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/likes/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
+fn iface_likes__post_likes_playlists_playlist_id_params__to_json(p: &iface_likes::PostLikesPlaylistsPlaylistIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_likes__delete_likes_playlists_playlist_id_params__to_json(p: &iface_likes::DeleteLikesPlaylistsPlaylistIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_likes__post_likes_tracks_track_id_params__to_json(p: &iface_likes::PostLikesTracksTrackIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_likes__delete_likes_tracks_track_id_params__to_json(p: &iface_likes::DeleteLikesTracksTrackIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_likes::Guest for crate::Component {
-    fn post_likes_playlists_playlist_id() -> Result<String, String> {
-        dispatch(&OP_LIKES_POST_LIKES_PLAYLISTS_PLAYLIST_ID, Value::Object(Map::new()))
+    fn post_likes_playlists_playlist_id(params: iface_likes::PostLikesPlaylistsPlaylistIdParams) -> Result<String, String> {
+        let json = iface_likes__post_likes_playlists_playlist_id_params__to_json(&params);
+        dispatch(&OP_LIKES_POST_LIKES_PLAYLISTS_PLAYLIST_ID, json)
     }
-    fn delete_likes_playlists_playlist_id() -> Result<String, String> {
-        dispatch(&OP_LIKES_DELETE_LIKES_PLAYLISTS_PLAYLIST_ID, Value::Object(Map::new()))
+    fn delete_likes_playlists_playlist_id(params: iface_likes::DeleteLikesPlaylistsPlaylistIdParams) -> Result<String, String> {
+        let json = iface_likes__delete_likes_playlists_playlist_id_params__to_json(&params);
+        dispatch(&OP_LIKES_DELETE_LIKES_PLAYLISTS_PLAYLIST_ID, json)
     }
-    fn post_likes_tracks_track_id() -> Result<String, String> {
-        dispatch(&OP_LIKES_POST_LIKES_TRACKS_TRACK_ID, Value::Object(Map::new()))
+    fn post_likes_tracks_track_id(params: iface_likes::PostLikesTracksTrackIdParams) -> Result<String, String> {
+        let json = iface_likes__post_likes_tracks_track_id_params__to_json(&params);
+        dispatch(&OP_LIKES_POST_LIKES_TRACKS_TRACK_ID, json)
     }
-    fn delete_likes_tracks_track_id() -> Result<String, String> {
-        dispatch(&OP_LIKES_DELETE_LIKES_TRACKS_TRACK_ID, Value::Object(Map::new()))
+    fn delete_likes_tracks_track_id(params: iface_likes::DeleteLikesTracksTrackIdParams) -> Result<String, String> {
+        let json = iface_likes__delete_likes_tracks_track_id_params__to_json(&params);
+        dispatch(&OP_LIKES_DELETE_LIKES_TRACKS_TRACK_ID, json)
     }
 }
 use crate::exports::autostamp::soundcloud::me as iface_me;
@@ -385,6 +439,8 @@ const OP_ME_GET_ME_ACTIVITIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/activities",
     fields: &[
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -395,6 +451,8 @@ const OP_ME_GET_ME_ACTIVITIES_ALL_OWN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/activities/all/own",
     fields: &[
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -405,6 +463,8 @@ const OP_ME_GET_ME_ACTIVITIES_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/activities/tracks",
     fields: &[
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -415,6 +475,8 @@ const OP_ME_GET_ME_CONNECTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/connections",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -425,6 +487,7 @@ const OP_ME_GET_ME_CONNECTIONS_CONNECTION_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/connections/{connection_id}",
     fields: &[
+        FieldSpec { snake: "connection_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -435,6 +498,7 @@ const OP_ME_GET_ME_FAVORITES_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/favorites/ids",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -445,6 +509,7 @@ const OP_ME_GET_ME_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followers",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -455,6 +520,7 @@ const OP_ME_GET_ME_FOLLOWERS_FOLLOWER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followers/{follower_id}",
     fields: &[
+        FieldSpec { snake: "follower_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -465,6 +531,8 @@ const OP_ME_GET_ME_FOLLOWINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followings",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -475,6 +543,9 @@ const OP_ME_GET_ME_FOLLOWINGS_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followings/tracks",
     fields: &[
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -485,6 +556,7 @@ const OP_ME_GET_ME_FOLLOWINGS_USER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followings/{user_id}",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -495,6 +567,7 @@ const OP_ME_PUT_ME_FOLLOWINGS_USER_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/followings/{user_id}",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -505,6 +578,7 @@ const OP_ME_DELETE_ME_FOLLOWINGS_USER_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/followings/{user_id}",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -515,6 +589,8 @@ const OP_ME_GET_ME_LIKES_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/likes/tracks",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -525,6 +601,7 @@ const OP_ME_GET_ME_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/playlists",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -535,6 +612,7 @@ const OP_ME_GET_ME_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -545,6 +623,8 @@ const OP_ME_GET_ME_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -555,69 +635,213 @@ const OP_ME_GET_ME_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
+fn iface_me__get_me_activities_access_item_enum__to_str(e: &iface_me::GetMeActivitiesAccessItemEnum) -> &'static str {
+    match e {
+        iface_me::GetMeActivitiesAccessItemEnum::Playable => "playable",
+        iface_me::GetMeActivitiesAccessItemEnum::Preview => "preview",
+        iface_me::GetMeActivitiesAccessItemEnum::Blocked => "blocked",
+    }
+}
+
+fn iface_me__get_me_activities_params__to_json(p: &iface_me::GetMeActivitiesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_me__get_me_activities_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_activities_all_own_params__to_json(p: &iface_me::GetMeActivitiesAllOwnParams) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_me__get_me_activities_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_activities_tracks_params__to_json(p: &iface_me::GetMeActivitiesTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_me__get_me_activities_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_connections_params__to_json(p: &iface_me::GetMeConnectionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_connections_connection_id_params__to_json(p: &iface_me::GetMeConnectionsConnectionIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("connection_id".into(), Value::String((&p.connection_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__get_me_favorites_ids_params__to_json(p: &iface_me::GetMeFavoritesIdsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_followers_params__to_json(p: &iface_me::GetMeFollowersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_followers_follower_id_params__to_json(p: &iface_me::GetMeFollowersFollowerIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("follower_id".into(), Value::String((&p.follower_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__get_me_followings_params__to_json(p: &iface_me::GetMeFollowingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_followings_tracks_params__to_json(p: &iface_me::GetMeFollowingsTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_me__get_me_activities_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_followings_user_id_params__to_json(p: &iface_me::GetMeFollowingsUserIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__put_me_followings_user_id_params__to_json(p: &iface_me::PutMeFollowingsUserIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__delete_me_followings_user_id_params__to_json(p: &iface_me::DeleteMeFollowingsUserIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__get_me_likes_tracks_params__to_json(p: &iface_me::GetMeLikesTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_playlists_params__to_json(p: &iface_me::GetMePlaylistsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_playlists_playlist_id_params__to_json(p: &iface_me::GetMePlaylistsPlaylistIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__get_me_tracks_params__to_json(p: &iface_me::GetMeTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__get_me_tracks_track_id_params__to_json(p: &iface_me::GetMeTracksTrackIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_me::Guest for crate::Component {
     fn get_me() -> Result<String, String> {
         dispatch(&OP_ME_GET_ME, Value::Object(Map::new()))
     }
-    fn get_me_activities() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_ACTIVITIES, Value::Object(Map::new()))
+    fn get_me_activities(params: iface_me::GetMeActivitiesParams) -> Result<String, String> {
+        let json = iface_me__get_me_activities_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_ACTIVITIES, json)
     }
-    fn get_me_activities_all_own() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_ACTIVITIES_ALL_OWN, Value::Object(Map::new()))
+    fn get_me_activities_all_own(params: iface_me::GetMeActivitiesAllOwnParams) -> Result<String, String> {
+        let json = iface_me__get_me_activities_all_own_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_ACTIVITIES_ALL_OWN, json)
     }
-    fn get_me_activities_tracks() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_ACTIVITIES_TRACKS, Value::Object(Map::new()))
+    fn get_me_activities_tracks(params: iface_me::GetMeActivitiesTracksParams) -> Result<String, String> {
+        let json = iface_me__get_me_activities_tracks_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_ACTIVITIES_TRACKS, json)
     }
-    fn get_me_connections() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_CONNECTIONS, Value::Object(Map::new()))
+    fn get_me_connections(params: iface_me::GetMeConnectionsParams) -> Result<String, String> {
+        let json = iface_me__get_me_connections_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_CONNECTIONS, json)
     }
-    fn get_me_connections_connection_id() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_CONNECTIONS_CONNECTION_ID, Value::Object(Map::new()))
+    fn get_me_connections_connection_id(params: iface_me::GetMeConnectionsConnectionIdParams) -> Result<String, String> {
+        let json = iface_me__get_me_connections_connection_id_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_CONNECTIONS_CONNECTION_ID, json)
     }
-    fn get_me_favorites_ids() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_FAVORITES_IDS, Value::Object(Map::new()))
+    fn get_me_favorites_ids(params: iface_me::GetMeFavoritesIdsParams) -> Result<String, String> {
+        let json = iface_me__get_me_favorites_ids_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_FAVORITES_IDS, json)
     }
-    fn get_me_followers() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_FOLLOWERS, Value::Object(Map::new()))
+    fn get_me_followers(params: iface_me::GetMeFollowersParams) -> Result<String, String> {
+        let json = iface_me__get_me_followers_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_FOLLOWERS, json)
     }
-    fn get_me_followers_follower_id() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_FOLLOWERS_FOLLOWER_ID, Value::Object(Map::new()))
+    fn get_me_followers_follower_id(params: iface_me::GetMeFollowersFollowerIdParams) -> Result<String, String> {
+        let json = iface_me__get_me_followers_follower_id_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_FOLLOWERS_FOLLOWER_ID, json)
     }
-    fn get_me_followings() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_FOLLOWINGS, Value::Object(Map::new()))
+    fn get_me_followings(params: iface_me::GetMeFollowingsParams) -> Result<String, String> {
+        let json = iface_me__get_me_followings_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_FOLLOWINGS, json)
     }
-    fn get_me_followings_tracks() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_FOLLOWINGS_TRACKS, Value::Object(Map::new()))
+    fn get_me_followings_tracks(params: iface_me::GetMeFollowingsTracksParams) -> Result<String, String> {
+        let json = iface_me__get_me_followings_tracks_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_FOLLOWINGS_TRACKS, json)
     }
-    fn get_me_followings_user_id() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_FOLLOWINGS_USER_ID, Value::Object(Map::new()))
+    fn get_me_followings_user_id(params: iface_me::GetMeFollowingsUserIdParams) -> Result<String, String> {
+        let json = iface_me__get_me_followings_user_id_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_FOLLOWINGS_USER_ID, json)
     }
-    fn put_me_followings_user_id() -> Result<String, String> {
-        dispatch(&OP_ME_PUT_ME_FOLLOWINGS_USER_ID, Value::Object(Map::new()))
+    fn put_me_followings_user_id(params: iface_me::PutMeFollowingsUserIdParams) -> Result<String, String> {
+        let json = iface_me__put_me_followings_user_id_params__to_json(&params);
+        dispatch(&OP_ME_PUT_ME_FOLLOWINGS_USER_ID, json)
     }
-    fn delete_me_followings_user_id() -> Result<String, String> {
-        dispatch(&OP_ME_DELETE_ME_FOLLOWINGS_USER_ID, Value::Object(Map::new()))
+    fn delete_me_followings_user_id(params: iface_me::DeleteMeFollowingsUserIdParams) -> Result<String, String> {
+        let json = iface_me__delete_me_followings_user_id_params__to_json(&params);
+        dispatch(&OP_ME_DELETE_ME_FOLLOWINGS_USER_ID, json)
     }
-    fn get_me_likes_tracks() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_LIKES_TRACKS, Value::Object(Map::new()))
+    fn get_me_likes_tracks(params: iface_me::GetMeLikesTracksParams) -> Result<String, String> {
+        let json = iface_me__get_me_likes_tracks_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_LIKES_TRACKS, json)
     }
-    fn get_me_playlists() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_PLAYLISTS, Value::Object(Map::new()))
+    fn get_me_playlists(params: iface_me::GetMePlaylistsParams) -> Result<String, String> {
+        let json = iface_me__get_me_playlists_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_PLAYLISTS, json)
     }
-    fn get_me_playlists_playlist_id() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_PLAYLISTS_PLAYLIST_ID, Value::Object(Map::new()))
+    fn get_me_playlists_playlist_id(params: iface_me::GetMePlaylistsPlaylistIdParams) -> Result<String, String> {
+        let json = iface_me__get_me_playlists_playlist_id_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_PLAYLISTS_PLAYLIST_ID, json)
     }
-    fn get_me_tracks() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_TRACKS, Value::Object(Map::new()))
+    fn get_me_tracks(params: iface_me::GetMeTracksParams) -> Result<String, String> {
+        let json = iface_me__get_me_tracks_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_TRACKS, json)
     }
-    fn get_me_tracks_track_id() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME_TRACKS_TRACK_ID, Value::Object(Map::new()))
+    fn get_me_tracks_track_id(params: iface_me::GetMeTracksTrackIdParams) -> Result<String, String> {
+        let json = iface_me__get_me_tracks_track_id_params__to_json(&params);
+        dispatch(&OP_ME_GET_ME_TRACKS_TRACK_ID, json)
     }
 }
 use crate::exports::autostamp::soundcloud::search as iface_search;
@@ -626,6 +850,11 @@ const OP_SEARCH_GET_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists",
     fields: &[
+        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -637,6 +866,17 @@ const OP_SEARCH_GET_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks",
     fields: &[
+        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "genres", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "bpm", location: FieldLocation::Query },
+        FieldSpec { snake: "duration", location: FieldLocation::Query },
+        FieldSpec { snake: "created_at", location: FieldLocation::Query },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -648,6 +888,11 @@ const OP_SEARCH_GET_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users",
     fields: &[
+        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -655,15 +900,62 @@ const OP_SEARCH_GET_USERS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_search__get_playlists_access_item_enum__to_str(e: &iface_search::GetPlaylistsAccessItemEnum) -> &'static str {
+    match e {
+        iface_search::GetPlaylistsAccessItemEnum::Playable => "playable",
+        iface_search::GetPlaylistsAccessItemEnum::Preview => "preview",
+        iface_search::GetPlaylistsAccessItemEnum::Blocked => "blocked",
+    }
+}
+
+fn iface_search__get_playlists_params__to_json(p: &iface_search::GetPlaylistsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("q".into(), Value::String((&p.q).clone()));
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_search__get_playlists_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__get_tracks_params__to_json(p: &iface_search::GetTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("q".into(), Value::String((&p.q).clone()));
+    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bpm".into(), match (&p.bpm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_search__get_playlists_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__get_users_params__to_json(p: &iface_search::GetUsersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("q".into(), Value::String((&p.q).clone()));
+    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_search::Guest for crate::Component {
-    fn get_playlists() -> Result<String, String> {
-        dispatch(&OP_SEARCH_GET_PLAYLISTS, Value::Object(Map::new()))
+    fn get_playlists(params: iface_search::GetPlaylistsParams) -> Result<String, String> {
+        let json = iface_search__get_playlists_params__to_json(&params);
+        dispatch(&OP_SEARCH_GET_PLAYLISTS, json)
     }
-    fn get_tracks() -> Result<String, String> {
-        dispatch(&OP_SEARCH_GET_TRACKS, Value::Object(Map::new()))
+    fn get_tracks(params: iface_search::GetTracksParams) -> Result<String, String> {
+        let json = iface_search__get_tracks_params__to_json(&params);
+        dispatch(&OP_SEARCH_GET_TRACKS, json)
     }
-    fn get_users() -> Result<String, String> {
-        dispatch(&OP_SEARCH_GET_USERS, Value::Object(Map::new()))
+    fn get_users(params: iface_search::GetUsersParams) -> Result<String, String> {
+        let json = iface_search__get_users_params__to_json(&params);
+        dispatch(&OP_SEARCH_GET_USERS, json)
     }
 }
 use crate::exports::autostamp::soundcloud::playlists as iface_playlists;
@@ -683,6 +975,9 @@ const OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -694,6 +989,7 @@ const OP_PLAYLISTS_PUT_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
         FieldSpec { snake: "playlist", location: FieldLocation::Body },
     ],
     auth: &[
@@ -705,6 +1001,7 @@ const OP_PLAYLISTS_DELETE_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -716,6 +1013,8 @@ const OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_REPOSTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/reposters",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -726,6 +1025,10 @@ const OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -737,6 +1040,14 @@ fn iface_playlists__create_update_playlist_request_playlist_sharing_enum__to_str
     match e {
         iface_playlists::CreateUpdatePlaylistRequestPlaylistSharingEnum::Public => "public",
         iface_playlists::CreateUpdatePlaylistRequestPlaylistSharingEnum::Private => "private",
+    }
+}
+
+fn iface_playlists__get_playlists_playlist_id_access_item_enum__to_str(e: &iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum) -> &'static str {
+    match e {
+        iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum::Playable => "playable",
+        iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum::Preview => "preview",
+        iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum::Blocked => "blocked",
     }
 }
 
@@ -761,9 +1072,40 @@ fn iface_playlists__post_playlists_params__to_json(p: &iface_playlists::PostPlay
     Value::Object(m)
 }
 
+fn iface_playlists__get_playlists_playlist_id_params__to_json(p: &iface_playlists::GetPlaylistsPlaylistIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    m.insert("secret_token".into(), match (&p.secret_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_playlists__get_playlists_playlist_id_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_playlists__put_playlists_playlist_id_params__to_json(p: &iface_playlists::PutPlaylistsPlaylistIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("playlist".into(), match (&p.playlist) { Some(v) => iface_playlists__create_update_playlist_request_playlist__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__delete_playlists_playlist_id_params__to_json(p: &iface_playlists::DeletePlaylistsPlaylistIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_playlists__get_playlists_playlist_id_reposters_params__to_json(p: &iface_playlists::GetPlaylistsPlaylistIdRepostersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__get_playlists_playlist_id_tracks_params__to_json(p: &iface_playlists::GetPlaylistsPlaylistIdTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    m.insert("secret_token".into(), match (&p.secret_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_playlists__get_playlists_playlist_id_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -772,21 +1114,25 @@ impl iface_playlists::Guest for crate::Component {
         let json = iface_playlists__post_playlists_params__to_json(&params);
         dispatch(&OP_PLAYLISTS_POST_PLAYLISTS, json)
     }
-    fn get_playlists_playlist_id() -> Result<String, String> {
-        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID, Value::Object(Map::new()))
+    fn get_playlists_playlist_id(params: iface_playlists::GetPlaylistsPlaylistIdParams) -> Result<String, String> {
+        let json = iface_playlists__get_playlists_playlist_id_params__to_json(&params);
+        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID, json)
     }
     fn put_playlists_playlist_id(params: iface_playlists::PutPlaylistsPlaylistIdParams) -> Result<String, String> {
         let json = iface_playlists__put_playlists_playlist_id_params__to_json(&params);
         dispatch(&OP_PLAYLISTS_PUT_PLAYLISTS_PLAYLIST_ID, json)
     }
-    fn delete_playlists_playlist_id() -> Result<String, String> {
-        dispatch(&OP_PLAYLISTS_DELETE_PLAYLISTS_PLAYLIST_ID, Value::Object(Map::new()))
+    fn delete_playlists_playlist_id(params: iface_playlists::DeletePlaylistsPlaylistIdParams) -> Result<String, String> {
+        let json = iface_playlists__delete_playlists_playlist_id_params__to_json(&params);
+        dispatch(&OP_PLAYLISTS_DELETE_PLAYLISTS_PLAYLIST_ID, json)
     }
-    fn get_playlists_playlist_id_reposters() -> Result<String, String> {
-        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_REPOSTERS, Value::Object(Map::new()))
+    fn get_playlists_playlist_id_reposters(params: iface_playlists::GetPlaylistsPlaylistIdRepostersParams) -> Result<String, String> {
+        let json = iface_playlists__get_playlists_playlist_id_reposters_params__to_json(&params);
+        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_REPOSTERS, json)
     }
-    fn get_playlists_playlist_id_tracks() -> Result<String, String> {
-        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_TRACKS, Value::Object(Map::new()))
+    fn get_playlists_playlist_id_tracks(params: iface_playlists::GetPlaylistsPlaylistIdTracksParams) -> Result<String, String> {
+        let json = iface_playlists__get_playlists_playlist_id_tracks_params__to_json(&params);
+        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_TRACKS, json)
     }
 }
 use crate::exports::autostamp::soundcloud::reposts as iface_reposts;
@@ -795,6 +1141,7 @@ const OP_REPOSTS_POST_REPOSTS_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reposts/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -805,6 +1152,7 @@ const OP_REPOSTS_DELETE_REPOSTS_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/reposts/playlists/{playlist_id}",
     fields: &[
+        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -815,6 +1163,7 @@ const OP_REPOSTS_POST_REPOSTS_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reposts/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -825,24 +1174,53 @@ const OP_REPOSTS_DELETE_REPOSTS_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/reposts/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
+fn iface_reposts__post_reposts_playlists_playlist_id_params__to_json(p: &iface_reposts::PostRepostsPlaylistsPlaylistIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_reposts__delete_reposts_playlists_playlist_id_params__to_json(p: &iface_reposts::DeleteRepostsPlaylistsPlaylistIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_reposts__post_reposts_tracks_track_id_params__to_json(p: &iface_reposts::PostRepostsTracksTrackIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_reposts__delete_reposts_tracks_track_id_params__to_json(p: &iface_reposts::DeleteRepostsTracksTrackIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_reposts::Guest for crate::Component {
-    fn post_reposts_playlists_playlist_id() -> Result<String, String> {
-        dispatch(&OP_REPOSTS_POST_REPOSTS_PLAYLISTS_PLAYLIST_ID, Value::Object(Map::new()))
+    fn post_reposts_playlists_playlist_id(params: iface_reposts::PostRepostsPlaylistsPlaylistIdParams) -> Result<String, String> {
+        let json = iface_reposts__post_reposts_playlists_playlist_id_params__to_json(&params);
+        dispatch(&OP_REPOSTS_POST_REPOSTS_PLAYLISTS_PLAYLIST_ID, json)
     }
-    fn delete_reposts_playlists_playlist_id() -> Result<String, String> {
-        dispatch(&OP_REPOSTS_DELETE_REPOSTS_PLAYLISTS_PLAYLIST_ID, Value::Object(Map::new()))
+    fn delete_reposts_playlists_playlist_id(params: iface_reposts::DeleteRepostsPlaylistsPlaylistIdParams) -> Result<String, String> {
+        let json = iface_reposts__delete_reposts_playlists_playlist_id_params__to_json(&params);
+        dispatch(&OP_REPOSTS_DELETE_REPOSTS_PLAYLISTS_PLAYLIST_ID, json)
     }
-    fn post_reposts_tracks_track_id() -> Result<String, String> {
-        dispatch(&OP_REPOSTS_POST_REPOSTS_TRACKS_TRACK_ID, Value::Object(Map::new()))
+    fn post_reposts_tracks_track_id(params: iface_reposts::PostRepostsTracksTrackIdParams) -> Result<String, String> {
+        let json = iface_reposts__post_reposts_tracks_track_id_params__to_json(&params);
+        dispatch(&OP_REPOSTS_POST_REPOSTS_TRACKS_TRACK_ID, json)
     }
-    fn delete_reposts_tracks_track_id() -> Result<String, String> {
-        dispatch(&OP_REPOSTS_DELETE_REPOSTS_TRACKS_TRACK_ID, Value::Object(Map::new()))
+    fn delete_reposts_tracks_track_id(params: iface_reposts::DeleteRepostsTracksTrackIdParams) -> Result<String, String> {
+        let json = iface_reposts__delete_reposts_tracks_track_id_params__to_json(&params);
+        dispatch(&OP_REPOSTS_DELETE_REPOSTS_TRACKS_TRACK_ID, json)
     }
 }
 use crate::exports::autostamp::soundcloud::miscellaneous as iface_miscellaneous;
@@ -851,6 +1229,7 @@ const OP_MISCELLANEOUS_GET_RESOLVE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/resolve",
     fields: &[
+        FieldSpec { snake: "url", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -858,9 +1237,16 @@ const OP_MISCELLANEOUS_GET_RESOLVE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_miscellaneous__get_resolve_params__to_json(p: &iface_miscellaneous::GetResolveParams) -> Value {
+    let mut m = Map::new();
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
 impl iface_miscellaneous::Guest for crate::Component {
-    fn get_resolve() -> Result<String, String> {
-        dispatch(&OP_MISCELLANEOUS_GET_RESOLVE, Value::Object(Map::new()))
+    fn get_resolve(params: iface_miscellaneous::GetResolveParams) -> Result<String, String> {
+        let json = iface_miscellaneous__get_resolve_params__to_json(&params);
+        dispatch(&OP_MISCELLANEOUS_GET_RESOLVE, json)
     }
 }
 use crate::exports::autostamp::soundcloud::tracks as iface_tracks;
@@ -880,6 +1266,8 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -890,6 +1278,7 @@ const OP_TRACKS_PUT_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
         FieldSpec { snake: "track", location: FieldLocation::Body },
     ],
     auth: &[
@@ -901,6 +1290,7 @@ const OP_TRACKS_DELETE_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/tracks/{track_id}",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -911,6 +1301,10 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/comments",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -921,6 +1315,7 @@ const OP_TRACKS_POST_TRACKS_TRACK_ID_COMMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tracks/{track_id}/comments",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -932,6 +1327,9 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_FAVORITERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/favoriters",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -942,6 +1340,11 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_RELATED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/related",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -952,6 +1355,8 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_REPOSTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/reposters",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -962,6 +1367,8 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_STREAMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/streams",
     fields: &[
+        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -996,6 +1403,14 @@ fn iface_tracks__track_metadata_request_track_sharing_enum__to_str(e: &iface_tra
     }
 }
 
+fn iface_tracks__get_tracks_track_id_related_access_item_enum__to_str(e: &iface_tracks::GetTracksTrackIdRelatedAccessItemEnum) -> &'static str {
+    match e {
+        iface_tracks::GetTracksTrackIdRelatedAccessItemEnum::Playable => "playable",
+        iface_tracks::GetTracksTrackIdRelatedAccessItemEnum::Preview => "preview",
+        iface_tracks::GetTracksTrackIdRelatedAccessItemEnum::Blocked => "blocked",
+    }
+}
+
 fn iface_tracks__track_metadata_request_track__to_json(p: &iface_tracks::TrackMetadataRequestTrack) -> Value {
     let mut m = Map::new();
     m.insert("commentable".into(), match (&p.commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1017,9 +1432,70 @@ fn iface_tracks__track_metadata_request_track__to_json(p: &iface_tracks::TrackMe
     Value::Object(m)
 }
 
+fn iface_tracks__get_tracks_track_id_params__to_json(p: &iface_tracks::GetTracksTrackIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    m.insert("secret_token".into(), match (&p.secret_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_tracks__put_tracks_track_id_params__to_json(p: &iface_tracks::PutTracksTrackIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
     m.insert("track".into(), match (&p.track) { Some(v) => iface_tracks__track_metadata_request_track__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__delete_tracks_track_id_params__to_json(p: &iface_tracks::DeleteTracksTrackIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__get_tracks_track_id_comments_params__to_json(p: &iface_tracks::GetTracksTrackIdCommentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__post_tracks_track_id_comments_params__to_json(p: &iface_tracks::PostTracksTrackIdCommentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__get_tracks_track_id_favoriters_params__to_json(p: &iface_tracks::GetTracksTrackIdFavoritersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__get_tracks_track_id_related_params__to_json(p: &iface_tracks::GetTracksTrackIdRelatedParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tracks__get_tracks_track_id_related_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__get_tracks_track_id_reposters_params__to_json(p: &iface_tracks::GetTracksTrackIdRepostersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__get_tracks_track_id_streams_params__to_json(p: &iface_tracks::GetTracksTrackIdStreamsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    m.insert("secret_token".into(), match (&p.secret_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1027,33 +1503,41 @@ impl iface_tracks::Guest for crate::Component {
     fn post_tracks() -> Result<String, String> {
         dispatch(&OP_TRACKS_POST_TRACKS, Value::Object(Map::new()))
     }
-    fn get_tracks_track_id() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID, Value::Object(Map::new()))
+    fn get_tracks_track_id(params: iface_tracks::GetTracksTrackIdParams) -> Result<String, String> {
+        let json = iface_tracks__get_tracks_track_id_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID, json)
     }
     fn put_tracks_track_id(params: iface_tracks::PutTracksTrackIdParams) -> Result<String, String> {
         let json = iface_tracks__put_tracks_track_id_params__to_json(&params);
         dispatch(&OP_TRACKS_PUT_TRACKS_TRACK_ID, json)
     }
-    fn delete_tracks_track_id() -> Result<String, String> {
-        dispatch(&OP_TRACKS_DELETE_TRACKS_TRACK_ID, Value::Object(Map::new()))
+    fn delete_tracks_track_id(params: iface_tracks::DeleteTracksTrackIdParams) -> Result<String, String> {
+        let json = iface_tracks__delete_tracks_track_id_params__to_json(&params);
+        dispatch(&OP_TRACKS_DELETE_TRACKS_TRACK_ID, json)
     }
-    fn get_tracks_track_id_comments() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_COMMENTS, Value::Object(Map::new()))
+    fn get_tracks_track_id_comments(params: iface_tracks::GetTracksTrackIdCommentsParams) -> Result<String, String> {
+        let json = iface_tracks__get_tracks_track_id_comments_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_COMMENTS, json)
     }
-    fn post_tracks_track_id_comments() -> Result<String, String> {
-        dispatch(&OP_TRACKS_POST_TRACKS_TRACK_ID_COMMENTS, Value::Object(Map::new()))
+    fn post_tracks_track_id_comments(params: iface_tracks::PostTracksTrackIdCommentsParams) -> Result<String, String> {
+        let json = iface_tracks__post_tracks_track_id_comments_params__to_json(&params);
+        dispatch(&OP_TRACKS_POST_TRACKS_TRACK_ID_COMMENTS, json)
     }
-    fn get_tracks_track_id_favoriters() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_FAVORITERS, Value::Object(Map::new()))
+    fn get_tracks_track_id_favoriters(params: iface_tracks::GetTracksTrackIdFavoritersParams) -> Result<String, String> {
+        let json = iface_tracks__get_tracks_track_id_favoriters_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_FAVORITERS, json)
     }
-    fn get_tracks_track_id_related() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_RELATED, Value::Object(Map::new()))
+    fn get_tracks_track_id_related(params: iface_tracks::GetTracksTrackIdRelatedParams) -> Result<String, String> {
+        let json = iface_tracks__get_tracks_track_id_related_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_RELATED, json)
     }
-    fn get_tracks_track_id_reposters() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_REPOSTERS, Value::Object(Map::new()))
+    fn get_tracks_track_id_reposters(params: iface_tracks::GetTracksTrackIdRepostersParams) -> Result<String, String> {
+        let json = iface_tracks__get_tracks_track_id_reposters_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_REPOSTERS, json)
     }
-    fn get_tracks_track_id_streams() -> Result<String, String> {
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_STREAMS, Value::Object(Map::new()))
+    fn get_tracks_track_id_streams(params: iface_tracks::GetTracksTrackIdStreamsParams) -> Result<String, String> {
+        let json = iface_tracks__get_tracks_track_id_streams_params__to_json(&params);
+        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_STREAMS, json)
     }
 }
 use crate::exports::autostamp::soundcloud::users as iface_users;
@@ -1062,6 +1546,7 @@ const OP_USERS_GET_USERS_USER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1073,6 +1558,9 @@ const OP_USERS_GET_USERS_USER_ID_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/comments",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1084,6 +1572,9 @@ const OP_USERS_GET_USERS_USER_ID_FAVORITES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/favorites",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1095,6 +1586,8 @@ const OP_USERS_GET_USERS_USER_ID_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/followers",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1106,6 +1599,8 @@ const OP_USERS_GET_USERS_USER_ID_FOLLOWINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/followings",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1117,6 +1612,8 @@ const OP_USERS_GET_USERS_USER_ID_FOLLOWINGS_FOLLOWING_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/followings/{following_id}",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "following_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1128,6 +1625,10 @@ const OP_USERS_GET_USERS_USER_ID_LIKES_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/likes/tracks",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1139,6 +1640,10 @@ const OP_USERS_GET_USERS_USER_ID_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/playlists",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1150,6 +1655,10 @@ const OP_USERS_GET_USERS_USER_ID_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/tracks",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1161,6 +1670,8 @@ const OP_USERS_GET_USERS_USER_ID_WEB_PROFILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/web-profiles",
     fields: &[
+        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1168,36 +1679,131 @@ const OP_USERS_GET_USERS_USER_ID_WEB_PROFILES: OpSpec = OpSpec {
     ],
 };
 
+fn iface_users__get_users_user_id_likes_tracks_access_item_enum__to_str(e: &iface_users::GetUsersUserIdLikesTracksAccessItemEnum) -> &'static str {
+    match e {
+        iface_users::GetUsersUserIdLikesTracksAccessItemEnum::Playable => "playable",
+        iface_users::GetUsersUserIdLikesTracksAccessItemEnum::Preview => "preview",
+        iface_users::GetUsersUserIdLikesTracksAccessItemEnum::Blocked => "blocked",
+    }
+}
+
+fn iface_users__get_users_user_id_params__to_json(p: &iface_users::GetUsersUserIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_comments_params__to_json(p: &iface_users::GetUsersUserIdCommentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_favorites_params__to_json(p: &iface_users::GetUsersUserIdFavoritesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_followers_params__to_json(p: &iface_users::GetUsersUserIdFollowersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_followings_params__to_json(p: &iface_users::GetUsersUserIdFollowingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_followings_following_id_params__to_json(p: &iface_users::GetUsersUserIdFollowingsFollowingIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("following_id".into(), Value::String((&p.following_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_likes_tracks_params__to_json(p: &iface_users::GetUsersUserIdLikesTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__get_users_user_id_likes_tracks_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_playlists_params__to_json(p: &iface_users::GetUsersUserIdPlaylistsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__get_users_user_id_likes_tracks_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_tracks_params__to_json(p: &iface_users::GetUsersUserIdTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__get_users_user_id_likes_tracks_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_user_id_web_profiles_params__to_json(p: &iface_users::GetUsersUserIdWebProfilesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_users_user_id() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID, Value::Object(Map::new()))
+    fn get_users_user_id(params: iface_users::GetUsersUserIdParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID, json)
     }
-    fn get_users_user_id_comments() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_COMMENTS, Value::Object(Map::new()))
+    fn get_users_user_id_comments(params: iface_users::GetUsersUserIdCommentsParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_comments_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_COMMENTS, json)
     }
-    fn get_users_user_id_favorites() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FAVORITES, Value::Object(Map::new()))
+    fn get_users_user_id_favorites(params: iface_users::GetUsersUserIdFavoritesParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_favorites_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_FAVORITES, json)
     }
-    fn get_users_user_id_followers() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWERS, Value::Object(Map::new()))
+    fn get_users_user_id_followers(params: iface_users::GetUsersUserIdFollowersParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_followers_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWERS, json)
     }
-    fn get_users_user_id_followings() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS, Value::Object(Map::new()))
+    fn get_users_user_id_followings(params: iface_users::GetUsersUserIdFollowingsParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_followings_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS, json)
     }
-    fn get_users_user_id_followings_following_id() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS_FOLLOWING_ID, Value::Object(Map::new()))
+    fn get_users_user_id_followings_following_id(params: iface_users::GetUsersUserIdFollowingsFollowingIdParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_followings_following_id_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS_FOLLOWING_ID, json)
     }
-    fn get_users_user_id_likes_tracks() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_LIKES_TRACKS, Value::Object(Map::new()))
+    fn get_users_user_id_likes_tracks(params: iface_users::GetUsersUserIdLikesTracksParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_likes_tracks_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_LIKES_TRACKS, json)
     }
-    fn get_users_user_id_playlists() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_PLAYLISTS, Value::Object(Map::new()))
+    fn get_users_user_id_playlists(params: iface_users::GetUsersUserIdPlaylistsParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_playlists_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_PLAYLISTS, json)
     }
-    fn get_users_user_id_tracks() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_TRACKS, Value::Object(Map::new()))
+    fn get_users_user_id_tracks(params: iface_users::GetUsersUserIdTracksParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_tracks_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_TRACKS, json)
     }
-    fn get_users_user_id_web_profiles() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS_USER_ID_WEB_PROFILES, Value::Object(Map::new()))
+    fn get_users_user_id_web_profiles(params: iface_users::GetUsersUserIdWebProfilesParams) -> Result<String, String> {
+        let json = iface_users__get_users_user_id_web_profiles_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS_USER_ID_WEB_PROFILES, json)
     }
 }
 

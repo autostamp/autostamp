@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:rawg"
-version = "0.2.1+rawg-v1.0"
+version = "0.3.0+rawg-v1.0"
 registry = "ghcr.io/autostamp/rawg"
 kind = "component"
 file = "build/rawg.wasm"

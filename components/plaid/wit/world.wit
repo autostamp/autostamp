@@ -8,7 +8,7 @@
 /// | `clientId` | header `PLAID-CLIENT-ID` |
 /// | `plaidVersion` | header `Plaid-Version` |
 /// | `secret` | header `PLAID-SECRET` |
-package autostamp:plaid@0.2.1;
+package autostamp:plaid@0.3.0;
 
 interface plaid {
   enum deposit-switch-alt-create-request-country-code-enum {

@@ -1204,7 +1204,7 @@ const OP_PHONE_LIST_PHONE_USERS: OpSpec = OpSpec {
     ],
 };
 
-const OP_PHONE_PHONE_USER: OpSpec = OpSpec {
+const OP_PHONE_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone/users/{user_id}",
     fields: &[
@@ -1227,7 +1227,7 @@ const OP_PHONE_UPDATE_USER_PROFILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_PHONE_PHONE_USER_CALL_LOGS: OpSpec = OpSpec {
+const OP_PHONE_USER_CALL_LOGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone/users/{user_id}/call_logs",
     fields: &[
@@ -1302,7 +1302,7 @@ const OP_PHONE_UNASSIGN_PHONE_NUMBER: OpSpec = OpSpec {
     ],
 };
 
-const OP_PHONE_PHONE_USER_RECORDINGS: OpSpec = OpSpec {
+const OP_PHONE_USER_RECORDINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone/users/{user_id}/recordings",
     fields: &[
@@ -1317,7 +1317,7 @@ const OP_PHONE_PHONE_USER_RECORDINGS: OpSpec = OpSpec {
     ],
 };
 
-const OP_PHONE_PHONE_USER_SETTINGS: OpSpec = OpSpec {
+const OP_PHONE_USER_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone/users/{user_id}/settings",
     fields: &[
@@ -1367,7 +1367,7 @@ const OP_PHONE_DELETE_USER_SETTING: OpSpec = OpSpec {
     ],
 };
 
-const OP_PHONE_PHONE_USER_VOICE_MAILS: OpSpec = OpSpec {
+const OP_PHONE_USER_VOICE_MAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/phone/users/{user_id}/voice_mails",
     fields: &[
@@ -1461,18 +1461,18 @@ fn iface_phone__update_setting_template_body_user_settings_hold_music_enum__to_s
     }
 }
 
-fn iface_phone__phone_user_call_logs_type_op_enum__to_str(e: &iface_phone::PhoneUserCallLogsTypeOpEnum) -> &'static str {
+fn iface_phone__user_call_logs_type_op_enum__to_str(e: &iface_phone::UserCallLogsTypeOpEnum) -> &'static str {
     match e {
-        iface_phone::PhoneUserCallLogsTypeOpEnum::All => "all",
-        iface_phone::PhoneUserCallLogsTypeOpEnum::Missed => "missed",
+        iface_phone::UserCallLogsTypeOpEnum::All => "all",
+        iface_phone::UserCallLogsTypeOpEnum::Missed => "missed",
     }
 }
 
-fn iface_phone__phone_user_voice_mails_status_enum__to_str(e: &iface_phone::PhoneUserVoiceMailsStatusEnum) -> &'static str {
+fn iface_phone__user_voice_mails_status_enum__to_str(e: &iface_phone::UserVoiceMailsStatusEnum) -> &'static str {
     match e {
-        iface_phone::PhoneUserVoiceMailsStatusEnum::All => "all",
-        iface_phone::PhoneUserVoiceMailsStatusEnum::Read => "read",
-        iface_phone::PhoneUserVoiceMailsStatusEnum::Unread => "unread",
+        iface_phone::UserVoiceMailsStatusEnum::All => "all",
+        iface_phone::UserVoiceMailsStatusEnum::Read => "read",
+        iface_phone::UserVoiceMailsStatusEnum::Unread => "unread",
     }
 }
 
@@ -1791,7 +1791,7 @@ fn iface_phone__list_phone_users_params__to_json(p: &iface_phone::ListPhoneUsers
     Value::Object(m)
 }
 
-fn iface_phone__phone_user_params__to_json(p: &iface_phone::PhoneUserParams) -> Value {
+fn iface_phone__user_params__to_json(p: &iface_phone::UserParams) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
@@ -1804,13 +1804,13 @@ fn iface_phone__update_user_profile_params__to_json(p: &iface_phone::UpdateUserP
     Value::Object(m)
 }
 
-fn iface_phone__phone_user_call_logs_params__to_json(p: &iface_phone::PhoneUserCallLogsParams) -> Value {
+fn iface_phone__user_call_logs_params__to_json(p: &iface_phone::UserCallLogsParams) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("from".into(), Value::String((&p.from_op).clone()));
     m.insert("to".into(), Value::String((&p.to).clone()));
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_phone__phone_user_call_logs_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_phone__user_call_logs_type_op_enum__to_str(v).into()), None => Value::Null });
     m.insert("next_page_token".into(), match (&p.next_page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("time_type".into(), match (&p.time_type) { Some(v) => Value::String(iface_phone__account_call_logs_time_type_enum__to_str(v).into()), None => Value::Null });
@@ -1849,7 +1849,7 @@ fn iface_phone__unassign_phone_number_params__to_json(p: &iface_phone::UnassignP
     Value::Object(m)
 }
 
-fn iface_phone__phone_user_recordings_params__to_json(p: &iface_phone::PhoneUserRecordingsParams) -> Value {
+fn iface_phone__user_recordings_params__to_json(p: &iface_phone::UserRecordingsParams) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1859,7 +1859,7 @@ fn iface_phone__phone_user_recordings_params__to_json(p: &iface_phone::PhoneUser
     Value::Object(m)
 }
 
-fn iface_phone__phone_user_settings_params__to_json(p: &iface_phone::PhoneUserSettingsParams) -> Value {
+fn iface_phone__user_settings_params__to_json(p: &iface_phone::UserSettingsParams) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
@@ -1889,11 +1889,11 @@ fn iface_phone__delete_user_setting_params__to_json(p: &iface_phone::DeleteUserS
     Value::Object(m)
 }
 
-fn iface_phone__phone_user_voice_mails_params__to_json(p: &iface_phone::PhoneUserVoiceMailsParams) -> Value {
+fn iface_phone__user_voice_mails_params__to_json(p: &iface_phone::UserVoiceMailsParams) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_phone__phone_user_voice_mails_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_phone__user_voice_mails_status_enum__to_str(v).into()), None => Value::Null });
     m.insert("next_page_token".into(), match (&p.next_page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("from".into(), match (&p.from_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("to".into(), Value::String((&p.to).clone()));
@@ -1978,17 +1978,17 @@ impl iface_phone::Guest for crate::Component {
         let json = iface_phone__list_phone_users_params__to_json(&params);
         dispatch(&OP_PHONE_LIST_PHONE_USERS, json)
     }
-    fn phone_user(params: iface_phone::PhoneUserParams) -> Result<String, String> {
-        let json = iface_phone__phone_user_params__to_json(&params);
-        dispatch(&OP_PHONE_PHONE_USER, json)
+    fn user(params: iface_phone::UserParams) -> Result<String, String> {
+        let json = iface_phone__user_params__to_json(&params);
+        dispatch(&OP_PHONE_USER, json)
     }
     fn update_user_profile(params: iface_phone::UpdateUserProfileParams) -> Result<String, String> {
         let json = iface_phone__update_user_profile_params__to_json(&params);
         dispatch(&OP_PHONE_UPDATE_USER_PROFILE, json)
     }
-    fn phone_user_call_logs(params: iface_phone::PhoneUserCallLogsParams) -> Result<String, String> {
-        let json = iface_phone__phone_user_call_logs_params__to_json(&params);
-        dispatch(&OP_PHONE_PHONE_USER_CALL_LOGS, json)
+    fn user_call_logs(params: iface_phone::UserCallLogsParams) -> Result<String, String> {
+        let json = iface_phone__user_call_logs_params__to_json(&params);
+        dispatch(&OP_PHONE_USER_CALL_LOGS, json)
     }
     fn delete_call_log(params: iface_phone::DeleteCallLogParams) -> Result<String, String> {
         let json = iface_phone__delete_call_log_params__to_json(&params);
@@ -2010,13 +2010,13 @@ impl iface_phone::Guest for crate::Component {
         let json = iface_phone__unassign_phone_number_params__to_json(&params);
         dispatch(&OP_PHONE_UNASSIGN_PHONE_NUMBER, json)
     }
-    fn phone_user_recordings(params: iface_phone::PhoneUserRecordingsParams) -> Result<String, String> {
-        let json = iface_phone__phone_user_recordings_params__to_json(&params);
-        dispatch(&OP_PHONE_PHONE_USER_RECORDINGS, json)
+    fn user_recordings(params: iface_phone::UserRecordingsParams) -> Result<String, String> {
+        let json = iface_phone__user_recordings_params__to_json(&params);
+        dispatch(&OP_PHONE_USER_RECORDINGS, json)
     }
-    fn phone_user_settings(params: iface_phone::PhoneUserSettingsParams) -> Result<String, String> {
-        let json = iface_phone__phone_user_settings_params__to_json(&params);
-        dispatch(&OP_PHONE_PHONE_USER_SETTINGS, json)
+    fn user_settings(params: iface_phone::UserSettingsParams) -> Result<String, String> {
+        let json = iface_phone__user_settings_params__to_json(&params);
+        dispatch(&OP_PHONE_USER_SETTINGS, json)
     }
     fn add_user_setting(params: iface_phone::AddUserSettingParams) -> Result<String, String> {
         let json = iface_phone__add_user_setting_params__to_json(&params);
@@ -2030,9 +2030,9 @@ impl iface_phone::Guest for crate::Component {
         let json = iface_phone__delete_user_setting_params__to_json(&params);
         dispatch(&OP_PHONE_DELETE_USER_SETTING, json)
     }
-    fn phone_user_voice_mails(params: iface_phone::PhoneUserVoiceMailsParams) -> Result<String, String> {
-        let json = iface_phone__phone_user_voice_mails_params__to_json(&params);
-        dispatch(&OP_PHONE_PHONE_USER_VOICE_MAILS, json)
+    fn user_voice_mails(params: iface_phone::UserVoiceMailsParams) -> Result<String, String> {
+        let json = iface_phone__user_voice_mails_params__to_json(&params);
+        dispatch(&OP_PHONE_USER_VOICE_MAILS, json)
     }
     fn delete_voicemail(params: iface_phone::DeleteVoicemailParams) -> Result<String, String> {
         let json = iface_phone__delete_voicemail_params__to_json(&params);
@@ -4752,7 +4752,7 @@ impl iface_chatbot_messages::Guest for crate::Component {
 }
 use crate::exports::autostamp::zoom::im_chat as iface_im_chat;
 
-const OP_IM_CHAT_IM_CHAT_SESSIONS: OpSpec = OpSpec {
+const OP_IM_CHAT_SESSIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/im/chat/sessions",
     fields: &[
@@ -4766,7 +4766,7 @@ const OP_IM_CHAT_IM_CHAT_SESSIONS: OpSpec = OpSpec {
     ],
 };
 
-const OP_IM_CHAT_IM_CHAT_MESSAGES: OpSpec = OpSpec {
+const OP_IM_CHAT_MESSAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/im/chat/sessions/{session_id}",
     fields: &[
@@ -4809,7 +4809,7 @@ const OP_IM_CHAT_LISTIMMESSAGES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_im_chat__im_chat_sessions_params__to_json(p: &iface_im_chat::ImChatSessionsParams) -> Value {
+fn iface_im_chat__sessions_params__to_json(p: &iface_im_chat::SessionsParams) -> Value {
     let mut m = Map::new();
     m.insert("from".into(), Value::String((&p.from_op).clone()));
     m.insert("to".into(), Value::String((&p.to).clone()));
@@ -4818,7 +4818,7 @@ fn iface_im_chat__im_chat_sessions_params__to_json(p: &iface_im_chat::ImChatSess
     Value::Object(m)
 }
 
-fn iface_im_chat__im_chat_messages_params__to_json(p: &iface_im_chat::ImChatMessagesParams) -> Value {
+fn iface_im_chat__messages_params__to_json(p: &iface_im_chat::MessagesParams) -> Value {
     let mut m = Map::new();
     m.insert("session_id".into(), Value::String((&p.session_id).clone()));
     m.insert("from".into(), Value::String((&p.from_op).clone()));
@@ -4847,13 +4847,13 @@ fn iface_im_chat__listimmessages_params__to_json(p: &iface_im_chat::Listimmessag
 }
 
 impl iface_im_chat::Guest for crate::Component {
-    fn im_chat_sessions(params: iface_im_chat::ImChatSessionsParams) -> Result<String, String> {
-        let json = iface_im_chat__im_chat_sessions_params__to_json(&params);
-        dispatch(&OP_IM_CHAT_IM_CHAT_SESSIONS, json)
+    fn sessions(params: iface_im_chat::SessionsParams) -> Result<String, String> {
+        let json = iface_im_chat__sessions_params__to_json(&params);
+        dispatch(&OP_IM_CHAT_SESSIONS, json)
     }
-    fn im_chat_messages(params: iface_im_chat::ImChatMessagesParams) -> Result<String, String> {
-        let json = iface_im_chat__im_chat_messages_params__to_json(&params);
-        dispatch(&OP_IM_CHAT_IM_CHAT_MESSAGES, json)
+    fn messages(params: iface_im_chat::MessagesParams) -> Result<String, String> {
+        let json = iface_im_chat__messages_params__to_json(&params);
+        dispatch(&OP_IM_CHAT_MESSAGES, json)
     }
     fn sendimmessages(params: iface_im_chat::SendimmessagesParams) -> Result<String, String> {
         let json = iface_im_chat__sendimmessages_params__to_json(&params);
@@ -10402,7 +10402,7 @@ const OP_TSP_TSP: OpSpec = OpSpec {
     ],
 };
 
-const OP_TSP_TSP_UPDATE: OpSpec = OpSpec {
+const OP_TSP_UPDATE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/tsp",
     fields: &[
@@ -10445,7 +10445,7 @@ const OP_TSP_USER_TSP_CREATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_TSP_TSP_URL_UPDATE: OpSpec = OpSpec {
+const OP_TSP_URL_UPDATE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/users/{user_id}/tsp/settings",
     fields: &[
@@ -10497,10 +10497,10 @@ const OP_TSP_USER_TSP_DELETE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_tsp__tsp_update_body_tsp_bridge_enum__to_str(e: &iface_tsp::TspUpdateBodyTspBridgeEnum) -> &'static str {
+fn iface_tsp__update_body_tsp_bridge_enum__to_str(e: &iface_tsp::UpdateBodyTspBridgeEnum) -> &'static str {
     match e {
-        iface_tsp::TspUpdateBodyTspBridgeEnum::UsTspTb => "US_TSP_TB",
-        iface_tsp::TspUpdateBodyTspBridgeEnum::EuTspTb => "EU_TSP_TB",
+        iface_tsp::UpdateBodyTspBridgeEnum::UsTspTb => "US_TSP_TB",
+        iface_tsp::UpdateBodyTspBridgeEnum::EuTspTb => "EU_TSP_TB",
     }
 }
 
@@ -10530,13 +10530,13 @@ fn iface_tsp__user_tsp_update_body_dial_in_numbers_item__to_json(p: &iface_tsp::
     Value::Object(m)
 }
 
-fn iface_tsp__tsp_update_params__to_json(p: &iface_tsp::TspUpdateParams) -> Value {
+fn iface_tsp__update_params__to_json(p: &iface_tsp::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("dial_in_number_unrestricted".into(), match (&p.dial_in_number_unrestricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("enable".into(), match (&p.enable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("master_account_setting_extended".into(), match (&p.master_account_setting_extended) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("modify_credential_forbidden".into(), match (&p.modify_credential_forbidden) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("tsp_bridge".into(), match (&p.tsp_bridge) { Some(v) => Value::String(iface_tsp__tsp_update_body_tsp_bridge_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tsp_bridge".into(), match (&p.tsp_bridge) { Some(v) => Value::String(iface_tsp__update_body_tsp_bridge_enum__to_str(v).into()), None => Value::Null });
     m.insert("tsp_enabled".into(), match (&p.tsp_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("tsp_provider".into(), match (&p.tsp_provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -10554,11 +10554,11 @@ fn iface_tsp__user_tsp_create_params__to_json(p: &iface_tsp::UserTspCreateParams
     m.insert("conference_code".into(), Value::String((&p.conference_code).clone()));
     m.insert("dial_in_numbers".into(), match (&p.dial_in_numbers) { Some(v) => Value::Array((v).iter().map(|v| iface_tsp__user_tsp_create_body_dial_in_numbers_item__to_json(v)).collect()), None => Value::Null });
     m.insert("leader_pin".into(), Value::String((&p.leader_pin).clone()));
-    m.insert("tsp_bridge".into(), match (&p.tsp_bridge) { Some(v) => Value::String(iface_tsp__tsp_update_body_tsp_bridge_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tsp_bridge".into(), match (&p.tsp_bridge) { Some(v) => Value::String(iface_tsp__update_body_tsp_bridge_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tsp__tsp_url_update_params__to_json(p: &iface_tsp::TspUrlUpdateParams) -> Value {
+fn iface_tsp__url_update_params__to_json(p: &iface_tsp::UrlUpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     m.insert("audio_url".into(), match (&p.audio_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -10579,7 +10579,7 @@ fn iface_tsp__user_tsp_update_params__to_json(p: &iface_tsp::UserTspUpdateParams
     m.insert("conference_code".into(), Value::String((&p.conference_code).clone()));
     m.insert("dial_in_numbers".into(), match (&p.dial_in_numbers) { Some(v) => Value::Array((v).iter().map(|v| iface_tsp__user_tsp_update_body_dial_in_numbers_item__to_json(v)).collect()), None => Value::Null });
     m.insert("leader_pin".into(), Value::String((&p.leader_pin).clone()));
-    m.insert("tsp_bridge".into(), match (&p.tsp_bridge) { Some(v) => Value::String(iface_tsp__tsp_update_body_tsp_bridge_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tsp_bridge".into(), match (&p.tsp_bridge) { Some(v) => Value::String(iface_tsp__update_body_tsp_bridge_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -10594,9 +10594,9 @@ impl iface_tsp::Guest for crate::Component {
     fn tsp() -> Result<String, String> {
         dispatch(&OP_TSP_TSP, Value::Object(Map::new()))
     }
-    fn tsp_update(params: iface_tsp::TspUpdateParams) -> Result<String, String> {
-        let json = iface_tsp__tsp_update_params__to_json(&params);
-        dispatch(&OP_TSP_TSP_UPDATE, json)
+    fn update(params: iface_tsp::UpdateParams) -> Result<String, String> {
+        let json = iface_tsp__update_params__to_json(&params);
+        dispatch(&OP_TSP_UPDATE, json)
     }
     fn user_ts_ps(params: iface_tsp::UserTsPsParams) -> Result<String, String> {
         let json = iface_tsp__user_ts_ps_params__to_json(&params);
@@ -10606,9 +10606,9 @@ impl iface_tsp::Guest for crate::Component {
         let json = iface_tsp__user_tsp_create_params__to_json(&params);
         dispatch(&OP_TSP_USER_TSP_CREATE, json)
     }
-    fn tsp_url_update(params: iface_tsp::TspUrlUpdateParams) -> Result<String, String> {
-        let json = iface_tsp__tsp_url_update_params__to_json(&params);
-        dispatch(&OP_TSP_TSP_URL_UPDATE, json)
+    fn url_update(params: iface_tsp::UrlUpdateParams) -> Result<String, String> {
+        let json = iface_tsp__url_update_params__to_json(&params);
+        dispatch(&OP_TSP_URL_UPDATE, json)
     }
     fn user_tsp(params: iface_tsp::UserTspParams) -> Result<String, String> {
         let json = iface_tsp__user_tsp_params__to_json(&params);

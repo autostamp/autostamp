@@ -284,7 +284,7 @@ use serde_json::{Map, Value};
 
 use crate::exports::autostamp::bungie::app as iface_app;
 
-const OP_APP_APP_GET_APPLICATION_API_USAGE: OpSpec = OpSpec {
+const OP_APP_GET_APPLICATION_API_USAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/App/ApiUsage/{application_id}/",
     fields: &[
@@ -297,7 +297,7 @@ const OP_APP_APP_GET_APPLICATION_API_USAGE: OpSpec = OpSpec {
     ],
 };
 
-const OP_APP_APP_GET_BUNGIE_APPLICATIONS: OpSpec = OpSpec {
+const OP_APP_GET_BUNGIE_APPLICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/App/FirstParty/",
     fields: &[
@@ -306,7 +306,7 @@ const OP_APP_APP_GET_BUNGIE_APPLICATIONS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_app__app_get_application_api_usage_params__to_json(p: &iface_app::AppGetApplicationApiUsageParams) -> Value {
+fn iface_app__get_application_api_usage_params__to_json(p: &iface_app::GetApplicationApiUsageParams) -> Value {
     let mut m = Map::new();
     m.insert("application_id".into(), Value::String((&p.application_id).clone()));
     m.insert("end".into(), match (&p.end) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -315,17 +315,17 @@ fn iface_app__app_get_application_api_usage_params__to_json(p: &iface_app::AppGe
 }
 
 impl iface_app::Guest for crate::Component {
-    fn app_get_application_api_usage(params: iface_app::AppGetApplicationApiUsageParams) -> Result<String, String> {
-        let json = iface_app__app_get_application_api_usage_params__to_json(&params);
-        dispatch(&OP_APP_APP_GET_APPLICATION_API_USAGE, json)
+    fn get_application_api_usage(params: iface_app::GetApplicationApiUsageParams) -> Result<String, String> {
+        let json = iface_app__get_application_api_usage_params__to_json(&params);
+        dispatch(&OP_APP_GET_APPLICATION_API_USAGE, json)
     }
-    fn app_get_bungie_applications() -> Result<String, String> {
-        dispatch(&OP_APP_APP_GET_BUNGIE_APPLICATIONS, Value::Object(Map::new()))
+    fn get_bungie_applications() -> Result<String, String> {
+        dispatch(&OP_APP_GET_BUNGIE_APPLICATIONS, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::bungie::community_content as iface_community_content;
 
-const OP_COMMUNITY_CONTENT_COMMUNITY_CONTENT_GET_COMMUNITY_CONTENT: OpSpec = OpSpec {
+const OP_COMMUNITY_CONTENT_GET_COMMUNITY_CONTENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/CommunityContent/Get/{sort}/{media_filter}/{page}/",
     fields: &[
@@ -337,7 +337,7 @@ const OP_COMMUNITY_CONTENT_COMMUNITY_CONTENT_GET_COMMUNITY_CONTENT: OpSpec = OpS
     ],
 };
 
-fn iface_community_content__community_content_get_community_content_params__to_json(p: &iface_community_content::CommunityContentGetCommunityContentParams) -> Value {
+fn iface_community_content__get_community_content_params__to_json(p: &iface_community_content::GetCommunityContentParams) -> Value {
     let mut m = Map::new();
     m.insert("media_filter".into(), Value::String((&p.media_filter).clone()));
     m.insert("page".into(), Value::String((&p.page).clone()));
@@ -346,14 +346,14 @@ fn iface_community_content__community_content_get_community_content_params__to_j
 }
 
 impl iface_community_content::Guest for crate::Component {
-    fn community_content_get_community_content(params: iface_community_content::CommunityContentGetCommunityContentParams) -> Result<String, String> {
-        let json = iface_community_content__community_content_get_community_content_params__to_json(&params);
-        dispatch(&OP_COMMUNITY_CONTENT_COMMUNITY_CONTENT_GET_COMMUNITY_CONTENT, json)
+    fn get_community_content(params: iface_community_content::GetCommunityContentParams) -> Result<String, String> {
+        let json = iface_community_content__get_community_content_params__to_json(&params);
+        dispatch(&OP_COMMUNITY_CONTENT_GET_COMMUNITY_CONTENT, json)
     }
 }
 use crate::exports::autostamp::bungie::content as iface_content;
 
-const OP_CONTENT_CONTENT_GET_CONTENT_BY_ID: OpSpec = OpSpec {
+const OP_CONTENT_GET_CONTENT_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Content/GetContentById/{id}/{locale}/",
     fields: &[
@@ -365,7 +365,7 @@ const OP_CONTENT_CONTENT_GET_CONTENT_BY_ID: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONTENT_CONTENT_GET_CONTENT_BY_TAG_AND_TYPE: OpSpec = OpSpec {
+const OP_CONTENT_GET_CONTENT_BY_TAG_AND_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Content/GetContentByTagAndType/{tag}/{type}/{locale}/",
     fields: &[
@@ -378,7 +378,7 @@ const OP_CONTENT_CONTENT_GET_CONTENT_BY_TAG_AND_TYPE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONTENT_CONTENT_GET_CONTENT_TYPE: OpSpec = OpSpec {
+const OP_CONTENT_GET_CONTENT_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Content/GetContentType/{type}/",
     fields: &[
@@ -388,7 +388,7 @@ const OP_CONTENT_CONTENT_GET_CONTENT_TYPE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONTENT_CONTENT_RSS_NEWS_ARTICLES: OpSpec = OpSpec {
+const OP_CONTENT_RSS_NEWS_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Content/Rss/NewsArticles/{page_token}/",
     fields: &[
@@ -400,7 +400,7 @@ const OP_CONTENT_CONTENT_RSS_NEWS_ARTICLES: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONTENT_CONTENT_SEARCH_CONTENT_WITH_TEXT: OpSpec = OpSpec {
+const OP_CONTENT_SEARCH_CONTENT_WITH_TEXT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Content/Search/{locale}/",
     fields: &[
@@ -416,7 +416,7 @@ const OP_CONTENT_CONTENT_SEARCH_CONTENT_WITH_TEXT: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONTENT_CONTENT_SEARCH_CONTENT_BY_TAG_AND_TYPE: OpSpec = OpSpec {
+const OP_CONTENT_SEARCH_CONTENT_BY_TAG_AND_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Content/SearchContentByTagAndType/{tag}/{type}/{locale}/",
     fields: &[
@@ -431,7 +431,7 @@ const OP_CONTENT_CONTENT_SEARCH_CONTENT_BY_TAG_AND_TYPE: OpSpec = OpSpec {
     ],
 };
 
-const OP_CONTENT_CONTENT_SEARCH_HELP_ARTICLES: OpSpec = OpSpec {
+const OP_CONTENT_SEARCH_HELP_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Content/SearchHelpArticles/{searchtext}/{size}/",
     fields: &[
@@ -442,7 +442,7 @@ const OP_CONTENT_CONTENT_SEARCH_HELP_ARTICLES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_content__content_get_content_by_id_params__to_json(p: &iface_content::ContentGetContentByIdParams) -> Value {
+fn iface_content__get_content_by_id_params__to_json(p: &iface_content::GetContentByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("head".into(), match (&p.head) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
@@ -450,7 +450,7 @@ fn iface_content__content_get_content_by_id_params__to_json(p: &iface_content::C
     Value::Object(m)
 }
 
-fn iface_content__content_get_content_by_tag_and_type_params__to_json(p: &iface_content::ContentGetContentByTagAndTypeParams) -> Value {
+fn iface_content__get_content_by_tag_and_type_params__to_json(p: &iface_content::GetContentByTagAndTypeParams) -> Value {
     let mut m = Map::new();
     m.insert("head".into(), match (&p.head) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("locale".into(), Value::String((&p.locale).clone()));
@@ -459,13 +459,13 @@ fn iface_content__content_get_content_by_tag_and_type_params__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_content__content_get_content_type_params__to_json(p: &iface_content::ContentGetContentTypeParams) -> Value {
+fn iface_content__get_content_type_params__to_json(p: &iface_content::GetContentTypeParams) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_content__content_rss_news_articles_params__to_json(p: &iface_content::ContentRssNewsArticlesParams) -> Value {
+fn iface_content__rss_news_articles_params__to_json(p: &iface_content::RssNewsArticlesParams) -> Value {
     let mut m = Map::new();
     m.insert("categoryfilter".into(), match (&p.categoryfilter) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("includebody".into(), match (&p.includebody) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -473,7 +473,7 @@ fn iface_content__content_rss_news_articles_params__to_json(p: &iface_content::C
     Value::Object(m)
 }
 
-fn iface_content__content_search_content_with_text_params__to_json(p: &iface_content::ContentSearchContentWithTextParams) -> Value {
+fn iface_content__search_content_with_text_params__to_json(p: &iface_content::SearchContentWithTextParams) -> Value {
     let mut m = Map::new();
     m.insert("ctype".into(), match (&p.ctype) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("currentpage".into(), match (&p.currentpage) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -485,7 +485,7 @@ fn iface_content__content_search_content_with_text_params__to_json(p: &iface_con
     Value::Object(m)
 }
 
-fn iface_content__content_search_content_by_tag_and_type_params__to_json(p: &iface_content::ContentSearchContentByTagAndTypeParams) -> Value {
+fn iface_content__search_content_by_tag_and_type_params__to_json(p: &iface_content::SearchContentByTagAndTypeParams) -> Value {
     let mut m = Map::new();
     m.insert("currentpage".into(), match (&p.currentpage) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("head".into(), match (&p.head) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -496,7 +496,7 @@ fn iface_content__content_search_content_by_tag_and_type_params__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_content__content_search_help_articles_params__to_json(p: &iface_content::ContentSearchHelpArticlesParams) -> Value {
+fn iface_content__search_help_articles_params__to_json(p: &iface_content::SearchHelpArticlesParams) -> Value {
     let mut m = Map::new();
     m.insert("searchtext".into(), Value::String((&p.searchtext).clone()));
     m.insert("size".into(), Value::String((&p.size).clone()));
@@ -504,38 +504,38 @@ fn iface_content__content_search_help_articles_params__to_json(p: &iface_content
 }
 
 impl iface_content::Guest for crate::Component {
-    fn content_get_content_by_id(params: iface_content::ContentGetContentByIdParams) -> Result<String, String> {
-        let json = iface_content__content_get_content_by_id_params__to_json(&params);
-        dispatch(&OP_CONTENT_CONTENT_GET_CONTENT_BY_ID, json)
+    fn get_content_by_id(params: iface_content::GetContentByIdParams) -> Result<String, String> {
+        let json = iface_content__get_content_by_id_params__to_json(&params);
+        dispatch(&OP_CONTENT_GET_CONTENT_BY_ID, json)
     }
-    fn content_get_content_by_tag_and_type(params: iface_content::ContentGetContentByTagAndTypeParams) -> Result<String, String> {
-        let json = iface_content__content_get_content_by_tag_and_type_params__to_json(&params);
-        dispatch(&OP_CONTENT_CONTENT_GET_CONTENT_BY_TAG_AND_TYPE, json)
+    fn get_content_by_tag_and_type(params: iface_content::GetContentByTagAndTypeParams) -> Result<String, String> {
+        let json = iface_content__get_content_by_tag_and_type_params__to_json(&params);
+        dispatch(&OP_CONTENT_GET_CONTENT_BY_TAG_AND_TYPE, json)
     }
-    fn content_get_content_type(params: iface_content::ContentGetContentTypeParams) -> Result<String, String> {
-        let json = iface_content__content_get_content_type_params__to_json(&params);
-        dispatch(&OP_CONTENT_CONTENT_GET_CONTENT_TYPE, json)
+    fn get_content_type(params: iface_content::GetContentTypeParams) -> Result<String, String> {
+        let json = iface_content__get_content_type_params__to_json(&params);
+        dispatch(&OP_CONTENT_GET_CONTENT_TYPE, json)
     }
-    fn content_rss_news_articles(params: iface_content::ContentRssNewsArticlesParams) -> Result<String, String> {
-        let json = iface_content__content_rss_news_articles_params__to_json(&params);
-        dispatch(&OP_CONTENT_CONTENT_RSS_NEWS_ARTICLES, json)
+    fn rss_news_articles(params: iface_content::RssNewsArticlesParams) -> Result<String, String> {
+        let json = iface_content__rss_news_articles_params__to_json(&params);
+        dispatch(&OP_CONTENT_RSS_NEWS_ARTICLES, json)
     }
-    fn content_search_content_with_text(params: iface_content::ContentSearchContentWithTextParams) -> Result<String, String> {
-        let json = iface_content__content_search_content_with_text_params__to_json(&params);
-        dispatch(&OP_CONTENT_CONTENT_SEARCH_CONTENT_WITH_TEXT, json)
+    fn search_content_with_text(params: iface_content::SearchContentWithTextParams) -> Result<String, String> {
+        let json = iface_content__search_content_with_text_params__to_json(&params);
+        dispatch(&OP_CONTENT_SEARCH_CONTENT_WITH_TEXT, json)
     }
-    fn content_search_content_by_tag_and_type(params: iface_content::ContentSearchContentByTagAndTypeParams) -> Result<String, String> {
-        let json = iface_content__content_search_content_by_tag_and_type_params__to_json(&params);
-        dispatch(&OP_CONTENT_CONTENT_SEARCH_CONTENT_BY_TAG_AND_TYPE, json)
+    fn search_content_by_tag_and_type(params: iface_content::SearchContentByTagAndTypeParams) -> Result<String, String> {
+        let json = iface_content__search_content_by_tag_and_type_params__to_json(&params);
+        dispatch(&OP_CONTENT_SEARCH_CONTENT_BY_TAG_AND_TYPE, json)
     }
-    fn content_search_help_articles(params: iface_content::ContentSearchHelpArticlesParams) -> Result<String, String> {
-        let json = iface_content__content_search_help_articles_params__to_json(&params);
-        dispatch(&OP_CONTENT_CONTENT_SEARCH_HELP_ARTICLES, json)
+    fn search_help_articles(params: iface_content::SearchHelpArticlesParams) -> Result<String, String> {
+        let json = iface_content__search_help_articles_params__to_json(&params);
+        dispatch(&OP_CONTENT_SEARCH_HELP_ARTICLES, json)
     }
 }
 use crate::exports::autostamp::bungie::destiny2 as iface_destiny2;
 
-const OP_DESTINY2_DESTINY2_EQUIP_ITEM: OpSpec = OpSpec {
+const OP_DESTINY2_EQUIP_ITEM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/EquipItem/",
     fields: &[
@@ -545,7 +545,7 @@ const OP_DESTINY2_DESTINY2_EQUIP_ITEM: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_EQUIP_ITEMS: OpSpec = OpSpec {
+const OP_DESTINY2_EQUIP_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/EquipItems/",
     fields: &[
@@ -555,7 +555,7 @@ const OP_DESTINY2_DESTINY2_EQUIP_ITEMS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_INSERT_SOCKET_PLUG: OpSpec = OpSpec {
+const OP_DESTINY2_INSERT_SOCKET_PLUG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/InsertSocketPlug/",
     fields: &[
@@ -565,7 +565,7 @@ const OP_DESTINY2_DESTINY2_INSERT_SOCKET_PLUG: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_INSERT_SOCKET_PLUG_FREE: OpSpec = OpSpec {
+const OP_DESTINY2_INSERT_SOCKET_PLUG_FREE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/InsertSocketPlugFree/",
     fields: &[
@@ -575,7 +575,7 @@ const OP_DESTINY2_DESTINY2_INSERT_SOCKET_PLUG_FREE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_PULL_FROM_POSTMASTER: OpSpec = OpSpec {
+const OP_DESTINY2_PULL_FROM_POSTMASTER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/PullFromPostmaster/",
     fields: &[
@@ -585,7 +585,7 @@ const OP_DESTINY2_DESTINY2_PULL_FROM_POSTMASTER: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_SET_ITEM_LOCK_STATE: OpSpec = OpSpec {
+const OP_DESTINY2_SET_ITEM_LOCK_STATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/SetLockState/",
     fields: &[
@@ -595,7 +595,7 @@ const OP_DESTINY2_DESTINY2_SET_ITEM_LOCK_STATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_SET_QUEST_TRACKED_STATE: OpSpec = OpSpec {
+const OP_DESTINY2_SET_QUEST_TRACKED_STATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/SetTrackedState/",
     fields: &[
@@ -605,7 +605,7 @@ const OP_DESTINY2_DESTINY2_SET_QUEST_TRACKED_STATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_TRANSFER_ITEM: OpSpec = OpSpec {
+const OP_DESTINY2_TRANSFER_ITEM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Items/TransferItem/",
     fields: &[
@@ -615,7 +615,7 @@ const OP_DESTINY2_DESTINY2_TRANSFER_ITEM: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_CLEAR_LOADOUT: OpSpec = OpSpec {
+const OP_DESTINY2_CLEAR_LOADOUT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Loadouts/ClearLoadout/",
     fields: &[
@@ -625,7 +625,7 @@ const OP_DESTINY2_DESTINY2_CLEAR_LOADOUT: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_EQUIP_LOADOUT: OpSpec = OpSpec {
+const OP_DESTINY2_EQUIP_LOADOUT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Loadouts/EquipLoadout/",
     fields: &[
@@ -635,7 +635,7 @@ const OP_DESTINY2_DESTINY2_EQUIP_LOADOUT: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_SNAPSHOT_LOADOUT: OpSpec = OpSpec {
+const OP_DESTINY2_SNAPSHOT_LOADOUT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Loadouts/SnapshotLoadout/",
     fields: &[
@@ -645,7 +645,7 @@ const OP_DESTINY2_DESTINY2_SNAPSHOT_LOADOUT: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_UPDATE_LOADOUT_IDENTIFIERS: OpSpec = OpSpec {
+const OP_DESTINY2_UPDATE_LOADOUT_IDENTIFIERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Actions/Loadouts/UpdateLoadoutIdentifiers/",
     fields: &[
@@ -655,7 +655,7 @@ const OP_DESTINY2_DESTINY2_UPDATE_LOADOUT_IDENTIFIERS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_SEARCH_DESTINY_ENTITIES: OpSpec = OpSpec {
+const OP_DESTINY2_SEARCH_DESTINY_ENTITIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Armory/Search/{type}/{search_term}/",
     fields: &[
@@ -667,7 +667,7 @@ const OP_DESTINY2_DESTINY2_SEARCH_DESTINY_ENTITIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_AWA_PROVIDE_AUTHORIZATION_RESULT: OpSpec = OpSpec {
+const OP_DESTINY2_AWA_PROVIDE_AUTHORIZATION_RESULT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Awa/AwaProvideAuthorizationResult/",
     fields: &[
@@ -676,7 +676,7 @@ const OP_DESTINY2_DESTINY2_AWA_PROVIDE_AUTHORIZATION_RESULT: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_AWA_GET_ACTION_TOKEN: OpSpec = OpSpec {
+const OP_DESTINY2_AWA_GET_ACTION_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Awa/GetActionToken/{correlation_id}/",
     fields: &[
@@ -687,7 +687,7 @@ const OP_DESTINY2_DESTINY2_AWA_GET_ACTION_TOKEN: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_AWA_INITIALIZE_REQUEST: OpSpec = OpSpec {
+const OP_DESTINY2_AWA_INITIALIZE_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Awa/Initialize/",
     fields: &[
@@ -697,7 +697,7 @@ const OP_DESTINY2_DESTINY2_AWA_INITIALIZE_REQUEST: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_CLAN_BANNER_SOURCE: OpSpec = OpSpec {
+const OP_DESTINY2_GET_CLAN_BANNER_SOURCE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Clan/ClanBannerDictionary/",
     fields: &[
@@ -706,7 +706,7 @@ const OP_DESTINY2_DESTINY2_GET_CLAN_BANNER_SOURCE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_CLAN_WEEKLY_REWARD_STATE: OpSpec = OpSpec {
+const OP_DESTINY2_GET_CLAN_WEEKLY_REWARD_STATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Clan/{group_id}/WeeklyRewardState/",
     fields: &[
@@ -716,7 +716,7 @@ const OP_DESTINY2_DESTINY2_GET_CLAN_WEEKLY_REWARD_STATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_DESTINY_MANIFEST: OpSpec = OpSpec {
+const OP_DESTINY2_GET_DESTINY_MANIFEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Manifest/",
     fields: &[
@@ -725,7 +725,7 @@ const OP_DESTINY2_DESTINY2_GET_DESTINY_MANIFEST: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_DESTINY_ENTITY_DEFINITION: OpSpec = OpSpec {
+const OP_DESTINY2_GET_DESTINY_ENTITY_DEFINITION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Manifest/{entity_type}/{hash_identifier}/",
     fields: &[
@@ -736,7 +736,7 @@ const OP_DESTINY2_DESTINY2_GET_DESTINY_ENTITY_DEFINITION: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_PUBLIC_MILESTONES: OpSpec = OpSpec {
+const OP_DESTINY2_GET_PUBLIC_MILESTONES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Milestones/",
     fields: &[
@@ -745,7 +745,7 @@ const OP_DESTINY2_DESTINY2_GET_PUBLIC_MILESTONES: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_PUBLIC_MILESTONE_CONTENT: OpSpec = OpSpec {
+const OP_DESTINY2_GET_PUBLIC_MILESTONE_CONTENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Milestones/{milestone_hash}/Content/",
     fields: &[
@@ -755,7 +755,7 @@ const OP_DESTINY2_DESTINY2_GET_PUBLIC_MILESTONE_CONTENT: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_SEARCH_DESTINY_PLAYER_BY_BUNGIE_NAME: OpSpec = OpSpec {
+const OP_DESTINY2_SEARCH_DESTINY_PLAYER_BY_BUNGIE_NAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/SearchDestinyPlayerByBungieName/{membership_type}/",
     fields: &[
@@ -765,7 +765,7 @@ const OP_DESTINY2_DESTINY2_SEARCH_DESTINY_PLAYER_BY_BUNGIE_NAME: OpSpec = OpSpec
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_CLAN_AGGREGATE_STATS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_CLAN_AGGREGATE_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Stats/AggregateClanStats/{group_id}/",
     fields: &[
@@ -776,7 +776,7 @@ const OP_DESTINY2_DESTINY2_GET_CLAN_AGGREGATE_STATS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS_DEFINITION: OpSpec = OpSpec {
+const OP_DESTINY2_GET_HISTORICAL_STATS_DEFINITION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Stats/Definition/",
     fields: &[
@@ -785,7 +785,7 @@ const OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS_DEFINITION: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_CLAN_LEADERBOARDS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_CLAN_LEADERBOARDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Stats/Leaderboards/Clans/{group_id}/",
     fields: &[
@@ -798,7 +798,7 @@ const OP_DESTINY2_DESTINY2_GET_CLAN_LEADERBOARDS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_LEADERBOARDS_FOR_CHARACTER: OpSpec = OpSpec {
+const OP_DESTINY2_GET_LEADERBOARDS_FOR_CHARACTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Stats/Leaderboards/{membership_type}/{destiny_membership_id}/{character_id}/",
     fields: &[
@@ -813,7 +813,7 @@ const OP_DESTINY2_DESTINY2_GET_LEADERBOARDS_FOR_CHARACTER: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_POST_GAME_CARNAGE_REPORT: OpSpec = OpSpec {
+const OP_DESTINY2_GET_POST_GAME_CARNAGE_REPORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Stats/PostGameCarnageReport/{activity_id}/",
     fields: &[
@@ -823,7 +823,7 @@ const OP_DESTINY2_DESTINY2_GET_POST_GAME_CARNAGE_REPORT: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_REPORT_OFFENSIVE_POST_GAME_CARNAGE_REPORT_PLAYER: OpSpec = OpSpec {
+const OP_DESTINY2_REPORT_OFFENSIVE_POST_GAME_CARNAGE_REPORT_PLAYER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Destiny2/Stats/PostGameCarnageReport/{activity_id}/Report/",
     fields: &[
@@ -834,7 +834,7 @@ const OP_DESTINY2_DESTINY2_REPORT_OFFENSIVE_POST_GAME_CARNAGE_REPORT_PLAYER: OpS
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_PUBLIC_VENDORS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_PUBLIC_VENDORS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/Vendors/",
     fields: &[
@@ -844,7 +844,7 @@ const OP_DESTINY2_DESTINY2_GET_PUBLIC_VENDORS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_HISTORICAL_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Account/{destiny_membership_id}/Character/{character_id}/Stats/",
     fields: &[
@@ -861,7 +861,7 @@ const OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_ACTIVITY_HISTORY: OpSpec = OpSpec {
+const OP_DESTINY2_GET_ACTIVITY_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Account/{destiny_membership_id}/Character/{character_id}/Stats/Activities/",
     fields: &[
@@ -876,7 +876,7 @@ const OP_DESTINY2_DESTINY2_GET_ACTIVITY_HISTORY: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_DESTINY_AGGREGATE_ACTIVITY_STATS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_DESTINY_AGGREGATE_ACTIVITY_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Account/{destiny_membership_id}/Character/{character_id}/Stats/AggregateActivityStats/",
     fields: &[
@@ -888,7 +888,7 @@ const OP_DESTINY2_DESTINY2_GET_DESTINY_AGGREGATE_ACTIVITY_STATS: OpSpec = OpSpec
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_UNIQUE_WEAPON_HISTORY: OpSpec = OpSpec {
+const OP_DESTINY2_GET_UNIQUE_WEAPON_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Account/{destiny_membership_id}/Character/{character_id}/Stats/UniqueWeapons/",
     fields: &[
@@ -900,7 +900,7 @@ const OP_DESTINY2_DESTINY2_GET_UNIQUE_WEAPON_HISTORY: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS_FOR_ACCOUNT: OpSpec = OpSpec {
+const OP_DESTINY2_GET_HISTORICAL_STATS_FOR_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Account/{destiny_membership_id}/Stats/",
     fields: &[
@@ -912,7 +912,7 @@ const OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS_FOR_ACCOUNT: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_LEADERBOARDS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_LEADERBOARDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Account/{destiny_membership_id}/Stats/Leaderboards/",
     fields: &[
@@ -926,7 +926,7 @@ const OP_DESTINY2_DESTINY2_GET_LEADERBOARDS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_PROFILE: OpSpec = OpSpec {
+const OP_DESTINY2_GET_PROFILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Profile/{destiny_membership_id}/",
     fields: &[
@@ -938,7 +938,7 @@ const OP_DESTINY2_DESTINY2_GET_PROFILE: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_CHARACTER: OpSpec = OpSpec {
+const OP_DESTINY2_GET_CHARACTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Profile/{destiny_membership_id}/Character/{character_id}/",
     fields: &[
@@ -951,7 +951,7 @@ const OP_DESTINY2_DESTINY2_GET_CHARACTER: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_COLLECTIBLE_NODE_DETAILS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_COLLECTIBLE_NODE_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Profile/{destiny_membership_id}/Character/{character_id}/Collectibles/{collectible_presentation_node_hash}/",
     fields: &[
@@ -965,7 +965,7 @@ const OP_DESTINY2_DESTINY2_GET_COLLECTIBLE_NODE_DETAILS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_VENDORS: OpSpec = OpSpec {
+const OP_DESTINY2_GET_VENDORS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Profile/{destiny_membership_id}/Character/{character_id}/Vendors/",
     fields: &[
@@ -979,7 +979,7 @@ const OP_DESTINY2_DESTINY2_GET_VENDORS: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_VENDOR: OpSpec = OpSpec {
+const OP_DESTINY2_GET_VENDOR: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Profile/{destiny_membership_id}/Character/{character_id}/Vendors/{vendor_hash}/",
     fields: &[
@@ -993,7 +993,7 @@ const OP_DESTINY2_DESTINY2_GET_VENDOR: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_ITEM: OpSpec = OpSpec {
+const OP_DESTINY2_GET_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Profile/{destiny_membership_id}/Item/{item_instance_id}/",
     fields: &[
@@ -1006,7 +1006,7 @@ const OP_DESTINY2_DESTINY2_GET_ITEM: OpSpec = OpSpec {
     ],
 };
 
-const OP_DESTINY2_DESTINY2_GET_LINKED_PROFILES: OpSpec = OpSpec {
+const OP_DESTINY2_GET_LINKED_PROFILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Destiny2/{membership_type}/Profile/{membership_id}/LinkedProfiles/",
     fields: &[
@@ -1018,7 +1018,7 @@ const OP_DESTINY2_DESTINY2_GET_LINKED_PROFILES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_destiny2__destiny2_search_destiny_entities_params__to_json(p: &iface_destiny2::Destiny2SearchDestinyEntitiesParams) -> Value {
+fn iface_destiny2__search_destiny_entities_params__to_json(p: &iface_destiny2::SearchDestinyEntitiesParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("search_term".into(), Value::String((&p.search_term).clone()));
@@ -1026,45 +1026,45 @@ fn iface_destiny2__destiny2_search_destiny_entities_params__to_json(p: &iface_de
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_awa_get_action_token_params__to_json(p: &iface_destiny2::Destiny2AwaGetActionTokenParams) -> Value {
+fn iface_destiny2__awa_get_action_token_params__to_json(p: &iface_destiny2::AwaGetActionTokenParams) -> Value {
     let mut m = Map::new();
     m.insert("correlation_id".into(), Value::String((&p.correlation_id).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_clan_weekly_reward_state_params__to_json(p: &iface_destiny2::Destiny2GetClanWeeklyRewardStateParams) -> Value {
+fn iface_destiny2__get_clan_weekly_reward_state_params__to_json(p: &iface_destiny2::GetClanWeeklyRewardStateParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_destiny_entity_definition_params__to_json(p: &iface_destiny2::Destiny2GetDestinyEntityDefinitionParams) -> Value {
+fn iface_destiny2__get_destiny_entity_definition_params__to_json(p: &iface_destiny2::GetDestinyEntityDefinitionParams) -> Value {
     let mut m = Map::new();
     m.insert("entity_type".into(), Value::String((&p.entity_type).clone()));
     m.insert("hash_identifier".into(), Value::String((&p.hash_identifier).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_public_milestone_content_params__to_json(p: &iface_destiny2::Destiny2GetPublicMilestoneContentParams) -> Value {
+fn iface_destiny2__get_public_milestone_content_params__to_json(p: &iface_destiny2::GetPublicMilestoneContentParams) -> Value {
     let mut m = Map::new();
     m.insert("milestone_hash".into(), Value::String((&p.milestone_hash).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_search_destiny_player_by_bungie_name_params__to_json(p: &iface_destiny2::Destiny2SearchDestinyPlayerByBungieNameParams) -> Value {
+fn iface_destiny2__search_destiny_player_by_bungie_name_params__to_json(p: &iface_destiny2::SearchDestinyPlayerByBungieNameParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_type".into(), Value::String((&p.membership_type).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_clan_aggregate_stats_params__to_json(p: &iface_destiny2::Destiny2GetClanAggregateStatsParams) -> Value {
+fn iface_destiny2__get_clan_aggregate_stats_params__to_json(p: &iface_destiny2::GetClanAggregateStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("modes".into(), match (&p.modes) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_clan_leaderboards_params__to_json(p: &iface_destiny2::Destiny2GetClanLeaderboardsParams) -> Value {
+fn iface_destiny2__get_clan_leaderboards_params__to_json(p: &iface_destiny2::GetClanLeaderboardsParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("maxtop".into(), match (&p.maxtop) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1073,7 +1073,7 @@ fn iface_destiny2__destiny2_get_clan_leaderboards_params__to_json(p: &iface_dest
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_leaderboards_for_character_params__to_json(p: &iface_destiny2::Destiny2GetLeaderboardsForCharacterParams) -> Value {
+fn iface_destiny2__get_leaderboards_for_character_params__to_json(p: &iface_destiny2::GetLeaderboardsForCharacterParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("destiny_membership_id".into(), Value::String((&p.destiny_membership_id).clone()));
@@ -1084,25 +1084,25 @@ fn iface_destiny2__destiny2_get_leaderboards_for_character_params__to_json(p: &i
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_post_game_carnage_report_params__to_json(p: &iface_destiny2::Destiny2GetPostGameCarnageReportParams) -> Value {
+fn iface_destiny2__get_post_game_carnage_report_params__to_json(p: &iface_destiny2::GetPostGameCarnageReportParams) -> Value {
     let mut m = Map::new();
     m.insert("activity_id".into(), Value::String((&p.activity_id).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_report_offensive_post_game_carnage_report_player_params__to_json(p: &iface_destiny2::Destiny2ReportOffensivePostGameCarnageReportPlayerParams) -> Value {
+fn iface_destiny2__report_offensive_post_game_carnage_report_player_params__to_json(p: &iface_destiny2::ReportOffensivePostGameCarnageReportPlayerParams) -> Value {
     let mut m = Map::new();
     m.insert("activity_id".into(), Value::String((&p.activity_id).clone()));
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_public_vendors_params__to_json(p: &iface_destiny2::Destiny2GetPublicVendorsParams) -> Value {
+fn iface_destiny2__get_public_vendors_params__to_json(p: &iface_destiny2::GetPublicVendorsParams) -> Value {
     let mut m = Map::new();
     m.insert("components".into(), match (&p.components) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_historical_stats_params__to_json(p: &iface_destiny2::Destiny2GetHistoricalStatsParams) -> Value {
+fn iface_destiny2__get_historical_stats_params__to_json(p: &iface_destiny2::GetHistoricalStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("dayend".into(), match (&p.dayend) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1115,7 +1115,7 @@ fn iface_destiny2__destiny2_get_historical_stats_params__to_json(p: &iface_desti
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_activity_history_params__to_json(p: &iface_destiny2::Destiny2GetActivityHistoryParams) -> Value {
+fn iface_destiny2__get_activity_history_params__to_json(p: &iface_destiny2::GetActivityHistoryParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1126,7 +1126,7 @@ fn iface_destiny2__destiny2_get_activity_history_params__to_json(p: &iface_desti
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_destiny_aggregate_activity_stats_params__to_json(p: &iface_destiny2::Destiny2GetDestinyAggregateActivityStatsParams) -> Value {
+fn iface_destiny2__get_destiny_aggregate_activity_stats_params__to_json(p: &iface_destiny2::GetDestinyAggregateActivityStatsParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("destiny_membership_id".into(), Value::String((&p.destiny_membership_id).clone()));
@@ -1134,7 +1134,7 @@ fn iface_destiny2__destiny2_get_destiny_aggregate_activity_stats_params__to_json
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_unique_weapon_history_params__to_json(p: &iface_destiny2::Destiny2GetUniqueWeaponHistoryParams) -> Value {
+fn iface_destiny2__get_unique_weapon_history_params__to_json(p: &iface_destiny2::GetUniqueWeaponHistoryParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("destiny_membership_id".into(), Value::String((&p.destiny_membership_id).clone()));
@@ -1142,7 +1142,7 @@ fn iface_destiny2__destiny2_get_unique_weapon_history_params__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_historical_stats_for_account_params__to_json(p: &iface_destiny2::Destiny2GetHistoricalStatsForAccountParams) -> Value {
+fn iface_destiny2__get_historical_stats_for_account_params__to_json(p: &iface_destiny2::GetHistoricalStatsForAccountParams) -> Value {
     let mut m = Map::new();
     m.insert("destiny_membership_id".into(), Value::String((&p.destiny_membership_id).clone()));
     m.insert("groups".into(), match (&p.groups) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
@@ -1150,7 +1150,7 @@ fn iface_destiny2__destiny2_get_historical_stats_for_account_params__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_leaderboards_params__to_json(p: &iface_destiny2::Destiny2GetLeaderboardsParams) -> Value {
+fn iface_destiny2__get_leaderboards_params__to_json(p: &iface_destiny2::GetLeaderboardsParams) -> Value {
     let mut m = Map::new();
     m.insert("destiny_membership_id".into(), Value::String((&p.destiny_membership_id).clone()));
     m.insert("maxtop".into(), match (&p.maxtop) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1160,7 +1160,7 @@ fn iface_destiny2__destiny2_get_leaderboards_params__to_json(p: &iface_destiny2:
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_profile_params__to_json(p: &iface_destiny2::Destiny2GetProfileParams) -> Value {
+fn iface_destiny2__get_profile_params__to_json(p: &iface_destiny2::GetProfileParams) -> Value {
     let mut m = Map::new();
     m.insert("components".into(), match (&p.components) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
     m.insert("destiny_membership_id".into(), Value::String((&p.destiny_membership_id).clone()));
@@ -1168,7 +1168,7 @@ fn iface_destiny2__destiny2_get_profile_params__to_json(p: &iface_destiny2::Dest
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_character_params__to_json(p: &iface_destiny2::Destiny2GetCharacterParams) -> Value {
+fn iface_destiny2__get_character_params__to_json(p: &iface_destiny2::GetCharacterParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("components".into(), match (&p.components) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
@@ -1177,7 +1177,7 @@ fn iface_destiny2__destiny2_get_character_params__to_json(p: &iface_destiny2::De
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_collectible_node_details_params__to_json(p: &iface_destiny2::Destiny2GetCollectibleNodeDetailsParams) -> Value {
+fn iface_destiny2__get_collectible_node_details_params__to_json(p: &iface_destiny2::GetCollectibleNodeDetailsParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("collectible_presentation_node_hash".into(), Value::String((&p.collectible_presentation_node_hash).clone()));
@@ -1187,7 +1187,7 @@ fn iface_destiny2__destiny2_get_collectible_node_details_params__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_vendors_params__to_json(p: &iface_destiny2::Destiny2GetVendorsParams) -> Value {
+fn iface_destiny2__get_vendors_params__to_json(p: &iface_destiny2::GetVendorsParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("components".into(), match (&p.components) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
@@ -1197,7 +1197,7 @@ fn iface_destiny2__destiny2_get_vendors_params__to_json(p: &iface_destiny2::Dest
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_vendor_params__to_json(p: &iface_destiny2::Destiny2GetVendorParams) -> Value {
+fn iface_destiny2__get_vendor_params__to_json(p: &iface_destiny2::GetVendorParams) -> Value {
     let mut m = Map::new();
     m.insert("character_id".into(), Value::String((&p.character_id).clone()));
     m.insert("components".into(), match (&p.components) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
@@ -1207,7 +1207,7 @@ fn iface_destiny2__destiny2_get_vendor_params__to_json(p: &iface_destiny2::Desti
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_item_params__to_json(p: &iface_destiny2::Destiny2GetItemParams) -> Value {
+fn iface_destiny2__get_item_params__to_json(p: &iface_destiny2::GetItemParams) -> Value {
     let mut m = Map::new();
     m.insert("components".into(), match (&p.components) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
     m.insert("destiny_membership_id".into(), Value::String((&p.destiny_membership_id).clone()));
@@ -1216,7 +1216,7 @@ fn iface_destiny2__destiny2_get_item_params__to_json(p: &iface_destiny2::Destiny
     Value::Object(m)
 }
 
-fn iface_destiny2__destiny2_get_linked_profiles_params__to_json(p: &iface_destiny2::Destiny2GetLinkedProfilesParams) -> Value {
+fn iface_destiny2__get_linked_profiles_params__to_json(p: &iface_destiny2::GetLinkedProfilesParams) -> Value {
     let mut m = Map::new();
     m.insert("get_all_memberships".into(), match (&p.get_all_memberships) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -1225,164 +1225,164 @@ fn iface_destiny2__destiny2_get_linked_profiles_params__to_json(p: &iface_destin
 }
 
 impl iface_destiny2::Guest for crate::Component {
-    fn destiny2_equip_item() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_EQUIP_ITEM, Value::Object(Map::new()))
+    fn equip_item() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_EQUIP_ITEM, Value::Object(Map::new()))
     }
-    fn destiny2_equip_items() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_EQUIP_ITEMS, Value::Object(Map::new()))
+    fn equip_items() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_EQUIP_ITEMS, Value::Object(Map::new()))
     }
-    fn destiny2_insert_socket_plug() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_INSERT_SOCKET_PLUG, Value::Object(Map::new()))
+    fn insert_socket_plug() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_INSERT_SOCKET_PLUG, Value::Object(Map::new()))
     }
-    fn destiny2_insert_socket_plug_free() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_INSERT_SOCKET_PLUG_FREE, Value::Object(Map::new()))
+    fn insert_socket_plug_free() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_INSERT_SOCKET_PLUG_FREE, Value::Object(Map::new()))
     }
-    fn destiny2_pull_from_postmaster() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_PULL_FROM_POSTMASTER, Value::Object(Map::new()))
+    fn pull_from_postmaster() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_PULL_FROM_POSTMASTER, Value::Object(Map::new()))
     }
-    fn destiny2_set_item_lock_state() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_SET_ITEM_LOCK_STATE, Value::Object(Map::new()))
+    fn set_item_lock_state() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_SET_ITEM_LOCK_STATE, Value::Object(Map::new()))
     }
-    fn destiny2_set_quest_tracked_state() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_SET_QUEST_TRACKED_STATE, Value::Object(Map::new()))
+    fn set_quest_tracked_state() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_SET_QUEST_TRACKED_STATE, Value::Object(Map::new()))
     }
-    fn destiny2_transfer_item() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_TRANSFER_ITEM, Value::Object(Map::new()))
+    fn transfer_item() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_TRANSFER_ITEM, Value::Object(Map::new()))
     }
-    fn destiny2_clear_loadout() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_CLEAR_LOADOUT, Value::Object(Map::new()))
+    fn clear_loadout() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_CLEAR_LOADOUT, Value::Object(Map::new()))
     }
-    fn destiny2_equip_loadout() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_EQUIP_LOADOUT, Value::Object(Map::new()))
+    fn equip_loadout() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_EQUIP_LOADOUT, Value::Object(Map::new()))
     }
-    fn destiny2_snapshot_loadout() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_SNAPSHOT_LOADOUT, Value::Object(Map::new()))
+    fn snapshot_loadout() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_SNAPSHOT_LOADOUT, Value::Object(Map::new()))
     }
-    fn destiny2_update_loadout_identifiers() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_UPDATE_LOADOUT_IDENTIFIERS, Value::Object(Map::new()))
+    fn update_loadout_identifiers() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_UPDATE_LOADOUT_IDENTIFIERS, Value::Object(Map::new()))
     }
-    fn destiny2_search_destiny_entities(params: iface_destiny2::Destiny2SearchDestinyEntitiesParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_search_destiny_entities_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_SEARCH_DESTINY_ENTITIES, json)
+    fn search_destiny_entities(params: iface_destiny2::SearchDestinyEntitiesParams) -> Result<String, String> {
+        let json = iface_destiny2__search_destiny_entities_params__to_json(&params);
+        dispatch(&OP_DESTINY2_SEARCH_DESTINY_ENTITIES, json)
     }
-    fn destiny2_awa_provide_authorization_result() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_AWA_PROVIDE_AUTHORIZATION_RESULT, Value::Object(Map::new()))
+    fn awa_provide_authorization_result() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_AWA_PROVIDE_AUTHORIZATION_RESULT, Value::Object(Map::new()))
     }
-    fn destiny2_awa_get_action_token(params: iface_destiny2::Destiny2AwaGetActionTokenParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_awa_get_action_token_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_AWA_GET_ACTION_TOKEN, json)
+    fn awa_get_action_token(params: iface_destiny2::AwaGetActionTokenParams) -> Result<String, String> {
+        let json = iface_destiny2__awa_get_action_token_params__to_json(&params);
+        dispatch(&OP_DESTINY2_AWA_GET_ACTION_TOKEN, json)
     }
-    fn destiny2_awa_initialize_request() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_AWA_INITIALIZE_REQUEST, Value::Object(Map::new()))
+    fn awa_initialize_request() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_AWA_INITIALIZE_REQUEST, Value::Object(Map::new()))
     }
-    fn destiny2_get_clan_banner_source() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_GET_CLAN_BANNER_SOURCE, Value::Object(Map::new()))
+    fn get_clan_banner_source() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_GET_CLAN_BANNER_SOURCE, Value::Object(Map::new()))
     }
-    fn destiny2_get_clan_weekly_reward_state(params: iface_destiny2::Destiny2GetClanWeeklyRewardStateParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_clan_weekly_reward_state_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_CLAN_WEEKLY_REWARD_STATE, json)
+    fn get_clan_weekly_reward_state(params: iface_destiny2::GetClanWeeklyRewardStateParams) -> Result<String, String> {
+        let json = iface_destiny2__get_clan_weekly_reward_state_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_CLAN_WEEKLY_REWARD_STATE, json)
     }
-    fn destiny2_get_destiny_manifest() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_GET_DESTINY_MANIFEST, Value::Object(Map::new()))
+    fn get_destiny_manifest() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_GET_DESTINY_MANIFEST, Value::Object(Map::new()))
     }
-    fn destiny2_get_destiny_entity_definition(params: iface_destiny2::Destiny2GetDestinyEntityDefinitionParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_destiny_entity_definition_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_DESTINY_ENTITY_DEFINITION, json)
+    fn get_destiny_entity_definition(params: iface_destiny2::GetDestinyEntityDefinitionParams) -> Result<String, String> {
+        let json = iface_destiny2__get_destiny_entity_definition_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_DESTINY_ENTITY_DEFINITION, json)
     }
-    fn destiny2_get_public_milestones() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_GET_PUBLIC_MILESTONES, Value::Object(Map::new()))
+    fn get_public_milestones() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_GET_PUBLIC_MILESTONES, Value::Object(Map::new()))
     }
-    fn destiny2_get_public_milestone_content(params: iface_destiny2::Destiny2GetPublicMilestoneContentParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_public_milestone_content_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_PUBLIC_MILESTONE_CONTENT, json)
+    fn get_public_milestone_content(params: iface_destiny2::GetPublicMilestoneContentParams) -> Result<String, String> {
+        let json = iface_destiny2__get_public_milestone_content_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_PUBLIC_MILESTONE_CONTENT, json)
     }
-    fn destiny2_search_destiny_player_by_bungie_name(params: iface_destiny2::Destiny2SearchDestinyPlayerByBungieNameParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_search_destiny_player_by_bungie_name_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_SEARCH_DESTINY_PLAYER_BY_BUNGIE_NAME, json)
+    fn search_destiny_player_by_bungie_name(params: iface_destiny2::SearchDestinyPlayerByBungieNameParams) -> Result<String, String> {
+        let json = iface_destiny2__search_destiny_player_by_bungie_name_params__to_json(&params);
+        dispatch(&OP_DESTINY2_SEARCH_DESTINY_PLAYER_BY_BUNGIE_NAME, json)
     }
-    fn destiny2_get_clan_aggregate_stats(params: iface_destiny2::Destiny2GetClanAggregateStatsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_clan_aggregate_stats_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_CLAN_AGGREGATE_STATS, json)
+    fn get_clan_aggregate_stats(params: iface_destiny2::GetClanAggregateStatsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_clan_aggregate_stats_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_CLAN_AGGREGATE_STATS, json)
     }
-    fn destiny2_get_historical_stats_definition() -> Result<String, String> {
-        dispatch(&OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS_DEFINITION, Value::Object(Map::new()))
+    fn get_historical_stats_definition() -> Result<String, String> {
+        dispatch(&OP_DESTINY2_GET_HISTORICAL_STATS_DEFINITION, Value::Object(Map::new()))
     }
-    fn destiny2_get_clan_leaderboards(params: iface_destiny2::Destiny2GetClanLeaderboardsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_clan_leaderboards_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_CLAN_LEADERBOARDS, json)
+    fn get_clan_leaderboards(params: iface_destiny2::GetClanLeaderboardsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_clan_leaderboards_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_CLAN_LEADERBOARDS, json)
     }
-    fn destiny2_get_leaderboards_for_character(params: iface_destiny2::Destiny2GetLeaderboardsForCharacterParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_leaderboards_for_character_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_LEADERBOARDS_FOR_CHARACTER, json)
+    fn get_leaderboards_for_character(params: iface_destiny2::GetLeaderboardsForCharacterParams) -> Result<String, String> {
+        let json = iface_destiny2__get_leaderboards_for_character_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_LEADERBOARDS_FOR_CHARACTER, json)
     }
-    fn destiny2_get_post_game_carnage_report(params: iface_destiny2::Destiny2GetPostGameCarnageReportParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_post_game_carnage_report_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_POST_GAME_CARNAGE_REPORT, json)
+    fn get_post_game_carnage_report(params: iface_destiny2::GetPostGameCarnageReportParams) -> Result<String, String> {
+        let json = iface_destiny2__get_post_game_carnage_report_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_POST_GAME_CARNAGE_REPORT, json)
     }
-    fn destiny2_report_offensive_post_game_carnage_report_player(params: iface_destiny2::Destiny2ReportOffensivePostGameCarnageReportPlayerParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_report_offensive_post_game_carnage_report_player_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_REPORT_OFFENSIVE_POST_GAME_CARNAGE_REPORT_PLAYER, json)
+    fn report_offensive_post_game_carnage_report_player(params: iface_destiny2::ReportOffensivePostGameCarnageReportPlayerParams) -> Result<String, String> {
+        let json = iface_destiny2__report_offensive_post_game_carnage_report_player_params__to_json(&params);
+        dispatch(&OP_DESTINY2_REPORT_OFFENSIVE_POST_GAME_CARNAGE_REPORT_PLAYER, json)
     }
-    fn destiny2_get_public_vendors(params: iface_destiny2::Destiny2GetPublicVendorsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_public_vendors_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_PUBLIC_VENDORS, json)
+    fn get_public_vendors(params: iface_destiny2::GetPublicVendorsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_public_vendors_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_PUBLIC_VENDORS, json)
     }
-    fn destiny2_get_historical_stats(params: iface_destiny2::Destiny2GetHistoricalStatsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_historical_stats_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS, json)
+    fn get_historical_stats(params: iface_destiny2::GetHistoricalStatsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_historical_stats_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_HISTORICAL_STATS, json)
     }
-    fn destiny2_get_activity_history(params: iface_destiny2::Destiny2GetActivityHistoryParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_activity_history_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_ACTIVITY_HISTORY, json)
+    fn get_activity_history(params: iface_destiny2::GetActivityHistoryParams) -> Result<String, String> {
+        let json = iface_destiny2__get_activity_history_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_ACTIVITY_HISTORY, json)
     }
-    fn destiny2_get_destiny_aggregate_activity_stats(params: iface_destiny2::Destiny2GetDestinyAggregateActivityStatsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_destiny_aggregate_activity_stats_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_DESTINY_AGGREGATE_ACTIVITY_STATS, json)
+    fn get_destiny_aggregate_activity_stats(params: iface_destiny2::GetDestinyAggregateActivityStatsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_destiny_aggregate_activity_stats_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_DESTINY_AGGREGATE_ACTIVITY_STATS, json)
     }
-    fn destiny2_get_unique_weapon_history(params: iface_destiny2::Destiny2GetUniqueWeaponHistoryParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_unique_weapon_history_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_UNIQUE_WEAPON_HISTORY, json)
+    fn get_unique_weapon_history(params: iface_destiny2::GetUniqueWeaponHistoryParams) -> Result<String, String> {
+        let json = iface_destiny2__get_unique_weapon_history_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_UNIQUE_WEAPON_HISTORY, json)
     }
-    fn destiny2_get_historical_stats_for_account(params: iface_destiny2::Destiny2GetHistoricalStatsForAccountParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_historical_stats_for_account_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_HISTORICAL_STATS_FOR_ACCOUNT, json)
+    fn get_historical_stats_for_account(params: iface_destiny2::GetHistoricalStatsForAccountParams) -> Result<String, String> {
+        let json = iface_destiny2__get_historical_stats_for_account_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_HISTORICAL_STATS_FOR_ACCOUNT, json)
     }
-    fn destiny2_get_leaderboards(params: iface_destiny2::Destiny2GetLeaderboardsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_leaderboards_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_LEADERBOARDS, json)
+    fn get_leaderboards(params: iface_destiny2::GetLeaderboardsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_leaderboards_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_LEADERBOARDS, json)
     }
-    fn destiny2_get_profile(params: iface_destiny2::Destiny2GetProfileParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_profile_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_PROFILE, json)
+    fn get_profile(params: iface_destiny2::GetProfileParams) -> Result<String, String> {
+        let json = iface_destiny2__get_profile_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_PROFILE, json)
     }
-    fn destiny2_get_character(params: iface_destiny2::Destiny2GetCharacterParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_character_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_CHARACTER, json)
+    fn get_character(params: iface_destiny2::GetCharacterParams) -> Result<String, String> {
+        let json = iface_destiny2__get_character_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_CHARACTER, json)
     }
-    fn destiny2_get_collectible_node_details(params: iface_destiny2::Destiny2GetCollectibleNodeDetailsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_collectible_node_details_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_COLLECTIBLE_NODE_DETAILS, json)
+    fn get_collectible_node_details(params: iface_destiny2::GetCollectibleNodeDetailsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_collectible_node_details_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_COLLECTIBLE_NODE_DETAILS, json)
     }
-    fn destiny2_get_vendors(params: iface_destiny2::Destiny2GetVendorsParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_vendors_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_VENDORS, json)
+    fn get_vendors(params: iface_destiny2::GetVendorsParams) -> Result<String, String> {
+        let json = iface_destiny2__get_vendors_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_VENDORS, json)
     }
-    fn destiny2_get_vendor(params: iface_destiny2::Destiny2GetVendorParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_vendor_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_VENDOR, json)
+    fn get_vendor(params: iface_destiny2::GetVendorParams) -> Result<String, String> {
+        let json = iface_destiny2__get_vendor_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_VENDOR, json)
     }
-    fn destiny2_get_item(params: iface_destiny2::Destiny2GetItemParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_item_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_ITEM, json)
+    fn get_item(params: iface_destiny2::GetItemParams) -> Result<String, String> {
+        let json = iface_destiny2__get_item_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_ITEM, json)
     }
-    fn destiny2_get_linked_profiles(params: iface_destiny2::Destiny2GetLinkedProfilesParams) -> Result<String, String> {
-        let json = iface_destiny2__destiny2_get_linked_profiles_params__to_json(&params);
-        dispatch(&OP_DESTINY2_DESTINY2_GET_LINKED_PROFILES, json)
+    fn get_linked_profiles(params: iface_destiny2::GetLinkedProfilesParams) -> Result<String, String> {
+        let json = iface_destiny2__get_linked_profiles_params__to_json(&params);
+        dispatch(&OP_DESTINY2_GET_LINKED_PROFILES, json)
     }
 }
 use crate::exports::autostamp::bungie::fireteam as iface_fireteam;
 
-const OP_FIRETEAM_FIRETEAM_GET_ACTIVE_PRIVATE_CLAN_FIRETEAM_COUNT: OpSpec = OpSpec {
+const OP_FIRETEAM_GET_ACTIVE_PRIVATE_CLAN_FIRETEAM_COUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Fireteam/Clan/{group_id}/ActiveCount/",
     fields: &[
@@ -1393,7 +1393,7 @@ const OP_FIRETEAM_FIRETEAM_GET_ACTIVE_PRIVATE_CLAN_FIRETEAM_COUNT: OpSpec = OpSp
     ],
 };
 
-const OP_FIRETEAM_FIRETEAM_GET_AVAILABLE_CLAN_FIRETEAMS: OpSpec = OpSpec {
+const OP_FIRETEAM_GET_AVAILABLE_CLAN_FIRETEAMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Fireteam/Clan/{group_id}/Available/{platform}/{activity_type}/{date_range}/{slot_filter}/{public_only}/{page}/",
     fields: &[
@@ -1412,7 +1412,7 @@ const OP_FIRETEAM_FIRETEAM_GET_AVAILABLE_CLAN_FIRETEAMS: OpSpec = OpSpec {
     ],
 };
 
-const OP_FIRETEAM_FIRETEAM_GET_MY_CLAN_FIRETEAMS: OpSpec = OpSpec {
+const OP_FIRETEAM_GET_MY_CLAN_FIRETEAMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Fireteam/Clan/{group_id}/My/{platform}/{include_closed}/{page}/",
     fields: &[
@@ -1428,7 +1428,7 @@ const OP_FIRETEAM_FIRETEAM_GET_MY_CLAN_FIRETEAMS: OpSpec = OpSpec {
     ],
 };
 
-const OP_FIRETEAM_FIRETEAM_GET_CLAN_FIRETEAM: OpSpec = OpSpec {
+const OP_FIRETEAM_GET_CLAN_FIRETEAM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Fireteam/Clan/{group_id}/Summary/{fireteam_id}/",
     fields: &[
@@ -1440,7 +1440,7 @@ const OP_FIRETEAM_FIRETEAM_GET_CLAN_FIRETEAM: OpSpec = OpSpec {
     ],
 };
 
-const OP_FIRETEAM_FIRETEAM_SEARCH_PUBLIC_AVAILABLE_CLAN_FIRETEAMS: OpSpec = OpSpec {
+const OP_FIRETEAM_SEARCH_PUBLIC_AVAILABLE_CLAN_FIRETEAMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Fireteam/Search/Available/{platform}/{activity_type}/{date_range}/{slot_filter}/{page}/",
     fields: &[
@@ -1457,13 +1457,13 @@ const OP_FIRETEAM_FIRETEAM_SEARCH_PUBLIC_AVAILABLE_CLAN_FIRETEAMS: OpSpec = OpSp
     ],
 };
 
-fn iface_fireteam__fireteam_get_active_private_clan_fireteam_count_params__to_json(p: &iface_fireteam::FireteamGetActivePrivateClanFireteamCountParams) -> Value {
+fn iface_fireteam__get_active_private_clan_fireteam_count_params__to_json(p: &iface_fireteam::GetActivePrivateClanFireteamCountParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_fireteam__fireteam_get_available_clan_fireteams_params__to_json(p: &iface_fireteam::FireteamGetAvailableClanFireteamsParams) -> Value {
+fn iface_fireteam__get_available_clan_fireteams_params__to_json(p: &iface_fireteam::GetAvailableClanFireteamsParams) -> Value {
     let mut m = Map::new();
     m.insert("activity_type".into(), Value::String((&p.activity_type).clone()));
     m.insert("date_range".into(), Value::String((&p.date_range).clone()));
@@ -1477,7 +1477,7 @@ fn iface_fireteam__fireteam_get_available_clan_fireteams_params__to_json(p: &ifa
     Value::Object(m)
 }
 
-fn iface_fireteam__fireteam_get_my_clan_fireteams_params__to_json(p: &iface_fireteam::FireteamGetMyClanFireteamsParams) -> Value {
+fn iface_fireteam__get_my_clan_fireteams_params__to_json(p: &iface_fireteam::GetMyClanFireteamsParams) -> Value {
     let mut m = Map::new();
     m.insert("group_filter".into(), match (&p.group_filter) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
@@ -1488,14 +1488,14 @@ fn iface_fireteam__fireteam_get_my_clan_fireteams_params__to_json(p: &iface_fire
     Value::Object(m)
 }
 
-fn iface_fireteam__fireteam_get_clan_fireteam_params__to_json(p: &iface_fireteam::FireteamGetClanFireteamParams) -> Value {
+fn iface_fireteam__get_clan_fireteam_params__to_json(p: &iface_fireteam::GetClanFireteamParams) -> Value {
     let mut m = Map::new();
     m.insert("fireteam_id".into(), Value::String((&p.fireteam_id).clone()));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_fireteam__fireteam_search_public_available_clan_fireteams_params__to_json(p: &iface_fireteam::FireteamSearchPublicAvailableClanFireteamsParams) -> Value {
+fn iface_fireteam__search_public_available_clan_fireteams_params__to_json(p: &iface_fireteam::SearchPublicAvailableClanFireteamsParams) -> Value {
     let mut m = Map::new();
     m.insert("activity_type".into(), Value::String((&p.activity_type).clone()));
     m.insert("date_range".into(), Value::String((&p.date_range).clone()));
@@ -1508,30 +1508,30 @@ fn iface_fireteam__fireteam_search_public_available_clan_fireteams_params__to_js
 }
 
 impl iface_fireteam::Guest for crate::Component {
-    fn fireteam_get_active_private_clan_fireteam_count(params: iface_fireteam::FireteamGetActivePrivateClanFireteamCountParams) -> Result<String, String> {
-        let json = iface_fireteam__fireteam_get_active_private_clan_fireteam_count_params__to_json(&params);
-        dispatch(&OP_FIRETEAM_FIRETEAM_GET_ACTIVE_PRIVATE_CLAN_FIRETEAM_COUNT, json)
+    fn get_active_private_clan_fireteam_count(params: iface_fireteam::GetActivePrivateClanFireteamCountParams) -> Result<String, String> {
+        let json = iface_fireteam__get_active_private_clan_fireteam_count_params__to_json(&params);
+        dispatch(&OP_FIRETEAM_GET_ACTIVE_PRIVATE_CLAN_FIRETEAM_COUNT, json)
     }
-    fn fireteam_get_available_clan_fireteams(params: iface_fireteam::FireteamGetAvailableClanFireteamsParams) -> Result<String, String> {
-        let json = iface_fireteam__fireteam_get_available_clan_fireteams_params__to_json(&params);
-        dispatch(&OP_FIRETEAM_FIRETEAM_GET_AVAILABLE_CLAN_FIRETEAMS, json)
+    fn get_available_clan_fireteams(params: iface_fireteam::GetAvailableClanFireteamsParams) -> Result<String, String> {
+        let json = iface_fireteam__get_available_clan_fireteams_params__to_json(&params);
+        dispatch(&OP_FIRETEAM_GET_AVAILABLE_CLAN_FIRETEAMS, json)
     }
-    fn fireteam_get_my_clan_fireteams(params: iface_fireteam::FireteamGetMyClanFireteamsParams) -> Result<String, String> {
-        let json = iface_fireteam__fireteam_get_my_clan_fireteams_params__to_json(&params);
-        dispatch(&OP_FIRETEAM_FIRETEAM_GET_MY_CLAN_FIRETEAMS, json)
+    fn get_my_clan_fireteams(params: iface_fireteam::GetMyClanFireteamsParams) -> Result<String, String> {
+        let json = iface_fireteam__get_my_clan_fireteams_params__to_json(&params);
+        dispatch(&OP_FIRETEAM_GET_MY_CLAN_FIRETEAMS, json)
     }
-    fn fireteam_get_clan_fireteam(params: iface_fireteam::FireteamGetClanFireteamParams) -> Result<String, String> {
-        let json = iface_fireteam__fireteam_get_clan_fireteam_params__to_json(&params);
-        dispatch(&OP_FIRETEAM_FIRETEAM_GET_CLAN_FIRETEAM, json)
+    fn get_clan_fireteam(params: iface_fireteam::GetClanFireteamParams) -> Result<String, String> {
+        let json = iface_fireteam__get_clan_fireteam_params__to_json(&params);
+        dispatch(&OP_FIRETEAM_GET_CLAN_FIRETEAM, json)
     }
-    fn fireteam_search_public_available_clan_fireteams(params: iface_fireteam::FireteamSearchPublicAvailableClanFireteamsParams) -> Result<String, String> {
-        let json = iface_fireteam__fireteam_search_public_available_clan_fireteams_params__to_json(&params);
-        dispatch(&OP_FIRETEAM_FIRETEAM_SEARCH_PUBLIC_AVAILABLE_CLAN_FIRETEAMS, json)
+    fn search_public_available_clan_fireteams(params: iface_fireteam::SearchPublicAvailableClanFireteamsParams) -> Result<String, String> {
+        let json = iface_fireteam__search_public_available_clan_fireteams_params__to_json(&params);
+        dispatch(&OP_FIRETEAM_SEARCH_PUBLIC_AVAILABLE_CLAN_FIRETEAMS, json)
     }
 }
 use crate::exports::autostamp::bungie::forum as iface_forum;
 
-const OP_FORUM_FORUM_GET_CORE_TOPICS_PAGED: OpSpec = OpSpec {
+const OP_FORUM_GET_CORE_TOPICS_PAGED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetCoreTopicsPaged/{page}/{sort}/{quick_date}/{category_filter}/",
     fields: &[
@@ -1545,7 +1545,7 @@ const OP_FORUM_FORUM_GET_CORE_TOPICS_PAGED: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_FORUM_TAG_SUGGESTIONS: OpSpec = OpSpec {
+const OP_FORUM_GET_FORUM_TAG_SUGGESTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetForumTagSuggestions/",
     fields: &[
@@ -1555,7 +1555,7 @@ const OP_FORUM_FORUM_GET_FORUM_TAG_SUGGESTIONS: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_POST_AND_PARENT: OpSpec = OpSpec {
+const OP_FORUM_GET_POST_AND_PARENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetPostAndParent/{child_post_id}/",
     fields: &[
@@ -1566,7 +1566,7 @@ const OP_FORUM_FORUM_GET_POST_AND_PARENT: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_POST_AND_PARENT_AWAITING_APPROVAL: OpSpec = OpSpec {
+const OP_FORUM_GET_POST_AND_PARENT_AWAITING_APPROVAL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetPostAndParentAwaitingApproval/{child_post_id}/",
     fields: &[
@@ -1577,7 +1577,7 @@ const OP_FORUM_FORUM_GET_POST_AND_PARENT_AWAITING_APPROVAL: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_POSTS_THREADED_PAGED: OpSpec = OpSpec {
+const OP_FORUM_GET_POSTS_THREADED_PAGED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetPostsThreadedPaged/{parent_post_id}/{page}/{page_size}/{reply_size}/{get_parent_post}/{root_thread_mode}/{sort_mode}/",
     fields: &[
@@ -1594,7 +1594,7 @@ const OP_FORUM_FORUM_GET_POSTS_THREADED_PAGED: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_POSTS_THREADED_PAGED_FROM_CHILD: OpSpec = OpSpec {
+const OP_FORUM_GET_POSTS_THREADED_PAGED_FROM_CHILD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetPostsThreadedPagedFromChild/{child_post_id}/{page}/{page_size}/{reply_size}/{root_thread_mode}/{sort_mode}/",
     fields: &[
@@ -1610,7 +1610,7 @@ const OP_FORUM_FORUM_GET_POSTS_THREADED_PAGED_FROM_CHILD: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_TOPIC_FOR_CONTENT: OpSpec = OpSpec {
+const OP_FORUM_GET_TOPIC_FOR_CONTENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetTopicForContent/{content_id}/",
     fields: &[
@@ -1620,7 +1620,7 @@ const OP_FORUM_FORUM_GET_TOPIC_FOR_CONTENT: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_TOPICS_PAGED: OpSpec = OpSpec {
+const OP_FORUM_GET_TOPICS_PAGED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/GetTopicsPaged/{page}/{page_size}/{group}/{sort}/{quick_date}/{category_filter}/",
     fields: &[
@@ -1637,7 +1637,7 @@ const OP_FORUM_FORUM_GET_TOPICS_PAGED: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_POLL: OpSpec = OpSpec {
+const OP_FORUM_GET_POLL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Forum/Poll/{topic_id}/",
     fields: &[
@@ -1647,7 +1647,7 @@ const OP_FORUM_FORUM_GET_POLL: OpSpec = OpSpec {
     ],
 };
 
-const OP_FORUM_FORUM_GET_RECRUITMENT_THREAD_SUMMARIES: OpSpec = OpSpec {
+const OP_FORUM_GET_RECRUITMENT_THREAD_SUMMARIES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Forum/Recruit/Summaries/",
     fields: &[
@@ -1656,7 +1656,7 @@ const OP_FORUM_FORUM_GET_RECRUITMENT_THREAD_SUMMARIES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_forum__forum_get_core_topics_paged_params__to_json(p: &iface_forum::ForumGetCoreTopicsPagedParams) -> Value {
+fn iface_forum__get_core_topics_paged_params__to_json(p: &iface_forum::GetCoreTopicsPagedParams) -> Value {
     let mut m = Map::new();
     m.insert("category_filter".into(), Value::String((&p.category_filter).clone()));
     m.insert("locales".into(), match (&p.locales) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1666,27 +1666,27 @@ fn iface_forum__forum_get_core_topics_paged_params__to_json(p: &iface_forum::For
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_forum_tag_suggestions_params__to_json(p: &iface_forum::ForumGetForumTagSuggestionsParams) -> Value {
+fn iface_forum__get_forum_tag_suggestions_params__to_json(p: &iface_forum::GetForumTagSuggestionsParams) -> Value {
     let mut m = Map::new();
     m.insert("partialtag".into(), match (&p.partialtag) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_post_and_parent_params__to_json(p: &iface_forum::ForumGetPostAndParentParams) -> Value {
+fn iface_forum__get_post_and_parent_params__to_json(p: &iface_forum::GetPostAndParentParams) -> Value {
     let mut m = Map::new();
     m.insert("child_post_id".into(), Value::String((&p.child_post_id).clone()));
     m.insert("showbanned".into(), match (&p.showbanned) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_post_and_parent_awaiting_approval_params__to_json(p: &iface_forum::ForumGetPostAndParentAwaitingApprovalParams) -> Value {
+fn iface_forum__get_post_and_parent_awaiting_approval_params__to_json(p: &iface_forum::GetPostAndParentAwaitingApprovalParams) -> Value {
     let mut m = Map::new();
     m.insert("child_post_id".into(), Value::String((&p.child_post_id).clone()));
     m.insert("showbanned".into(), match (&p.showbanned) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_posts_threaded_paged_params__to_json(p: &iface_forum::ForumGetPostsThreadedPagedParams) -> Value {
+fn iface_forum__get_posts_threaded_paged_params__to_json(p: &iface_forum::GetPostsThreadedPagedParams) -> Value {
     let mut m = Map::new();
     m.insert("get_parent_post".into(), Value::String((&p.get_parent_post).clone()));
     m.insert("page".into(), Value::String((&p.page).clone()));
@@ -1699,7 +1699,7 @@ fn iface_forum__forum_get_posts_threaded_paged_params__to_json(p: &iface_forum::
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_posts_threaded_paged_from_child_params__to_json(p: &iface_forum::ForumGetPostsThreadedPagedFromChildParams) -> Value {
+fn iface_forum__get_posts_threaded_paged_from_child_params__to_json(p: &iface_forum::GetPostsThreadedPagedFromChildParams) -> Value {
     let mut m = Map::new();
     m.insert("child_post_id".into(), Value::String((&p.child_post_id).clone()));
     m.insert("page".into(), Value::String((&p.page).clone()));
@@ -1711,13 +1711,13 @@ fn iface_forum__forum_get_posts_threaded_paged_from_child_params__to_json(p: &if
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_topic_for_content_params__to_json(p: &iface_forum::ForumGetTopicForContentParams) -> Value {
+fn iface_forum__get_topic_for_content_params__to_json(p: &iface_forum::GetTopicForContentParams) -> Value {
     let mut m = Map::new();
     m.insert("content_id".into(), Value::String((&p.content_id).clone()));
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_topics_paged_params__to_json(p: &iface_forum::ForumGetTopicsPagedParams) -> Value {
+fn iface_forum__get_topics_paged_params__to_json(p: &iface_forum::GetTopicsPagedParams) -> Value {
     let mut m = Map::new();
     m.insert("category_filter".into(), Value::String((&p.category_filter).clone()));
     m.insert("group".into(), Value::String((&p.group).clone()));
@@ -1730,51 +1730,51 @@ fn iface_forum__forum_get_topics_paged_params__to_json(p: &iface_forum::ForumGet
     Value::Object(m)
 }
 
-fn iface_forum__forum_get_poll_params__to_json(p: &iface_forum::ForumGetPollParams) -> Value {
+fn iface_forum__get_poll_params__to_json(p: &iface_forum::GetPollParams) -> Value {
     let mut m = Map::new();
     m.insert("topic_id".into(), Value::String((&p.topic_id).clone()));
     Value::Object(m)
 }
 
 impl iface_forum::Guest for crate::Component {
-    fn forum_get_core_topics_paged(params: iface_forum::ForumGetCoreTopicsPagedParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_core_topics_paged_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_CORE_TOPICS_PAGED, json)
+    fn get_core_topics_paged(params: iface_forum::GetCoreTopicsPagedParams) -> Result<String, String> {
+        let json = iface_forum__get_core_topics_paged_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_CORE_TOPICS_PAGED, json)
     }
-    fn forum_get_forum_tag_suggestions(params: iface_forum::ForumGetForumTagSuggestionsParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_forum_tag_suggestions_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_FORUM_TAG_SUGGESTIONS, json)
+    fn get_forum_tag_suggestions(params: iface_forum::GetForumTagSuggestionsParams) -> Result<String, String> {
+        let json = iface_forum__get_forum_tag_suggestions_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_FORUM_TAG_SUGGESTIONS, json)
     }
-    fn forum_get_post_and_parent(params: iface_forum::ForumGetPostAndParentParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_post_and_parent_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_POST_AND_PARENT, json)
+    fn get_post_and_parent(params: iface_forum::GetPostAndParentParams) -> Result<String, String> {
+        let json = iface_forum__get_post_and_parent_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_POST_AND_PARENT, json)
     }
-    fn forum_get_post_and_parent_awaiting_approval(params: iface_forum::ForumGetPostAndParentAwaitingApprovalParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_post_and_parent_awaiting_approval_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_POST_AND_PARENT_AWAITING_APPROVAL, json)
+    fn get_post_and_parent_awaiting_approval(params: iface_forum::GetPostAndParentAwaitingApprovalParams) -> Result<String, String> {
+        let json = iface_forum__get_post_and_parent_awaiting_approval_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_POST_AND_PARENT_AWAITING_APPROVAL, json)
     }
-    fn forum_get_posts_threaded_paged(params: iface_forum::ForumGetPostsThreadedPagedParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_posts_threaded_paged_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_POSTS_THREADED_PAGED, json)
+    fn get_posts_threaded_paged(params: iface_forum::GetPostsThreadedPagedParams) -> Result<String, String> {
+        let json = iface_forum__get_posts_threaded_paged_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_POSTS_THREADED_PAGED, json)
     }
-    fn forum_get_posts_threaded_paged_from_child(params: iface_forum::ForumGetPostsThreadedPagedFromChildParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_posts_threaded_paged_from_child_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_POSTS_THREADED_PAGED_FROM_CHILD, json)
+    fn get_posts_threaded_paged_from_child(params: iface_forum::GetPostsThreadedPagedFromChildParams) -> Result<String, String> {
+        let json = iface_forum__get_posts_threaded_paged_from_child_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_POSTS_THREADED_PAGED_FROM_CHILD, json)
     }
-    fn forum_get_topic_for_content(params: iface_forum::ForumGetTopicForContentParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_topic_for_content_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_TOPIC_FOR_CONTENT, json)
+    fn get_topic_for_content(params: iface_forum::GetTopicForContentParams) -> Result<String, String> {
+        let json = iface_forum__get_topic_for_content_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_TOPIC_FOR_CONTENT, json)
     }
-    fn forum_get_topics_paged(params: iface_forum::ForumGetTopicsPagedParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_topics_paged_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_TOPICS_PAGED, json)
+    fn get_topics_paged(params: iface_forum::GetTopicsPagedParams) -> Result<String, String> {
+        let json = iface_forum__get_topics_paged_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_TOPICS_PAGED, json)
     }
-    fn forum_get_poll(params: iface_forum::ForumGetPollParams) -> Result<String, String> {
-        let json = iface_forum__forum_get_poll_params__to_json(&params);
-        dispatch(&OP_FORUM_FORUM_GET_POLL, json)
+    fn get_poll(params: iface_forum::GetPollParams) -> Result<String, String> {
+        let json = iface_forum__get_poll_params__to_json(&params);
+        dispatch(&OP_FORUM_GET_POLL, json)
     }
-    fn forum_get_recruitment_thread_summaries() -> Result<String, String> {
-        dispatch(&OP_FORUM_FORUM_GET_RECRUITMENT_THREAD_SUMMARIES, Value::Object(Map::new()))
+    fn get_recruitment_thread_summaries() -> Result<String, String> {
+        dispatch(&OP_FORUM_GET_RECRUITMENT_THREAD_SUMMARIES, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::bungie::x as iface_x;
@@ -1839,7 +1839,7 @@ impl iface_x::Guest for crate::Component {
 }
 use crate::exports::autostamp::bungie::group_v2 as iface_group_v2;
 
-const OP_GROUP_V2_GROUP_V2_GET_AVAILABLE_AVATARS: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_AVAILABLE_AVATARS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/GetAvailableAvatars/",
     fields: &[
@@ -1848,7 +1848,7 @@ const OP_GROUP_V2_GROUP_V2_GET_AVAILABLE_AVATARS: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_AVAILABLE_THEMES: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_AVAILABLE_THEMES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/GetAvailableThemes/",
     fields: &[
@@ -1857,7 +1857,7 @@ const OP_GROUP_V2_GROUP_V2_GET_AVAILABLE_THEMES: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_USER_CLAN_INVITE_SETTING: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_USER_CLAN_INVITE_SETTING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/GetUserClanInviteSetting/{m_type}/",
     fields: &[
@@ -1868,7 +1868,7 @@ const OP_GROUP_V2_GROUP_V2_GET_USER_CLAN_INVITE_SETTING: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_GROUP_BY_NAME: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_GROUP_BY_NAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/Name/{group_name}/{group_type}/",
     fields: &[
@@ -1879,7 +1879,7 @@ const OP_GROUP_V2_GROUP_V2_GET_GROUP_BY_NAME: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_GROUP_BY_NAME_V2: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_GROUP_BY_NAME_V2: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/NameV2/",
     fields: &[
@@ -1888,7 +1888,7 @@ const OP_GROUP_V2_GROUP_V2_GET_GROUP_BY_NAME_V2: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_RECOMMENDED_GROUPS: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_RECOMMENDED_GROUPS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/Recommended/{group_type}/{create_date_range}/",
     fields: &[
@@ -1900,7 +1900,7 @@ const OP_GROUP_V2_GROUP_V2_GET_RECOMMENDED_GROUPS: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_RECOVER_GROUP_FOR_FOUNDER: OpSpec = OpSpec {
+const OP_GROUP_V2_RECOVER_GROUP_FOR_FOUNDER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/Recover/{membership_type}/{membership_id}/{group_type}/",
     fields: &[
@@ -1912,7 +1912,7 @@ const OP_GROUP_V2_GROUP_V2_RECOVER_GROUP_FOR_FOUNDER: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GROUP_SEARCH: OpSpec = OpSpec {
+const OP_GROUP_V2_GROUP_SEARCH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/Search/",
     fields: &[
@@ -1921,7 +1921,7 @@ const OP_GROUP_V2_GROUP_V2_GROUP_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_POTENTIAL_GROUPS_FOR_MEMBER: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_POTENTIAL_GROUPS_FOR_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/User/Potential/{membership_type}/{membership_id}/{filter}/{group_type}/",
     fields: &[
@@ -1934,7 +1934,7 @@ const OP_GROUP_V2_GROUP_V2_GET_POTENTIAL_GROUPS_FOR_MEMBER: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_GROUPS_FOR_MEMBER: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_GROUPS_FOR_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/User/{membership_type}/{membership_id}/{filter}/{group_type}/",
     fields: &[
@@ -1947,7 +1947,7 @@ const OP_GROUP_V2_GROUP_V2_GET_GROUPS_FOR_MEMBER: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_GROUP: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/{group_id}/",
     fields: &[
@@ -1957,7 +1957,7 @@ const OP_GROUP_V2_GROUP_V2_GET_GROUP: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_ABDICATE_FOUNDERSHIP: OpSpec = OpSpec {
+const OP_GROUP_V2_ABDICATE_FOUNDERSHIP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Admin/AbdicateFoundership/{membership_type}/{founder_id_new}/",
     fields: &[
@@ -1969,7 +1969,7 @@ const OP_GROUP_V2_GROUP_V2_ABDICATE_FOUNDERSHIP: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_ADMINS_AND_FOUNDER_OF_GROUP: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_ADMINS_AND_FOUNDER_OF_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/{group_id}/AdminsAndFounder/",
     fields: &[
@@ -1980,7 +1980,7 @@ const OP_GROUP_V2_GROUP_V2_GET_ADMINS_AND_FOUNDER_OF_GROUP: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_BANNED_MEMBERS_OF_GROUP: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_BANNED_MEMBERS_OF_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/{group_id}/Banned/",
     fields: &[
@@ -1992,7 +1992,7 @@ const OP_GROUP_V2_GROUP_V2_GET_BANNED_MEMBERS_OF_GROUP: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_EDIT_GROUP: OpSpec = OpSpec {
+const OP_GROUP_V2_EDIT_GROUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Edit/",
     fields: &[
@@ -2003,7 +2003,7 @@ const OP_GROUP_V2_GROUP_V2_EDIT_GROUP: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_EDIT_CLAN_BANNER: OpSpec = OpSpec {
+const OP_GROUP_V2_EDIT_CLAN_BANNER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/EditClanBanner/",
     fields: &[
@@ -2014,7 +2014,7 @@ const OP_GROUP_V2_GROUP_V2_EDIT_CLAN_BANNER: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_EDIT_FOUNDER_OPTIONS: OpSpec = OpSpec {
+const OP_GROUP_V2_EDIT_FOUNDER_OPTIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/EditFounderOptions/",
     fields: &[
@@ -2025,7 +2025,7 @@ const OP_GROUP_V2_GROUP_V2_EDIT_FOUNDER_OPTIONS: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_MEMBERS_OF_GROUP: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_MEMBERS_OF_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/{group_id}/Members/",
     fields: &[
@@ -2038,7 +2038,7 @@ const OP_GROUP_V2_GROUP_V2_GET_MEMBERS_OF_GROUP: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_APPROVE_PENDING: OpSpec = OpSpec {
+const OP_GROUP_V2_APPROVE_PENDING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/Approve/{membership_type}/{membership_id}/",
     fields: &[
@@ -2051,7 +2051,7 @@ const OP_GROUP_V2_GROUP_V2_APPROVE_PENDING: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_APPROVE_ALL_PENDING: OpSpec = OpSpec {
+const OP_GROUP_V2_APPROVE_ALL_PENDING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/ApproveAll/",
     fields: &[
@@ -2062,7 +2062,7 @@ const OP_GROUP_V2_GROUP_V2_APPROVE_ALL_PENDING: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_APPROVE_PENDING_FOR_LIST: OpSpec = OpSpec {
+const OP_GROUP_V2_APPROVE_PENDING_FOR_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/ApproveList/",
     fields: &[
@@ -2073,7 +2073,7 @@ const OP_GROUP_V2_GROUP_V2_APPROVE_PENDING_FOR_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_DENY_ALL_PENDING: OpSpec = OpSpec {
+const OP_GROUP_V2_DENY_ALL_PENDING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/DenyAll/",
     fields: &[
@@ -2084,7 +2084,7 @@ const OP_GROUP_V2_GROUP_V2_DENY_ALL_PENDING: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_DENY_PENDING_FOR_LIST: OpSpec = OpSpec {
+const OP_GROUP_V2_DENY_PENDING_FOR_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/DenyList/",
     fields: &[
@@ -2095,7 +2095,7 @@ const OP_GROUP_V2_GROUP_V2_DENY_PENDING_FOR_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_INDIVIDUAL_GROUP_INVITE: OpSpec = OpSpec {
+const OP_GROUP_V2_INDIVIDUAL_GROUP_INVITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/IndividualInvite/{membership_type}/{membership_id}/",
     fields: &[
@@ -2108,7 +2108,7 @@ const OP_GROUP_V2_GROUP_V2_INDIVIDUAL_GROUP_INVITE: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_INDIVIDUAL_GROUP_INVITE_CANCEL: OpSpec = OpSpec {
+const OP_GROUP_V2_INDIVIDUAL_GROUP_INVITE_CANCEL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/IndividualInviteCancel/{membership_type}/{membership_id}/",
     fields: &[
@@ -2121,7 +2121,7 @@ const OP_GROUP_V2_GROUP_V2_INDIVIDUAL_GROUP_INVITE_CANCEL: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_INVITED_INDIVIDUALS: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_INVITED_INDIVIDUALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/{group_id}/Members/InvitedIndividuals/",
     fields: &[
@@ -2133,7 +2133,7 @@ const OP_GROUP_V2_GROUP_V2_GET_INVITED_INDIVIDUALS: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_PENDING_MEMBERSHIPS: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_PENDING_MEMBERSHIPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/{group_id}/Members/Pending/",
     fields: &[
@@ -2145,7 +2145,7 @@ const OP_GROUP_V2_GROUP_V2_GET_PENDING_MEMBERSHIPS: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_BAN_MEMBER: OpSpec = OpSpec {
+const OP_GROUP_V2_BAN_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/{membership_type}/{membership_id}/Ban/",
     fields: &[
@@ -2158,7 +2158,7 @@ const OP_GROUP_V2_GROUP_V2_BAN_MEMBER: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_KICK_MEMBER: OpSpec = OpSpec {
+const OP_GROUP_V2_KICK_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/{membership_type}/{membership_id}/Kick/",
     fields: &[
@@ -2171,7 +2171,7 @@ const OP_GROUP_V2_GROUP_V2_KICK_MEMBER: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_EDIT_GROUP_MEMBERSHIP: OpSpec = OpSpec {
+const OP_GROUP_V2_EDIT_GROUP_MEMBERSHIP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/{membership_type}/{membership_id}/SetMembershipType/{member_type}/",
     fields: &[
@@ -2185,7 +2185,7 @@ const OP_GROUP_V2_GROUP_V2_EDIT_GROUP_MEMBERSHIP: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_UNBAN_MEMBER: OpSpec = OpSpec {
+const OP_GROUP_V2_UNBAN_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/Members/{membership_type}/{membership_id}/Unban/",
     fields: &[
@@ -2198,7 +2198,7 @@ const OP_GROUP_V2_GROUP_V2_UNBAN_MEMBER: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_GET_GROUP_OPTIONAL_CONVERSATIONS: OpSpec = OpSpec {
+const OP_GROUP_V2_GET_GROUP_OPTIONAL_CONVERSATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/GroupV2/{group_id}/OptionalConversations/",
     fields: &[
@@ -2208,7 +2208,7 @@ const OP_GROUP_V2_GROUP_V2_GET_GROUP_OPTIONAL_CONVERSATIONS: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_ADD_OPTIONAL_CONVERSATION: OpSpec = OpSpec {
+const OP_GROUP_V2_ADD_OPTIONAL_CONVERSATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/OptionalConversations/Add/",
     fields: &[
@@ -2219,7 +2219,7 @@ const OP_GROUP_V2_GROUP_V2_ADD_OPTIONAL_CONVERSATION: OpSpec = OpSpec {
     ],
 };
 
-const OP_GROUP_V2_GROUP_V2_EDIT_OPTIONAL_CONVERSATION: OpSpec = OpSpec {
+const OP_GROUP_V2_EDIT_OPTIONAL_CONVERSATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/GroupV2/{group_id}/OptionalConversations/Edit/{conversation_id}/",
     fields: &[
@@ -2231,27 +2231,27 @@ const OP_GROUP_V2_GROUP_V2_EDIT_OPTIONAL_CONVERSATION: OpSpec = OpSpec {
     ],
 };
 
-fn iface_group_v2__group_v2_get_user_clan_invite_setting_params__to_json(p: &iface_group_v2::GroupV2GetUserClanInviteSettingParams) -> Value {
+fn iface_group_v2__get_user_clan_invite_setting_params__to_json(p: &iface_group_v2::GetUserClanInviteSettingParams) -> Value {
     let mut m = Map::new();
     m.insert("m_type".into(), Value::String((&p.m_type).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_group_by_name_params__to_json(p: &iface_group_v2::GroupV2GetGroupByNameParams) -> Value {
+fn iface_group_v2__get_group_by_name_params__to_json(p: &iface_group_v2::GetGroupByNameParams) -> Value {
     let mut m = Map::new();
     m.insert("group_name".into(), Value::String((&p.group_name).clone()));
     m.insert("group_type".into(), Value::String((&p.group_type).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_recommended_groups_params__to_json(p: &iface_group_v2::GroupV2GetRecommendedGroupsParams) -> Value {
+fn iface_group_v2__get_recommended_groups_params__to_json(p: &iface_group_v2::GetRecommendedGroupsParams) -> Value {
     let mut m = Map::new();
     m.insert("create_date_range".into(), Value::String((&p.create_date_range).clone()));
     m.insert("group_type".into(), Value::String((&p.group_type).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_recover_group_for_founder_params__to_json(p: &iface_group_v2::GroupV2RecoverGroupForFounderParams) -> Value {
+fn iface_group_v2__recover_group_for_founder_params__to_json(p: &iface_group_v2::RecoverGroupForFounderParams) -> Value {
     let mut m = Map::new();
     m.insert("group_type".into(), Value::String((&p.group_type).clone()));
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -2259,16 +2259,7 @@ fn iface_group_v2__group_v2_recover_group_for_founder_params__to_json(p: &iface_
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_potential_groups_for_member_params__to_json(p: &iface_group_v2::GroupV2GetPotentialGroupsForMemberParams) -> Value {
-    let mut m = Map::new();
-    m.insert("filter".into(), Value::String((&p.filter).clone()));
-    m.insert("group_type".into(), Value::String((&p.group_type).clone()));
-    m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
-    m.insert("membership_type".into(), Value::String((&p.membership_type).clone()));
-    Value::Object(m)
-}
-
-fn iface_group_v2__group_v2_get_groups_for_member_params__to_json(p: &iface_group_v2::GroupV2GetGroupsForMemberParams) -> Value {
+fn iface_group_v2__get_potential_groups_for_member_params__to_json(p: &iface_group_v2::GetPotentialGroupsForMemberParams) -> Value {
     let mut m = Map::new();
     m.insert("filter".into(), Value::String((&p.filter).clone()));
     m.insert("group_type".into(), Value::String((&p.group_type).clone()));
@@ -2277,13 +2268,22 @@ fn iface_group_v2__group_v2_get_groups_for_member_params__to_json(p: &iface_grou
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_group_params__to_json(p: &iface_group_v2::GroupV2GetGroupParams) -> Value {
+fn iface_group_v2__get_groups_for_member_params__to_json(p: &iface_group_v2::GetGroupsForMemberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("filter".into(), Value::String((&p.filter).clone()));
+    m.insert("group_type".into(), Value::String((&p.group_type).clone()));
+    m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
+    m.insert("membership_type".into(), Value::String((&p.membership_type).clone()));
+    Value::Object(m)
+}
+
+fn iface_group_v2__get_group_params__to_json(p: &iface_group_v2::GetGroupParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_abdicate_foundership_params__to_json(p: &iface_group_v2::GroupV2AbdicateFoundershipParams) -> Value {
+fn iface_group_v2__abdicate_foundership_params__to_json(p: &iface_group_v2::AbdicateFoundershipParams) -> Value {
     let mut m = Map::new();
     m.insert("founder_id_new".into(), Value::String((&p.founder_id_new).clone()));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
@@ -2291,39 +2291,39 @@ fn iface_group_v2__group_v2_abdicate_foundership_params__to_json(p: &iface_group
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_admins_and_founder_of_group_params__to_json(p: &iface_group_v2::GroupV2GetAdminsAndFounderOfGroupParams) -> Value {
+fn iface_group_v2__get_admins_and_founder_of_group_params__to_json(p: &iface_group_v2::GetAdminsAndFounderOfGroupParams) -> Value {
     let mut m = Map::new();
     m.insert("currentpage".into(), Value::Number(serde_json::Number::from(*(&p.currentpage))));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_banned_members_of_group_params__to_json(p: &iface_group_v2::GroupV2GetBannedMembersOfGroupParams) -> Value {
+fn iface_group_v2__get_banned_members_of_group_params__to_json(p: &iface_group_v2::GetBannedMembersOfGroupParams) -> Value {
     let mut m = Map::new();
     m.insert("currentpage".into(), Value::Number(serde_json::Number::from(*(&p.currentpage))));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_edit_group_params__to_json(p: &iface_group_v2::GroupV2EditGroupParams) -> Value {
+fn iface_group_v2__edit_group_params__to_json(p: &iface_group_v2::EditGroupParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_edit_clan_banner_params__to_json(p: &iface_group_v2::GroupV2EditClanBannerParams) -> Value {
+fn iface_group_v2__edit_clan_banner_params__to_json(p: &iface_group_v2::EditClanBannerParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_edit_founder_options_params__to_json(p: &iface_group_v2::GroupV2EditFounderOptionsParams) -> Value {
+fn iface_group_v2__edit_founder_options_params__to_json(p: &iface_group_v2::EditFounderOptionsParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_members_of_group_params__to_json(p: &iface_group_v2::GroupV2GetMembersOfGroupParams) -> Value {
+fn iface_group_v2__get_members_of_group_params__to_json(p: &iface_group_v2::GetMembersOfGroupParams) -> Value {
     let mut m = Map::new();
     m.insert("currentpage".into(), Value::Number(serde_json::Number::from(*(&p.currentpage))));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
@@ -2332,7 +2332,7 @@ fn iface_group_v2__group_v2_get_members_of_group_params__to_json(p: &iface_group
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_approve_pending_params__to_json(p: &iface_group_v2::GroupV2ApprovePendingParams) -> Value {
+fn iface_group_v2__approve_pending_params__to_json(p: &iface_group_v2::ApprovePendingParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -2340,39 +2340,31 @@ fn iface_group_v2__group_v2_approve_pending_params__to_json(p: &iface_group_v2::
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_approve_all_pending_params__to_json(p: &iface_group_v2::GroupV2ApproveAllPendingParams) -> Value {
+fn iface_group_v2__approve_all_pending_params__to_json(p: &iface_group_v2::ApproveAllPendingParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_approve_pending_for_list_params__to_json(p: &iface_group_v2::GroupV2ApprovePendingForListParams) -> Value {
+fn iface_group_v2__approve_pending_for_list_params__to_json(p: &iface_group_v2::ApprovePendingForListParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_deny_all_pending_params__to_json(p: &iface_group_v2::GroupV2DenyAllPendingParams) -> Value {
+fn iface_group_v2__deny_all_pending_params__to_json(p: &iface_group_v2::DenyAllPendingParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_deny_pending_for_list_params__to_json(p: &iface_group_v2::GroupV2DenyPendingForListParams) -> Value {
+fn iface_group_v2__deny_pending_for_list_params__to_json(p: &iface_group_v2::DenyPendingForListParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_individual_group_invite_params__to_json(p: &iface_group_v2::GroupV2IndividualGroupInviteParams) -> Value {
-    let mut m = Map::new();
-    m.insert("group_id".into(), Value::String((&p.group_id).clone()));
-    m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
-    m.insert("membership_type".into(), Value::String((&p.membership_type).clone()));
-    Value::Object(m)
-}
-
-fn iface_group_v2__group_v2_individual_group_invite_cancel_params__to_json(p: &iface_group_v2::GroupV2IndividualGroupInviteCancelParams) -> Value {
+fn iface_group_v2__individual_group_invite_params__to_json(p: &iface_group_v2::IndividualGroupInviteParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -2380,21 +2372,29 @@ fn iface_group_v2__group_v2_individual_group_invite_cancel_params__to_json(p: &i
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_invited_individuals_params__to_json(p: &iface_group_v2::GroupV2GetInvitedIndividualsParams) -> Value {
+fn iface_group_v2__individual_group_invite_cancel_params__to_json(p: &iface_group_v2::IndividualGroupInviteCancelParams) -> Value {
+    let mut m = Map::new();
+    m.insert("group_id".into(), Value::String((&p.group_id).clone()));
+    m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
+    m.insert("membership_type".into(), Value::String((&p.membership_type).clone()));
+    Value::Object(m)
+}
+
+fn iface_group_v2__get_invited_individuals_params__to_json(p: &iface_group_v2::GetInvitedIndividualsParams) -> Value {
     let mut m = Map::new();
     m.insert("currentpage".into(), Value::Number(serde_json::Number::from(*(&p.currentpage))));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_pending_memberships_params__to_json(p: &iface_group_v2::GroupV2GetPendingMembershipsParams) -> Value {
+fn iface_group_v2__get_pending_memberships_params__to_json(p: &iface_group_v2::GetPendingMembershipsParams) -> Value {
     let mut m = Map::new();
     m.insert("currentpage".into(), Value::Number(serde_json::Number::from(*(&p.currentpage))));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_ban_member_params__to_json(p: &iface_group_v2::GroupV2BanMemberParams) -> Value {
+fn iface_group_v2__ban_member_params__to_json(p: &iface_group_v2::BanMemberParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -2402,7 +2402,7 @@ fn iface_group_v2__group_v2_ban_member_params__to_json(p: &iface_group_v2::Group
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_kick_member_params__to_json(p: &iface_group_v2::GroupV2KickMemberParams) -> Value {
+fn iface_group_v2__kick_member_params__to_json(p: &iface_group_v2::KickMemberParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -2410,7 +2410,7 @@ fn iface_group_v2__group_v2_kick_member_params__to_json(p: &iface_group_v2::Grou
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_edit_group_membership_params__to_json(p: &iface_group_v2::GroupV2EditGroupMembershipParams) -> Value {
+fn iface_group_v2__edit_group_membership_params__to_json(p: &iface_group_v2::EditGroupMembershipParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -2419,7 +2419,7 @@ fn iface_group_v2__group_v2_edit_group_membership_params__to_json(p: &iface_grou
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_unban_member_params__to_json(p: &iface_group_v2::GroupV2UnbanMemberParams) -> Value {
+fn iface_group_v2__unban_member_params__to_json(p: &iface_group_v2::UnbanMemberParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
@@ -2427,19 +2427,19 @@ fn iface_group_v2__group_v2_unban_member_params__to_json(p: &iface_group_v2::Gro
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_get_group_optional_conversations_params__to_json(p: &iface_group_v2::GroupV2GetGroupOptionalConversationsParams) -> Value {
+fn iface_group_v2__get_group_optional_conversations_params__to_json(p: &iface_group_v2::GetGroupOptionalConversationsParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_add_optional_conversation_params__to_json(p: &iface_group_v2::GroupV2AddOptionalConversationParams) -> Value {
+fn iface_group_v2__add_optional_conversation_params__to_json(p: &iface_group_v2::AddOptionalConversationParams) -> Value {
     let mut m = Map::new();
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
     Value::Object(m)
 }
 
-fn iface_group_v2__group_v2_edit_optional_conversation_params__to_json(p: &iface_group_v2::GroupV2EditOptionalConversationParams) -> Value {
+fn iface_group_v2__edit_optional_conversation_params__to_json(p: &iface_group_v2::EditOptionalConversationParams) -> Value {
     let mut m = Map::new();
     m.insert("conversation_id".into(), Value::String((&p.conversation_id).clone()));
     m.insert("group_id".into(), Value::String((&p.group_id).clone()));
@@ -2447,142 +2447,142 @@ fn iface_group_v2__group_v2_edit_optional_conversation_params__to_json(p: &iface
 }
 
 impl iface_group_v2::Guest for crate::Component {
-    fn group_v2_get_available_avatars() -> Result<String, String> {
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_AVAILABLE_AVATARS, Value::Object(Map::new()))
+    fn get_available_avatars() -> Result<String, String> {
+        dispatch(&OP_GROUP_V2_GET_AVAILABLE_AVATARS, Value::Object(Map::new()))
     }
-    fn group_v2_get_available_themes() -> Result<String, String> {
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_AVAILABLE_THEMES, Value::Object(Map::new()))
+    fn get_available_themes() -> Result<String, String> {
+        dispatch(&OP_GROUP_V2_GET_AVAILABLE_THEMES, Value::Object(Map::new()))
     }
-    fn group_v2_get_user_clan_invite_setting(params: iface_group_v2::GroupV2GetUserClanInviteSettingParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_user_clan_invite_setting_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_USER_CLAN_INVITE_SETTING, json)
+    fn get_user_clan_invite_setting(params: iface_group_v2::GetUserClanInviteSettingParams) -> Result<String, String> {
+        let json = iface_group_v2__get_user_clan_invite_setting_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_USER_CLAN_INVITE_SETTING, json)
     }
-    fn group_v2_get_group_by_name(params: iface_group_v2::GroupV2GetGroupByNameParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_group_by_name_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_GROUP_BY_NAME, json)
+    fn get_group_by_name(params: iface_group_v2::GetGroupByNameParams) -> Result<String, String> {
+        let json = iface_group_v2__get_group_by_name_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_GROUP_BY_NAME, json)
     }
-    fn group_v2_get_group_by_name_v2() -> Result<String, String> {
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_GROUP_BY_NAME_V2, Value::Object(Map::new()))
+    fn get_group_by_name_v2() -> Result<String, String> {
+        dispatch(&OP_GROUP_V2_GET_GROUP_BY_NAME_V2, Value::Object(Map::new()))
     }
-    fn group_v2_get_recommended_groups(params: iface_group_v2::GroupV2GetRecommendedGroupsParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_recommended_groups_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_RECOMMENDED_GROUPS, json)
+    fn get_recommended_groups(params: iface_group_v2::GetRecommendedGroupsParams) -> Result<String, String> {
+        let json = iface_group_v2__get_recommended_groups_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_RECOMMENDED_GROUPS, json)
     }
-    fn group_v2_recover_group_for_founder(params: iface_group_v2::GroupV2RecoverGroupForFounderParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_recover_group_for_founder_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_RECOVER_GROUP_FOR_FOUNDER, json)
+    fn recover_group_for_founder(params: iface_group_v2::RecoverGroupForFounderParams) -> Result<String, String> {
+        let json = iface_group_v2__recover_group_for_founder_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_RECOVER_GROUP_FOR_FOUNDER, json)
     }
-    fn group_v2_group_search() -> Result<String, String> {
-        dispatch(&OP_GROUP_V2_GROUP_V2_GROUP_SEARCH, Value::Object(Map::new()))
+    fn group_search() -> Result<String, String> {
+        dispatch(&OP_GROUP_V2_GROUP_SEARCH, Value::Object(Map::new()))
     }
-    fn group_v2_get_potential_groups_for_member(params: iface_group_v2::GroupV2GetPotentialGroupsForMemberParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_potential_groups_for_member_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_POTENTIAL_GROUPS_FOR_MEMBER, json)
+    fn get_potential_groups_for_member(params: iface_group_v2::GetPotentialGroupsForMemberParams) -> Result<String, String> {
+        let json = iface_group_v2__get_potential_groups_for_member_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_POTENTIAL_GROUPS_FOR_MEMBER, json)
     }
-    fn group_v2_get_groups_for_member(params: iface_group_v2::GroupV2GetGroupsForMemberParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_groups_for_member_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_GROUPS_FOR_MEMBER, json)
+    fn get_groups_for_member(params: iface_group_v2::GetGroupsForMemberParams) -> Result<String, String> {
+        let json = iface_group_v2__get_groups_for_member_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_GROUPS_FOR_MEMBER, json)
     }
-    fn group_v2_get_group(params: iface_group_v2::GroupV2GetGroupParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_group_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_GROUP, json)
+    fn get_group(params: iface_group_v2::GetGroupParams) -> Result<String, String> {
+        let json = iface_group_v2__get_group_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_GROUP, json)
     }
-    fn group_v2_abdicate_foundership(params: iface_group_v2::GroupV2AbdicateFoundershipParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_abdicate_foundership_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_ABDICATE_FOUNDERSHIP, json)
+    fn abdicate_foundership(params: iface_group_v2::AbdicateFoundershipParams) -> Result<String, String> {
+        let json = iface_group_v2__abdicate_foundership_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_ABDICATE_FOUNDERSHIP, json)
     }
-    fn group_v2_get_admins_and_founder_of_group(params: iface_group_v2::GroupV2GetAdminsAndFounderOfGroupParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_admins_and_founder_of_group_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_ADMINS_AND_FOUNDER_OF_GROUP, json)
+    fn get_admins_and_founder_of_group(params: iface_group_v2::GetAdminsAndFounderOfGroupParams) -> Result<String, String> {
+        let json = iface_group_v2__get_admins_and_founder_of_group_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_ADMINS_AND_FOUNDER_OF_GROUP, json)
     }
-    fn group_v2_get_banned_members_of_group(params: iface_group_v2::GroupV2GetBannedMembersOfGroupParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_banned_members_of_group_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_BANNED_MEMBERS_OF_GROUP, json)
+    fn get_banned_members_of_group(params: iface_group_v2::GetBannedMembersOfGroupParams) -> Result<String, String> {
+        let json = iface_group_v2__get_banned_members_of_group_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_BANNED_MEMBERS_OF_GROUP, json)
     }
-    fn group_v2_edit_group(params: iface_group_v2::GroupV2EditGroupParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_edit_group_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_EDIT_GROUP, json)
+    fn edit_group(params: iface_group_v2::EditGroupParams) -> Result<String, String> {
+        let json = iface_group_v2__edit_group_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_EDIT_GROUP, json)
     }
-    fn group_v2_edit_clan_banner(params: iface_group_v2::GroupV2EditClanBannerParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_edit_clan_banner_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_EDIT_CLAN_BANNER, json)
+    fn edit_clan_banner(params: iface_group_v2::EditClanBannerParams) -> Result<String, String> {
+        let json = iface_group_v2__edit_clan_banner_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_EDIT_CLAN_BANNER, json)
     }
-    fn group_v2_edit_founder_options(params: iface_group_v2::GroupV2EditFounderOptionsParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_edit_founder_options_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_EDIT_FOUNDER_OPTIONS, json)
+    fn edit_founder_options(params: iface_group_v2::EditFounderOptionsParams) -> Result<String, String> {
+        let json = iface_group_v2__edit_founder_options_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_EDIT_FOUNDER_OPTIONS, json)
     }
-    fn group_v2_get_members_of_group(params: iface_group_v2::GroupV2GetMembersOfGroupParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_members_of_group_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_MEMBERS_OF_GROUP, json)
+    fn get_members_of_group(params: iface_group_v2::GetMembersOfGroupParams) -> Result<String, String> {
+        let json = iface_group_v2__get_members_of_group_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_MEMBERS_OF_GROUP, json)
     }
-    fn group_v2_approve_pending(params: iface_group_v2::GroupV2ApprovePendingParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_approve_pending_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_APPROVE_PENDING, json)
+    fn approve_pending(params: iface_group_v2::ApprovePendingParams) -> Result<String, String> {
+        let json = iface_group_v2__approve_pending_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_APPROVE_PENDING, json)
     }
-    fn group_v2_approve_all_pending(params: iface_group_v2::GroupV2ApproveAllPendingParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_approve_all_pending_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_APPROVE_ALL_PENDING, json)
+    fn approve_all_pending(params: iface_group_v2::ApproveAllPendingParams) -> Result<String, String> {
+        let json = iface_group_v2__approve_all_pending_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_APPROVE_ALL_PENDING, json)
     }
-    fn group_v2_approve_pending_for_list(params: iface_group_v2::GroupV2ApprovePendingForListParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_approve_pending_for_list_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_APPROVE_PENDING_FOR_LIST, json)
+    fn approve_pending_for_list(params: iface_group_v2::ApprovePendingForListParams) -> Result<String, String> {
+        let json = iface_group_v2__approve_pending_for_list_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_APPROVE_PENDING_FOR_LIST, json)
     }
-    fn group_v2_deny_all_pending(params: iface_group_v2::GroupV2DenyAllPendingParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_deny_all_pending_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_DENY_ALL_PENDING, json)
+    fn deny_all_pending(params: iface_group_v2::DenyAllPendingParams) -> Result<String, String> {
+        let json = iface_group_v2__deny_all_pending_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_DENY_ALL_PENDING, json)
     }
-    fn group_v2_deny_pending_for_list(params: iface_group_v2::GroupV2DenyPendingForListParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_deny_pending_for_list_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_DENY_PENDING_FOR_LIST, json)
+    fn deny_pending_for_list(params: iface_group_v2::DenyPendingForListParams) -> Result<String, String> {
+        let json = iface_group_v2__deny_pending_for_list_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_DENY_PENDING_FOR_LIST, json)
     }
-    fn group_v2_individual_group_invite(params: iface_group_v2::GroupV2IndividualGroupInviteParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_individual_group_invite_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_INDIVIDUAL_GROUP_INVITE, json)
+    fn individual_group_invite(params: iface_group_v2::IndividualGroupInviteParams) -> Result<String, String> {
+        let json = iface_group_v2__individual_group_invite_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_INDIVIDUAL_GROUP_INVITE, json)
     }
-    fn group_v2_individual_group_invite_cancel(params: iface_group_v2::GroupV2IndividualGroupInviteCancelParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_individual_group_invite_cancel_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_INDIVIDUAL_GROUP_INVITE_CANCEL, json)
+    fn individual_group_invite_cancel(params: iface_group_v2::IndividualGroupInviteCancelParams) -> Result<String, String> {
+        let json = iface_group_v2__individual_group_invite_cancel_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_INDIVIDUAL_GROUP_INVITE_CANCEL, json)
     }
-    fn group_v2_get_invited_individuals(params: iface_group_v2::GroupV2GetInvitedIndividualsParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_invited_individuals_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_INVITED_INDIVIDUALS, json)
+    fn get_invited_individuals(params: iface_group_v2::GetInvitedIndividualsParams) -> Result<String, String> {
+        let json = iface_group_v2__get_invited_individuals_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_INVITED_INDIVIDUALS, json)
     }
-    fn group_v2_get_pending_memberships(params: iface_group_v2::GroupV2GetPendingMembershipsParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_pending_memberships_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_PENDING_MEMBERSHIPS, json)
+    fn get_pending_memberships(params: iface_group_v2::GetPendingMembershipsParams) -> Result<String, String> {
+        let json = iface_group_v2__get_pending_memberships_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_PENDING_MEMBERSHIPS, json)
     }
-    fn group_v2_ban_member(params: iface_group_v2::GroupV2BanMemberParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_ban_member_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_BAN_MEMBER, json)
+    fn ban_member(params: iface_group_v2::BanMemberParams) -> Result<String, String> {
+        let json = iface_group_v2__ban_member_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_BAN_MEMBER, json)
     }
-    fn group_v2_kick_member(params: iface_group_v2::GroupV2KickMemberParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_kick_member_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_KICK_MEMBER, json)
+    fn kick_member(params: iface_group_v2::KickMemberParams) -> Result<String, String> {
+        let json = iface_group_v2__kick_member_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_KICK_MEMBER, json)
     }
-    fn group_v2_edit_group_membership(params: iface_group_v2::GroupV2EditGroupMembershipParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_edit_group_membership_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_EDIT_GROUP_MEMBERSHIP, json)
+    fn edit_group_membership(params: iface_group_v2::EditGroupMembershipParams) -> Result<String, String> {
+        let json = iface_group_v2__edit_group_membership_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_EDIT_GROUP_MEMBERSHIP, json)
     }
-    fn group_v2_unban_member(params: iface_group_v2::GroupV2UnbanMemberParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_unban_member_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_UNBAN_MEMBER, json)
+    fn unban_member(params: iface_group_v2::UnbanMemberParams) -> Result<String, String> {
+        let json = iface_group_v2__unban_member_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_UNBAN_MEMBER, json)
     }
-    fn group_v2_get_group_optional_conversations(params: iface_group_v2::GroupV2GetGroupOptionalConversationsParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_get_group_optional_conversations_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_GET_GROUP_OPTIONAL_CONVERSATIONS, json)
+    fn get_group_optional_conversations(params: iface_group_v2::GetGroupOptionalConversationsParams) -> Result<String, String> {
+        let json = iface_group_v2__get_group_optional_conversations_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_GET_GROUP_OPTIONAL_CONVERSATIONS, json)
     }
-    fn group_v2_add_optional_conversation(params: iface_group_v2::GroupV2AddOptionalConversationParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_add_optional_conversation_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_ADD_OPTIONAL_CONVERSATION, json)
+    fn add_optional_conversation(params: iface_group_v2::AddOptionalConversationParams) -> Result<String, String> {
+        let json = iface_group_v2__add_optional_conversation_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_ADD_OPTIONAL_CONVERSATION, json)
     }
-    fn group_v2_edit_optional_conversation(params: iface_group_v2::GroupV2EditOptionalConversationParams) -> Result<String, String> {
-        let json = iface_group_v2__group_v2_edit_optional_conversation_params__to_json(&params);
-        dispatch(&OP_GROUP_V2_GROUP_V2_EDIT_OPTIONAL_CONVERSATION, json)
+    fn edit_optional_conversation(params: iface_group_v2::EditOptionalConversationParams) -> Result<String, String> {
+        let json = iface_group_v2__edit_optional_conversation_params__to_json(&params);
+        dispatch(&OP_GROUP_V2_EDIT_OPTIONAL_CONVERSATION, json)
     }
 }
 use crate::exports::autostamp::bungie::social as iface_social;
 
-const OP_SOCIAL_SOCIAL_GET_FRIEND_LIST: OpSpec = OpSpec {
+const OP_SOCIAL_GET_FRIEND_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Social/Friends/",
     fields: &[
@@ -2592,7 +2592,7 @@ const OP_SOCIAL_SOCIAL_GET_FRIEND_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_SOCIAL_SOCIAL_ISSUE_FRIEND_REQUEST: OpSpec = OpSpec {
+const OP_SOCIAL_ISSUE_FRIEND_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Social/Friends/Add/{membership_id}/",
     fields: &[
@@ -2603,7 +2603,7 @@ const OP_SOCIAL_SOCIAL_ISSUE_FRIEND_REQUEST: OpSpec = OpSpec {
     ],
 };
 
-const OP_SOCIAL_SOCIAL_REMOVE_FRIEND: OpSpec = OpSpec {
+const OP_SOCIAL_REMOVE_FRIEND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Social/Friends/Remove/{membership_id}/",
     fields: &[
@@ -2614,7 +2614,7 @@ const OP_SOCIAL_SOCIAL_REMOVE_FRIEND: OpSpec = OpSpec {
     ],
 };
 
-const OP_SOCIAL_SOCIAL_GET_FRIEND_REQUEST_LIST: OpSpec = OpSpec {
+const OP_SOCIAL_GET_FRIEND_REQUEST_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Social/Friends/Requests/",
     fields: &[
@@ -2624,7 +2624,7 @@ const OP_SOCIAL_SOCIAL_GET_FRIEND_REQUEST_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_SOCIAL_SOCIAL_ACCEPT_FRIEND_REQUEST: OpSpec = OpSpec {
+const OP_SOCIAL_ACCEPT_FRIEND_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Social/Friends/Requests/Accept/{membership_id}/",
     fields: &[
@@ -2635,7 +2635,7 @@ const OP_SOCIAL_SOCIAL_ACCEPT_FRIEND_REQUEST: OpSpec = OpSpec {
     ],
 };
 
-const OP_SOCIAL_SOCIAL_DECLINE_FRIEND_REQUEST: OpSpec = OpSpec {
+const OP_SOCIAL_DECLINE_FRIEND_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Social/Friends/Requests/Decline/{membership_id}/",
     fields: &[
@@ -2646,7 +2646,7 @@ const OP_SOCIAL_SOCIAL_DECLINE_FRIEND_REQUEST: OpSpec = OpSpec {
     ],
 };
 
-const OP_SOCIAL_SOCIAL_REMOVE_FRIEND_REQUEST: OpSpec = OpSpec {
+const OP_SOCIAL_REMOVE_FRIEND_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Social/Friends/Requests/Remove/{membership_id}/",
     fields: &[
@@ -2657,7 +2657,7 @@ const OP_SOCIAL_SOCIAL_REMOVE_FRIEND_REQUEST: OpSpec = OpSpec {
     ],
 };
 
-const OP_SOCIAL_SOCIAL_GET_PLATFORM_FRIEND_LIST: OpSpec = OpSpec {
+const OP_SOCIAL_GET_PLATFORM_FRIEND_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Social/PlatformFriends/{friend_platform}/{page}/",
     fields: &[
@@ -2668,37 +2668,37 @@ const OP_SOCIAL_SOCIAL_GET_PLATFORM_FRIEND_LIST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_social__social_issue_friend_request_params__to_json(p: &iface_social::SocialIssueFriendRequestParams) -> Value {
+fn iface_social__issue_friend_request_params__to_json(p: &iface_social::IssueFriendRequestParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_social__social_remove_friend_params__to_json(p: &iface_social::SocialRemoveFriendParams) -> Value {
+fn iface_social__remove_friend_params__to_json(p: &iface_social::RemoveFriendParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_social__social_accept_friend_request_params__to_json(p: &iface_social::SocialAcceptFriendRequestParams) -> Value {
+fn iface_social__accept_friend_request_params__to_json(p: &iface_social::AcceptFriendRequestParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_social__social_decline_friend_request_params__to_json(p: &iface_social::SocialDeclineFriendRequestParams) -> Value {
+fn iface_social__decline_friend_request_params__to_json(p: &iface_social::DeclineFriendRequestParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_social__social_remove_friend_request_params__to_json(p: &iface_social::SocialRemoveFriendRequestParams) -> Value {
+fn iface_social__remove_friend_request_params__to_json(p: &iface_social::RemoveFriendRequestParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_social__social_get_platform_friend_list_params__to_json(p: &iface_social::SocialGetPlatformFriendListParams) -> Value {
+fn iface_social__get_platform_friend_list_params__to_json(p: &iface_social::GetPlatformFriendListParams) -> Value {
     let mut m = Map::new();
     m.insert("friend_platform".into(), Value::String((&p.friend_platform).clone()));
     m.insert("page".into(), Value::String((&p.page).clone()));
@@ -2706,40 +2706,40 @@ fn iface_social__social_get_platform_friend_list_params__to_json(p: &iface_socia
 }
 
 impl iface_social::Guest for crate::Component {
-    fn social_get_friend_list() -> Result<String, String> {
-        dispatch(&OP_SOCIAL_SOCIAL_GET_FRIEND_LIST, Value::Object(Map::new()))
+    fn get_friend_list() -> Result<String, String> {
+        dispatch(&OP_SOCIAL_GET_FRIEND_LIST, Value::Object(Map::new()))
     }
-    fn social_issue_friend_request(params: iface_social::SocialIssueFriendRequestParams) -> Result<String, String> {
-        let json = iface_social__social_issue_friend_request_params__to_json(&params);
-        dispatch(&OP_SOCIAL_SOCIAL_ISSUE_FRIEND_REQUEST, json)
+    fn issue_friend_request(params: iface_social::IssueFriendRequestParams) -> Result<String, String> {
+        let json = iface_social__issue_friend_request_params__to_json(&params);
+        dispatch(&OP_SOCIAL_ISSUE_FRIEND_REQUEST, json)
     }
-    fn social_remove_friend(params: iface_social::SocialRemoveFriendParams) -> Result<String, String> {
-        let json = iface_social__social_remove_friend_params__to_json(&params);
-        dispatch(&OP_SOCIAL_SOCIAL_REMOVE_FRIEND, json)
+    fn remove_friend(params: iface_social::RemoveFriendParams) -> Result<String, String> {
+        let json = iface_social__remove_friend_params__to_json(&params);
+        dispatch(&OP_SOCIAL_REMOVE_FRIEND, json)
     }
-    fn social_get_friend_request_list() -> Result<String, String> {
-        dispatch(&OP_SOCIAL_SOCIAL_GET_FRIEND_REQUEST_LIST, Value::Object(Map::new()))
+    fn get_friend_request_list() -> Result<String, String> {
+        dispatch(&OP_SOCIAL_GET_FRIEND_REQUEST_LIST, Value::Object(Map::new()))
     }
-    fn social_accept_friend_request(params: iface_social::SocialAcceptFriendRequestParams) -> Result<String, String> {
-        let json = iface_social__social_accept_friend_request_params__to_json(&params);
-        dispatch(&OP_SOCIAL_SOCIAL_ACCEPT_FRIEND_REQUEST, json)
+    fn accept_friend_request(params: iface_social::AcceptFriendRequestParams) -> Result<String, String> {
+        let json = iface_social__accept_friend_request_params__to_json(&params);
+        dispatch(&OP_SOCIAL_ACCEPT_FRIEND_REQUEST, json)
     }
-    fn social_decline_friend_request(params: iface_social::SocialDeclineFriendRequestParams) -> Result<String, String> {
-        let json = iface_social__social_decline_friend_request_params__to_json(&params);
-        dispatch(&OP_SOCIAL_SOCIAL_DECLINE_FRIEND_REQUEST, json)
+    fn decline_friend_request(params: iface_social::DeclineFriendRequestParams) -> Result<String, String> {
+        let json = iface_social__decline_friend_request_params__to_json(&params);
+        dispatch(&OP_SOCIAL_DECLINE_FRIEND_REQUEST, json)
     }
-    fn social_remove_friend_request(params: iface_social::SocialRemoveFriendRequestParams) -> Result<String, String> {
-        let json = iface_social__social_remove_friend_request_params__to_json(&params);
-        dispatch(&OP_SOCIAL_SOCIAL_REMOVE_FRIEND_REQUEST, json)
+    fn remove_friend_request(params: iface_social::RemoveFriendRequestParams) -> Result<String, String> {
+        let json = iface_social__remove_friend_request_params__to_json(&params);
+        dispatch(&OP_SOCIAL_REMOVE_FRIEND_REQUEST, json)
     }
-    fn social_get_platform_friend_list(params: iface_social::SocialGetPlatformFriendListParams) -> Result<String, String> {
-        let json = iface_social__social_get_platform_friend_list_params__to_json(&params);
-        dispatch(&OP_SOCIAL_SOCIAL_GET_PLATFORM_FRIEND_LIST, json)
+    fn get_platform_friend_list(params: iface_social::GetPlatformFriendListParams) -> Result<String, String> {
+        let json = iface_social__get_platform_friend_list_params__to_json(&params);
+        dispatch(&OP_SOCIAL_GET_PLATFORM_FRIEND_LIST, json)
     }
 }
 use crate::exports::autostamp::bungie::tokens as iface_tokens;
 
-const OP_TOKENS_TOKENS_APPLY_MISSING_PARTNER_OFFERS_WITHOUT_CLAIM: OpSpec = OpSpec {
+const OP_TOKENS_APPLY_MISSING_PARTNER_OFFERS_WITHOUT_CLAIM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Tokens/Partner/ApplyMissingOffers/{partner_application_id}/{target_bnet_membership_id}/",
     fields: &[
@@ -2751,7 +2751,7 @@ const OP_TOKENS_TOKENS_APPLY_MISSING_PARTNER_OFFERS_WITHOUT_CLAIM: OpSpec = OpSp
     ],
 };
 
-const OP_TOKENS_TOKENS_CLAIM_PARTNER_OFFER: OpSpec = OpSpec {
+const OP_TOKENS_CLAIM_PARTNER_OFFER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Tokens/Partner/ClaimOffer/",
     fields: &[
@@ -2761,7 +2761,7 @@ const OP_TOKENS_TOKENS_CLAIM_PARTNER_OFFER: OpSpec = OpSpec {
     ],
 };
 
-const OP_TOKENS_TOKENS_FORCE_DROPS_REPAIR: OpSpec = OpSpec {
+const OP_TOKENS_FORCE_DROPS_REPAIR: OpSpec = OpSpec {
     method: "POST",
     path_template: "/Tokens/Partner/ForceDropsRepair/",
     fields: &[
@@ -2771,7 +2771,7 @@ const OP_TOKENS_TOKENS_FORCE_DROPS_REPAIR: OpSpec = OpSpec {
     ],
 };
 
-const OP_TOKENS_TOKENS_GET_PARTNER_OFFER_SKU_HISTORY: OpSpec = OpSpec {
+const OP_TOKENS_GET_PARTNER_OFFER_SKU_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Tokens/Partner/History/{partner_application_id}/{target_bnet_membership_id}/",
     fields: &[
@@ -2783,7 +2783,7 @@ const OP_TOKENS_TOKENS_GET_PARTNER_OFFER_SKU_HISTORY: OpSpec = OpSpec {
     ],
 };
 
-const OP_TOKENS_TOKENS_GET_PARTNER_REWARD_HISTORY: OpSpec = OpSpec {
+const OP_TOKENS_GET_PARTNER_REWARD_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Tokens/Partner/History/{target_bnet_membership_id}/Application/{partner_application_id}/",
     fields: &[
@@ -2795,7 +2795,7 @@ const OP_TOKENS_TOKENS_GET_PARTNER_REWARD_HISTORY: OpSpec = OpSpec {
     ],
 };
 
-const OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_LIST: OpSpec = OpSpec {
+const OP_TOKENS_GET_BUNGIE_REWARDS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Tokens/Rewards/BungieRewards/",
     fields: &[
@@ -2804,7 +2804,7 @@ const OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_FOR_PLATFORM_USER: OpSpec = OpSpec {
+const OP_TOKENS_GET_BUNGIE_REWARDS_FOR_PLATFORM_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Tokens/Rewards/GetRewardsForPlatformUser/{membership_id}/{membership_type}/",
     fields: &[
@@ -2816,7 +2816,7 @@ const OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_FOR_PLATFORM_USER: OpSpec = OpSpec {
     ],
 };
 
-const OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_FOR_USER: OpSpec = OpSpec {
+const OP_TOKENS_GET_BUNGIE_REWARDS_FOR_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Tokens/Rewards/GetRewardsForUser/{membership_id}/",
     fields: &[
@@ -2827,74 +2827,74 @@ const OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_FOR_USER: OpSpec = OpSpec {
     ],
 };
 
-fn iface_tokens__tokens_apply_missing_partner_offers_without_claim_params__to_json(p: &iface_tokens::TokensApplyMissingPartnerOffersWithoutClaimParams) -> Value {
+fn iface_tokens__apply_missing_partner_offers_without_claim_params__to_json(p: &iface_tokens::ApplyMissingPartnerOffersWithoutClaimParams) -> Value {
     let mut m = Map::new();
     m.insert("partner_application_id".into(), Value::String((&p.partner_application_id).clone()));
     m.insert("target_bnet_membership_id".into(), Value::String((&p.target_bnet_membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_tokens__tokens_get_partner_offer_sku_history_params__to_json(p: &iface_tokens::TokensGetPartnerOfferSkuHistoryParams) -> Value {
+fn iface_tokens__get_partner_offer_sku_history_params__to_json(p: &iface_tokens::GetPartnerOfferSkuHistoryParams) -> Value {
     let mut m = Map::new();
     m.insert("partner_application_id".into(), Value::String((&p.partner_application_id).clone()));
     m.insert("target_bnet_membership_id".into(), Value::String((&p.target_bnet_membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_tokens__tokens_get_partner_reward_history_params__to_json(p: &iface_tokens::TokensGetPartnerRewardHistoryParams) -> Value {
+fn iface_tokens__get_partner_reward_history_params__to_json(p: &iface_tokens::GetPartnerRewardHistoryParams) -> Value {
     let mut m = Map::new();
     m.insert("partner_application_id".into(), Value::String((&p.partner_application_id).clone()));
     m.insert("target_bnet_membership_id".into(), Value::String((&p.target_bnet_membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_tokens__tokens_get_bungie_rewards_for_platform_user_params__to_json(p: &iface_tokens::TokensGetBungieRewardsForPlatformUserParams) -> Value {
+fn iface_tokens__get_bungie_rewards_for_platform_user_params__to_json(p: &iface_tokens::GetBungieRewardsForPlatformUserParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     m.insert("membership_type".into(), Value::String((&p.membership_type).clone()));
     Value::Object(m)
 }
 
-fn iface_tokens__tokens_get_bungie_rewards_for_user_params__to_json(p: &iface_tokens::TokensGetBungieRewardsForUserParams) -> Value {
+fn iface_tokens__get_bungie_rewards_for_user_params__to_json(p: &iface_tokens::GetBungieRewardsForUserParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
 impl iface_tokens::Guest for crate::Component {
-    fn tokens_apply_missing_partner_offers_without_claim(params: iface_tokens::TokensApplyMissingPartnerOffersWithoutClaimParams) -> Result<String, String> {
-        let json = iface_tokens__tokens_apply_missing_partner_offers_without_claim_params__to_json(&params);
-        dispatch(&OP_TOKENS_TOKENS_APPLY_MISSING_PARTNER_OFFERS_WITHOUT_CLAIM, json)
+    fn apply_missing_partner_offers_without_claim(params: iface_tokens::ApplyMissingPartnerOffersWithoutClaimParams) -> Result<String, String> {
+        let json = iface_tokens__apply_missing_partner_offers_without_claim_params__to_json(&params);
+        dispatch(&OP_TOKENS_APPLY_MISSING_PARTNER_OFFERS_WITHOUT_CLAIM, json)
     }
-    fn tokens_claim_partner_offer() -> Result<String, String> {
-        dispatch(&OP_TOKENS_TOKENS_CLAIM_PARTNER_OFFER, Value::Object(Map::new()))
+    fn claim_partner_offer() -> Result<String, String> {
+        dispatch(&OP_TOKENS_CLAIM_PARTNER_OFFER, Value::Object(Map::new()))
     }
-    fn tokens_force_drops_repair() -> Result<String, String> {
-        dispatch(&OP_TOKENS_TOKENS_FORCE_DROPS_REPAIR, Value::Object(Map::new()))
+    fn force_drops_repair() -> Result<String, String> {
+        dispatch(&OP_TOKENS_FORCE_DROPS_REPAIR, Value::Object(Map::new()))
     }
-    fn tokens_get_partner_offer_sku_history(params: iface_tokens::TokensGetPartnerOfferSkuHistoryParams) -> Result<String, String> {
-        let json = iface_tokens__tokens_get_partner_offer_sku_history_params__to_json(&params);
-        dispatch(&OP_TOKENS_TOKENS_GET_PARTNER_OFFER_SKU_HISTORY, json)
+    fn get_partner_offer_sku_history(params: iface_tokens::GetPartnerOfferSkuHistoryParams) -> Result<String, String> {
+        let json = iface_tokens__get_partner_offer_sku_history_params__to_json(&params);
+        dispatch(&OP_TOKENS_GET_PARTNER_OFFER_SKU_HISTORY, json)
     }
-    fn tokens_get_partner_reward_history(params: iface_tokens::TokensGetPartnerRewardHistoryParams) -> Result<String, String> {
-        let json = iface_tokens__tokens_get_partner_reward_history_params__to_json(&params);
-        dispatch(&OP_TOKENS_TOKENS_GET_PARTNER_REWARD_HISTORY, json)
+    fn get_partner_reward_history(params: iface_tokens::GetPartnerRewardHistoryParams) -> Result<String, String> {
+        let json = iface_tokens__get_partner_reward_history_params__to_json(&params);
+        dispatch(&OP_TOKENS_GET_PARTNER_REWARD_HISTORY, json)
     }
-    fn tokens_get_bungie_rewards_list() -> Result<String, String> {
-        dispatch(&OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_LIST, Value::Object(Map::new()))
+    fn get_bungie_rewards_list() -> Result<String, String> {
+        dispatch(&OP_TOKENS_GET_BUNGIE_REWARDS_LIST, Value::Object(Map::new()))
     }
-    fn tokens_get_bungie_rewards_for_platform_user(params: iface_tokens::TokensGetBungieRewardsForPlatformUserParams) -> Result<String, String> {
-        let json = iface_tokens__tokens_get_bungie_rewards_for_platform_user_params__to_json(&params);
-        dispatch(&OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_FOR_PLATFORM_USER, json)
+    fn get_bungie_rewards_for_platform_user(params: iface_tokens::GetBungieRewardsForPlatformUserParams) -> Result<String, String> {
+        let json = iface_tokens__get_bungie_rewards_for_platform_user_params__to_json(&params);
+        dispatch(&OP_TOKENS_GET_BUNGIE_REWARDS_FOR_PLATFORM_USER, json)
     }
-    fn tokens_get_bungie_rewards_for_user(params: iface_tokens::TokensGetBungieRewardsForUserParams) -> Result<String, String> {
-        let json = iface_tokens__tokens_get_bungie_rewards_for_user_params__to_json(&params);
-        dispatch(&OP_TOKENS_TOKENS_GET_BUNGIE_REWARDS_FOR_USER, json)
+    fn get_bungie_rewards_for_user(params: iface_tokens::GetBungieRewardsForUserParams) -> Result<String, String> {
+        let json = iface_tokens__get_bungie_rewards_for_user_params__to_json(&params);
+        dispatch(&OP_TOKENS_GET_BUNGIE_REWARDS_FOR_USER, json)
     }
 }
 use crate::exports::autostamp::bungie::trending as iface_trending;
 
-const OP_TRENDING_TRENDING_GET_TRENDING_CATEGORIES: OpSpec = OpSpec {
+const OP_TRENDING_GET_TRENDING_CATEGORIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Trending/Categories/",
     fields: &[
@@ -2903,7 +2903,7 @@ const OP_TRENDING_TRENDING_GET_TRENDING_CATEGORIES: OpSpec = OpSpec {
     ],
 };
 
-const OP_TRENDING_TRENDING_GET_TRENDING_CATEGORY: OpSpec = OpSpec {
+const OP_TRENDING_GET_TRENDING_CATEGORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Trending/Categories/{category_id}/{page_number}/",
     fields: &[
@@ -2914,7 +2914,7 @@ const OP_TRENDING_TRENDING_GET_TRENDING_CATEGORY: OpSpec = OpSpec {
     ],
 };
 
-const OP_TRENDING_TRENDING_GET_TRENDING_ENTRY_DETAIL: OpSpec = OpSpec {
+const OP_TRENDING_GET_TRENDING_ENTRY_DETAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Trending/Details/{trending_entry_type}/{identifier}/",
     fields: &[
@@ -2925,14 +2925,14 @@ const OP_TRENDING_TRENDING_GET_TRENDING_ENTRY_DETAIL: OpSpec = OpSpec {
     ],
 };
 
-fn iface_trending__trending_get_trending_category_params__to_json(p: &iface_trending::TrendingGetTrendingCategoryParams) -> Value {
+fn iface_trending__get_trending_category_params__to_json(p: &iface_trending::GetTrendingCategoryParams) -> Value {
     let mut m = Map::new();
     m.insert("category_id".into(), Value::String((&p.category_id).clone()));
     m.insert("page_number".into(), Value::String((&p.page_number).clone()));
     Value::Object(m)
 }
 
-fn iface_trending__trending_get_trending_entry_detail_params__to_json(p: &iface_trending::TrendingGetTrendingEntryDetailParams) -> Value {
+fn iface_trending__get_trending_entry_detail_params__to_json(p: &iface_trending::GetTrendingEntryDetailParams) -> Value {
     let mut m = Map::new();
     m.insert("identifier".into(), Value::String((&p.identifier).clone()));
     m.insert("trending_entry_type".into(), Value::String((&p.trending_entry_type).clone()));
@@ -2940,21 +2940,21 @@ fn iface_trending__trending_get_trending_entry_detail_params__to_json(p: &iface_
 }
 
 impl iface_trending::Guest for crate::Component {
-    fn trending_get_trending_categories() -> Result<String, String> {
-        dispatch(&OP_TRENDING_TRENDING_GET_TRENDING_CATEGORIES, Value::Object(Map::new()))
+    fn get_trending_categories() -> Result<String, String> {
+        dispatch(&OP_TRENDING_GET_TRENDING_CATEGORIES, Value::Object(Map::new()))
     }
-    fn trending_get_trending_category(params: iface_trending::TrendingGetTrendingCategoryParams) -> Result<String, String> {
-        let json = iface_trending__trending_get_trending_category_params__to_json(&params);
-        dispatch(&OP_TRENDING_TRENDING_GET_TRENDING_CATEGORY, json)
+    fn get_trending_category(params: iface_trending::GetTrendingCategoryParams) -> Result<String, String> {
+        let json = iface_trending__get_trending_category_params__to_json(&params);
+        dispatch(&OP_TRENDING_GET_TRENDING_CATEGORY, json)
     }
-    fn trending_get_trending_entry_detail(params: iface_trending::TrendingGetTrendingEntryDetailParams) -> Result<String, String> {
-        let json = iface_trending__trending_get_trending_entry_detail_params__to_json(&params);
-        dispatch(&OP_TRENDING_TRENDING_GET_TRENDING_ENTRY_DETAIL, json)
+    fn get_trending_entry_detail(params: iface_trending::GetTrendingEntryDetailParams) -> Result<String, String> {
+        let json = iface_trending__get_trending_entry_detail_params__to_json(&params);
+        dispatch(&OP_TRENDING_GET_TRENDING_ENTRY_DETAIL, json)
     }
 }
 use crate::exports::autostamp::bungie::user as iface_user;
 
-const OP_USER_USER_GET_AVAILABLE_THEMES: OpSpec = OpSpec {
+const OP_USER_GET_AVAILABLE_THEMES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/GetAvailableThemes/",
     fields: &[
@@ -2963,7 +2963,7 @@ const OP_USER_USER_GET_AVAILABLE_THEMES: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_GET_BUNGIE_NET_USER_BY_ID: OpSpec = OpSpec {
+const OP_USER_GET_BUNGIE_NET_USER_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/GetBungieNetUserById/{id}/",
     fields: &[
@@ -2973,7 +2973,7 @@ const OP_USER_USER_GET_BUNGIE_NET_USER_BY_ID: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_GET_CREDENTIAL_TYPES_FOR_TARGET_ACCOUNT: OpSpec = OpSpec {
+const OP_USER_GET_CREDENTIAL_TYPES_FOR_TARGET_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/GetCredentialTypesForTargetAccount/{membership_id}/",
     fields: &[
@@ -2983,7 +2983,7 @@ const OP_USER_USER_GET_CREDENTIAL_TYPES_FOR_TARGET_ACCOUNT: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_GET_MEMBERSHIP_FROM_HARD_LINKED_CREDENTIAL: OpSpec = OpSpec {
+const OP_USER_GET_MEMBERSHIP_FROM_HARD_LINKED_CREDENTIAL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/GetMembershipFromHardLinkedCredential/{cr_type}/{credential}/",
     fields: &[
@@ -2994,7 +2994,7 @@ const OP_USER_USER_GET_MEMBERSHIP_FROM_HARD_LINKED_CREDENTIAL: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_GET_MEMBERSHIP_DATA_BY_ID: OpSpec = OpSpec {
+const OP_USER_GET_MEMBERSHIP_DATA_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/GetMembershipsById/{membership_id}/{membership_type}/",
     fields: &[
@@ -3005,7 +3005,7 @@ const OP_USER_USER_GET_MEMBERSHIP_DATA_BY_ID: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_GET_MEMBERSHIP_DATA_FOR_CURRENT_USER: OpSpec = OpSpec {
+const OP_USER_GET_MEMBERSHIP_DATA_FOR_CURRENT_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/GetMembershipsForCurrentUser/",
     fields: &[
@@ -3015,7 +3015,7 @@ const OP_USER_USER_GET_MEMBERSHIP_DATA_FOR_CURRENT_USER: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_GET_SANITIZED_PLATFORM_DISPLAY_NAMES: OpSpec = OpSpec {
+const OP_USER_GET_SANITIZED_PLATFORM_DISPLAY_NAMES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/GetSanitizedPlatformDisplayNames/{membership_id}/",
     fields: &[
@@ -3025,7 +3025,7 @@ const OP_USER_USER_GET_SANITIZED_PLATFORM_DISPLAY_NAMES: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_SEARCH_BY_GLOBAL_NAME_POST: OpSpec = OpSpec {
+const OP_USER_SEARCH_BY_GLOBAL_NAME_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/User/Search/GlobalName/{page}/",
     fields: &[
@@ -3035,7 +3035,7 @@ const OP_USER_USER_SEARCH_BY_GLOBAL_NAME_POST: OpSpec = OpSpec {
     ],
 };
 
-const OP_USER_USER_SEARCH_BY_GLOBAL_NAME_PREFIX: OpSpec = OpSpec {
+const OP_USER_SEARCH_BY_GLOBAL_NAME_PREFIX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/User/Search/Prefix/{display_name_prefix}/{page}/",
     fields: &[
@@ -3046,45 +3046,45 @@ const OP_USER_USER_SEARCH_BY_GLOBAL_NAME_PREFIX: OpSpec = OpSpec {
     ],
 };
 
-fn iface_user__user_get_bungie_net_user_by_id_params__to_json(p: &iface_user::UserGetBungieNetUserByIdParams) -> Value {
+fn iface_user__get_bungie_net_user_by_id_params__to_json(p: &iface_user::GetBungieNetUserByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_user__user_get_credential_types_for_target_account_params__to_json(p: &iface_user::UserGetCredentialTypesForTargetAccountParams) -> Value {
+fn iface_user__get_credential_types_for_target_account_params__to_json(p: &iface_user::GetCredentialTypesForTargetAccountParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_user__user_get_membership_from_hard_linked_credential_params__to_json(p: &iface_user::UserGetMembershipFromHardLinkedCredentialParams) -> Value {
+fn iface_user__get_membership_from_hard_linked_credential_params__to_json(p: &iface_user::GetMembershipFromHardLinkedCredentialParams) -> Value {
     let mut m = Map::new();
     m.insert("credential".into(), Value::String((&p.credential).clone()));
     m.insert("cr_type".into(), Value::String((&p.cr_type).clone()));
     Value::Object(m)
 }
 
-fn iface_user__user_get_membership_data_by_id_params__to_json(p: &iface_user::UserGetMembershipDataByIdParams) -> Value {
+fn iface_user__get_membership_data_by_id_params__to_json(p: &iface_user::GetMembershipDataByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     m.insert("membership_type".into(), Value::String((&p.membership_type).clone()));
     Value::Object(m)
 }
 
-fn iface_user__user_get_sanitized_platform_display_names_params__to_json(p: &iface_user::UserGetSanitizedPlatformDisplayNamesParams) -> Value {
+fn iface_user__get_sanitized_platform_display_names_params__to_json(p: &iface_user::GetSanitizedPlatformDisplayNamesParams) -> Value {
     let mut m = Map::new();
     m.insert("membership_id".into(), Value::String((&p.membership_id).clone()));
     Value::Object(m)
 }
 
-fn iface_user__user_search_by_global_name_post_params__to_json(p: &iface_user::UserSearchByGlobalNamePostParams) -> Value {
+fn iface_user__search_by_global_name_post_params__to_json(p: &iface_user::SearchByGlobalNamePostParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), Value::String((&p.page).clone()));
     Value::Object(m)
 }
 
-fn iface_user__user_search_by_global_name_prefix_params__to_json(p: &iface_user::UserSearchByGlobalNamePrefixParams) -> Value {
+fn iface_user__search_by_global_name_prefix_params__to_json(p: &iface_user::SearchByGlobalNamePrefixParams) -> Value {
     let mut m = Map::new();
     m.insert("display_name_prefix".into(), Value::String((&p.display_name_prefix).clone()));
     m.insert("page".into(), Value::String((&p.page).clone()));
@@ -3092,39 +3092,39 @@ fn iface_user__user_search_by_global_name_prefix_params__to_json(p: &iface_user:
 }
 
 impl iface_user::Guest for crate::Component {
-    fn user_get_available_themes() -> Result<String, String> {
-        dispatch(&OP_USER_USER_GET_AVAILABLE_THEMES, Value::Object(Map::new()))
+    fn get_available_themes() -> Result<String, String> {
+        dispatch(&OP_USER_GET_AVAILABLE_THEMES, Value::Object(Map::new()))
     }
-    fn user_get_bungie_net_user_by_id(params: iface_user::UserGetBungieNetUserByIdParams) -> Result<String, String> {
-        let json = iface_user__user_get_bungie_net_user_by_id_params__to_json(&params);
-        dispatch(&OP_USER_USER_GET_BUNGIE_NET_USER_BY_ID, json)
+    fn get_bungie_net_user_by_id(params: iface_user::GetBungieNetUserByIdParams) -> Result<String, String> {
+        let json = iface_user__get_bungie_net_user_by_id_params__to_json(&params);
+        dispatch(&OP_USER_GET_BUNGIE_NET_USER_BY_ID, json)
     }
-    fn user_get_credential_types_for_target_account(params: iface_user::UserGetCredentialTypesForTargetAccountParams) -> Result<String, String> {
-        let json = iface_user__user_get_credential_types_for_target_account_params__to_json(&params);
-        dispatch(&OP_USER_USER_GET_CREDENTIAL_TYPES_FOR_TARGET_ACCOUNT, json)
+    fn get_credential_types_for_target_account(params: iface_user::GetCredentialTypesForTargetAccountParams) -> Result<String, String> {
+        let json = iface_user__get_credential_types_for_target_account_params__to_json(&params);
+        dispatch(&OP_USER_GET_CREDENTIAL_TYPES_FOR_TARGET_ACCOUNT, json)
     }
-    fn user_get_membership_from_hard_linked_credential(params: iface_user::UserGetMembershipFromHardLinkedCredentialParams) -> Result<String, String> {
-        let json = iface_user__user_get_membership_from_hard_linked_credential_params__to_json(&params);
-        dispatch(&OP_USER_USER_GET_MEMBERSHIP_FROM_HARD_LINKED_CREDENTIAL, json)
+    fn get_membership_from_hard_linked_credential(params: iface_user::GetMembershipFromHardLinkedCredentialParams) -> Result<String, String> {
+        let json = iface_user__get_membership_from_hard_linked_credential_params__to_json(&params);
+        dispatch(&OP_USER_GET_MEMBERSHIP_FROM_HARD_LINKED_CREDENTIAL, json)
     }
-    fn user_get_membership_data_by_id(params: iface_user::UserGetMembershipDataByIdParams) -> Result<String, String> {
-        let json = iface_user__user_get_membership_data_by_id_params__to_json(&params);
-        dispatch(&OP_USER_USER_GET_MEMBERSHIP_DATA_BY_ID, json)
+    fn get_membership_data_by_id(params: iface_user::GetMembershipDataByIdParams) -> Result<String, String> {
+        let json = iface_user__get_membership_data_by_id_params__to_json(&params);
+        dispatch(&OP_USER_GET_MEMBERSHIP_DATA_BY_ID, json)
     }
-    fn user_get_membership_data_for_current_user() -> Result<String, String> {
-        dispatch(&OP_USER_USER_GET_MEMBERSHIP_DATA_FOR_CURRENT_USER, Value::Object(Map::new()))
+    fn get_membership_data_for_current_user() -> Result<String, String> {
+        dispatch(&OP_USER_GET_MEMBERSHIP_DATA_FOR_CURRENT_USER, Value::Object(Map::new()))
     }
-    fn user_get_sanitized_platform_display_names(params: iface_user::UserGetSanitizedPlatformDisplayNamesParams) -> Result<String, String> {
-        let json = iface_user__user_get_sanitized_platform_display_names_params__to_json(&params);
-        dispatch(&OP_USER_USER_GET_SANITIZED_PLATFORM_DISPLAY_NAMES, json)
+    fn get_sanitized_platform_display_names(params: iface_user::GetSanitizedPlatformDisplayNamesParams) -> Result<String, String> {
+        let json = iface_user__get_sanitized_platform_display_names_params__to_json(&params);
+        dispatch(&OP_USER_GET_SANITIZED_PLATFORM_DISPLAY_NAMES, json)
     }
-    fn user_search_by_global_name_post(params: iface_user::UserSearchByGlobalNamePostParams) -> Result<String, String> {
-        let json = iface_user__user_search_by_global_name_post_params__to_json(&params);
-        dispatch(&OP_USER_USER_SEARCH_BY_GLOBAL_NAME_POST, json)
+    fn search_by_global_name_post(params: iface_user::SearchByGlobalNamePostParams) -> Result<String, String> {
+        let json = iface_user__search_by_global_name_post_params__to_json(&params);
+        dispatch(&OP_USER_SEARCH_BY_GLOBAL_NAME_POST, json)
     }
-    fn user_search_by_global_name_prefix(params: iface_user::UserSearchByGlobalNamePrefixParams) -> Result<String, String> {
-        let json = iface_user__user_search_by_global_name_prefix_params__to_json(&params);
-        dispatch(&OP_USER_USER_SEARCH_BY_GLOBAL_NAME_PREFIX, json)
+    fn search_by_global_name_prefix(params: iface_user::SearchByGlobalNamePrefixParams) -> Result<String, String> {
+        let json = iface_user__search_by_global_name_prefix_params__to_json(&params);
+        dispatch(&OP_USER_SEARCH_BY_GLOBAL_NAME_PREFIX, json)
     }
 }
 

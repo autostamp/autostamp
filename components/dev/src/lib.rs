@@ -391,6 +391,8 @@ const OP_ARTICLES_GET_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/articles",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
         FieldSpec { snake: "tag", location: FieldLocation::Query },
         FieldSpec { snake: "tags", location: FieldLocation::Query },
         FieldSpec { snake: "tags_exclude", location: FieldLocation::Query },
@@ -418,6 +420,8 @@ const OP_ARTICLES_GET_LATEST_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/articles/latest",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -427,6 +431,8 @@ const OP_ARTICLES_GET_USER_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/articles/me",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
@@ -437,6 +443,8 @@ const OP_ARTICLES_GET_USER_ALL_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/articles/me/all",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
@@ -447,6 +455,8 @@ const OP_ARTICLES_GET_USER_PUBLISHED_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/articles/me/published",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
@@ -457,6 +467,8 @@ const OP_ARTICLES_GET_USER_UNPUBLISHED_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/articles/me/unpublished",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
@@ -532,6 +544,8 @@ fn iface_articles__article_article__to_json(p: &iface_articles::ArticleArticle) 
 
 fn iface_articles__get_articles_params__to_json(p: &iface_articles::GetArticlesParams) -> Value {
     let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags_exclude".into(), match (&p.tags_exclude) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -545,6 +559,41 @@ fn iface_articles__get_articles_params__to_json(p: &iface_articles::GetArticlesP
 fn iface_articles__create_article_params__to_json(p: &iface_articles::CreateArticleParams) -> Value {
     let mut m = Map::new();
     m.insert("article".into(), match (&p.article) { Some(v) => iface_articles__article_article__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_articles__get_latest_articles_params__to_json(p: &iface_articles::GetLatestArticlesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_articles__get_user_articles_params__to_json(p: &iface_articles::GetUserArticlesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_articles__get_user_all_articles_params__to_json(p: &iface_articles::GetUserAllArticlesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_articles__get_user_published_articles_params__to_json(p: &iface_articles::GetUserPublishedArticlesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_articles__get_user_unpublished_articles_params__to_json(p: &iface_articles::GetUserUnpublishedArticlesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -584,20 +633,25 @@ impl iface_articles::Guest for crate::Component {
         let json = iface_articles__create_article_params__to_json(&params);
         dispatch(&OP_ARTICLES_CREATE_ARTICLE, json)
     }
-    fn get_latest_articles() -> Result<String, String> {
-        dispatch(&OP_ARTICLES_GET_LATEST_ARTICLES, Value::Object(Map::new()))
+    fn get_latest_articles(params: iface_articles::GetLatestArticlesParams) -> Result<String, String> {
+        let json = iface_articles__get_latest_articles_params__to_json(&params);
+        dispatch(&OP_ARTICLES_GET_LATEST_ARTICLES, json)
     }
-    fn get_user_articles() -> Result<String, String> {
-        dispatch(&OP_ARTICLES_GET_USER_ARTICLES, Value::Object(Map::new()))
+    fn get_user_articles(params: iface_articles::GetUserArticlesParams) -> Result<String, String> {
+        let json = iface_articles__get_user_articles_params__to_json(&params);
+        dispatch(&OP_ARTICLES_GET_USER_ARTICLES, json)
     }
-    fn get_user_all_articles() -> Result<String, String> {
-        dispatch(&OP_ARTICLES_GET_USER_ALL_ARTICLES, Value::Object(Map::new()))
+    fn get_user_all_articles(params: iface_articles::GetUserAllArticlesParams) -> Result<String, String> {
+        let json = iface_articles__get_user_all_articles_params__to_json(&params);
+        dispatch(&OP_ARTICLES_GET_USER_ALL_ARTICLES, json)
     }
-    fn get_user_published_articles() -> Result<String, String> {
-        dispatch(&OP_ARTICLES_GET_USER_PUBLISHED_ARTICLES, Value::Object(Map::new()))
+    fn get_user_published_articles(params: iface_articles::GetUserPublishedArticlesParams) -> Result<String, String> {
+        let json = iface_articles__get_user_published_articles_params__to_json(&params);
+        dispatch(&OP_ARTICLES_GET_USER_PUBLISHED_ARTICLES, json)
     }
-    fn get_user_unpublished_articles() -> Result<String, String> {
-        dispatch(&OP_ARTICLES_GET_USER_UNPUBLISHED_ARTICLES, Value::Object(Map::new()))
+    fn get_user_unpublished_articles(params: iface_articles::GetUserUnpublishedArticlesParams) -> Result<String, String> {
+        let json = iface_articles__get_user_unpublished_articles_params__to_json(&params);
+        dispatch(&OP_ARTICLES_GET_USER_UNPUBLISHED_ARTICLES, json)
     }
     fn get_article_by_id(params: iface_articles::GetArticleByIdParams) -> Result<String, String> {
         let json = iface_articles__get_article_by_id_params__to_json(&params);
@@ -771,6 +825,8 @@ const OP_FOLLOWERS_GET_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/followers/users",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
         FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
@@ -780,6 +836,8 @@ const OP_FOLLOWERS_GET_FOLLOWERS: OpSpec = OpSpec {
 
 fn iface_followers__get_followers_params__to_json(p: &iface_followers::GetFollowersParams) -> Value {
     let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -824,6 +882,8 @@ const OP_ORGANIZATIONS_GET_ORG_ARTICLES: OpSpec = OpSpec {
     path_template: "/api/organizations/{username}/articles",
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -834,6 +894,8 @@ const OP_ORGANIZATIONS_GET_ORG_USERS: OpSpec = OpSpec {
     path_template: "/api/organizations/{username}/users",
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -848,12 +910,16 @@ fn iface_organizations__get_organization_params__to_json(p: &iface_organizations
 fn iface_organizations__get_org_articles_params__to_json(p: &iface_organizations::GetOrgArticlesParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_organizations__get_org_users_params__to_json(p: &iface_organizations::GetOrgUsersParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1019,6 +1085,8 @@ const OP_PODCAST_EPISODES_GET_PODCAST_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/podcast_episodes",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
         FieldSpec { snake: "username", location: FieldLocation::Query },
     ],
     auth: &[
@@ -1027,6 +1095,8 @@ const OP_PODCAST_EPISODES_GET_PODCAST_EPISODES: OpSpec = OpSpec {
 
 fn iface_podcast_episodes__get_podcast_episodes_params__to_json(p: &iface_podcast_episodes::GetPodcastEpisodesParams) -> Value {
     let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1140,15 +1210,25 @@ const OP_READINGLIST_GET_READINGLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/readinglist",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyHeader("api-key") },
     ],
 };
 
+fn iface_readinglist__get_readinglist_params__to_json(p: &iface_readinglist::GetReadinglistParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_readinglist::Guest for crate::Component {
-    fn get_readinglist() -> Result<String, String> {
-        dispatch(&OP_READINGLIST_GET_READINGLIST, Value::Object(Map::new()))
+    fn get_readinglist(params: iface_readinglist::GetReadinglistParams) -> Result<String, String> {
+        let json = iface_readinglist__get_readinglist_params__to_json(&params);
+        dispatch(&OP_READINGLIST_GET_READINGLIST, json)
     }
 }
 use crate::exports::autostamp::dev::tags as iface_tags;
@@ -1157,14 +1237,24 @@ const OP_TAGS_GET_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/tags",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
 
+fn iface_tags__get_tags_params__to_json(p: &iface_tags::GetTagsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_tags::Guest for crate::Component {
-    fn get_tags() -> Result<String, String> {
-        dispatch(&OP_TAGS_GET_TAGS, Value::Object(Map::new()))
+    fn get_tags(params: iface_tags::GetTagsParams) -> Result<String, String> {
+        let json = iface_tags__get_tags_params__to_json(&params);
+        dispatch(&OP_TAGS_GET_TAGS, json)
     }
 }
 use crate::exports::autostamp::dev::videos as iface_videos;
@@ -1173,14 +1263,24 @@ const OP_VIDEOS_VIDEOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/videos",
     fields: &[
+        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
 
+fn iface_videos__videos_params__to_json(p: &iface_videos::VideosParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_videos::Guest for crate::Component {
-    fn videos() -> Result<String, String> {
-        dispatch(&OP_VIDEOS_VIDEOS, Value::Object(Map::new()))
+    fn videos(params: iface_videos::VideosParams) -> Result<String, String> {
+        let json = iface_videos__videos_params__to_json(&params);
+        dispatch(&OP_VIDEOS_VIDEOS, json)
     }
 }
 

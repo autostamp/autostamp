@@ -312,8 +312,11 @@ const OP_MISC_SEARCH_CUSTOM_FOODS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/customFoods/search",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "username", location: FieldLocation::Query },
         FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -324,6 +327,7 @@ const OP_MISC_DETECT_FOOD_IN_TEXT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/food/detect",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -367,6 +371,8 @@ const OP_MISC_SEARCH_ALL_FOOD: OpSpec = OpSpec {
     path_template: "/food/search",
     fields: &[
         FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -398,6 +404,7 @@ const OP_MISC_SEARCH_FOOD_VIDEOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/videos/search",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "type", location: FieldLocation::Query },
         FieldSpec { snake: "cuisine", location: FieldLocation::Query },
         FieldSpec { snake: "diet", location: FieldLocation::Query },
@@ -405,11 +412,21 @@ const OP_MISC_SEARCH_FOOD_VIDEOS: OpSpec = OpSpec {
         FieldSpec { snake: "exclude_ingredients", location: FieldLocation::Query },
         FieldSpec { snake: "min_length", location: FieldLocation::Query },
         FieldSpec { snake: "max_length", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
     ],
 };
+
+fn iface_misc__detect_food_in_text_content_type_enum__to_str(e: &iface_misc::DetectFoodInTextContentTypeEnum) -> &'static str {
+    match e {
+        iface_misc::DetectFoodInTextContentTypeEnum::ApplicationXWwwFormUrlencoded => "application/x-www-form-urlencoded",
+        iface_misc::DetectFoodInTextContentTypeEnum::ApplicationJson => "application/json",
+        iface_misc::DetectFoodInTextContentTypeEnum::MultipartFormData => "multipart/form-data",
+    }
+}
 
 fn iface_misc__talk_to_chatbot_params__to_json(p: &iface_misc::TalkToChatbotParams) -> Value {
     let mut m = Map::new();
@@ -427,8 +444,17 @@ fn iface_misc__get_conversation_suggests_params__to_json(p: &iface_misc::GetConv
 
 fn iface_misc__search_custom_foods_params__to_json(p: &iface_misc::SearchCustomFoodsParams) -> Value {
     let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_misc__detect_food_in_text_params__to_json(p: &iface_misc::DetectFoodInTextParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_misc__detect_food_in_text_content_type_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -447,6 +473,8 @@ fn iface_misc__image_classification_by_url_params__to_json(p: &iface_misc::Image
 fn iface_misc__search_all_food_params__to_json(p: &iface_misc::SearchAllFoodParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -458,6 +486,7 @@ fn iface_misc__search_site_content_params__to_json(p: &iface_misc::SearchSiteCon
 
 fn iface_misc__search_food_videos_params__to_json(p: &iface_misc::SearchFoodVideosParams) -> Value {
     let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cuisine".into(), match (&p.cuisine) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("diet".into(), match (&p.diet) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -465,6 +494,8 @@ fn iface_misc__search_food_videos_params__to_json(p: &iface_misc::SearchFoodVide
     m.insert("exclude_ingredients".into(), match (&p.exclude_ingredients) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("min_length".into(), match (&p.min_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_length".into(), match (&p.max_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -481,8 +512,9 @@ impl iface_misc::Guest for crate::Component {
         let json = iface_misc__search_custom_foods_params__to_json(&params);
         dispatch(&OP_MISC_SEARCH_CUSTOM_FOODS, json)
     }
-    fn detect_food_in_text() -> Result<String, String> {
-        dispatch(&OP_MISC_DETECT_FOOD_IN_TEXT, Value::Object(Map::new()))
+    fn detect_food_in_text(params: iface_misc::DetectFoodInTextParams) -> Result<String, String> {
+        let json = iface_misc__detect_food_in_text_params__to_json(&params);
+        dispatch(&OP_MISC_DETECT_FOOD_IN_TEXT, json)
     }
     fn image_analysis_by_url(params: iface_misc::ImageAnalysisByUrlParams) -> Result<String, String> {
         let json = iface_misc__image_analysis_by_url_params__to_json(&params);
@@ -517,8 +549,11 @@ const OP_INGREDIENTS_AUTOCOMPLETE_INGREDIENT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/autocomplete",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
         FieldSpec { snake: "meta_information", location: FieldLocation::Query },
         FieldSpec { snake: "intolerances", location: FieldLocation::Query },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -541,6 +576,7 @@ const OP_INGREDIENTS_INGREDIENT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/search",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "add_children", location: FieldLocation::Query },
         FieldSpec { snake: "min_protein_percent", location: FieldLocation::Query },
         FieldSpec { snake: "max_protein_percent", location: FieldLocation::Query },
@@ -552,6 +588,9 @@ const OP_INGREDIENTS_INGREDIENT_SEARCH: OpSpec = OpSpec {
         FieldSpec { snake: "intolerances", location: FieldLocation::Query },
         FieldSpec { snake: "sort", location: FieldLocation::Query },
         FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -611,13 +650,16 @@ const OP_INGREDIENTS_VISUALIZE_INGREDIENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeIngredients",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
     ],
 };
 
-const OP_INGREDIENTS_INGREDIENTS_BY_ID_IMAGE: OpSpec = OpSpec {
+const OP_INGREDIENTS_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/ingredientWidget.png",
     fields: &[
@@ -629,17 +671,43 @@ const OP_INGREDIENTS_INGREDIENTS_BY_ID_IMAGE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_ingredients__ingredients_by_id_image_measure_enum__to_str(e: &iface_ingredients::IngredientsByIdImageMeasureEnum) -> &'static str {
+fn iface_ingredients__autocomplete_ingredient_search_language_enum__to_str(e: &iface_ingredients::AutocompleteIngredientSearchLanguageEnum) -> &'static str {
     match e {
-        iface_ingredients::IngredientsByIdImageMeasureEnum::Us => "us",
-        iface_ingredients::IngredientsByIdImageMeasureEnum::Metric => "metric",
+        iface_ingredients::AutocompleteIngredientSearchLanguageEnum::En => "en",
+        iface_ingredients::AutocompleteIngredientSearchLanguageEnum::De => "de",
+    }
+}
+
+fn iface_ingredients__visualize_ingredients_content_type_enum__to_str(e: &iface_ingredients::VisualizeIngredientsContentTypeEnum) -> &'static str {
+    match e {
+        iface_ingredients::VisualizeIngredientsContentTypeEnum::ApplicationXWwwFormUrlencoded => "application/x-www-form-urlencoded",
+        iface_ingredients::VisualizeIngredientsContentTypeEnum::ApplicationJson => "application/json",
+        iface_ingredients::VisualizeIngredientsContentTypeEnum::MultipartFormData => "multipart/form-data",
+    }
+}
+
+fn iface_ingredients__visualize_ingredients_accept_enum__to_str(e: &iface_ingredients::VisualizeIngredientsAcceptEnum) -> &'static str {
+    match e {
+        iface_ingredients::VisualizeIngredientsAcceptEnum::ApplicationJson => "application/json",
+        iface_ingredients::VisualizeIngredientsAcceptEnum::TextHtml => "text/html",
+        iface_ingredients::VisualizeIngredientsAcceptEnum::Media => "media/*",
+    }
+}
+
+fn iface_ingredients__by_id_image_measure_enum__to_str(e: &iface_ingredients::ByIdImageMeasureEnum) -> &'static str {
+    match e {
+        iface_ingredients::ByIdImageMeasureEnum::Us => "us",
+        iface_ingredients::ByIdImageMeasureEnum::Metric => "metric",
     }
 }
 
 fn iface_ingredients__autocomplete_ingredient_search_params__to_json(p: &iface_ingredients::AutocompleteIngredientSearchParams) -> Value {
     let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("meta_information".into(), match (&p.meta_information) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("intolerances".into(), match (&p.intolerances) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_ingredients__autocomplete_ingredient_search_language_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -652,6 +720,7 @@ fn iface_ingredients__map_ingredients_to_grocery_products_params__to_json(p: &if
 
 fn iface_ingredients__ingredient_search_params__to_json(p: &iface_ingredients::IngredientSearchParams) -> Value {
     let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("add_children".into(), match (&p.add_children) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("min_protein_percent".into(), match (&p.min_protein_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_protein_percent".into(), match (&p.max_protein_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -663,6 +732,9 @@ fn iface_ingredients__ingredient_search_params__to_json(p: &iface_ingredients::I
     m.insert("intolerances".into(), match (&p.intolerances) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sort_direction".into(), match (&p.sort_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_ingredients__autocomplete_ingredient_search_language_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -695,10 +767,18 @@ fn iface_ingredients__get_ingredient_substitutes_by_id_params__to_json(p: &iface
     Value::Object(m)
 }
 
-fn iface_ingredients__ingredients_by_id_image_params__to_json(p: &iface_ingredients::IngredientsByIdImageParams) -> Value {
+fn iface_ingredients__visualize_ingredients_params__to_json(p: &iface_ingredients::VisualizeIngredientsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_ingredients__visualize_ingredients_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_ingredients__autocomplete_ingredient_search_language_enum__to_str(v).into()), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_ingredients__visualize_ingredients_accept_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ingredients__by_id_image_params__to_json(p: &iface_ingredients::ByIdImageParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("measure".into(), match (&p.measure) { Some(v) => Value::String(iface_ingredients__ingredients_by_id_image_measure_enum__to_str(v).into()), None => Value::Null });
+    m.insert("measure".into(), match (&p.measure) { Some(v) => Value::String(iface_ingredients__by_id_image_measure_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -731,12 +811,13 @@ impl iface_ingredients::Guest for crate::Component {
         let json = iface_ingredients__get_ingredient_substitutes_by_id_params__to_json(&params);
         dispatch(&OP_INGREDIENTS_GET_INGREDIENT_SUBSTITUTES_BY_ID, json)
     }
-    fn visualize_ingredients() -> Result<String, String> {
-        dispatch(&OP_INGREDIENTS_VISUALIZE_INGREDIENTS, Value::Object(Map::new()))
+    fn visualize_ingredients(params: iface_ingredients::VisualizeIngredientsParams) -> Result<String, String> {
+        let json = iface_ingredients__visualize_ingredients_params__to_json(&params);
+        dispatch(&OP_INGREDIENTS_VISUALIZE_INGREDIENTS, json)
     }
-    fn ingredients_by_id_image(params: iface_ingredients::IngredientsByIdImageParams) -> Result<String, String> {
-        let json = iface_ingredients__ingredients_by_id_image_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_INGREDIENTS_BY_ID_IMAGE, json)
+    fn by_id_image(params: iface_ingredients::ByIdImageParams) -> Result<String, String> {
+        let json = iface_ingredients__by_id_image_params__to_json(&params);
+        dispatch(&OP_INGREDIENTS_BY_ID_IMAGE, json)
     }
 }
 use crate::exports::autostamp::spoonacular::recipes as iface_recipes;
@@ -745,6 +826,7 @@ const OP_RECIPES_COMPUTE_GLYCEMIC_LOAD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/food/ingredients/glycemicLoad",
     fields: &[
+        FieldSpec { snake: "language", location: FieldLocation::Query },
         FieldSpec { snake: "ingredients", location: FieldLocation::Body },
     ],
     auth: &[
@@ -773,6 +855,7 @@ const OP_RECIPES_ANALYZE_RECIPE_INSTRUCTIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/analyzeInstructions",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -783,6 +866,8 @@ const OP_RECIPES_AUTOCOMPLETE_RECIPE_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/autocomplete",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -793,6 +878,7 @@ const OP_RECIPES_SEARCH_RECIPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/complexSearch",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "cuisine", location: FieldLocation::Query },
         FieldSpec { snake: "exclude_cuisine", location: FieldLocation::Query },
         FieldSpec { snake: "diet", location: FieldLocation::Query },
@@ -806,9 +892,11 @@ const OP_RECIPES_SEARCH_RECIPES: OpSpec = OpSpec {
         FieldSpec { snake: "add_recipe_information", location: FieldLocation::Query },
         FieldSpec { snake: "add_recipe_nutrition", location: FieldLocation::Query },
         FieldSpec { snake: "author", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", location: FieldLocation::Query },
         FieldSpec { snake: "recipe_box_id", location: FieldLocation::Query },
         FieldSpec { snake: "title_match", location: FieldLocation::Query },
         FieldSpec { snake: "max_ready_time", location: FieldLocation::Query },
+        FieldSpec { snake: "ignore_pantry", location: FieldLocation::Query },
         FieldSpec { snake: "sort", location: FieldLocation::Query },
         FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
         FieldSpec { snake: "min_carbs", location: FieldLocation::Query },
@@ -883,6 +971,9 @@ const OP_RECIPES_SEARCH_RECIPES: OpSpec = OpSpec {
         FieldSpec { snake: "max_sugar", location: FieldLocation::Query },
         FieldSpec { snake: "min_zinc", location: FieldLocation::Query },
         FieldSpec { snake: "max_zinc", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -907,6 +998,7 @@ const OP_RECIPES_CLASSIFY_CUISINE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/cuisine",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -920,6 +1012,8 @@ const OP_RECIPES_EXTRACT_RECIPE_FROM_WEBSITE: OpSpec = OpSpec {
         FieldSpec { snake: "url", location: FieldLocation::Query },
         FieldSpec { snake: "force_extraction", location: FieldLocation::Query },
         FieldSpec { snake: "analyze", location: FieldLocation::Query },
+        FieldSpec { snake: "include_nutrition", location: FieldLocation::Query },
+        FieldSpec { snake: "include_taste", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -930,7 +1024,11 @@ const OP_RECIPES_SEARCH_RECIPES_BY_INGREDIENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/findByIngredients",
     fields: &[
+        FieldSpec { snake: "ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
         FieldSpec { snake: "ranking", location: FieldLocation::Query },
+        FieldSpec { snake: "ignore_pantry", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1013,7 +1111,10 @@ const OP_RECIPES_SEARCH_RECIPES_BY_NUTRIENTS: OpSpec = OpSpec {
         FieldSpec { snake: "max_sugar", location: FieldLocation::Query },
         FieldSpec { snake: "min_zinc", location: FieldLocation::Query },
         FieldSpec { snake: "max_zinc", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
         FieldSpec { snake: "random", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1036,6 +1137,7 @@ const OP_RECIPES_GET_RECIPE_INFORMATION_BULK: OpSpec = OpSpec {
     path_template: "/recipes/informationBulk",
     fields: &[
         FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "include_nutrition", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1046,6 +1148,8 @@ const OP_RECIPES_PARSE_INGREDIENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/parseIngredients",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1078,6 +1182,9 @@ const OP_RECIPES_GET_RANDOM_RECIPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/random",
     fields: &[
+        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1088,6 +1195,8 @@ const OP_RECIPES_VISUALIZE_EQUIPMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeEquipment",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1098,6 +1207,9 @@ const OP_RECIPES_VISUALIZE_RECIPE_NUTRITION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeNutrition",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1108,6 +1220,9 @@ const OP_RECIPES_VISUALIZE_PRICE_BREAKDOWN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizePriceEstimator",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1118,6 +1233,7 @@ const OP_RECIPES_CREATE_RECIPE_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeRecipe",
     fields: &[
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1128,7 +1244,11 @@ const OP_RECIPES_VISUALIZE_RECIPE_TASTE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeTaste",
     fields: &[
+        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
         FieldSpec { snake: "normalize", location: FieldLocation::Query },
+        FieldSpec { snake: "rgb", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1167,6 +1287,7 @@ const OP_RECIPES_VISUALIZE_RECIPE_EQUIPMENT_BY_ID: OpSpec = OpSpec {
     path_template: "/recipes/{id}/equipmentWidget",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1200,6 +1321,7 @@ const OP_RECIPES_GET_RECIPE_INFORMATION: OpSpec = OpSpec {
     path_template: "/recipes/{id}/information",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_nutrition", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1211,6 +1333,7 @@ const OP_RECIPES_VISUALIZE_RECIPE_INGREDIENTS_BY_ID: OpSpec = OpSpec {
     path_template: "/recipes/{id}/ingredientWidget",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
         FieldSpec { snake: "measure", location: FieldLocation::Query },
     ],
     auth: &[
@@ -1234,6 +1357,7 @@ const OP_RECIPES_RECIPE_NUTRITION_LABEL_WIDGET: OpSpec = OpSpec {
     path_template: "/recipes/{id}/nutritionLabel",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
         FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
         FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
         FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
@@ -1262,6 +1386,8 @@ const OP_RECIPES_VISUALIZE_RECIPE_NUTRITION_BY_ID: OpSpec = OpSpec {
     path_template: "/recipes/{id}/nutritionWidget",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1295,6 +1421,7 @@ const OP_RECIPES_VISUALIZE_RECIPE_PRICE_BREAKDOWN_BY_ID: OpSpec = OpSpec {
     path_template: "/recipes/{id}/priceBreakdownWidget",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1328,6 +1455,8 @@ const OP_RECIPES_GET_SIMILAR_RECIPES: OpSpec = OpSpec {
     path_template: "/recipes/{id}/similar",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1351,6 +1480,7 @@ const OP_RECIPES_VISUALIZE_RECIPE_TASTE_BY_ID: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "normalize", location: FieldLocation::Query },
+        FieldSpec { snake: "rgb", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1375,11 +1505,35 @@ const OP_RECIPES_RECIPE_TASTE_BY_ID_IMAGE: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "normalize", location: FieldLocation::Query },
+        FieldSpec { snake: "rgb", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
     ],
 };
+
+fn iface_recipes__compute_glycemic_load_language_enum__to_str(e: &iface_recipes::ComputeGlycemicLoadLanguageEnum) -> &'static str {
+    match e {
+        iface_recipes::ComputeGlycemicLoadLanguageEnum::En => "en",
+        iface_recipes::ComputeGlycemicLoadLanguageEnum::De => "de",
+    }
+}
+
+fn iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(e: &iface_recipes::AnalyzeRecipeInstructionsContentTypeEnum) -> &'static str {
+    match e {
+        iface_recipes::AnalyzeRecipeInstructionsContentTypeEnum::ApplicationXWwwFormUrlencoded => "application/x-www-form-urlencoded",
+        iface_recipes::AnalyzeRecipeInstructionsContentTypeEnum::ApplicationJson => "application/json",
+        iface_recipes::AnalyzeRecipeInstructionsContentTypeEnum::MultipartFormData => "multipart/form-data",
+    }
+}
+
+fn iface_recipes__visualize_equipment_accept_enum__to_str(e: &iface_recipes::VisualizeEquipmentAcceptEnum) -> &'static str {
+    match e {
+        iface_recipes::VisualizeEquipmentAcceptEnum::ApplicationJson => "application/json",
+        iface_recipes::VisualizeEquipmentAcceptEnum::TextHtml => "text/html",
+        iface_recipes::VisualizeEquipmentAcceptEnum::Media => "media/*",
+    }
+}
 
 fn iface_recipes__visualize_recipe_ingredients_by_id_measure_enum__to_str(e: &iface_recipes::VisualizeRecipeIngredientsByIdMeasureEnum) -> &'static str {
     match e {
@@ -1390,6 +1544,7 @@ fn iface_recipes__visualize_recipe_ingredients_by_id_measure_enum__to_str(e: &if
 
 fn iface_recipes__compute_glycemic_load_params__to_json(p: &iface_recipes::ComputeGlycemicLoadParams) -> Value {
     let mut m = Map::new();
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
     m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
@@ -1406,8 +1561,22 @@ fn iface_recipes__analyze_recipe_params__to_json(p: &iface_recipes::AnalyzeRecip
     Value::Object(m)
 }
 
+fn iface_recipes__analyze_recipe_instructions_params__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__autocomplete_recipe_search_params__to_json(p: &iface_recipes::AutocompleteRecipeSearchParams) -> Value {
+    let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_recipes__search_recipes_params__to_json(p: &iface_recipes::SearchRecipesParams) -> Value {
     let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("cuisine".into(), match (&p.cuisine) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("exclude_cuisine".into(), match (&p.exclude_cuisine) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("diet".into(), match (&p.diet) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1421,9 +1590,11 @@ fn iface_recipes__search_recipes_params__to_json(p: &iface_recipes::SearchRecipe
     m.insert("add_recipe_information".into(), match (&p.add_recipe_information) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("add_recipe_nutrition".into(), match (&p.add_recipe_nutrition) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("author".into(), match (&p.author) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("recipe_box_id".into(), match (&p.recipe_box_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("title_match".into(), match (&p.title_match) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_ready_time".into(), match (&p.max_ready_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ignore_pantry".into(), match (&p.ignore_pantry) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("sort_direction".into(), match (&p.sort_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("min_carbs".into(), match (&p.min_carbs) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -1498,6 +1669,9 @@ fn iface_recipes__search_recipes_params__to_json(p: &iface_recipes::SearchRecipe
     m.insert("max_sugar".into(), match (&p.max_sugar) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("min_zinc".into(), match (&p.min_zinc) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_zinc".into(), match (&p.max_zinc) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("limit_license".into(), match (&p.limit_license) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1510,17 +1684,29 @@ fn iface_recipes__convert_amounts_params__to_json(p: &iface_recipes::ConvertAmou
     Value::Object(m)
 }
 
+fn iface_recipes__classify_cuisine_params__to_json(p: &iface_recipes::ClassifyCuisineParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_recipes__extract_recipe_from_website_params__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteParams) -> Value {
     let mut m = Map::new();
     m.insert("url".into(), Value::String((&p.url).clone()));
     m.insert("force_extraction".into(), match (&p.force_extraction) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("analyze".into(), match (&p.analyze) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("include_nutrition".into(), match (&p.include_nutrition) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("include_taste".into(), match (&p.include_taste) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_recipes__search_recipes_by_ingredients_params__to_json(p: &iface_recipes::SearchRecipesByIngredientsParams) -> Value {
     let mut m = Map::new();
+    m.insert("ingredients".into(), match (&p.ingredients) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("limit_license".into(), match (&p.limit_license) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ranking".into(), match (&p.ranking) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ignore_pantry".into(), match (&p.ignore_pantry) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1598,7 +1784,10 @@ fn iface_recipes__search_recipes_by_nutrients_params__to_json(p: &iface_recipes:
     m.insert("max_sugar".into(), match (&p.max_sugar) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("min_zinc".into(), match (&p.min_zinc) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_zinc".into(), match (&p.max_zinc) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("random".into(), match (&p.random) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("limit_license".into(), match (&p.limit_license) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1611,6 +1800,14 @@ fn iface_recipes__guess_nutrition_by_dish_name_params__to_json(p: &iface_recipes
 fn iface_recipes__get_recipe_information_bulk_params__to_json(p: &iface_recipes::GetRecipeInformationBulkParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("include_nutrition".into(), match (&p.include_nutrition) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_params__to_json(p: &iface_recipes::ParseIngredientsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1626,9 +1823,50 @@ fn iface_recipes__quick_answer_params__to_json(p: &iface_recipes::QuickAnswerPar
     Value::Object(m)
 }
 
+fn iface_recipes__get_random_recipes_params__to_json(p: &iface_recipes::GetRandomRecipesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit_license".into(), match (&p.limit_license) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__visualize_equipment_params__to_json(p: &iface_recipes::VisualizeEquipmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__visualize_recipe_nutrition_params__to_json(p: &iface_recipes::VisualizeRecipeNutritionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__visualize_price_breakdown_params__to_json(p: &iface_recipes::VisualizePriceBreakdownParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__create_recipe_card_params__to_json(p: &iface_recipes::CreateRecipeCardParams) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_recipes__visualize_recipe_taste_params__to_json(p: &iface_recipes::VisualizeRecipeTasteParams) -> Value {
     let mut m = Map::new();
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
     m.insert("normalize".into(), match (&p.normalize) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("rgb".into(), match (&p.rgb) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1652,6 +1890,7 @@ fn iface_recipes__create_recipe_card_get_params__to_json(p: &iface_recipes::Crea
 fn iface_recipes__visualize_recipe_equipment_by_id_params__to_json(p: &iface_recipes::VisualizeRecipeEquipmentByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1670,12 +1909,14 @@ fn iface_recipes__equipment_by_id_image_params__to_json(p: &iface_recipes::Equip
 fn iface_recipes__get_recipe_information_params__to_json(p: &iface_recipes::GetRecipeInformationParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("include_nutrition".into(), match (&p.include_nutrition) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_recipes__visualize_recipe_ingredients_by_id_params__to_json(p: &iface_recipes::VisualizeRecipeIngredientsByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("measure".into(), match (&p.measure) { Some(v) => Value::String(iface_recipes__visualize_recipe_ingredients_by_id_measure_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
@@ -1689,6 +1930,7 @@ fn iface_recipes__get_recipe_ingredients_by_id_params__to_json(p: &iface_recipes
 fn iface_recipes__recipe_nutrition_label_widget_params__to_json(p: &iface_recipes::RecipeNutritionLabelWidgetParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_optional_nutrients".into(), match (&p.show_optional_nutrients) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_zero_values".into(), match (&p.show_zero_values) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_ingredients".into(), match (&p.show_ingredients) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1707,6 +1949,8 @@ fn iface_recipes__recipe_nutrition_label_image_params__to_json(p: &iface_recipes
 fn iface_recipes__visualize_recipe_nutrition_by_id_params__to_json(p: &iface_recipes::VisualizeRecipeNutritionByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1725,6 +1969,7 @@ fn iface_recipes__recipe_nutrition_by_id_image_params__to_json(p: &iface_recipes
 fn iface_recipes__visualize_recipe_price_breakdown_by_id_params__to_json(p: &iface_recipes::VisualizeRecipePriceBreakdownByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1743,6 +1988,8 @@ fn iface_recipes__price_breakdown_by_id_image_params__to_json(p: &iface_recipes:
 fn iface_recipes__get_similar_recipes_params__to_json(p: &iface_recipes::GetSimilarRecipesParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("limit_license".into(), match (&p.limit_license) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1756,6 +2003,7 @@ fn iface_recipes__visualize_recipe_taste_by_id_params__to_json(p: &iface_recipes
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("normalize".into(), match (&p.normalize) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("rgb".into(), match (&p.rgb) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1770,6 +2018,7 @@ fn iface_recipes__recipe_taste_by_id_image_params__to_json(p: &iface_recipes::Re
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("normalize".into(), match (&p.normalize) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("rgb".into(), match (&p.rgb) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1782,11 +2031,13 @@ impl iface_recipes::Guest for crate::Component {
         let json = iface_recipes__analyze_recipe_params__to_json(&params);
         dispatch(&OP_RECIPES_ANALYZE_RECIPE, json)
     }
-    fn analyze_recipe_instructions() -> Result<String, String> {
-        dispatch(&OP_RECIPES_ANALYZE_RECIPE_INSTRUCTIONS, Value::Object(Map::new()))
+    fn analyze_recipe_instructions(params: iface_recipes::AnalyzeRecipeInstructionsParams) -> Result<String, String> {
+        let json = iface_recipes__analyze_recipe_instructions_params__to_json(&params);
+        dispatch(&OP_RECIPES_ANALYZE_RECIPE_INSTRUCTIONS, json)
     }
-    fn autocomplete_recipe_search() -> Result<String, String> {
-        dispatch(&OP_RECIPES_AUTOCOMPLETE_RECIPE_SEARCH, Value::Object(Map::new()))
+    fn autocomplete_recipe_search(params: iface_recipes::AutocompleteRecipeSearchParams) -> Result<String, String> {
+        let json = iface_recipes__autocomplete_recipe_search_params__to_json(&params);
+        dispatch(&OP_RECIPES_AUTOCOMPLETE_RECIPE_SEARCH, json)
     }
     fn search_recipes(params: iface_recipes::SearchRecipesParams) -> Result<String, String> {
         let json = iface_recipes__search_recipes_params__to_json(&params);
@@ -1796,8 +2047,9 @@ impl iface_recipes::Guest for crate::Component {
         let json = iface_recipes__convert_amounts_params__to_json(&params);
         dispatch(&OP_RECIPES_CONVERT_AMOUNTS, json)
     }
-    fn classify_cuisine() -> Result<String, String> {
-        dispatch(&OP_RECIPES_CLASSIFY_CUISINE, Value::Object(Map::new()))
+    fn classify_cuisine(params: iface_recipes::ClassifyCuisineParams) -> Result<String, String> {
+        let json = iface_recipes__classify_cuisine_params__to_json(&params);
+        dispatch(&OP_RECIPES_CLASSIFY_CUISINE, json)
     }
     fn extract_recipe_from_website(params: iface_recipes::ExtractRecipeFromWebsiteParams) -> Result<String, String> {
         let json = iface_recipes__extract_recipe_from_website_params__to_json(&params);
@@ -1819,8 +2071,9 @@ impl iface_recipes::Guest for crate::Component {
         let json = iface_recipes__get_recipe_information_bulk_params__to_json(&params);
         dispatch(&OP_RECIPES_GET_RECIPE_INFORMATION_BULK, json)
     }
-    fn parse_ingredients() -> Result<String, String> {
-        dispatch(&OP_RECIPES_PARSE_INGREDIENTS, Value::Object(Map::new()))
+    fn parse_ingredients(params: iface_recipes::ParseIngredientsParams) -> Result<String, String> {
+        let json = iface_recipes__parse_ingredients_params__to_json(&params);
+        dispatch(&OP_RECIPES_PARSE_INGREDIENTS, json)
     }
     fn analyze_a_recipe_search_query(params: iface_recipes::AnalyzeARecipeSearchQueryParams) -> Result<String, String> {
         let json = iface_recipes__analyze_a_recipe_search_query_params__to_json(&params);
@@ -1830,20 +2083,25 @@ impl iface_recipes::Guest for crate::Component {
         let json = iface_recipes__quick_answer_params__to_json(&params);
         dispatch(&OP_RECIPES_QUICK_ANSWER, json)
     }
-    fn get_random_recipes() -> Result<String, String> {
-        dispatch(&OP_RECIPES_GET_RANDOM_RECIPES, Value::Object(Map::new()))
+    fn get_random_recipes(params: iface_recipes::GetRandomRecipesParams) -> Result<String, String> {
+        let json = iface_recipes__get_random_recipes_params__to_json(&params);
+        dispatch(&OP_RECIPES_GET_RANDOM_RECIPES, json)
     }
-    fn visualize_equipment() -> Result<String, String> {
-        dispatch(&OP_RECIPES_VISUALIZE_EQUIPMENT, Value::Object(Map::new()))
+    fn visualize_equipment(params: iface_recipes::VisualizeEquipmentParams) -> Result<String, String> {
+        let json = iface_recipes__visualize_equipment_params__to_json(&params);
+        dispatch(&OP_RECIPES_VISUALIZE_EQUIPMENT, json)
     }
-    fn visualize_recipe_nutrition() -> Result<String, String> {
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_NUTRITION, Value::Object(Map::new()))
+    fn visualize_recipe_nutrition(params: iface_recipes::VisualizeRecipeNutritionParams) -> Result<String, String> {
+        let json = iface_recipes__visualize_recipe_nutrition_params__to_json(&params);
+        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_NUTRITION, json)
     }
-    fn visualize_price_breakdown() -> Result<String, String> {
-        dispatch(&OP_RECIPES_VISUALIZE_PRICE_BREAKDOWN, Value::Object(Map::new()))
+    fn visualize_price_breakdown(params: iface_recipes::VisualizePriceBreakdownParams) -> Result<String, String> {
+        let json = iface_recipes__visualize_price_breakdown_params__to_json(&params);
+        dispatch(&OP_RECIPES_VISUALIZE_PRICE_BREAKDOWN, json)
     }
-    fn create_recipe_card() -> Result<String, String> {
-        dispatch(&OP_RECIPES_CREATE_RECIPE_CARD, Value::Object(Map::new()))
+    fn create_recipe_card(params: iface_recipes::CreateRecipeCardParams) -> Result<String, String> {
+        let json = iface_recipes__create_recipe_card_params__to_json(&params);
+        dispatch(&OP_RECIPES_CREATE_RECIPE_CARD, json)
     }
     fn visualize_recipe_taste(params: iface_recipes::VisualizeRecipeTasteParams) -> Result<String, String> {
         let json = iface_recipes__visualize_recipe_taste_params__to_json(&params);
@@ -1940,6 +2198,7 @@ const OP_MENU_ITEMS_SEARCH_MENU_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/search",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "min_calories", location: FieldLocation::Query },
         FieldSpec { snake: "max_calories", location: FieldLocation::Query },
         FieldSpec { snake: "min_carbs", location: FieldLocation::Query },
@@ -1949,6 +2208,8 @@ const OP_MENU_ITEMS_SEARCH_MENU_ITEMS: OpSpec = OpSpec {
         FieldSpec { snake: "min_fat", location: FieldLocation::Query },
         FieldSpec { snake: "max_fat", location: FieldLocation::Query },
         FieldSpec { snake: "add_menu_item_information", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1983,6 +2244,7 @@ const OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_WIDGET: OpSpec = OpSpec {
     path_template: "/food/menuItems/{id}/nutritionLabel",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
         FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
         FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
         FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
@@ -2011,6 +2273,8 @@ const OP_MENU_ITEMS_VISUALIZE_MENU_ITEM_NUTRITION_BY_ID: OpSpec = OpSpec {
     path_template: "/food/menuItems/{id}/nutritionWidget",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2028,8 +2292,17 @@ const OP_MENU_ITEMS_MENU_ITEM_NUTRITION_BY_ID_IMAGE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_menu_items__visualize_menu_item_nutrition_by_id_accept_enum__to_str(e: &iface_menu_items::VisualizeMenuItemNutritionByIdAcceptEnum) -> &'static str {
+    match e {
+        iface_menu_items::VisualizeMenuItemNutritionByIdAcceptEnum::ApplicationJson => "application/json",
+        iface_menu_items::VisualizeMenuItemNutritionByIdAcceptEnum::TextHtml => "text/html",
+        iface_menu_items::VisualizeMenuItemNutritionByIdAcceptEnum::Media => "media/*",
+    }
+}
+
 fn iface_menu_items__search_menu_items_params__to_json(p: &iface_menu_items::SearchMenuItemsParams) -> Value {
     let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("min_calories".into(), match (&p.min_calories) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_calories".into(), match (&p.max_calories) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("min_carbs".into(), match (&p.min_carbs) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -2039,6 +2312,8 @@ fn iface_menu_items__search_menu_items_params__to_json(p: &iface_menu_items::Sea
     m.insert("min_fat".into(), match (&p.min_fat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_fat".into(), match (&p.max_fat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("add_menu_item_information".into(), match (&p.add_menu_item_information) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2058,6 +2333,7 @@ fn iface_menu_items__get_menu_item_information_params__to_json(p: &iface_menu_it
 fn iface_menu_items__menu_item_nutrition_label_widget_params__to_json(p: &iface_menu_items::MenuItemNutritionLabelWidgetParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_optional_nutrients".into(), match (&p.show_optional_nutrients) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_zero_values".into(), match (&p.show_zero_values) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_ingredients".into(), match (&p.show_ingredients) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -2076,6 +2352,8 @@ fn iface_menu_items__menu_item_nutrition_label_image_params__to_json(p: &iface_m
 fn iface_menu_items__visualize_menu_item_nutrition_by_id_params__to_json(p: &iface_menu_items::VisualizeMenuItemNutritionByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_menu_items__visualize_menu_item_nutrition_by_id_accept_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2147,6 +2425,7 @@ const OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/search",
     fields: &[
+        FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "min_calories", location: FieldLocation::Query },
         FieldSpec { snake: "max_calories", location: FieldLocation::Query },
         FieldSpec { snake: "min_carbs", location: FieldLocation::Query },
@@ -2156,6 +2435,8 @@ const OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS: OpSpec = OpSpec {
         FieldSpec { snake: "min_fat", location: FieldLocation::Query },
         FieldSpec { snake: "max_fat", location: FieldLocation::Query },
         FieldSpec { snake: "add_product_information", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2212,6 +2493,7 @@ const OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_WIDGET: OpSpec = OpSpec {
     path_template: "/food/products/{id}/nutritionLabel",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
         FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
         FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
         FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
@@ -2240,6 +2522,8 @@ const OP_PRODUCTS_VISUALIZE_PRODUCT_NUTRITION_BY_ID: OpSpec = OpSpec {
     path_template: "/food/products/{id}/nutritionWidget",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2261,6 +2545,14 @@ fn iface_products__classify_grocery_product_locale_enum__to_str(e: &iface_produc
     match e {
         iface_products::ClassifyGroceryProductLocaleEnum::EnUs => "en_US",
         iface_products::ClassifyGroceryProductLocaleEnum::EnGb => "en_GB",
+    }
+}
+
+fn iface_products__visualize_product_nutrition_by_id_accept_enum__to_str(e: &iface_products::VisualizeProductNutritionByIdAcceptEnum) -> &'static str {
+    match e {
+        iface_products::VisualizeProductNutritionByIdAcceptEnum::ApplicationJson => "application/json",
+        iface_products::VisualizeProductNutritionByIdAcceptEnum::TextHtml => "text/html",
+        iface_products::VisualizeProductNutritionByIdAcceptEnum::Media => "media/*",
     }
 }
 
@@ -2290,6 +2582,7 @@ fn iface_products__classify_grocery_product_bulk_params__to_json(p: &iface_produ
 
 fn iface_products__search_grocery_products_params__to_json(p: &iface_products::SearchGroceryProductsParams) -> Value {
     let mut m = Map::new();
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("min_calories".into(), match (&p.min_calories) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_calories".into(), match (&p.max_calories) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("min_carbs".into(), match (&p.min_carbs) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
@@ -2299,6 +2592,8 @@ fn iface_products__search_grocery_products_params__to_json(p: &iface_products::S
     m.insert("min_fat".into(), match (&p.min_fat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("max_fat".into(), match (&p.max_fat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("add_product_information".into(), match (&p.add_product_information) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2330,6 +2625,7 @@ fn iface_products__get_product_information_params__to_json(p: &iface_products::G
 fn iface_products__product_nutrition_label_widget_params__to_json(p: &iface_products::ProductNutritionLabelWidgetParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_optional_nutrients".into(), match (&p.show_optional_nutrients) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_zero_values".into(), match (&p.show_zero_values) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("show_ingredients".into(), match (&p.show_ingredients) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -2348,6 +2644,8 @@ fn iface_products__product_nutrition_label_image_params__to_json(p: &iface_produ
 fn iface_products__visualize_product_nutrition_by_id_params__to_json(p: &iface_products::VisualizeProductNutritionByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("default_css".into(), match (&p.default_css) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_products__visualize_product_nutrition_by_id_accept_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2564,6 +2862,7 @@ const OP_MEAL_PLANNING_CLEAR_MEAL_PLAN_DAY: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
         FieldSpec { snake: "date", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2575,6 +2874,7 @@ const OP_MEAL_PLANNING_ADD_TO_MEAL_PLAN: OpSpec = OpSpec {
     path_template: "/mealplanner/{username}/items",
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
         FieldSpec { snake: "date", location: FieldLocation::Body },
         FieldSpec { snake: "position", location: FieldLocation::Body },
         FieldSpec { snake: "slot", location: FieldLocation::Body },
@@ -2592,6 +2892,7 @@ const OP_MEAL_PLANNING_DELETE_FROM_MEAL_PLAN: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2603,6 +2904,7 @@ const OP_MEAL_PLANNING_GET_SHOPPING_LIST: OpSpec = OpSpec {
     path_template: "/mealplanner/{username}/shopping-list",
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2614,6 +2916,7 @@ const OP_MEAL_PLANNING_ADD_TO_SHOPPING_LIST: OpSpec = OpSpec {
     path_template: "/mealplanner/{username}/shopping-list/items",
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
         FieldSpec { snake: "aisle", location: FieldLocation::Body },
         FieldSpec { snake: "item", location: FieldLocation::Body },
         FieldSpec { snake: "parse", location: FieldLocation::Body },
@@ -2629,6 +2932,7 @@ const OP_MEAL_PLANNING_DELETE_FROM_SHOPPING_LIST: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2642,6 +2946,7 @@ const OP_MEAL_PLANNING_GENERATE_SHOPPING_LIST: OpSpec = OpSpec {
         FieldSpec { snake: "username", location: FieldLocation::Path },
         FieldSpec { snake: "start_date", location: FieldLocation::Path },
         FieldSpec { snake: "end_date", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2653,6 +2958,7 @@ const OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATES: OpSpec = OpSpec {
     path_template: "/mealplanner/{username}/templates",
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2677,6 +2983,7 @@ const OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATE: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2702,6 +3009,7 @@ const OP_MEAL_PLANNING_GET_MEAL_PLAN_WEEK: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
         FieldSpec { snake: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2747,12 +3055,14 @@ fn iface_meal_planning__clear_meal_plan_day_params__to_json(p: &iface_meal_plann
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("date".into(), Value::String((&p.date).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 
 fn iface_meal_planning__add_to_meal_plan_params__to_json(p: &iface_meal_planning::AddToMealPlanParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     m.insert("date".into(), serde_json::Number::from_f64(*(&p.date)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
     m.insert("slot".into(), Value::Number(serde_json::Number::from(*(&p.slot))));
@@ -2765,18 +3075,21 @@ fn iface_meal_planning__delete_from_meal_plan_params__to_json(p: &iface_meal_pla
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 
 fn iface_meal_planning__get_shopping_list_params__to_json(p: &iface_meal_planning::GetShoppingListParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 
 fn iface_meal_planning__add_to_shopping_list_params__to_json(p: &iface_meal_planning::AddToShoppingListParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     m.insert("aisle".into(), Value::String((&p.aisle).clone()));
     m.insert("item".into(), Value::String((&p.item).clone()));
     m.insert("parse".into(), Value::Bool(*(&p.parse)));
@@ -2787,6 +3100,7 @@ fn iface_meal_planning__delete_from_shopping_list_params__to_json(p: &iface_meal
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 
@@ -2795,12 +3109,14 @@ fn iface_meal_planning__generate_shopping_list_params__to_json(p: &iface_meal_pl
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     m.insert("end_date".into(), Value::String((&p.end_date).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 
 fn iface_meal_planning__get_meal_plan_templates_params__to_json(p: &iface_meal_planning::GetMealPlanTemplatesParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 
@@ -2815,6 +3131,7 @@ fn iface_meal_planning__get_meal_plan_template_params__to_json(p: &iface_meal_pl
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 
@@ -2830,6 +3147,7 @@ fn iface_meal_planning__get_meal_plan_week_params__to_json(p: &iface_meal_planni
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
     Value::Object(m)
 }
 

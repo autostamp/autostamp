@@ -1,4 +1,4 @@
-package autostamp:wikimedia@0.2.1;
+package autostamp:wikimedia@0.3.0;
 
 interface feed-content-availability {
   /// Gets availability of featured feed content for the apps by wiki domain.

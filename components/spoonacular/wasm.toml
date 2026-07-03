@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:spoonacular"
-version = "0.2.1+spoonacular-1.1"
+version = "0.3.0+spoonacular-1.1"
 registry = "ghcr.io/autostamp/spoonacular"
 kind = "component"
 file = "build/spoonacular.wasm"

@@ -311,6 +311,7 @@ const OP_SHOPPING_SEARCH_FLIGHT_OFFERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/shopping/flight-offers",
     fields: &[
+        FieldSpec { snake: "x_http_method_override", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -344,13 +345,20 @@ fn iface_shopping__get_flight_offers_params__to_json(p: &iface_shopping::GetFlig
     Value::Object(m)
 }
 
+fn iface_shopping__search_flight_offers_params__to_json(p: &iface_shopping::SearchFlightOffersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_http_method_override".into(), Value::String((&p.x_http_method_override).clone()));
+    Value::Object(m)
+}
+
 impl iface_shopping::Guest for crate::Component {
     fn get_flight_offers(params: iface_shopping::GetFlightOffersParams) -> Result<String, String> {
         let json = iface_shopping__get_flight_offers_params__to_json(&params);
         dispatch(&OP_SHOPPING_GET_FLIGHT_OFFERS, json)
     }
-    fn search_flight_offers() -> Result<String, String> {
-        dispatch(&OP_SHOPPING_SEARCH_FLIGHT_OFFERS, Value::Object(Map::new()))
+    fn search_flight_offers(params: iface_shopping::SearchFlightOffersParams) -> Result<String, String> {
+        let json = iface_shopping__search_flight_offers_params__to_json(&params);
+        dispatch(&OP_SHOPPING_SEARCH_FLIGHT_OFFERS, json)
     }
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:squareup"
-version = "0.2.1+squareup-2.0"
+version = "0.3.0+squareup-2.0"
 registry = "ghcr.io/autostamp/squareup"
 kind = "component"
 file = "build/squareup.wasm"

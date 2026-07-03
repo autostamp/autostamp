@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `basicAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:bulksms@0.2.1;
+package autostamp:bulksms@0.3.0;
 
 interface blocked-numbers {
   /// A phone number in E.164 format

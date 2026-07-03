@@ -376,7 +376,7 @@ impl iface_amazon_order_ref::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::analytics_link as iface_analytics_link;
 
-const OP_ANALYTICS_LINK_ANALYTICS_LINK_PROVIDER_V1_GET_GET: OpSpec = OpSpec {
+const OP_ANALYTICS_LINK_PROVIDER_V1_GET_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/V1/analytics/link",
     fields: &[
@@ -386,8 +386,8 @@ const OP_ANALYTICS_LINK_ANALYTICS_LINK_PROVIDER_V1_GET_GET: OpSpec = OpSpec {
 };
 
 impl iface_analytics_link::Guest for crate::Component {
-    fn analytics_link_provider_v1_get_get() -> Result<String, String> {
-        dispatch(&OP_ANALYTICS_LINK_ANALYTICS_LINK_PROVIDER_V1_GET_GET, Value::Object(Map::new()))
+    fn provider_v1_get_get() -> Result<String, String> {
+        dispatch(&OP_ANALYTICS_LINK_PROVIDER_V1_GET_GET, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::magento::attribute_metadata_customer as iface_attribute_metadata_customer;
@@ -4796,7 +4796,7 @@ impl iface_categories_id::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::cms_block as iface_cms_block;
 
-const OP_CMS_BLOCK_CMS_BLOCK_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
+const OP_CMS_BLOCK_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/V1/cmsBlock",
     fields: &[
@@ -4818,16 +4818,16 @@ fn iface_cms_block__cms_data_block_interface__to_json(p: &iface_cms_block::CmsDa
     Value::Object(m)
 }
 
-fn iface_cms_block__cms_block_repository_v1_save_post_params__to_json(p: &iface_cms_block::CmsBlockRepositoryV1SavePostParams) -> Value {
+fn iface_cms_block__repository_v1_save_post_params__to_json(p: &iface_cms_block::RepositoryV1SavePostParams) -> Value {
     let mut m = Map::new();
     m.insert("block".into(), iface_cms_block__cms_data_block_interface__to_json(&p.block));
     Value::Object(m)
 }
 
 impl iface_cms_block::Guest for crate::Component {
-    fn cms_block_repository_v1_save_post(params: iface_cms_block::CmsBlockRepositoryV1SavePostParams) -> Result<String, String> {
-        let json = iface_cms_block__cms_block_repository_v1_save_post_params__to_json(&params);
-        dispatch(&OP_CMS_BLOCK_CMS_BLOCK_REPOSITORY_V1_SAVE_POST, json)
+    fn repository_v1_save_post(params: iface_cms_block::RepositoryV1SavePostParams) -> Result<String, String> {
+        let json = iface_cms_block__repository_v1_save_post_params__to_json(&params);
+        dispatch(&OP_CMS_BLOCK_REPOSITORY_V1_SAVE_POST, json)
     }
 }
 use crate::exports::autostamp::magento::cms_block_search as iface_cms_block_search;
@@ -4950,7 +4950,7 @@ impl iface_cms_block_id::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::cms_page as iface_cms_page;
 
-const OP_CMS_PAGE_CMS_PAGE_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
+const OP_CMS_PAGE_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/V1/cmsPage",
     fields: &[
@@ -4984,16 +4984,16 @@ fn iface_cms_page__cms_data_page_interface__to_json(p: &iface_cms_page::CmsDataP
     Value::Object(m)
 }
 
-fn iface_cms_page__cms_page_repository_v1_save_post_params__to_json(p: &iface_cms_page::CmsPageRepositoryV1SavePostParams) -> Value {
+fn iface_cms_page__repository_v1_save_post_params__to_json(p: &iface_cms_page::RepositoryV1SavePostParams) -> Value {
     let mut m = Map::new();
     m.insert("page".into(), iface_cms_page__cms_data_page_interface__to_json(&p.page));
     Value::Object(m)
 }
 
 impl iface_cms_page::Guest for crate::Component {
-    fn cms_page_repository_v1_save_post(params: iface_cms_page::CmsPageRepositoryV1SavePostParams) -> Result<String, String> {
-        let json = iface_cms_page__cms_page_repository_v1_save_post_params__to_json(&params);
-        dispatch(&OP_CMS_PAGE_CMS_PAGE_REPOSITORY_V1_SAVE_POST, json)
+    fn repository_v1_save_post(params: iface_cms_page::RepositoryV1SavePostParams) -> Result<String, String> {
+        let json = iface_cms_page__repository_v1_save_post_params__to_json(&params);
+        dispatch(&OP_CMS_PAGE_REPOSITORY_V1_SAVE_POST, json)
     }
 }
 use crate::exports::autostamp::magento::cms_page_search as iface_cms_page_search;
@@ -5128,7 +5128,7 @@ impl iface_cms_page_page_id::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::company as iface_company;
 
-const OP_COMPANY_COMPANY_COMPANY_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
+const OP_COMPANY_COMPANY_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/V1/company/",
     fields: &[
@@ -5144,7 +5144,7 @@ const OP_COMPANY_COMPANY_COMPANY_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_COMPANY_COMPANY_COMPANY_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
+const OP_COMPANY_COMPANY_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/V1/company/",
     fields: &[
@@ -5154,7 +5154,7 @@ const OP_COMPANY_COMPANY_COMPANY_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
     ],
 };
 
-fn iface_company__company_data_company_interface__to_json(p: &iface_company::CompanyDataCompanyInterface) -> Value {
+fn iface_company__data_company_interface__to_json(p: &iface_company::DataCompanyInterface) -> Value {
     let mut m = Map::new();
     m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5162,7 +5162,7 @@ fn iface_company__company_data_company_interface__to_json(p: &iface_company::Com
     m.insert("company_name".into(), match (&p.company_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country_id".into(), match (&p.country_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("customer_group_id".into(), Value::Number(serde_json::Number::from(*(&p.customer_group_id))));
-    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_company__company_data_company_extension_interface__to_json(v), None => Value::Null });
+    m.insert("extension_attributes".into(), match (&p.extension_attributes) { Some(v) => iface_company__data_company_extension_interface__to_json(v), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("legal_name".into(), match (&p.legal_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("postcode".into(), match (&p.postcode) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5180,7 +5180,7 @@ fn iface_company__company_data_company_interface__to_json(p: &iface_company::Com
     Value::Object(m)
 }
 
-fn iface_company__company_data_company_extension_interface__to_json(p: &iface_company::CompanyDataCompanyExtensionInterface) -> Value {
+fn iface_company__data_company_extension_interface__to_json(p: &iface_company::DataCompanyExtensionInterface) -> Value {
     let mut m = Map::new();
     m.insert("applicable_payment_method".into(), match (&p.applicable_payment_method) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("available_payment_methods".into(), match (&p.available_payment_methods) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5203,7 +5203,7 @@ fn iface_company__negotiable_quote_data_company_quote_config_extension_interface
     Value::Object(m)
 }
 
-fn iface_company__company_company_repository_v1_get_list_get_params__to_json(p: &iface_company::CompanyCompanyRepositoryV1GetListGetParams) -> Value {
+fn iface_company__company_repository_v1_get_list_get_params__to_json(p: &iface_company::CompanyRepositoryV1GetListGetParams) -> Value {
     let mut m = Map::new();
     m.insert("search_criteria_filter_groups_0_filters_0_field".into(), match (&p.search_criteria_filter_groups_v0_filters_v0_field) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("search_criteria_filter_groups_0_filters_0_value".into(), match (&p.search_criteria_filter_groups_v0_filters_v0_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5215,20 +5215,20 @@ fn iface_company__company_company_repository_v1_get_list_get_params__to_json(p: 
     Value::Object(m)
 }
 
-fn iface_company__company_company_repository_v1_save_post_params__to_json(p: &iface_company::CompanyCompanyRepositoryV1SavePostParams) -> Value {
+fn iface_company__company_repository_v1_save_post_params__to_json(p: &iface_company::CompanyRepositoryV1SavePostParams) -> Value {
     let mut m = Map::new();
-    m.insert("company".into(), iface_company__company_data_company_interface__to_json(&p.company));
+    m.insert("company".into(), iface_company__data_company_interface__to_json(&p.company));
     Value::Object(m)
 }
 
 impl iface_company::Guest for crate::Component {
-    fn company_company_repository_v1_get_list_get(params: iface_company::CompanyCompanyRepositoryV1GetListGetParams) -> Result<String, String> {
-        let json = iface_company__company_company_repository_v1_get_list_get_params__to_json(&params);
-        dispatch(&OP_COMPANY_COMPANY_COMPANY_REPOSITORY_V1_GET_LIST_GET, json)
+    fn company_repository_v1_get_list_get(params: iface_company::CompanyRepositoryV1GetListGetParams) -> Result<String, String> {
+        let json = iface_company__company_repository_v1_get_list_get_params__to_json(&params);
+        dispatch(&OP_COMPANY_COMPANY_REPOSITORY_V1_GET_LIST_GET, json)
     }
-    fn company_company_repository_v1_save_post(params: iface_company::CompanyCompanyRepositoryV1SavePostParams) -> Result<String, String> {
-        let json = iface_company__company_company_repository_v1_save_post_params__to_json(&params);
-        dispatch(&OP_COMPANY_COMPANY_COMPANY_REPOSITORY_V1_SAVE_POST, json)
+    fn company_repository_v1_save_post(params: iface_company::CompanyRepositoryV1SavePostParams) -> Result<String, String> {
+        let json = iface_company__company_repository_v1_save_post_params__to_json(&params);
+        dispatch(&OP_COMPANY_COMPANY_REPOSITORY_V1_SAVE_POST, json)
     }
 }
 use crate::exports::autostamp::magento::company_assign_roles as iface_company_assign_roles;
@@ -5284,7 +5284,7 @@ impl iface_company_assign_roles::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::company_role as iface_company_role;
 
-const OP_COMPANY_ROLE_COMPANY_ROLE_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
+const OP_COMPANY_ROLE_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/V1/company/role/",
     fields: &[
@@ -5300,7 +5300,7 @@ const OP_COMPANY_ROLE_COMPANY_ROLE_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
     ],
 };
 
-const OP_COMPANY_ROLE_COMPANY_ROLE_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
+const OP_COMPANY_ROLE_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/V1/company/role/",
     fields: &[
@@ -5335,7 +5335,7 @@ fn iface_company_role__company_data_permission_interface__to_json(p: &iface_comp
     Value::Object(m)
 }
 
-fn iface_company_role__company_role_repository_v1_get_list_get_params__to_json(p: &iface_company_role::CompanyRoleRepositoryV1GetListGetParams) -> Value {
+fn iface_company_role__repository_v1_get_list_get_params__to_json(p: &iface_company_role::RepositoryV1GetListGetParams) -> Value {
     let mut m = Map::new();
     m.insert("search_criteria_filter_groups_0_filters_0_field".into(), match (&p.search_criteria_filter_groups_v0_filters_v0_field) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("search_criteria_filter_groups_0_filters_0_value".into(), match (&p.search_criteria_filter_groups_v0_filters_v0_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5347,20 +5347,20 @@ fn iface_company_role__company_role_repository_v1_get_list_get_params__to_json(p
     Value::Object(m)
 }
 
-fn iface_company_role__company_role_repository_v1_save_post_params__to_json(p: &iface_company_role::CompanyRoleRepositoryV1SavePostParams) -> Value {
+fn iface_company_role__repository_v1_save_post_params__to_json(p: &iface_company_role::RepositoryV1SavePostParams) -> Value {
     let mut m = Map::new();
     m.insert("role".into(), iface_company_role__company_data_role_interface__to_json(&p.role));
     Value::Object(m)
 }
 
 impl iface_company_role::Guest for crate::Component {
-    fn company_role_repository_v1_get_list_get(params: iface_company_role::CompanyRoleRepositoryV1GetListGetParams) -> Result<String, String> {
-        let json = iface_company_role__company_role_repository_v1_get_list_get_params__to_json(&params);
-        dispatch(&OP_COMPANY_ROLE_COMPANY_ROLE_REPOSITORY_V1_GET_LIST_GET, json)
+    fn repository_v1_get_list_get(params: iface_company_role::RepositoryV1GetListGetParams) -> Result<String, String> {
+        let json = iface_company_role__repository_v1_get_list_get_params__to_json(&params);
+        dispatch(&OP_COMPANY_ROLE_REPOSITORY_V1_GET_LIST_GET, json)
     }
-    fn company_role_repository_v1_save_post(params: iface_company_role::CompanyRoleRepositoryV1SavePostParams) -> Result<String, String> {
-        let json = iface_company_role__company_role_repository_v1_save_post_params__to_json(&params);
-        dispatch(&OP_COMPANY_ROLE_COMPANY_ROLE_REPOSITORY_V1_SAVE_POST, json)
+    fn repository_v1_save_post(params: iface_company_role::RepositoryV1SavePostParams) -> Result<String, String> {
+        let json = iface_company_role__repository_v1_save_post_params__to_json(&params);
+        dispatch(&OP_COMPANY_ROLE_REPOSITORY_V1_SAVE_POST, json)
     }
 }
 use crate::exports::autostamp::magento::company_role_id as iface_company_role_id;
@@ -8596,7 +8596,7 @@ impl iface_directory_countries_country_id::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::directory_currency as iface_directory_currency;
 
-const OP_DIRECTORY_CURRENCY_DIRECTORY_CURRENCY_INFORMATION_ACQUIRER_V1_GET_CURRENCY_INFO_GET: OpSpec = OpSpec {
+const OP_DIRECTORY_CURRENCY_INFORMATION_ACQUIRER_V1_GET_CURRENCY_INFO_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/V1/directory/currency",
     fields: &[
@@ -8606,8 +8606,8 @@ const OP_DIRECTORY_CURRENCY_DIRECTORY_CURRENCY_INFORMATION_ACQUIRER_V1_GET_CURRE
 };
 
 impl iface_directory_currency::Guest for crate::Component {
-    fn directory_currency_information_acquirer_v1_get_currency_info_get() -> Result<String, String> {
-        dispatch(&OP_DIRECTORY_CURRENCY_DIRECTORY_CURRENCY_INFORMATION_ACQUIRER_V1_GET_CURRENCY_INFO_GET, Value::Object(Map::new()))
+    fn information_acquirer_v1_get_currency_info_get() -> Result<String, String> {
+        dispatch(&OP_DIRECTORY_CURRENCY_INFORMATION_ACQUIRER_V1_GET_CURRENCY_INFO_GET, Value::Object(Map::new()))
     }
 }
 use crate::exports::autostamp::magento::eav_attribute_sets as iface_eav_attribute_sets;
@@ -10618,7 +10618,7 @@ impl iface_hierarchy_id::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::integration_admin_token as iface_integration_admin_token;
 
-const OP_INTEGRATION_ADMIN_TOKEN_INTEGRATION_ADMIN_TOKEN_SERVICE_V1_CREATE_ADMIN_ACCESS_TOKEN_POST: OpSpec = OpSpec {
+const OP_INTEGRATION_ADMIN_TOKEN_SERVICE_V1_CREATE_ADMIN_ACCESS_TOKEN_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/V1/integration/admin/token",
     fields: &[
@@ -10629,7 +10629,7 @@ const OP_INTEGRATION_ADMIN_TOKEN_INTEGRATION_ADMIN_TOKEN_SERVICE_V1_CREATE_ADMIN
     ],
 };
 
-fn iface_integration_admin_token__integration_admin_token_service_v1_create_admin_access_token_post_params__to_json(p: &iface_integration_admin_token::IntegrationAdminTokenServiceV1CreateAdminAccessTokenPostParams) -> Value {
+fn iface_integration_admin_token__service_v1_create_admin_access_token_post_params__to_json(p: &iface_integration_admin_token::ServiceV1CreateAdminAccessTokenPostParams) -> Value {
     let mut m = Map::new();
     m.insert("password".into(), Value::String((&p.password).clone()));
     m.insert("username".into(), Value::String((&p.username).clone()));
@@ -10637,14 +10637,14 @@ fn iface_integration_admin_token__integration_admin_token_service_v1_create_admi
 }
 
 impl iface_integration_admin_token::Guest for crate::Component {
-    fn integration_admin_token_service_v1_create_admin_access_token_post(params: iface_integration_admin_token::IntegrationAdminTokenServiceV1CreateAdminAccessTokenPostParams) -> Result<String, String> {
-        let json = iface_integration_admin_token__integration_admin_token_service_v1_create_admin_access_token_post_params__to_json(&params);
-        dispatch(&OP_INTEGRATION_ADMIN_TOKEN_INTEGRATION_ADMIN_TOKEN_SERVICE_V1_CREATE_ADMIN_ACCESS_TOKEN_POST, json)
+    fn service_v1_create_admin_access_token_post(params: iface_integration_admin_token::ServiceV1CreateAdminAccessTokenPostParams) -> Result<String, String> {
+        let json = iface_integration_admin_token__service_v1_create_admin_access_token_post_params__to_json(&params);
+        dispatch(&OP_INTEGRATION_ADMIN_TOKEN_SERVICE_V1_CREATE_ADMIN_ACCESS_TOKEN_POST, json)
     }
 }
 use crate::exports::autostamp::magento::integration_customer_token as iface_integration_customer_token;
 
-const OP_INTEGRATION_CUSTOMER_TOKEN_INTEGRATION_CUSTOMER_TOKEN_SERVICE_V1_CREATE_CUSTOMER_ACCESS_TOKEN_POST: OpSpec = OpSpec {
+const OP_INTEGRATION_CUSTOMER_TOKEN_SERVICE_V1_CREATE_CUSTOMER_ACCESS_TOKEN_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/V1/integration/customer/token",
     fields: &[
@@ -10655,7 +10655,7 @@ const OP_INTEGRATION_CUSTOMER_TOKEN_INTEGRATION_CUSTOMER_TOKEN_SERVICE_V1_CREATE
     ],
 };
 
-fn iface_integration_customer_token__integration_customer_token_service_v1_create_customer_access_token_post_params__to_json(p: &iface_integration_customer_token::IntegrationCustomerTokenServiceV1CreateCustomerAccessTokenPostParams) -> Value {
+fn iface_integration_customer_token__service_v1_create_customer_access_token_post_params__to_json(p: &iface_integration_customer_token::ServiceV1CreateCustomerAccessTokenPostParams) -> Value {
     let mut m = Map::new();
     m.insert("password".into(), Value::String((&p.password).clone()));
     m.insert("username".into(), Value::String((&p.username).clone()));
@@ -10663,9 +10663,9 @@ fn iface_integration_customer_token__integration_customer_token_service_v1_creat
 }
 
 impl iface_integration_customer_token::Guest for crate::Component {
-    fn integration_customer_token_service_v1_create_customer_access_token_post(params: iface_integration_customer_token::IntegrationCustomerTokenServiceV1CreateCustomerAccessTokenPostParams) -> Result<String, String> {
-        let json = iface_integration_customer_token__integration_customer_token_service_v1_create_customer_access_token_post_params__to_json(&params);
-        dispatch(&OP_INTEGRATION_CUSTOMER_TOKEN_INTEGRATION_CUSTOMER_TOKEN_SERVICE_V1_CREATE_CUSTOMER_ACCESS_TOKEN_POST, json)
+    fn service_v1_create_customer_access_token_post(params: iface_integration_customer_token::ServiceV1CreateCustomerAccessTokenPostParams) -> Result<String, String> {
+        let json = iface_integration_customer_token__service_v1_create_customer_access_token_post_params__to_json(&params);
+        dispatch(&OP_INTEGRATION_CUSTOMER_TOKEN_SERVICE_V1_CREATE_CUSTOMER_ACCESS_TOKEN_POST, json)
     }
 }
 use crate::exports::autostamp::magento::invoice_invoice_id_refund as iface_invoice_invoice_id_refund;
@@ -12484,7 +12484,7 @@ impl iface_negotiable_carts_cart_id_totals::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::negotiable_quote_attachment_content as iface_negotiable_quote_attachment_content;
 
-const OP_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_MANAGEMENT_V1_GET_GET: OpSpec = OpSpec {
+const OP_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_MANAGEMENT_V1_GET_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/V1/negotiableQuote/attachmentContent",
     fields: &[
@@ -12494,16 +12494,16 @@ const OP_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT
     ],
 };
 
-fn iface_negotiable_quote_attachment_content__negotiable_quote_attachment_content_management_v1_get_get_params__to_json(p: &iface_negotiable_quote_attachment_content::NegotiableQuoteAttachmentContentManagementV1GetGetParams) -> Value {
+fn iface_negotiable_quote_attachment_content__management_v1_get_get_params__to_json(p: &iface_negotiable_quote_attachment_content::ManagementV1GetGetParams) -> Value {
     let mut m = Map::new();
     m.insert("attachment_ids".into(), Value::Array((&p.attachment_ids).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()));
     Value::Object(m)
 }
 
 impl iface_negotiable_quote_attachment_content::Guest for crate::Component {
-    fn negotiable_quote_attachment_content_management_v1_get_get(params: iface_negotiable_quote_attachment_content::NegotiableQuoteAttachmentContentManagementV1GetGetParams) -> Result<String, String> {
-        let json = iface_negotiable_quote_attachment_content__negotiable_quote_attachment_content_management_v1_get_get_params__to_json(&params);
-        dispatch(&OP_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_MANAGEMENT_V1_GET_GET, json)
+    fn management_v1_get_get(params: iface_negotiable_quote_attachment_content::ManagementV1GetGetParams) -> Result<String, String> {
+        let json = iface_negotiable_quote_attachment_content__management_v1_get_get_params__to_json(&params);
+        dispatch(&OP_NEGOTIABLE_QUOTE_ATTACHMENT_CONTENT_MANAGEMENT_V1_GET_GET, json)
     }
 }
 use crate::exports::autostamp::magento::negotiable_quote_decline as iface_negotiable_quote_decline;
@@ -19474,7 +19474,7 @@ impl iface_sales_rules_rule_id::Guest for crate::Component {
 }
 use crate::exports::autostamp::magento::search as iface_search;
 
-const OP_SEARCH_SEARCH_V1_SEARCH_GET: OpSpec = OpSpec {
+const OP_SEARCH_V1_SEARCH_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/V1/search",
     fields: &[
@@ -19491,7 +19491,7 @@ const OP_SEARCH_SEARCH_V1_SEARCH_GET: OpSpec = OpSpec {
     ],
 };
 
-fn iface_search__search_v1_search_get_params__to_json(p: &iface_search::SearchV1SearchGetParams) -> Value {
+fn iface_search__v1_search_get_params__to_json(p: &iface_search::V1SearchGetParams) -> Value {
     let mut m = Map::new();
     m.insert("search_criteria_request_name".into(), match (&p.search_criteria_request_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("search_criteria_filter_groups_0_filters_0_field".into(), match (&p.search_criteria_filter_groups_v0_filters_v0_field) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -19505,14 +19505,14 @@ fn iface_search__search_v1_search_get_params__to_json(p: &iface_search::SearchV1
 }
 
 impl iface_search::Guest for crate::Component {
-    fn search_v1_search_get(params: iface_search::SearchV1SearchGetParams) -> Result<String, String> {
-        let json = iface_search__search_v1_search_get_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_V1_SEARCH_GET, json)
+    fn v1_search_get(params: iface_search::V1SearchGetParams) -> Result<String, String> {
+        let json = iface_search__v1_search_get_params__to_json(&params);
+        dispatch(&OP_SEARCH_V1_SEARCH_GET, json)
     }
 }
 use crate::exports::autostamp::magento::shared_catalog as iface_shared_catalog;
 
-const OP_SHARED_CATALOG_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
+const OP_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_SAVE_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/V1/sharedCatalog",
     fields: &[
@@ -19522,7 +19522,7 @@ const OP_SHARED_CATALOG_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_SAVE_POST: O
     ],
 };
 
-const OP_SHARED_CATALOG_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
+const OP_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_GET_LIST_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/V1/sharedCatalog/",
     fields: &[
@@ -19538,7 +19538,7 @@ const OP_SHARED_CATALOG_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_GET_LIST_GET
     ],
 };
 
-fn iface_shared_catalog__shared_catalog_data_shared_catalog_interface__to_json(p: &iface_shared_catalog::SharedCatalogDataSharedCatalogInterface) -> Value {
+fn iface_shared_catalog__data_shared_catalog_interface__to_json(p: &iface_shared_catalog::DataSharedCatalogInterface) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), Value::String((&p.created_at).clone()));
     m.insert("created_by".into(), Value::Number(serde_json::Number::from(*(&p.created_by))));
@@ -19552,13 +19552,13 @@ fn iface_shared_catalog__shared_catalog_data_shared_catalog_interface__to_json(p
     Value::Object(m)
 }
 
-fn iface_shared_catalog__shared_catalog_shared_catalog_repository_v1_save_post_params__to_json(p: &iface_shared_catalog::SharedCatalogSharedCatalogRepositoryV1SavePostParams) -> Value {
+fn iface_shared_catalog__shared_catalog_repository_v1_save_post_params__to_json(p: &iface_shared_catalog::SharedCatalogRepositoryV1SavePostParams) -> Value {
     let mut m = Map::new();
-    m.insert("shared_catalog".into(), iface_shared_catalog__shared_catalog_data_shared_catalog_interface__to_json(&p.shared_catalog));
+    m.insert("shared_catalog".into(), iface_shared_catalog__data_shared_catalog_interface__to_json(&p.shared_catalog));
     Value::Object(m)
 }
 
-fn iface_shared_catalog__shared_catalog_shared_catalog_repository_v1_get_list_get_params__to_json(p: &iface_shared_catalog::SharedCatalogSharedCatalogRepositoryV1GetListGetParams) -> Value {
+fn iface_shared_catalog__shared_catalog_repository_v1_get_list_get_params__to_json(p: &iface_shared_catalog::SharedCatalogRepositoryV1GetListGetParams) -> Value {
     let mut m = Map::new();
     m.insert("search_criteria_filter_groups_0_filters_0_field".into(), match (&p.search_criteria_filter_groups_v0_filters_v0_field) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("search_criteria_filter_groups_0_filters_0_value".into(), match (&p.search_criteria_filter_groups_v0_filters_v0_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -19571,13 +19571,13 @@ fn iface_shared_catalog__shared_catalog_shared_catalog_repository_v1_get_list_ge
 }
 
 impl iface_shared_catalog::Guest for crate::Component {
-    fn shared_catalog_shared_catalog_repository_v1_save_post(params: iface_shared_catalog::SharedCatalogSharedCatalogRepositoryV1SavePostParams) -> Result<String, String> {
-        let json = iface_shared_catalog__shared_catalog_shared_catalog_repository_v1_save_post_params__to_json(&params);
-        dispatch(&OP_SHARED_CATALOG_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_SAVE_POST, json)
+    fn shared_catalog_repository_v1_save_post(params: iface_shared_catalog::SharedCatalogRepositoryV1SavePostParams) -> Result<String, String> {
+        let json = iface_shared_catalog__shared_catalog_repository_v1_save_post_params__to_json(&params);
+        dispatch(&OP_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_SAVE_POST, json)
     }
-    fn shared_catalog_shared_catalog_repository_v1_get_list_get(params: iface_shared_catalog::SharedCatalogSharedCatalogRepositoryV1GetListGetParams) -> Result<String, String> {
-        let json = iface_shared_catalog__shared_catalog_shared_catalog_repository_v1_get_list_get_params__to_json(&params);
-        dispatch(&OP_SHARED_CATALOG_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_GET_LIST_GET, json)
+    fn shared_catalog_repository_v1_get_list_get(params: iface_shared_catalog::SharedCatalogRepositoryV1GetListGetParams) -> Result<String, String> {
+        let json = iface_shared_catalog__shared_catalog_repository_v1_get_list_get_params__to_json(&params);
+        dispatch(&OP_SHARED_CATALOG_SHARED_CATALOG_REPOSITORY_V1_GET_LIST_GET, json)
     }
 }
 use crate::exports::autostamp::magento::shared_catalog_id as iface_shared_catalog_id;

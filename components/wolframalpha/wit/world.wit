@@ -1,4 +1,4 @@
-package autostamp:wolframalpha@0.2.1;
+package autostamp:wolframalpha@0.3.0;
 
 interface api {
   /// Evaluate Wolfram Language code

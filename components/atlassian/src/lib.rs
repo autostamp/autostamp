@@ -1596,20 +1596,20 @@ const OP_TIME_TRACKING_SET_SHARED_TIME_TRACKING_CONFIGURATION: OpSpec = OpSpec {
     ],
 };
 
-fn iface_time_tracking__time_tracking_configuration_default_unit_enum__to_str(e: &iface_time_tracking::TimeTrackingConfigurationDefaultUnitEnum) -> &'static str {
+fn iface_time_tracking__configuration_default_unit_enum__to_str(e: &iface_time_tracking::ConfigurationDefaultUnitEnum) -> &'static str {
     match e {
-        iface_time_tracking::TimeTrackingConfigurationDefaultUnitEnum::Minute => "minute",
-        iface_time_tracking::TimeTrackingConfigurationDefaultUnitEnum::Hour => "hour",
-        iface_time_tracking::TimeTrackingConfigurationDefaultUnitEnum::Day => "day",
-        iface_time_tracking::TimeTrackingConfigurationDefaultUnitEnum::Week => "week",
+        iface_time_tracking::ConfigurationDefaultUnitEnum::Minute => "minute",
+        iface_time_tracking::ConfigurationDefaultUnitEnum::Hour => "hour",
+        iface_time_tracking::ConfigurationDefaultUnitEnum::Day => "day",
+        iface_time_tracking::ConfigurationDefaultUnitEnum::Week => "week",
     }
 }
 
-fn iface_time_tracking__time_tracking_configuration_time_format_enum__to_str(e: &iface_time_tracking::TimeTrackingConfigurationTimeFormatEnum) -> &'static str {
+fn iface_time_tracking__configuration_time_format_enum__to_str(e: &iface_time_tracking::ConfigurationTimeFormatEnum) -> &'static str {
     match e {
-        iface_time_tracking::TimeTrackingConfigurationTimeFormatEnum::Pretty => "pretty",
-        iface_time_tracking::TimeTrackingConfigurationTimeFormatEnum::Days => "days",
-        iface_time_tracking::TimeTrackingConfigurationTimeFormatEnum::Hours => "hours",
+        iface_time_tracking::ConfigurationTimeFormatEnum::Pretty => "pretty",
+        iface_time_tracking::ConfigurationTimeFormatEnum::Days => "days",
+        iface_time_tracking::ConfigurationTimeFormatEnum::Hours => "hours",
     }
 }
 
@@ -1623,8 +1623,8 @@ fn iface_time_tracking__select_time_tracking_implementation_params__to_json(p: &
 
 fn iface_time_tracking__set_shared_time_tracking_configuration_params__to_json(p: &iface_time_tracking::SetSharedTimeTrackingConfigurationParams) -> Value {
     let mut m = Map::new();
-    m.insert("default_unit".into(), Value::String(iface_time_tracking__time_tracking_configuration_default_unit_enum__to_str(&p.default_unit).into()));
-    m.insert("time_format".into(), Value::String(iface_time_tracking__time_tracking_configuration_time_format_enum__to_str(&p.time_format).into()));
+    m.insert("default_unit".into(), Value::String(iface_time_tracking__configuration_default_unit_enum__to_str(&p.default_unit).into()));
+    m.insert("time_format".into(), Value::String(iface_time_tracking__configuration_time_format_enum__to_str(&p.time_format).into()));
     m.insert("working_days_per_week".into(), serde_json::Number::from_f64(*(&p.working_days_per_week)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("working_hours_per_day".into(), serde_json::Number::from_f64(*(&p.working_hours_per_day)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
@@ -7841,7 +7841,7 @@ fn iface_jql__parse_jql_queries_validation_enum__to_str(e: &iface_jql::ParseJqlQ
     }
 }
 
-fn iface_jql__jql_query_to_sanitize__to_json(p: &iface_jql::JqlQueryToSanitize) -> Value {
+fn iface_jql__query_to_sanitize__to_json(p: &iface_jql::QueryToSanitize) -> Value {
     let mut m = Map::new();
     m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("query".into(), Value::String((&p.query).clone()));
@@ -7879,7 +7879,7 @@ fn iface_jql__migrate_queries_params__to_json(p: &iface_jql::MigrateQueriesParam
 
 fn iface_jql__sanitise_jql_queries_params__to_json(p: &iface_jql::SanitiseJqlQueriesParams) -> Value {
     let mut m = Map::new();
-    m.insert("queries".into(), Value::Array((&p.queries).iter().map(|v| iface_jql__jql_query_to_sanitize__to_json(v)).collect()));
+    m.insert("queries".into(), Value::Array((&p.queries).iter().map(|v| iface_jql__query_to_sanitize__to_json(v)).collect()));
     Value::Object(m)
 }
 
@@ -10068,7 +10068,7 @@ const OP_PROJECT_ROLE_ACTORS_DELETE_PROJECT_ROLE_ACTORS_FROM_ROLE: OpSpec = OpSp
     ],
 };
 
-fn iface_project_role_actors__project_role_actors_update_bean_categorised_actors__to_json(p: &iface_project_role_actors::ProjectRoleActorsUpdateBeanCategorisedActors) -> Value {
+fn iface_project_role_actors__update_bean_categorised_actors__to_json(p: &iface_project_role_actors::UpdateBeanCategorisedActors) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -10088,7 +10088,7 @@ fn iface_project_role_actors__set_actors_params__to_json(p: &iface_project_role_
     let mut m = Map::new();
     m.insert("project_id_or_key".into(), Value::String((&p.project_id_or_key).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("categorised_actors".into(), match (&p.categorised_actors) { Some(v) => iface_project_role_actors__project_role_actors_update_bean_categorised_actors__to_json(v), None => Value::Null });
+    m.insert("categorised_actors".into(), match (&p.categorised_actors) { Some(v) => iface_project_role_actors__update_bean_categorised_actors__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -11587,25 +11587,25 @@ const OP_STATUS_SEARCH: OpSpec = OpSpec {
     ],
 };
 
-fn iface_status__status_scope_type_op_enum__to_str(e: &iface_status::StatusScopeTypeOpEnum) -> &'static str {
+fn iface_status__scope_type_op_enum__to_str(e: &iface_status::ScopeTypeOpEnum) -> &'static str {
     match e {
-        iface_status::StatusScopeTypeOpEnum::Project => "PROJECT",
-        iface_status::StatusScopeTypeOpEnum::Global => "GLOBAL",
+        iface_status::ScopeTypeOpEnum::Project => "PROJECT",
+        iface_status::ScopeTypeOpEnum::Global => "GLOBAL",
     }
 }
 
-fn iface_status__status_create_status_category_enum__to_str(e: &iface_status::StatusCreateStatusCategoryEnum) -> &'static str {
+fn iface_status__create_status_category_enum__to_str(e: &iface_status::CreateStatusCategoryEnum) -> &'static str {
     match e {
-        iface_status::StatusCreateStatusCategoryEnum::Todo => "TODO",
-        iface_status::StatusCreateStatusCategoryEnum::InProgress => "IN_PROGRESS",
-        iface_status::StatusCreateStatusCategoryEnum::Done => "DONE",
+        iface_status::CreateStatusCategoryEnum::Todo => "TODO",
+        iface_status::CreateStatusCategoryEnum::InProgress => "IN_PROGRESS",
+        iface_status::CreateStatusCategoryEnum::Done => "DONE",
     }
 }
 
-fn iface_status__status_scope__to_json(p: &iface_status::StatusScope) -> Value {
+fn iface_status__scope__to_json(p: &iface_status::Scope) -> Value {
     let mut m = Map::new();
     m.insert("project".into(), match (&p.project) { Some(v) => iface_status__project_id__to_json(v), None => Value::Null });
-    m.insert("type".into(), Value::String(iface_status__status_scope_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("type".into(), Value::String(iface_status__scope_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
 }
 
@@ -11615,20 +11615,20 @@ fn iface_status__project_id__to_json(p: &iface_status::ProjectId) -> Value {
     Value::Object(m)
 }
 
-fn iface_status__status_create__to_json(p: &iface_status::StatusCreate) -> Value {
+fn iface_status__create__to_json(p: &iface_status::Create) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("status_category".into(), Value::String(iface_status__status_create_status_category_enum__to_str(&p.status_category).into()));
+    m.insert("status_category".into(), Value::String(iface_status__create_status_category_enum__to_str(&p.status_category).into()));
     Value::Object(m)
 }
 
-fn iface_status__status_update__to_json(p: &iface_status::StatusUpdate) -> Value {
+fn iface_status__update__to_json(p: &iface_status::Update) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("status_category".into(), Value::String(iface_status__status_create_status_category_enum__to_str(&p.status_category).into()));
+    m.insert("status_category".into(), Value::String(iface_status__create_status_category_enum__to_str(&p.status_category).into()));
     Value::Object(m)
 }
 
@@ -11641,14 +11641,14 @@ fn iface_status__get_statuses_by_id_params__to_json(p: &iface_status::GetStatuse
 
 fn iface_status__create_statuses_params__to_json(p: &iface_status::CreateStatusesParams) -> Value {
     let mut m = Map::new();
-    m.insert("scope".into(), iface_status__status_scope__to_json(&p.scope));
-    m.insert("statuses".into(), Value::Array((&p.statuses).iter().map(|v| iface_status__status_create__to_json(v)).collect()));
+    m.insert("scope".into(), iface_status__scope__to_json(&p.scope));
+    m.insert("statuses".into(), Value::Array((&p.statuses).iter().map(|v| iface_status__create__to_json(v)).collect()));
     Value::Object(m)
 }
 
 fn iface_status__update_statuses_params__to_json(p: &iface_status::UpdateStatusesParams) -> Value {
     let mut m = Map::new();
-    m.insert("statuses".into(), match (&p.statuses) { Some(v) => Value::Array((v).iter().map(|v| iface_status__status_update__to_json(v)).collect()), None => Value::Null });
+    m.insert("statuses".into(), match (&p.statuses) { Some(v) => Value::Array((v).iter().map(|v| iface_status__update__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -12928,7 +12928,7 @@ fn iface_workflow_transition_rules__workflow_id__to_json(p: &iface_workflow_tran
     Value::Object(m)
 }
 
-fn iface_workflow_transition_rules__workflow_transition_rules_details__to_json(p: &iface_workflow_transition_rules::WorkflowTransitionRulesDetails) -> Value {
+fn iface_workflow_transition_rules__details__to_json(p: &iface_workflow_transition_rules::Details) -> Value {
     let mut m = Map::new();
     m.insert("workflow_id".into(), iface_workflow_transition_rules__workflow_id__to_json(&p.workflow_id));
     m.insert("workflow_rule_ids".into(), Value::Array((&p.workflow_rule_ids).iter().map(|v| Value::String((v).clone())).collect()));
@@ -12956,7 +12956,7 @@ fn iface_workflow_transition_rules__update_workflow_transition_rule_configuratio
 
 fn iface_workflow_transition_rules__delete_workflow_transition_rule_configurations_params__to_json(p: &iface_workflow_transition_rules::DeleteWorkflowTransitionRuleConfigurationsParams) -> Value {
     let mut m = Map::new();
-    m.insert("workflows".into(), Value::Array((&p.workflows).iter().map(|v| iface_workflow_transition_rules__workflow_transition_rules_details__to_json(v)).collect()));
+    m.insert("workflows".into(), Value::Array((&p.workflows).iter().map(|v| iface_workflow_transition_rules__details__to_json(v)).collect()));
     Value::Object(m)
 }
 
@@ -14035,7 +14035,7 @@ impl iface_app_properties::Guest for crate::Component {
 }
 use crate::exports::autostamp::atlassian::dynamic_modules as iface_dynamic_modules;
 
-const OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_GET_MODULES_GET: OpSpec = OpSpec {
+const OP_DYNAMIC_MODULES_RESOURCE_GET_MODULES_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/rest/atlassian-connect/1/app/module/dynamic",
     fields: &[
@@ -14044,7 +14044,7 @@ const OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_GET_MODULES_GET: OpSpec = OpSp
     ],
 };
 
-const OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_REGISTER_MODULES_POST: OpSpec = OpSpec {
+const OP_DYNAMIC_MODULES_RESOURCE_REGISTER_MODULES_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/rest/atlassian-connect/1/app/module/dynamic",
     fields: &[
@@ -14054,7 +14054,7 @@ const OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_REGISTER_MODULES_POST: OpSpec 
     ],
 };
 
-const OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_REMOVE_MODULES_DELETE: OpSpec = OpSpec {
+const OP_DYNAMIC_MODULES_RESOURCE_REMOVE_MODULES_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/rest/atlassian-connect/1/app/module/dynamic",
     fields: &[
@@ -14070,29 +14070,29 @@ fn iface_dynamic_modules__connect_module__to_json(p: &iface_dynamic_modules::Con
     Value::Object(m)
 }
 
-fn iface_dynamic_modules__dynamic_modules_resource_register_modules_post_params__to_json(p: &iface_dynamic_modules::DynamicModulesResourceRegisterModulesPostParams) -> Value {
+fn iface_dynamic_modules__resource_register_modules_post_params__to_json(p: &iface_dynamic_modules::ResourceRegisterModulesPostParams) -> Value {
     let mut m = Map::new();
     m.insert("modules".into(), Value::Array((&p.modules).iter().map(|v| iface_dynamic_modules__connect_module__to_json(v)).collect()));
     Value::Object(m)
 }
 
-fn iface_dynamic_modules__dynamic_modules_resource_remove_modules_delete_params__to_json(p: &iface_dynamic_modules::DynamicModulesResourceRemoveModulesDeleteParams) -> Value {
+fn iface_dynamic_modules__resource_remove_modules_delete_params__to_json(p: &iface_dynamic_modules::ResourceRemoveModulesDeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("module_key".into(), match (&p.module_key) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 impl iface_dynamic_modules::Guest for crate::Component {
-    fn dynamic_modules_resource_get_modules_get() -> Result<String, String> {
-        dispatch(&OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_GET_MODULES_GET, Value::Object(Map::new()))
+    fn resource_get_modules_get() -> Result<String, String> {
+        dispatch(&OP_DYNAMIC_MODULES_RESOURCE_GET_MODULES_GET, Value::Object(Map::new()))
     }
-    fn dynamic_modules_resource_register_modules_post(params: iface_dynamic_modules::DynamicModulesResourceRegisterModulesPostParams) -> Result<String, String> {
-        let json = iface_dynamic_modules__dynamic_modules_resource_register_modules_post_params__to_json(&params);
-        dispatch(&OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_REGISTER_MODULES_POST, json)
+    fn resource_register_modules_post(params: iface_dynamic_modules::ResourceRegisterModulesPostParams) -> Result<String, String> {
+        let json = iface_dynamic_modules__resource_register_modules_post_params__to_json(&params);
+        dispatch(&OP_DYNAMIC_MODULES_RESOURCE_REGISTER_MODULES_POST, json)
     }
-    fn dynamic_modules_resource_remove_modules_delete(params: iface_dynamic_modules::DynamicModulesResourceRemoveModulesDeleteParams) -> Result<String, String> {
-        let json = iface_dynamic_modules__dynamic_modules_resource_remove_modules_delete_params__to_json(&params);
-        dispatch(&OP_DYNAMIC_MODULES_DYNAMIC_MODULES_RESOURCE_REMOVE_MODULES_DELETE, json)
+    fn resource_remove_modules_delete(params: iface_dynamic_modules::ResourceRemoveModulesDeleteParams) -> Result<String, String> {
+        let json = iface_dynamic_modules__resource_remove_modules_delete_params__to_json(&params);
+        dispatch(&OP_DYNAMIC_MODULES_RESOURCE_REMOVE_MODULES_DELETE, json)
     }
 }
 use crate::exports::autostamp::atlassian::app_migration as iface_app_migration;

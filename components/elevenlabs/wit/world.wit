@@ -1,4 +1,4 @@
-package autostamp:elevenlabs@0.2.1;
+package autostamp:elevenlabs@0.3.0;
 
 interface history {
   /// Get Generated Items
@@ -49,7 +49,7 @@ interface history {
 
 interface text-to-speech {
   /// Text To Speech
-  record text-to-speech-v1-text-to-speech-voice-id-post-params {
+  record v1-text-to-speech-voice-id-post-params {
     /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
     voice-id: string,
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
@@ -59,10 +59,10 @@ interface text-to-speech {
     /// Voice settings overriding stored setttings for the given voice. They are applied only on the given TTS request.
     voice-settings: option<string>
   }
-  text-to-speech-v1-text-to-speech-voice-id-post: func(params: text-to-speech-v1-text-to-speech-voice-id-post-params) -> result<string, string>;
+  v1-text-to-speech-voice-id-post: func(params: v1-text-to-speech-voice-id-post-params) -> result<string, string>;
 
   /// Text To Speech
-  record text-to-speech-v1-text-to-speech-voice-id-stream-post-params {
+  record v1-text-to-speech-voice-id-stream-post-params {
     /// Voice ID to be used, you can use https://api.elevenlabs.io/v1/voices to list all the available voices.
     voice-id: string,
     /// Your API key. This is required by most endpoints to access our API programatically. You can view your xi-api-key using the 'Profile' tab on the website.
@@ -72,7 +72,7 @@ interface text-to-speech {
     /// Voice settings overriding stored setttings for the given voice. They are applied only on the given TTS request.
     voice-settings: option<string>
   }
-  text-to-speech-v1-text-to-speech-voice-id-stream-post: func(params: text-to-speech-v1-text-to-speech-voice-id-stream-post-params) -> result<string, string>;
+  v1-text-to-speech-voice-id-stream-post: func(params: v1-text-to-speech-voice-id-stream-post-params) -> result<string, string>;
 
 }
 

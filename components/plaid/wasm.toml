@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:plaid"
-version = "0.2.1+plaid-2020-09-14-1.345.1"
+version = "0.3.0+plaid-2020-09-14-1.345.1"
 registry = "ghcr.io/autostamp/plaid"
 kind = "component"
 file = "build/plaid.wasm"

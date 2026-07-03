@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api-key` | header `api-key` |
-package autostamp:dev@0.2.1;
+package autostamp:dev@0.3.0;
 
 interface users {
   /// Invite a User
@@ -63,6 +63,10 @@ interface articles {
 
   /// Published articles
   record get-articles-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>,
     /// Using this parameter will retrieve articles that contain the requested tag. Articles
     /// will be ordered by descending popularity.This parameter can be used in conjuction with `top`.
     tag: option<string>,
@@ -94,19 +98,49 @@ interface articles {
   create-article: func(params: create-article-params) -> result<string, string>;
 
   /// Published articles sorted by published date
-  get-latest-articles: func() -> result<string, string>;
+  record get-latest-articles-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  get-latest-articles: func(params: get-latest-articles-params) -> result<string, string>;
 
   /// User's articles
-  get-user-articles: func() -> result<string, string>;
+  record get-user-articles-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  get-user-articles: func(params: get-user-articles-params) -> result<string, string>;
 
   /// User's all articles
-  get-user-all-articles: func() -> result<string, string>;
+  record get-user-all-articles-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  get-user-all-articles: func(params: get-user-all-articles-params) -> result<string, string>;
 
   /// User's published articles
-  get-user-published-articles: func() -> result<string, string>;
+  record get-user-published-articles-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  get-user-published-articles: func(params: get-user-published-articles-params) -> result<string, string>;
 
   /// User's unpublished articles
-  get-user-unpublished-articles: func() -> result<string, string>;
+  record get-user-unpublished-articles-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  get-user-unpublished-articles: func(params: get-user-unpublished-articles-params) -> result<string, string>;
 
   /// Published article by id
   record get-article-by-id-params {
@@ -196,6 +230,10 @@ interface display-ads {
 interface followers {
   /// Followers
   record get-followers-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>,
     /// Default is 'created_at'. Specifies the sort order for the created_at param of the follow
     ///                                 relationship. To sort by newest followers first (descending order) specify
     sort: option<string>
@@ -219,13 +257,21 @@ interface organizations {
 
   /// Organization's Articles
   record get-org-articles-params {
-    username: string
+    username: string,
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
   }
   get-org-articles: func(params: get-org-articles-params) -> result<string, string>;
 
   /// Organization's users
   record get-org-users-params {
-    username: string
+    username: string,
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
   }
   get-org-users: func(params: get-org-users-params) -> result<string, string>;
 
@@ -307,6 +353,10 @@ interface pages {
 interface podcast-episodes {
   /// Podcast Episodes
   record get-podcast-episodes-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>,
     /// Using this parameter will retrieve episodes belonging to a specific podcast.
     username: option<string>
   }
@@ -359,19 +409,37 @@ interface reactions {
 
 interface readinglist {
   /// Readinglist
-  get-readinglist: func() -> result<string, string>;
+  record get-readinglist-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  get-readinglist: func(params: get-readinglist-params) -> result<string, string>;
 
 }
 
 interface tags {
   /// Tags
-  get-tags: func() -> result<string, string>;
+  record get-tags-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  get-tags: func(params: get-tags-params) -> result<string, string>;
 
 }
 
 interface videos {
   /// Articles with a video
-  videos: func() -> result<string, string>;
+  record videos-params {
+    /// Pagination page
+    page: option<s32>,
+    /// Page size (the number of items to return per page). The default maximum value can be overridden by "API_PER_PAGE_MAX" environment variable.
+    per-page: option<s32>
+  }
+  videos: func(params: videos-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

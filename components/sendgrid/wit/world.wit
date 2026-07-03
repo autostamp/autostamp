@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `Authorization` | header `Authorization` |
-package autostamp:sendgrid@0.2.1;
+package autostamp:sendgrid@0.3.0;
 
 interface ip-access-management {
   record post-access-settings-whitelist-body-ips-item {
@@ -17,15 +17,20 @@ interface ip-access-management {
   /// Retrieve all recent access attempts
   record get-access-settings-activity-params {
     /// Limits the number of IPs to return.
-    limit: option<s32>
+    limit: option<s32>,
+    on-behalf-of: option<string>
   }
   get-access-settings-activity: func(params: get-access-settings-activity-params) -> result<string, string>;
 
   /// Retrieve a list of currently allowed IPs
-  get-access-settings-whitelist: func() -> result<string, string>;
+  record get-access-settings-whitelist-params {
+    on-behalf-of: option<string>
+  }
+  get-access-settings-whitelist: func(params: get-access-settings-whitelist-params) -> result<string, string>;
 
   /// Add one or more IPs to the allow list
   record post-access-settings-whitelist-params {
+    on-behalf-of: option<string>,
     /// An array containing the IP(s) you want to allow.
     ips: list<post-access-settings-whitelist-body-ips-item>
   }
@@ -33,16 +38,23 @@ interface ip-access-management {
 
   /// Remove one or more IPs from the allow list
   record delete-access-settings-whitelist-params {
+    on-behalf-of: option<string>,
     /// An array of the IDs of the IP address that you want to remove from your allow list.
     ids: option<list<s32>>
   }
   delete-access-settings-whitelist: func(params: delete-access-settings-whitelist-params) -> result<string, string>;
 
   /// Retrieve a specific allowed IP
-  get-access-settings-whitelist-rule-id: func() -> result<string, string>;
+  record get-access-settings-whitelist-rule-id-params {
+    on-behalf-of: option<string>
+  }
+  get-access-settings-whitelist-rule-id: func(params: get-access-settings-whitelist-rule-id-params) -> result<string, string>;
 
   /// Remove a specific IP from the allowed list
-  delete-access-settings-whitelist-rule-id: func() -> result<string, string>;
+  record delete-access-settings-whitelist-rule-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-access-settings-whitelist-rule-id: func(params: delete-access-settings-whitelist-rule-id-params) -> result<string, string>;
 
 }
 
@@ -54,7 +66,10 @@ interface alerts {
   }
 
   /// Retrieve all alerts
-  get-alerts: func() -> result<string, string>;
+  record get-alerts-params {
+    on-behalf-of: option<string>
+  }
+  get-alerts: func(params: get-alerts-params) -> result<string, string>;
 
   /// Create a new Alert
   record post-alerts-params {
@@ -75,10 +90,14 @@ interface alerts {
   post-alerts: func(params: post-alerts-params) -> result<string, string>;
 
   /// Retrieve a specific alert
-  get-alerts-alert-id: func() -> result<string, string>;
+  record get-alerts-alert-id-params {
+    on-behalf-of: option<string>
+  }
+  get-alerts-alert-id: func(params: get-alerts-alert-id-params) -> result<string, string>;
 
   /// Update an alert
   record patch-alerts-alert-id-params {
+    on-behalf-of: option<string>,
     /// The new email address you want your alert to be sent to.
     /// Example: test@example.com
     email-to: option<string>,
@@ -92,19 +111,24 @@ interface alerts {
   patch-alerts-alert-id: func(params: patch-alerts-alert-id-params) -> result<string, string>;
 
   /// Delete an alert
-  delete-alerts-alert-id: func() -> result<string, string>;
+  record delete-alerts-alert-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-alerts-alert-id: func(params: delete-alerts-alert-id-params) -> result<string, string>;
 
 }
 
 interface api-keys {
   /// Retrieve all API Keys belonging to the authenticated user
   record get-api-keys-params {
-    limit: option<s32>
+    limit: option<s32>,
+    on-behalf-of: option<string>
   }
   get-api-keys: func(params: get-api-keys-params) -> result<string, string>;
 
   /// Create API keys
   record create-api-keys-params {
+    on-behalf-of: option<string>,
     /// The name you will use to describe this API Key.
     name: string,
     /// The individual permissions that you are giving to this API Key.
@@ -113,10 +137,14 @@ interface api-keys {
   create-api-keys: func(params: create-api-keys-params) -> result<string, string>;
 
   /// Retrieve an existing API Key
-  get-api-keys-api-key-id: func() -> result<string, string>;
+  record get-api-keys-api-key-id-params {
+    on-behalf-of: option<string>
+  }
+  get-api-keys-api-key-id: func(params: get-api-keys-api-key-id-params) -> result<string, string>;
 
   /// Update API key name and scopes
   record put-api-keys-api-key-id-params {
+    on-behalf-of: option<string>,
     name: string,
     scopes: option<list<string>>
   }
@@ -124,25 +152,31 @@ interface api-keys {
 
   /// Update API key name
   record patch-api-keys-api-key-id-params {
+    on-behalf-of: option<string>,
     /// The new name of the API Key.
     name: string
   }
   patch-api-keys-api-key-id: func(params: patch-api-keys-api-key-id-params) -> result<string, string>;
 
   /// Delete API keys
-  delete-api-keys-api-key-id: func() -> result<string, string>;
+  record delete-api-keys-api-key-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-api-keys-api-key-id: func(params: delete-api-keys-api-key-id-params) -> result<string, string>;
 
 }
 
 interface suppressions-unsubscribe-groups {
   /// Retrieve all suppression groups associated with the user.
   record get-asm-groups-params {
-    id: option<s32>
+    id: option<s32>,
+    on-behalf-of: option<string>
   }
   get-asm-groups: func(params: get-asm-groups-params) -> result<string, string>;
 
   /// Create a new suppression group
   record post-asm-groups-params {
+    on-behalf-of: option<string>,
     /// A brief description of your suppression group. Required when creating a group.
     description: option<string>,
     /// Indicates if you would like this to be your default suppression group.
@@ -153,25 +187,36 @@ interface suppressions-unsubscribe-groups {
   post-asm-groups: func(params: post-asm-groups-params) -> result<string, string>;
 
   /// Get information on a single suppression group.
-  get-asm-groups-group-id: func() -> result<string, string>;
+  record get-asm-groups-group-id-params {
+    on-behalf-of: option<string>
+  }
+  get-asm-groups-group-id: func(params: get-asm-groups-group-id-params) -> result<string, string>;
 
   /// Update a suppression group.
   record patch-asm-groups-group-id-params {
+    on-behalf-of: option<string>,
     body: option<string>
   }
   patch-asm-groups-group-id: func(params: patch-asm-groups-group-id-params) -> result<string, string>;
 
   /// Delete a Suppression Group
-  delete-asm-groups-group-id: func() -> result<string, string>;
+  record delete-asm-groups-group-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-asm-groups-group-id: func(params: delete-asm-groups-group-id-params) -> result<string, string>;
 
 }
 
 interface suppressions-suppressions {
   /// Retrieve all suppressions for a suppression group
-  get-asm-groups-group-id-suppressions: func() -> result<string, string>;
+  record get-asm-groups-group-id-suppressions-params {
+    on-behalf-of: option<string>
+  }
+  get-asm-groups-group-id-suppressions: func(params: get-asm-groups-group-id-suppressions-params) -> result<string, string>;
 
   /// Add suppressions to a suppression group
   record post-asm-groups-group-id-suppressions-params {
+    on-behalf-of: option<string>,
     /// The array of email addresses to add or find.
     recipient-emails: list<string>
   }
@@ -179,35 +224,52 @@ interface suppressions-suppressions {
 
   /// Search for suppressions within a group
   record post-asm-groups-group-id-suppressions-search-params {
+    on-behalf-of: option<string>,
     /// The array of email addresses to add or find.
     recipient-emails: list<string>
   }
   post-asm-groups-group-id-suppressions-search: func(params: post-asm-groups-group-id-suppressions-search-params) -> result<string, string>;
 
   /// Delete a suppression from a suppression group
-  delete-asm-groups-group-id-suppressions-email: func() -> result<string, string>;
+  record delete-asm-groups-group-id-suppressions-email-params {
+    on-behalf-of: option<string>
+  }
+  delete-asm-groups-group-id-suppressions-email: func(params: delete-asm-groups-group-id-suppressions-email-params) -> result<string, string>;
 
   /// Retrieve all suppressions
-  get-asm-suppressions: func() -> result<string, string>;
+  record get-asm-suppressions-params {
+    on-behalf-of: option<string>
+  }
+  get-asm-suppressions: func(params: get-asm-suppressions-params) -> result<string, string>;
 
   /// Retrieve all suppression groups for an email address
-  get-asm-suppressions-email: func() -> result<string, string>;
+  record get-asm-suppressions-email-params {
+    on-behalf-of: option<string>
+  }
+  get-asm-suppressions-email: func(params: get-asm-suppressions-email-params) -> result<string, string>;
 
 }
 
 interface suppressions-global-suppressions {
   /// Add recipient addresses to the global suppression group.
   record post-asm-suppressions-global-params {
+    on-behalf-of: option<string>,
     /// The array of email addresses to add or find.
     recipient-emails: list<string>
   }
   post-asm-suppressions-global: func(params: post-asm-suppressions-global-params) -> result<string, string>;
 
   /// Retrieve a Global Suppression
-  get-asm-suppressions-global-email: func() -> result<string, string>;
+  record get-asm-suppressions-global-email-params {
+    on-behalf-of: option<string>
+  }
+  get-asm-suppressions-global-email: func(params: get-asm-suppressions-global-email-params) -> result<string, string>;
 
   /// Delete a Global Suppression
-  delete-asm-suppressions-global-email: func() -> result<string, string>;
+  record delete-asm-suppressions-global-email-params {
+    on-behalf-of: option<string>
+  }
+  delete-asm-suppressions-global-email: func(params: delete-asm-suppressions-global-email-params) -> result<string, string>;
 
   /// Retrieve all global suppressions
   record get-suppression-unsubscribes-params {
@@ -218,13 +280,20 @@ interface suppressions-global-suppressions {
     /// The number of results to display on each page.
     limit: option<s32>,
     /// The point in the list of results to begin displaying global suppressions.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-suppression-unsubscribes: func(params: get-suppression-unsubscribes-params) -> result<string, string>;
 
 }
 
 interface stats {
+  enum get-browsers-stats-aggregated-by-enum {
+    day,
+    week,
+    month,
+  }
+
   enum get-geo-stats-country-enum {
     us,
     ca,
@@ -233,35 +302,112 @@ interface stats {
   /// Retrieve email statistics by browser.
   record get-browsers-stats-params {
     /// The browsers to get statistics for. You can include up to 10 different browsers by including this parameter multiple times.
-    browsers: option<string>
+    browsers: option<string>,
+    on-behalf-of: option<string>,
+    /// The number of results to return.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-browsers-stats-aggregated-by-enum>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>
   }
   get-browsers-stats: func(params: get-browsers-stats-params) -> result<string, string>;
 
   /// Retrieve email statistics by client type.
-  get-clients-stats: func() -> result<string, string>;
+  record get-clients-stats-params {
+    on-behalf-of: option<string>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-browsers-stats-aggregated-by-enum>
+  }
+  get-clients-stats: func(params: get-clients-stats-params) -> result<string, string>;
 
   /// Retrieve stats by a specific client type.
-  get-clients-client-type-stats: func() -> result<string, string>;
+  record get-clients-client-type-stats-params {
+    on-behalf-of: option<string>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-browsers-stats-aggregated-by-enum>
+  }
+  get-clients-client-type-stats: func(params: get-clients-client-type-stats-params) -> result<string, string>;
 
   /// Retrieve email statistics by device type.
-  get-devices-stats: func() -> result<string, string>;
+  record get-devices-stats-params {
+    on-behalf-of: option<string>,
+    /// The number of results to return.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-browsers-stats-aggregated-by-enum>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>
+  }
+  get-devices-stats: func(params: get-devices-stats-params) -> result<string, string>;
 
   /// Retrieve email statistics by country and state/province.
   record get-geo-stats-params {
     /// The country you would like to see statistics for. Currently only supported for US and CA.
-    country: option<get-geo-stats-country-enum>
+    country: option<get-geo-stats-country-enum>,
+    on-behalf-of: option<string>,
+    /// The number of results to return.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-browsers-stats-aggregated-by-enum>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>
   }
   get-geo-stats: func(params: get-geo-stats-params) -> result<string, string>;
 
   /// Retrieve email statistics by mailbox provider.
   record get-mailbox-providers-stats-params {
     /// The mail box providers to get statistics for. You can include up to 10 by including this parameter multiple times.
-    mailbox-providers: option<string>
+    mailbox-providers: option<string>,
+    on-behalf-of: option<string>,
+    /// The number of results to return.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-browsers-stats-aggregated-by-enum>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>
   }
   get-mailbox-providers-stats: func(params: get-mailbox-providers-stats-params) -> result<string, string>;
 
   /// Retrieve global email statistics
-  get-stats: func() -> result<string, string>;
+  record get-stats-params {
+    on-behalf-of: option<string>,
+    /// The number of results to return.
+    limit: option<s32>,
+    /// The point in the list to begin retrieving results.
+    offset: option<s32>,
+    /// How to group the statistics. Must be either "day", "week", or "month".
+    aggregated-by: option<get-browsers-stats-aggregated-by-enum>,
+    /// The starting date of the statistics to retrieve. Must follow format YYYY-MM-DD.
+    start-date: string,
+    /// The end date of the statistics to retrieve. Defaults to today. Must follow format YYYY-MM-DD.
+    end-date: option<string>
+  }
+  get-stats: func(params: get-stats-params) -> result<string, string>;
 
 }
 
@@ -276,12 +422,14 @@ interface campaigns-api {
     /// The number of results you would like to receive at a time.
     limit: option<s32>,
     /// The index of the first campaign to return, where 0 is the first campaign.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-campaigns: func(params: get-campaigns-params) -> result<string, string>;
 
   /// Create a Campaign
   record post-campaigns-params {
+    on-behalf-of: option<string>,
     /// The categories you would like associated to this campaign.
     categories: option<list<string>>,
     /// This is the url of the custom unsubscribe page that you provide for customers to unsubscribe from your suppression groups.
@@ -310,10 +458,14 @@ interface campaigns-api {
   post-campaigns: func(params: post-campaigns-params) -> result<string, string>;
 
   /// Retrieve a single campaign
-  get-campaigns-campaign-id: func() -> result<string, string>;
+  record get-campaigns-campaign-id-params {
+    on-behalf-of: option<string>
+  }
+  get-campaigns-campaign-id: func(params: get-campaigns-campaign-id-params) -> result<string, string>;
 
   /// Update a Campaign
   record patch-campaigns-campaign-id-params {
+    on-behalf-of: option<string>,
     /// The categories you want to tag on this campaign.
     categories: list<string>,
     /// The HTML content of this campaign.
@@ -328,13 +480,20 @@ interface campaigns-api {
   patch-campaigns-campaign-id: func(params: patch-campaigns-campaign-id-params) -> result<string, string>;
 
   /// Delete a Campaign
-  delete-campaigns-campaign-id: func() -> result<string, string>;
+  record delete-campaigns-campaign-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-campaigns-campaign-id: func(params: delete-campaigns-campaign-id-params) -> result<string, string>;
 
   /// View Scheduled Time of a Campaign
-  get-campaigns-campaign-id-schedules: func() -> result<string, string>;
+  record get-campaigns-campaign-id-schedules-params {
+    on-behalf-of: option<string>
+  }
+  get-campaigns-campaign-id-schedules: func(params: get-campaigns-campaign-id-schedules-params) -> result<string, string>;
 
   /// Schedule a Campaign
   record post-campaigns-campaign-id-schedules-params {
+    on-behalf-of: option<string>,
     /// The unix timestamp for the date and time you would like your campaign to be sent out.
     send-at: s32
   }
@@ -342,18 +501,26 @@ interface campaigns-api {
 
   /// Update a Scheduled Campaign
   record patch-campaigns-campaign-id-schedules-params {
+    on-behalf-of: option<string>,
     send-at: s64
   }
   patch-campaigns-campaign-id-schedules: func(params: patch-campaigns-campaign-id-schedules-params) -> result<string, string>;
 
   /// Unschedule a Scheduled Campaign
-  delete-campaigns-campaign-id-schedules: func() -> result<string, string>;
+  record delete-campaigns-campaign-id-schedules-params {
+    on-behalf-of: option<string>
+  }
+  delete-campaigns-campaign-id-schedules: func(params: delete-campaigns-campaign-id-schedules-params) -> result<string, string>;
 
   /// Send a Campaign
-  post-campaigns-campaign-id-schedules-now: func() -> result<string, string>;
+  record post-campaigns-campaign-id-schedules-now-params {
+    on-behalf-of: option<string>
+  }
+  post-campaigns-campaign-id-schedules-now: func(params: post-campaigns-campaign-id-schedules-now-params) -> result<string, string>;
 
   /// Send a Test Campaign
   record post-campaigns-campaign-id-schedules-test-params {
+    on-behalf-of: option<string>,
     /// The email address that should receive the test campaign.
     to: string
   }
@@ -380,7 +547,8 @@ interface categories {
     /// Allows you to perform a prefix search on this particular category.
     category: option<string>,
     /// The point in the list that you would like to begin displaying results.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-categories: func(params: get-categories-params) -> result<string, string>;
 
@@ -397,7 +565,8 @@ interface categories {
     /// The number of results to skip.
     offset: option<s32>,
     /// How to group the statistics. Must be either "day", "week", or "month".
-    aggregated-by: option<get-categories-stats-aggregated-by-enum>
+    aggregated-by: option<get-categories-stats-aggregated-by-enum>,
+    on-behalf-of: option<string>
   }
   get-categories-stats: func(params: get-categories-stats-params) -> result<string, string>;
 
@@ -416,7 +585,8 @@ interface categories {
     /// The point in the list to begin retrieving results.
     offset: option<s32>,
     /// How to group the statistics. Must be either "day", "week", or "month".
-    aggregated-by: option<get-categories-stats-aggregated-by-enum>
+    aggregated-by: option<get-categories-stats-aggregated-by-enum>,
+    on-behalf-of: option<string>
   }
   get-categories-stats-sums: func(params: get-categories-stats-sums-params) -> result<string, string>;
 
@@ -424,38 +594,56 @@ interface categories {
 
 interface contacts-api-custom-fields {
   /// Retrieve all custom fields
-  get-contactdb-custom-fields: func() -> result<string, string>;
+  record get-contactdb-custom-fields-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-custom-fields: func(params: get-contactdb-custom-fields-params) -> result<string, string>;
 
   /// Create a Custom Field
   record post-contactdb-custom-fields-params {
+    on-behalf-of: option<string>,
     name: option<string>,
     type-op: option<string>
   }
   post-contactdb-custom-fields: func(params: post-contactdb-custom-fields-params) -> result<string, string>;
 
   /// Retrieve a Custom Field
-  get-contactdb-custom-fields-custom-field-id: func() -> result<string, string>;
+  record get-contactdb-custom-fields-custom-field-id-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-custom-fields-custom-field-id: func(params: get-contactdb-custom-fields-custom-field-id-params) -> result<string, string>;
 
   /// Delete a Custom Field
-  delete-contactdb-custom-fields-custom-field-id: func() -> result<string, string>;
+  record delete-contactdb-custom-fields-custom-field-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-contactdb-custom-fields-custom-field-id: func(params: delete-contactdb-custom-fields-custom-field-id-params) -> result<string, string>;
 
   /// Retrieve reserved fields
-  get-contactdb-reserved-fields: func() -> result<string, string>;
+  record get-contactdb-reserved-fields-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-reserved-fields: func(params: get-contactdb-reserved-fields-params) -> result<string, string>;
 
 }
 
 interface contacts-api-lists {
   /// Retrieve all lists
-  get-contactdb-lists: func() -> result<string, string>;
+  record get-contactdb-lists-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-lists: func(params: get-contactdb-lists-params) -> result<string, string>;
 
   /// Create a List
   record post-contactdb-lists-params {
+    on-behalf-of: option<string>,
     name: string
   }
   post-contactdb-lists: func(params: post-contactdb-lists-params) -> result<string, string>;
 
   /// Delete Multiple lists
   record delete-contactdb-lists-params {
+    on-behalf-of: option<string>,
     body: option<list<s32>>
   }
   delete-contactdb-lists: func(params: delete-contactdb-lists-params) -> result<string, string>;
@@ -463,7 +651,8 @@ interface contacts-api-lists {
   /// Retrieve a single list
   record get-contactdb-lists-list-id-params {
     /// The ID of the list to retrieve.
-    list-id: option<s32>
+    list-id: option<s32>,
+    on-behalf-of: option<string>
   }
   get-contactdb-lists-list-id: func(params: get-contactdb-lists-list-id-params) -> result<string, string>;
 
@@ -471,6 +660,7 @@ interface contacts-api-lists {
   record patch-contactdb-lists-list-id-params {
     /// The ID of the list you are updating.
     list-id: s32,
+    on-behalf-of: option<string>,
     /// The new name for your list. 
     name: string
   }
@@ -480,6 +670,7 @@ interface contacts-api-lists {
   record delete-contactdb-lists-list-id-params {
     /// Adds the ability to delete all contacts on the list in addition to deleting the list.
     delete-contacts: option<bool>,
+    on-behalf-of: option<string>,
     body: option<string>
   }
   delete-contactdb-lists-list-id: func(params: delete-contactdb-lists-list-id-params) -> result<string, string>;
@@ -491,18 +682,23 @@ interface contacts-api-lists {
     /// Number of recipients to return at a time (must be a positive integer between 1 and 1000)
     page-size: option<s32>,
     /// The ID of the list whose recipients you are requesting.
-    list-id: s32
+    list-id: s32,
+    on-behalf-of: option<string>
   }
   get-contactdb-lists-list-id-recipients: func(params: get-contactdb-lists-list-id-recipients-params) -> result<string, string>;
 
   /// Add Multiple Recipients to a List
   record post-contactdb-lists-list-id-recipients-params {
+    on-behalf-of: option<string>,
     body: option<list<s32>>
   }
   post-contactdb-lists-list-id-recipients: func(params: post-contactdb-lists-list-id-recipients-params) -> result<string, string>;
 
   /// Add a Single Recipient to a List
-  post-contactdb-lists-list-id-recipients-recipient-id: func() -> result<string, string>;
+  record post-contactdb-lists-list-id-recipients-recipient-id-params {
+    on-behalf-of: option<string>
+  }
+  post-contactdb-lists-list-id-recipients-recipient-id: func(params: post-contactdb-lists-list-id-recipients-recipient-id-params) -> result<string, string>;
 
   /// Delete a Single Recipient from a Single List
   record delete-contactdb-lists-list-id-recipients-recipient-id-params {
@@ -510,6 +706,7 @@ interface contacts-api-lists {
     list-id: s32,
     /// The ID of the recipient to take off the list.
     recipient-id: s32,
+    on-behalf-of: option<string>,
     body: option<string>
   }
   delete-contactdb-lists-list-id-recipients-recipient-id: func(params: delete-contactdb-lists-list-id-recipients-recipient-id-params) -> result<string, string>;
@@ -540,37 +737,48 @@ interface contacts-api-recipients {
     /// Page index of first recipients to return (must be a positive integer)
     page: option<s32>,
     /// Number of recipients to return at a time (must be a positive integer between 1 and 1000)
-    page-size: option<s32>
+    page-size: option<s32>,
+    on-behalf-of: option<string>
   }
   get-contactdb-recipients: func(params: get-contactdb-recipients-params) -> result<string, string>;
 
   /// Add recipients
   record post-contactdb-recipients-params {
+    on-behalf-of: option<string>,
     body: option<list<post-contactdb-recipients-body-item>>
   }
   post-contactdb-recipients: func(params: post-contactdb-recipients-params) -> result<string, string>;
 
   /// Update Recipient
   record patch-contactdb-recipients-params {
+    on-behalf-of: option<string>,
     body: option<list<patch-contactdb-recipients-body-item>>
   }
   patch-contactdb-recipients: func(params: patch-contactdb-recipients-params) -> result<string, string>;
 
   /// Delete Recipients
   record delete-contactdb-recipients-params {
+    on-behalf-of: option<string>,
     body: option<list<string>>
   }
   delete-contactdb-recipients: func(params: delete-contactdb-recipients-params) -> result<string, string>;
 
   /// Retrieve the count of billable recipients
-  get-contactdb-recipients-billable-count: func() -> result<string, string>;
+  record get-contactdb-recipients-billable-count-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-recipients-billable-count: func(params: get-contactdb-recipients-billable-count-params) -> result<string, string>;
 
   /// Retrieve a Count of Recipients
-  get-contactdb-recipients-count: func() -> result<string, string>;
+  record get-contactdb-recipients-count-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-recipients-count: func(params: get-contactdb-recipients-count-params) -> result<string, string>;
 
   /// Search recipients
   record get-contactdb-recipients-search-params {
-    field-name: option<string>
+    field-name: option<string>,
+    on-behalf-of: option<string>
   }
   get-contactdb-recipients-search: func(params: get-contactdb-recipients-search-params) -> result<string, string>;
 
@@ -582,16 +790,28 @@ interface contacts-api-recipients {
   post-contactdb-recipients-search: func(params: post-contactdb-recipients-search-params) -> result<string, string>;
 
   /// Retrieve a single recipient
-  get-contactdb-recipients-recipient-id: func() -> result<string, string>;
+  record get-contactdb-recipients-recipient-id-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-recipients-recipient-id: func(params: get-contactdb-recipients-recipient-id-params) -> result<string, string>;
 
   /// Delete a Recipient
-  delete-contactdb-recipients-recipient-id: func() -> result<string, string>;
+  record delete-contactdb-recipients-recipient-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-contactdb-recipients-recipient-id: func(params: delete-contactdb-recipients-recipient-id-params) -> result<string, string>;
 
   /// Retrieve the lists that a recipient is on
-  get-contactdb-recipients-recipient-id-lists: func() -> result<string, string>;
+  record get-contactdb-recipients-recipient-id-lists-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-recipients-recipient-id-lists: func(params: get-contactdb-recipients-recipient-id-lists-params) -> result<string, string>;
 
   /// Get Recipient Upload Status
-  get-contactdb-status: func() -> result<string, string>;
+  record get-contactdb-status-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-status: func(params: get-contactdb-status-params) -> result<string, string>;
 
 }
 
@@ -618,10 +838,14 @@ interface contacts-api-segments {
   }
 
   /// Retrieve all segments
-  get-contactdb-segments: func() -> result<string, string>;
+  record get-contactdb-segments-params {
+    on-behalf-of: option<string>
+  }
+  get-contactdb-segments: func(params: get-contactdb-segments-params) -> result<string, string>;
 
   /// Create a Segment
   record post-contactdb-segments-params {
+    on-behalf-of: option<string>,
     /// The conditions for a recipient to be included in this segment.
     conditions: list<contactdb-segments-conditions>,
     /// The list id from which to make this segment. Not including this ID will mean your segment is created from the main contactdb rather than a list.
@@ -636,7 +860,8 @@ interface contacts-api-segments {
   /// Retrieve a segment
   record get-contactdb-segments-segment-id-params {
     /// The ID of the segment you want to request.
-    segment-id: s32
+    segment-id: s32,
+    on-behalf-of: option<string>
   }
   get-contactdb-segments-segment-id: func(params: get-contactdb-segments-segment-id-params) -> result<string, string>;
 
@@ -644,6 +869,7 @@ interface contacts-api-segments {
   record patch-contactdb-segments-segment-id-params {
     /// The ID of the segment you are updating.
     segment-id: option<string>,
+    on-behalf-of: option<string>,
     /// The conditions by which this segment should be created.
     conditions: option<list<contactdb-segments-conditions>>,
     /// The list ID you would like this segment to be built from.
@@ -656,6 +882,7 @@ interface contacts-api-segments {
   record delete-contactdb-segments-segment-id-params {
     /// True to delete all contacts matching the segment in addition to deleting the segment
     delete-contacts: option<bool>,
+    on-behalf-of: option<string>,
     body: option<string>
   }
   delete-contactdb-segments-segment-id: func(params: delete-contactdb-segments-segment-id-params) -> result<string, string>;
@@ -663,7 +890,8 @@ interface contacts-api-segments {
   /// Retrieve recipients on a segment
   record get-contactdb-segments-segment-id-recipients-params {
     page: option<s32>,
-    page-size: option<s32>
+    page-size: option<s32>,
+    on-behalf-of: option<string>
   }
   get-contactdb-segments-segment-id-recipients: func(params: get-contactdb-segments-segment-id-recipients-params) -> result<string, string>;
 
@@ -676,7 +904,15 @@ interface designs-api {
   }
 
   /// List Designs
-  list-designs: func() -> result<string, string>;
+  record list-designs-params {
+    /// number of results to return
+    page-size: option<s32>,
+    /// token corresponding to a specific page of results, as provided by metadata
+    page-token: option<string>,
+    /// set to false to return all fields
+    summary: option<bool>
+  }
+  list-designs: func(params: list-designs-params) -> result<string, string>;
 
   /// Create Design
   record post-designs-params {
@@ -686,7 +922,15 @@ interface designs-api {
   post-designs: func(params: post-designs-params) -> result<string, string>;
 
   /// List SendGrid Pre-built Designs
-  list-sendgrid-pre-built-designs: func() -> result<string, string>;
+  record list-sendgrid-pre-built-designs-params {
+    /// number of results to return
+    page-size: option<s32>,
+    /// token corresponding to a specific page of results, as provided by metadata
+    page-token: option<string>,
+    /// set to false to return all fields
+    summary: option<bool>
+  }
+  list-sendgrid-pre-built-designs: func(params: list-sendgrid-pre-built-designs-params) -> result<string, string>;
 
   /// Get SendGrid Pre-built Design
   get-sendgrid-pre-built-design: func() -> result<string, string>;
@@ -846,16 +1090,26 @@ interface cancel-scheduled-sends {
   }
 
   /// Create a batch ID
-  post-mail-batch: func() -> result<string, string>;
+  record post-mail-batch-params {
+    on-behalf-of: option<string>
+  }
+  post-mail-batch: func(params: post-mail-batch-params) -> result<string, string>;
 
   /// Validate batch ID
-  get-mail-batch-batch-id: func() -> result<string, string>;
+  record get-mail-batch-batch-id-params {
+    on-behalf-of: option<string>
+  }
+  get-mail-batch-batch-id: func(params: get-mail-batch-batch-id-params) -> result<string, string>;
 
   /// Retrieve all scheduled sends
-  get-user-scheduled-sends: func() -> result<string, string>;
+  record get-user-scheduled-sends-params {
+    on-behalf-of: option<string>
+  }
+  get-user-scheduled-sends: func(params: get-user-scheduled-sends-params) -> result<string, string>;
 
   /// Cancel or pause a scheduled send
   record post-user-scheduled-sends-params {
+    on-behalf-of: option<string>,
     /// The batch ID is the identifier that your scheduled mail sends share.
     batch-id: string,
     /// The status of the send you would like to implement. This can be pause or cancel. To delete a pause or cancel status see DELETE /v3/user/scheduled_sends/{batch_id}
@@ -864,17 +1118,24 @@ interface cancel-scheduled-sends {
   post-user-scheduled-sends: func(params: post-user-scheduled-sends-params) -> result<string, string>;
 
   /// Retrieve scheduled send
-  get-user-scheduled-sends-batch-id: func() -> result<string, string>;
+  record get-user-scheduled-sends-batch-id-params {
+    on-behalf-of: option<string>
+  }
+  get-user-scheduled-sends-batch-id: func(params: get-user-scheduled-sends-batch-id-params) -> result<string, string>;
 
   /// Update a scheduled send
   record patch-user-scheduled-sends-batch-id-params {
+    on-behalf-of: option<string>,
     /// The status you would like the scheduled send to have.
     status: patch-user-scheduled-sends-batch-id-body-status-enum
   }
   patch-user-scheduled-sends-batch-id: func(params: patch-user-scheduled-sends-batch-id-params) -> result<string, string>;
 
   /// Delete a cancellation or pause from a scheduled send
-  delete-user-scheduled-sends-batch-id: func() -> result<string, string>;
+  record delete-user-scheduled-sends-batch-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-user-scheduled-sends-batch-id: func(params: delete-user-scheduled-sends-batch-id-params) -> result<string, string>;
 
 }
 
@@ -1153,15 +1414,20 @@ interface settings-mail {
     /// The number of settings to return.
     limit: option<s32>,
     /// Where in the list of results to begin displaying settings.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-mail-settings: func(params: get-mail-settings-params) -> result<string, string>;
 
   /// Retrieve address whitelist mail settings
-  get-mail-settings-address-whitelist: func() -> result<string, string>;
+  record get-mail-settings-address-whitelist-params {
+    on-behalf-of: option<string>
+  }
+  get-mail-settings-address-whitelist: func(params: get-mail-settings-address-whitelist-params) -> result<string, string>;
 
   /// Update address whitelist mail settings
   record patch-mail-settings-address-whitelist-params {
+    on-behalf-of: option<string>,
     /// Indicates if your email address whitelist is enabled.
     enabled: option<bool>,
     /// Either a single email address that you want whitelisted or a domain, for which all email addresses belonging to this domain will be whitelisted.
@@ -1170,10 +1436,14 @@ interface settings-mail {
   patch-mail-settings-address-whitelist: func(params: patch-mail-settings-address-whitelist-params) -> result<string, string>;
 
   /// Retrieve bounce purge mail settings
-  get-mail-settings-bounce-purge: func() -> result<string, string>;
+  record get-mail-settings-bounce-purge-params {
+    on-behalf-of: option<string>
+  }
+  get-mail-settings-bounce-purge: func(params: get-mail-settings-bounce-purge-params) -> result<string, string>;
 
   /// Update bounce purge mail settings
   record patch-mail-settings-bounce-purge-params {
+    on-behalf-of: option<string>,
     /// Indicates if the bounce purge mail setting is enabled.
     enabled: option<bool>,
     /// The number of days after which SendGrid will purge all contacts from your hard bounces suppression lists.
@@ -1184,10 +1454,14 @@ interface settings-mail {
   patch-mail-settings-bounce-purge: func(params: patch-mail-settings-bounce-purge-params) -> result<string, string>;
 
   /// Retrieve footer mail settings
-  get-mail-settings-footer: func() -> result<string, string>;
+  record get-mail-settings-footer-params {
+    on-behalf-of: option<string>
+  }
+  get-mail-settings-footer: func(params: get-mail-settings-footer-params) -> result<string, string>;
 
   /// Update footer mail settings
   record patch-mail-settings-footer-params {
+    on-behalf-of: option<string>,
     /// Indicates if the Footer mail setting is currently enabled.
     enabled: option<bool>,
     /// The custom HTML content of your email footer.
@@ -1198,10 +1472,14 @@ interface settings-mail {
   patch-mail-settings-footer: func(params: patch-mail-settings-footer-params) -> result<string, string>;
 
   /// Retrieve forward bounce mail settings
-  get-mail-settings-forward-bounce: func() -> result<string, string>;
+  record get-mail-settings-forward-bounce-params {
+    on-behalf-of: option<string>
+  }
+  get-mail-settings-forward-bounce: func(params: get-mail-settings-forward-bounce-params) -> result<string, string>;
 
   /// Update forward bounce mail settings
   record patch-mail-settings-forward-bounce-params {
+    on-behalf-of: option<string>,
     /// The email address that you would like your bounce reports forwarded to.
     email: option<string>,
     /// Indicates if the bounce forwarding mail setting is enabled.
@@ -1210,10 +1488,14 @@ interface settings-mail {
   patch-mail-settings-forward-bounce: func(params: patch-mail-settings-forward-bounce-params) -> result<string, string>;
 
   /// Retrieve forward spam mail settings
-  get-mail-settings-forward-spam: func() -> result<string, string>;
+  record get-mail-settings-forward-spam-params {
+    on-behalf-of: option<string>
+  }
+  get-mail-settings-forward-spam: func(params: get-mail-settings-forward-spam-params) -> result<string, string>;
 
   /// Update forward spam mail settings
   record patch-mail-settings-forward-spam-params {
+    on-behalf-of: option<string>,
     /// The email address where you would like the spam reports to be forwarded.
     email: option<string>,
     /// Indicates if the Forward Spam setting is enabled.
@@ -1222,10 +1504,14 @@ interface settings-mail {
   patch-mail-settings-forward-spam: func(params: patch-mail-settings-forward-spam-params) -> result<string, string>;
 
   /// Retrieve legacy template mail settings
-  get-mail-settings-template: func() -> result<string, string>;
+  record get-mail-settings-template-params {
+    on-behalf-of: option<string>
+  }
+  get-mail-settings-template: func(params: get-mail-settings-template-params) -> result<string, string>;
 
   /// Update template mail settings
   record patch-mail-settings-template-params {
+    on-behalf-of: option<string>,
     /// Indicates if you want to enable the legacy email template mail setting.
     enabled: option<bool>,
     /// The new HTML content for your legacy email template.
@@ -1541,6 +1827,7 @@ interface senders {
 
   /// Create a Sender Identity
   record post-marketing-senders-params {
+    on-behalf-of: option<string>,
     /// The physical address of the sender identity.
     address: string,
     /// Additional sender identity address information.
@@ -1692,10 +1979,33 @@ interface single-sends {
 }
 
 interface marketing-campaigns-stats {
+  enum get-automation-stat-group-by-item-enum {
+    step-id,
+  }
+
+  enum get-automation-stat-aggregated-by-enum {
+    day,
+    total,
+  }
+
+  enum get-singlesend-stat-group-by-item-enum {
+    ab-variation,
+    ab-phase,
+  }
+
+  enum get-singlesend-link-stat-ab-phase-id-enum {
+    test,
+    send,
+  }
+
   /// Get All Automation Stats
   record getall-automation-stats-params {
     /// This endpoint returns all automation IDs if no `automation_ids` are specified.
-    automation-ids: option<list<string>>
+    automation-ids: option<list<string>>,
+    /// The number of elements you want returned on each page.
+    page-size: option<s32>,
+    /// The stats endpoints are paginated. To get the next page, call the passed `_metadata.next` URL. If `_metadata.prev` doesn't exist, you're at the first page. Similarly, if `_metadata.next` is not present, you're at the last page.
+    page-token: option<string>
   }
   getall-automation-stats: func(params: getall-automation-stats-params) -> result<string, string>;
 
@@ -1709,15 +2019,47 @@ interface marketing-campaigns-stats {
   get-automations-stats-export: func(params: get-automations-stats-export-params) -> result<string, string>;
 
   /// Get Automation Stats by ID
-  get-automation-stat: func() -> result<string, string>;
+  record get-automation-stat-params {
+    /// Automations can have multiple steps. Including `step_id` as a `group_by` metric allows further granularity of stats.
+    group-by: option<list<get-automation-stat-group-by-item-enum>>,
+    /// Comma-separated list of `step_ids` that you want the link stats for.
+    step-ids: option<list<string>>,
+    /// Dictates how the stats are time-sliced. Currently, `"total"` and `"day"` are supported.
+    aggregated-by: option<get-automation-stat-aggregated-by-enum>,
+    /// Format: `YYYY-MM-DD`. If this parameter is included, the stats' start date is included in the search.
+    start-date: option<string>,
+    /// Format: `YYYY-MM-DD`.If this parameter is included, the stats' end date is included in the search.
+    end-date: option<string>,
+    /// [IANA Area/Region](https://en.wikipedia.org/wiki/Tz_database#Names_of_time_zones) string representing the timezone in which the stats are to be presented, e.g., "America/Chicago".
+    timezone: option<string>,
+    /// The number of elements you want returned on each page.
+    page-size: option<s32>,
+    /// The stats endpoints are paginated. To get the next page, call the passed `_metadata.next` URL. If `_metadata.prev` doesn't exist, you're at the first page. Similarly, if `_metadata.next` is not present, you're at the last page.
+    page-token: option<string>
+  }
+  get-automation-stat: func(params: get-automation-stat-params) -> result<string, string>;
 
   /// Get Automation Click Tracking Stats by ID
-  get-automation-link-stat: func() -> result<string, string>;
+  record get-automation-link-stat-params {
+    /// Automations can have multiple steps. Including `step_id` as a `group_by` metric allows further granularity of stats.
+    group-by: option<list<get-automation-stat-group-by-item-enum>>,
+    /// Comma-separated list of `step_ids` that you want the link stats for.
+    step-ids: option<list<string>>,
+    /// The number of elements you want returned on each page.
+    page-size: option<s32>,
+    /// The stats endpoints are paginated. To get the next page, call the passed `_metadata.next` URL. If `_metadata.prev` doesn't exist, you're at the first page. Similarly, if `_metadata.next` is not present, you're at the last page.
+    page-token: option<string>
+  }
+  get-automation-link-stat: func(params: get-automation-link-stat-params) -> result<string, string>;
 
   /// Get All Single Sends Stats
   record getall-singlesend-stats-params {
     /// This endpoint returns all Single Send IDs if no IDs are included in `singlesend_ids`.
-    singlesend-ids: option<list<string>>
+    singlesend-ids: option<list<string>>,
+    /// The number of elements you want returned on each page.
+    page-size: option<s32>,
+    /// The stats endpoints are paginated. To get the next page, call the passed `_metadata.next` URL. If `_metadata.prev` doesn't exist, you're at the first page. Similarly, if `_metadata.next` is not present, you're at the last page.
+    page-token: option<string>
   }
   getall-singlesend-stats: func(params: getall-singlesend-stats-params) -> result<string, string>;
 
@@ -1731,10 +2073,36 @@ interface marketing-campaigns-stats {
   get-singlesend-stats-export: func(params: get-singlesend-stats-export-params) -> result<string, string>;
 
   /// Get Single Send Stats by ID
-  get-singlesend-stat: func() -> result<string, string>;
+  record get-singlesend-stat-params {
+    /// Dictates how the stats are time-sliced. Currently, `"total"` and `"day"` are supported.
+    aggregated-by: option<get-automation-stat-aggregated-by-enum>,
+    /// Format: `YYYY-MM-DD`. If this parameter is included, the stats' start date is included in the search.
+    start-date: option<string>,
+    /// Format: `YYYY-MM-DD`.If this parameter is included, the stats' end date is included in the search.
+    end-date: option<string>,
+    /// [IANA Area/Region](https://en.wikipedia.org/wiki/Tz_database#Names_of_time_zones) string representing the timezone in which the stats are to be presented, e.g., "America/Chicago".
+    timezone: option<string>,
+    /// The number of elements you want returned on each page.
+    page-size: option<s32>,
+    /// The stats endpoints are paginated. To get the next page, call the passed `_metadata.next` URL. If `_metadata.prev` doesn't exist, you're at the first page. Similarly, if `_metadata.next` is not present, you're at the last page.
+    page-token: option<string>,
+    /// A/B Single Sends have multiple variation IDs and phase IDs. Including these additional fields allows further granularity of stats by these fields.
+    group-by: option<list<get-singlesend-stat-group-by-item-enum>>
+  }
+  get-singlesend-stat: func(params: get-singlesend-stat-params) -> result<string, string>;
 
   /// Get Single Send Click Tracking Stats by ID
-  get-singlesend-link-stat: func() -> result<string, string>;
+  record get-singlesend-link-stat-params {
+    /// The number of elements you want returned on each page.
+    page-size: option<s32>,
+    /// The stats endpoints are paginated. To get the next page, call the passed `_metadata.next` URL. If `_metadata.prev` doesn't exist, you're at the first page. Similarly, if `_metadata.next` is not present, you're at the last page.
+    page-token: option<string>,
+    /// A/B Single Sends have multiple variation IDs and phase IDs. Including these additional fields allows further granularity of stats by these fields.
+    group-by: option<list<get-singlesend-stat-group-by-item-enum>>,
+    ab-variation-id: option<string>,
+    ab-phase-id: option<get-singlesend-link-stat-ab-phase-id-enum>
+  }
+  get-singlesend-link-stat: func(params: get-singlesend-link-stat-params) -> result<string, string>;
 
 }
 
@@ -1795,15 +2163,20 @@ interface settings-partner {
     /// The number of settings to return per page.
     limit: option<s32>,
     /// The paging offset.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-partner-settings: func(params: get-partner-settings-params) -> result<string, string>;
 
   /// Returns all New Relic partner settings.
-  get-partner-settings-new-relic: func() -> result<string, string>;
+  record get-partner-settings-new-relic-params {
+    on-behalf-of: option<string>
+  }
+  get-partner-settings-new-relic: func(params: get-partner-settings-new-relic-params) -> result<string, string>;
 
   /// Updates New Relic partner settings.
   record patch-partner-settings-new-relic-params {
+    on-behalf-of: option<string>,
     /// Indicates if your subuser statistics will be sent to your New Relic Dashboard.
     enable-subuser-statistics: option<bool>,
     /// Indicates if this partner setting is enabled.
@@ -1817,7 +2190,10 @@ interface settings-partner {
 
 interface api-key-permissions {
   /// Retrieve a list of scopes for which this user has access.
-  get-scopes: func() -> result<string, string>;
+  record get-scopes-params {
+    on-behalf-of: option<string>
+  }
+  get-scopes: func(params: get-scopes-params) -> result<string, string>;
 
 }
 
@@ -1842,12 +2218,14 @@ interface teammates {
     /// Number of items to return
     limit: option<s32>,
     /// Paging offset
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-v3-teammates: func(params: get-v3-teammates-params) -> result<string, string>;
 
   /// Invite teammate
   record post-v3-teammates-params {
+    on-behalf-of: option<string>,
     /// New teammate's email
     email: string,
     /// Set to true if teammate should be an admin user
@@ -1858,19 +2236,32 @@ interface teammates {
   post-v3-teammates: func(params: post-v3-teammates-params) -> result<string, string>;
 
   /// Retrieve all pending teammates
-  get-v3-teammates-pending: func() -> result<string, string>;
+  record get-v3-teammates-pending-params {
+    on-behalf-of: option<string>
+  }
+  get-v3-teammates-pending: func(params: get-v3-teammates-pending-params) -> result<string, string>;
 
   /// Delete pending teammate
-  delete-v3-teammates-pending-token: func() -> result<string, string>;
+  record delete-v3-teammates-pending-token-params {
+    on-behalf-of: option<string>
+  }
+  delete-v3-teammates-pending-token: func(params: delete-v3-teammates-pending-token-params) -> result<string, string>;
 
   /// Resend teammate invite
-  post-v3-teammates-pending-token-resend: func() -> result<string, string>;
+  record post-v3-teammates-pending-token-resend-params {
+    on-behalf-of: option<string>
+  }
+  post-v3-teammates-pending-token-resend: func(params: post-v3-teammates-pending-token-resend-params) -> result<string, string>;
 
   /// Retrieve specific teammate
-  get-v3-teammates-username: func() -> result<string, string>;
+  record get-v3-teammates-username-params {
+    on-behalf-of: option<string>
+  }
+  get-v3-teammates-username: func(params: get-v3-teammates-username-params) -> result<string, string>;
 
   /// Update teammate's permissions
   record patch-v3-teammates-username-params {
+    on-behalf-of: option<string>,
     /// Set to True if this teammate should be promoted to an admin user. If True, scopes should be an empty array.
     is-admin: bool,
     /// Provide list of scopes that should be given to teammate. If specifying list of scopes, is_admin should be set to False.
@@ -1879,7 +2270,10 @@ interface teammates {
   patch-v3-teammates-username: func(params: patch-v3-teammates-username-params) -> result<string, string>;
 
   /// Delete teammate
-  delete-v3-teammates-username: func() -> result<string, string>;
+  record delete-v3-teammates-username-params {
+    on-behalf-of: option<string>
+  }
+  delete-v3-teammates-username: func(params: delete-v3-teammates-username-params) -> result<string, string>;
 
 }
 
@@ -1899,19 +2293,27 @@ interface sender-identities-api {
   }
 
   /// Get all Sender Identities
-  get-v3-senders: func() -> result<string, string>;
+  record get-v3-senders-params {
+    on-behalf-of: option<string>
+  }
+  get-v3-senders: func(params: get-v3-senders-params) -> result<string, string>;
 
   /// Create a Sender Identity
   record post-senders-params {
+    on-behalf-of: option<string>,
     body: option<string>
   }
   post-senders: func(params: post-senders-params) -> result<string, string>;
 
   /// View a Sender Identity
-  get-v3-senders-sender-id: func() -> result<string, string>;
+  record get-v3-senders-sender-id-params {
+    on-behalf-of: option<string>
+  }
+  get-v3-senders-sender-id: func(params: get-v3-senders-sender-id-params) -> result<string, string>;
 
   /// Update a Sender Identity
   record patch-v3-senders-sender-id-params {
+    on-behalf-of: option<string>,
     /// The physical address of the sender identity.
     address: option<string>,
     /// Additional sender identity address information.
@@ -1932,10 +2334,16 @@ interface sender-identities-api {
   patch-v3-senders-sender-id: func(params: patch-v3-senders-sender-id-params) -> result<string, string>;
 
   /// Delete a Sender Identity
-  delete-v3-senders-sender-id: func() -> result<string, string>;
+  record delete-v3-senders-sender-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-v3-senders-sender-id: func(params: delete-v3-senders-sender-id-params) -> result<string, string>;
 
   /// Resend Sender Identity Verification
-  post-v3-senders-sender-id-resend-verification: func() -> result<string, string>;
+  record post-v3-senders-sender-id-resend-verification-params {
+    on-behalf-of: option<string>
+  }
+  post-v3-senders-sender-id-resend-verification: func(params: post-v3-senders-sender-id-resend-verification-params) -> result<string, string>;
 
 }
 
@@ -2228,12 +2636,14 @@ interface blocks-api {
     /// Limit the number of results to be displayed per page.
     limit: option<s32>,
     /// The point in the list to begin displaying results.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-suppression-blocks: func(params: get-suppression-blocks-params) -> result<string, string>;
 
   /// Delete blocks
   record delete-suppression-blocks-params {
+    on-behalf-of: option<string>,
     /// Indicates if you want to delete all blocked email addresses.
     delete-all: option<bool>,
     /// The specific blocked email addresses that you want to delete.
@@ -2242,10 +2652,16 @@ interface blocks-api {
   delete-suppression-blocks: func(params: delete-suppression-blocks-params) -> result<string, string>;
 
   /// Retrieve a specific block
-  get-suppression-blocks-email: func() -> result<string, string>;
+  record get-suppression-blocks-email-params {
+    on-behalf-of: option<string>
+  }
+  get-suppression-blocks-email: func(params: get-suppression-blocks-email-params) -> result<string, string>;
 
   /// Delete a specific block
-  delete-suppression-blocks-email: func() -> result<string, string>;
+  record delete-suppression-blocks-email-params {
+    on-behalf-of: option<string>
+  }
+  delete-suppression-blocks-email: func(params: delete-suppression-blocks-email-params) -> result<string, string>;
 
 }
 
@@ -2256,12 +2672,14 @@ interface bounces-api {
     start-time: option<s32>,
     /// Refers end of the time range in unix timestamp when a bounce was created (inclusive).
     end-time: option<s32>,
-    accept: string
+    accept: string,
+    on-behalf-of: option<string>
   }
   get-suppression-bounces: func(params: get-suppression-bounces-params) -> result<string, string>;
 
   /// Delete bounces
   record delete-suppression-bounces-params {
+    on-behalf-of: option<string>,
     /// This parameter allows you to delete **every** email in your bounce list. This should not be used with the emails parameter.
     delete-all: option<bool>,
     /// Delete multiple emails from your bounce list at the same time. This should not be used with the delete_all parameter.
@@ -2270,12 +2688,16 @@ interface bounces-api {
   delete-suppression-bounces: func(params: delete-suppression-bounces-params) -> result<string, string>;
 
   /// Retrieve a Bounce
-  get-suppression-bounces-email: func() -> result<string, string>;
+  record get-suppression-bounces-email-params {
+    on-behalf-of: option<string>
+  }
+  get-suppression-bounces-email: func(params: get-suppression-bounces-email-params) -> result<string, string>;
 
   /// Delete a bounce
   record delete-suppression-bounces-email-params {
     /// The email address you would like to remove from the bounce list.
     email-address: string,
+    on-behalf-of: option<string>,
     body: option<string>
   }
   delete-suppression-bounces-email: func(params: delete-suppression-bounces-email-params) -> result<string, string>;
@@ -2292,12 +2714,14 @@ interface invalid-emails-api {
     /// Limit the number of results to be displayed per page.
     limit: option<s32>,
     /// Paging offset. The point in the list to begin displaying results.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-suppression-invalid-emails: func(params: get-suppression-invalid-emails-params) -> result<string, string>;
 
   /// Delete invalid emails
   record delete-suppression-invalid-emails-params {
+    on-behalf-of: option<string>,
     /// Indicates if you want to remove all email address from the invalid emails list.
     delete-all: option<bool>,
     /// The list of specific email addresses that you want to remove.
@@ -2306,10 +2730,16 @@ interface invalid-emails-api {
   delete-suppression-invalid-emails: func(params: delete-suppression-invalid-emails-params) -> result<string, string>;
 
   /// Retrieve a specific invalid email
-  get-suppression-invalid-emails-email: func() -> result<string, string>;
+  record get-suppression-invalid-emails-email-params {
+    on-behalf-of: option<string>
+  }
+  get-suppression-invalid-emails-email: func(params: get-suppression-invalid-emails-email-params) -> result<string, string>;
 
   /// Delete a specific invalid email
-  delete-suppression-invalid-emails-email: func() -> result<string, string>;
+  record delete-suppression-invalid-emails-email-params {
+    on-behalf-of: option<string>
+  }
+  delete-suppression-invalid-emails-email: func(params: delete-suppression-invalid-emails-email-params) -> result<string, string>;
 
 }
 
@@ -2323,12 +2753,14 @@ interface spam-reports-api {
     /// Limit the number of results to be displayed per page.
     limit: option<s32>,
     /// Paging offset. The point in the list to begin displaying results.
-    offset: option<s32>
+    offset: option<s32>,
+    on-behalf-of: option<string>
   }
   get-suppression-spam-reports: func(params: get-suppression-spam-reports-params) -> result<string, string>;
 
   /// Delete spam reports
   record delete-suppression-spam-reports-params {
+    on-behalf-of: option<string>,
     /// Indicates if you want to delete all email addresses on the spam report list.
     delete-all: option<bool>,
     /// A list of specific email addresses that you want to remove from the spam report list.
@@ -2337,10 +2769,16 @@ interface spam-reports-api {
   delete-suppression-spam-reports: func(params: delete-suppression-spam-reports-params) -> result<string, string>;
 
   /// Retrieve a specific spam report
-  get-suppression-spam-reports-email: func() -> result<string, string>;
+  record get-suppression-spam-reports-email-params {
+    on-behalf-of: option<string>
+  }
+  get-suppression-spam-reports-email: func(params: get-suppression-spam-reports-email-params) -> result<string, string>;
 
   /// Delete a specific spam report
-  delete-suppression-spam-reports-email: func() -> result<string, string>;
+  record delete-suppression-spam-reports-email-params {
+    on-behalf-of: option<string>
+  }
+  delete-suppression-spam-reports-email: func(params: delete-suppression-spam-reports-email-params) -> result<string, string>;
 
 }
 
@@ -2363,12 +2801,14 @@ interface transactional-templates {
     /// The number of templates to be returned in each page of results
     page-size: f64,
     /// A token corresponding to a specific page of results, as provided by metadata
-    page-token: option<string>
+    page-token: option<string>,
+    on-behalf-of: option<string>
   }
   get-templates: func(params: get-templates-params) -> result<string, string>;
 
   /// Create a transactional template.
   record post-templates-params {
+    on-behalf-of: option<string>,
     /// Defines whether the template supports dynamic replacement.
     generation: option<post-templates-body-generation-enum>,
     /// The name for the new transactional template.
@@ -2377,10 +2817,14 @@ interface transactional-templates {
   post-templates: func(params: post-templates-params) -> result<string, string>;
 
   /// Retrieve a single transactional template.
-  get-templates-template-id: func() -> result<string, string>;
+  record get-templates-template-id-params {
+    on-behalf-of: option<string>
+  }
+  get-templates-template-id: func(params: get-templates-template-id-params) -> result<string, string>;
 
   /// Duplicate a transactional template.
   record post-templates-template-id-params {
+    on-behalf-of: option<string>,
     /// The name for the new transactional template.
     name: option<string>
   }
@@ -2388,13 +2832,17 @@ interface transactional-templates {
 
   /// Edit a transactional template.
   record patch-templates-template-id-params {
+    on-behalf-of: option<string>,
     /// The name of the transactional template.
     name: option<string>
   }
   patch-templates-template-id: func(params: patch-templates-template-id-params) -> result<string, string>;
 
   /// Delete a template.
-  delete-templates-template-id: func() -> result<string, string>;
+  record delete-templates-template-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-templates-template-id: func(params: delete-templates-template-id-params) -> result<string, string>;
 
 }
 
@@ -2406,6 +2854,7 @@ interface transactional-templates-versions {
 
   /// Create a new transactional template version.
   record post-templates-template-id-versions-params {
+    on-behalf-of: option<string>,
     /// Set the version as the active version associated with the template (0 is inactive, 1 is active). Only one version of a template can be active. The first version created for a template will automatically be set to Active.
     active: option<s32>,
     /// The editor used in the UI.
@@ -2426,10 +2875,14 @@ interface transactional-templates-versions {
   post-templates-template-id-versions: func(params: post-templates-template-id-versions-params) -> result<string, string>;
 
   /// Retrieve a specific transactional template version.
-  get-templates-template-id-versions-version-id: func() -> result<string, string>;
+  record get-templates-template-id-versions-version-id-params {
+    on-behalf-of: option<string>
+  }
+  get-templates-template-id-versions-version-id: func(params: get-templates-template-id-versions-version-id-params) -> result<string, string>;
 
   /// Edit a transactional template version.
   record patch-templates-template-id-versions-version-id-params {
+    on-behalf-of: option<string>,
     /// Set the version as the active version associated with the template (0 is inactive, 1 is active). Only one version of a template can be active. The first version created for a template will automatically be set to Active.
     active: option<s32>,
     /// The editor used in the UI.
@@ -2450,32 +2903,49 @@ interface transactional-templates-versions {
   patch-templates-template-id-versions-version-id: func(params: patch-templates-template-id-versions-version-id-params) -> result<string, string>;
 
   /// Delete a transactional template version.
-  delete-templates-template-id-versions-version-id: func() -> result<string, string>;
+  record delete-templates-template-id-versions-version-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-templates-template-id-versions-version-id: func(params: delete-templates-template-id-versions-version-id-params) -> result<string, string>;
 
   /// Activate a transactional template version.
-  post-templates-template-id-versions-version-id-activate: func() -> result<string, string>;
+  record post-templates-template-id-versions-version-id-activate-params {
+    on-behalf-of: option<string>
+  }
+  post-templates-template-id-versions-version-id-activate: func(params: post-templates-template-id-versions-version-id-activate-params) -> result<string, string>;
 
 }
 
 interface settings-tracking {
   /// Retrieve Tracking Settings
-  get-tracking-settings: func() -> result<string, string>;
+  record get-tracking-settings-params {
+    on-behalf-of: option<string>
+  }
+  get-tracking-settings: func(params: get-tracking-settings-params) -> result<string, string>;
 
   /// Retrieve Click Track Settings
-  get-tracking-settings-click: func() -> result<string, string>;
+  record get-tracking-settings-click-params {
+    on-behalf-of: option<string>
+  }
+  get-tracking-settings-click: func(params: get-tracking-settings-click-params) -> result<string, string>;
 
   /// Update Click Tracking Settings
   record patch-tracking-settings-click-params {
+    on-behalf-of: option<string>,
     /// The setting you want to use for click tracking.
     enabled: option<bool>
   }
   patch-tracking-settings-click: func(params: patch-tracking-settings-click-params) -> result<string, string>;
 
   /// Retrieve Google Analytics Settings
-  get-tracking-settings-google-analytics: func() -> result<string, string>;
+  record get-tracking-settings-google-analytics-params {
+    on-behalf-of: option<string>
+  }
+  get-tracking-settings-google-analytics: func(params: get-tracking-settings-google-analytics-params) -> result<string, string>;
 
   /// Update Google Analytics Settings
   record patch-tracking-settings-google-analytics-params {
+    on-behalf-of: option<string>,
     /// Indicates if Google Analytics is enabled.
     enabled: option<bool>,
     /// The name of the campaign.
@@ -2492,20 +2962,28 @@ interface settings-tracking {
   patch-tracking-settings-google-analytics: func(params: patch-tracking-settings-google-analytics-params) -> result<string, string>;
 
   /// Get Open Tracking Settings
-  get-tracking-settings-open: func() -> result<string, string>;
+  record get-tracking-settings-open-params {
+    on-behalf-of: option<string>
+  }
+  get-tracking-settings-open: func(params: get-tracking-settings-open-params) -> result<string, string>;
 
   /// Update Open Tracking Settings
   record patch-tracking-settings-open-params {
+    on-behalf-of: option<string>,
     /// The new status that you want to set for open tracking.
     enabled: option<bool>
   }
   patch-tracking-settings-open: func(params: patch-tracking-settings-open-params) -> result<string, string>;
 
   /// Retrieve Subscription Tracking Settings
-  get-tracking-settings-subscription: func() -> result<string, string>;
+  record get-tracking-settings-subscription-params {
+    on-behalf-of: option<string>
+  }
+  get-tracking-settings-subscription: func(params: get-tracking-settings-subscription-params) -> result<string, string>;
 
   /// Update Subscription Tracking Settings
   record patch-tracking-settings-subscription-params {
+    on-behalf-of: option<string>,
     /// Indicates if subscription tracking is enabled.
     enabled: option<bool>,
     /// The information and HTML for your unsubscribe link. 
@@ -2525,16 +3003,26 @@ interface settings-tracking {
 
 interface users-api {
   /// Get a user's account information.
-  get-user-account: func() -> result<string, string>;
+  record get-user-account-params {
+    on-behalf-of: option<string>
+  }
+  get-user-account: func(params: get-user-account-params) -> result<string, string>;
 
   /// Retrieve your credit balance
-  get-user-credits: func() -> result<string, string>;
+  record get-user-credits-params {
+    on-behalf-of: option<string>
+  }
+  get-user-credits: func(params: get-user-credits-params) -> result<string, string>;
 
   /// Retrieve your account email address
-  get-user-email: func() -> result<string, string>;
+  record get-user-email-params {
+    on-behalf-of: option<string>
+  }
+  get-user-email: func(params: get-user-email-params) -> result<string, string>;
 
   /// Update your account email address
   record put-user-email-params {
+    on-behalf-of: option<string>,
     /// The new email address that you would like to use for your account.
     email: option<string>
   }
@@ -2542,6 +3030,7 @@ interface users-api {
 
   /// Update your password
   record put-user-password-params {
+    on-behalf-of: option<string>,
     /// The new password you would like to use for your account.
     new-password: string,
     /// The old password for your account.
@@ -2550,10 +3039,14 @@ interface users-api {
   put-user-password: func(params: put-user-password-params) -> result<string, string>;
 
   /// Get a user's profile
-  get-user-profile: func() -> result<string, string>;
+  record get-user-profile-params {
+    on-behalf-of: option<string>
+  }
+  get-user-profile: func(params: get-user-profile-params) -> result<string, string>;
 
   /// Update a user's profile
   record patch-user-profile-params {
+    on-behalf-of: option<string>,
     /// The street address for this user profile.
     address: option<string>,
     /// An optional second line for the street address of this user profile.
@@ -2580,10 +3073,14 @@ interface users-api {
   patch-user-profile: func(params: patch-user-profile-params) -> result<string, string>;
 
   /// Retrieve your username
-  get-user-username: func() -> result<string, string>;
+  record get-user-username-params {
+    on-behalf-of: option<string>
+  }
+  get-user-username: func(params: get-user-username-params) -> result<string, string>;
 
   /// Update your username
   record put-user-username-params {
+    on-behalf-of: option<string>,
     /// The new username you would like to use for your account.
     username: option<string>
   }
@@ -2593,10 +3090,14 @@ interface users-api {
 
 interface settings-enforced-tls {
   /// Retrieve current Enforced TLS settings.
-  get-user-settings-enforced-tls: func() -> result<string, string>;
+  record get-user-settings-enforced-tls-params {
+    on-behalf-of: option<string>
+  }
+  get-user-settings-enforced-tls: func(params: get-user-settings-enforced-tls-params) -> result<string, string>;
 
   /// Update Enforced TLS settings
   record patch-user-settings-enforced-tls-params {
+    on-behalf-of: option<string>,
     /// Indicates if you want to require your recipients to support TLS. 
     require-tls: option<bool>,
     /// Indicates if you want to require your recipients to have a valid certificate.
@@ -2614,10 +3115,14 @@ interface webhooks {
   }
 
   /// Retrieve Event Webhook settings
-  get-user-webhooks-event-settings: func() -> result<string, string>;
+  record get-user-webhooks-event-settings-params {
+    on-behalf-of: option<string>
+  }
+  get-user-webhooks-event-settings: func(params: get-user-webhooks-event-settings-params) -> result<string, string>;
 
   /// Update Event Notification Settings
   record patch-user-webhooks-event-settings-params {
+    on-behalf-of: option<string>,
     /// Receiving server could not or would not accept message.
     bounce: bool,
     /// Recipient clicked on a link within the message. You need to enable Click Tracking for getting this type of event.
@@ -2654,16 +3159,21 @@ interface webhooks {
   patch-user-webhooks-event-settings: func(params: patch-user-webhooks-event-settings-params) -> result<string, string>;
 
   /// Retrieve Signed Webhook Public Key
-  get-user-webhooks-event-settings-signed: func() -> result<string, string>;
+  record get-user-webhooks-event-settings-signed-params {
+    on-behalf-of: option<string>
+  }
+  get-user-webhooks-event-settings-signed: func(params: get-user-webhooks-event-settings-signed-params) -> result<string, string>;
 
   /// Enable/Disable Signed Webhook
   record patch-user-webhooks-event-settings-signed-params {
+    on-behalf-of: option<string>,
     enabled: bool
   }
   patch-user-webhooks-event-settings-signed: func(params: patch-user-webhooks-event-settings-signed-params) -> result<string, string>;
 
   /// Test Event Notification Settings
   record post-user-webhooks-event-test-params {
+    on-behalf-of: option<string>,
     /// The client ID Twilio SendGrid sends to your OAuth server or service provider to generate an OAuth access token. When passing data in this field, you must also include the oauth_client_secret and oauth_token_url fields.
     oauth-client-id: option<string>,
     /// This secret is needed only once to create an access token. SendGrid will store this secret, allowing you to update your Client ID and Token URL without passing the secret to SendGrid again.  When passing data in this field, you must also include the oauth_client_id and oauth_token_url fields.
@@ -2676,7 +3186,10 @@ interface webhooks {
   post-user-webhooks-event-test: func(params: post-user-webhooks-event-test-params) -> result<string, string>;
 
   /// Retrieve all parse settings
-  get-user-webhooks-parse-settings: func() -> result<string, string>;
+  record get-user-webhooks-parse-settings-params {
+    on-behalf-of: option<string>
+  }
+  get-user-webhooks-parse-settings: func(params: get-user-webhooks-parse-settings-params) -> result<string, string>;
 
   /// Retrieves Inbound Parse Webhook statistics.
   record get-user-webhooks-parse-stats-params {
@@ -2689,7 +3202,8 @@ interface webhooks {
     /// The starting date of the statistics you want to retrieve. Must be in the format YYYY-MM-DD
     start-date: string,
     /// The end date of the statistics you want to retrieve. Must be in the format YYYY-MM-DD
-    end-date: option<string>
+    end-date: option<string>,
+    on-behalf-of: option<string>
   }
   get-user-webhooks-parse-stats: func(params: get-user-webhooks-parse-stats-params) -> result<string, string>;
 
@@ -2698,6 +3212,7 @@ interface webhooks {
 interface settings-inbound-parse {
   /// Create a parse setting
   record post-user-webhooks-parse-settings-params {
+    on-behalf-of: option<string>,
     /// A specific and unique domain or subdomain that you have created to use exclusively to parse your incoming email. For example, `parse.yourdomain.com`.
     hostname: option<string>,
     /// Indicates if you would like SendGrid to post the original MIME-type content of your parsed email. When this parameter is set to `true`, SendGrid will send a JSON payload of the content of your email.
@@ -2710,10 +3225,14 @@ interface settings-inbound-parse {
   post-user-webhooks-parse-settings: func(params: post-user-webhooks-parse-settings-params) -> result<string, string>;
 
   /// Retrieve a specific parse setting
-  get-user-webhooks-parse-settings-hostname: func() -> result<string, string>;
+  record get-user-webhooks-parse-settings-hostname-params {
+    on-behalf-of: option<string>
+  }
+  get-user-webhooks-parse-settings-hostname: func(params: get-user-webhooks-parse-settings-hostname-params) -> result<string, string>;
 
   /// Update a parse setting
   record patch-user-webhooks-parse-settings-hostname-params {
+    on-behalf-of: option<string>,
     /// A specific and unique domain or subdomain that you have created to use exclusively to parse your incoming email. For example, `parse.yourdomain.com`.
     hostname: option<string>,
     /// Indicates if you would like SendGrid to post the original MIME-type content of your parsed email. When this parameter is set to `true`, SendGrid will send a JSON payload of the content of your email.
@@ -2726,7 +3245,10 @@ interface settings-inbound-parse {
   patch-user-webhooks-parse-settings-hostname: func(params: patch-user-webhooks-parse-settings-hostname-params) -> result<string, string>;
 
   /// Delete a parse setting
-  delete-user-webhooks-parse-settings-hostname: func() -> result<string, string>;
+  record delete-user-webhooks-parse-settings-hostname-params {
+    on-behalf-of: option<string>
+  }
+  delete-user-webhooks-parse-settings-hostname: func(params: delete-user-webhooks-parse-settings-hostname-params) -> result<string, string>;
 
 }
 
@@ -2827,12 +3349,14 @@ interface domain-authentication {
     /// The username associated with an authenticated domain.
     username: option<string>,
     /// Search for authenticated domains.
-    domain: option<string>
+    domain: option<string>,
+    on-behalf-of: option<string>
   }
   get-whitelabel-domains: func(params: get-whitelabel-domains-params) -> result<string, string>;
 
   /// Authenticate a domain
   record post-whitelabel-domains-params {
+    on-behalf-of: option<string>,
     /// Whether to allow SendGrid to manage your SPF records, DKIM keys, and DKIM key rotation.
     automatic-security: option<bool>,
     /// Add a custom DKIM selector. Accepts three letters or numbers.
@@ -2855,7 +3379,8 @@ interface domain-authentication {
   /// Get the default authentication
   record get-whitelabel-domains-default-params {
     /// The domain to find a default authentication.
-    domain: option<string>
+    domain: option<string>,
+    on-behalf-of: option<string>
   }
   get-whitelabel-domains-default: func(params: get-whitelabel-domains-default-params) -> result<string, string>;
 
@@ -2874,10 +3399,14 @@ interface domain-authentication {
   delete-whitelabel-domains-subuser: func(params: delete-whitelabel-domains-subuser-params) -> result<string, string>;
 
   /// Retrieve an authenticated domain
-  get-whitelabel-domains-domain-id: func() -> result<string, string>;
+  record get-whitelabel-domains-domain-id-params {
+    on-behalf-of: option<string>
+  }
+  get-whitelabel-domains-domain-id: func(params: get-whitelabel-domains-domain-id-params) -> result<string, string>;
 
   /// Update an authenticated domain
   record patch-whitelabel-domains-domain-id-params {
+    on-behalf-of: option<string>,
     /// Indicates whether to generate a custom SPF record for manual security.
     custom-spf: option<bool>,
     /// Indicates whether this is the default authenticated domain.
@@ -2886,7 +3415,10 @@ interface domain-authentication {
   patch-whitelabel-domains-domain-id: func(params: patch-whitelabel-domains-domain-id-params) -> result<string, string>;
 
   /// Delete an authenticated domain.
-  delete-whitelabel-domains-domain-id: func() -> result<string, string>;
+  record delete-whitelabel-domains-domain-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-whitelabel-domains-domain-id: func(params: delete-whitelabel-domains-domain-id-params) -> result<string, string>;
 
   /// Associate an authenticated domain with a given user.
   record post-whitelabel-domains-domain-id-subuser-params {
@@ -2897,16 +3429,23 @@ interface domain-authentication {
 
   /// Add an IP to an authenticated domain
   record post-whitelabel-domains-id-ips-params {
+    on-behalf-of: option<string>,
     /// IP to associate with the domain. Used for manually specifying IPs for custom SPF.
     ip: string
   }
   post-whitelabel-domains-id-ips: func(params: post-whitelabel-domains-id-ips-params) -> result<string, string>;
 
   /// Remove an IP from an authenticated domain.
-  delete-whitelabel-domains-id-ips-ip: func() -> result<string, string>;
+  record delete-whitelabel-domains-id-ips-ip-params {
+    on-behalf-of: option<string>
+  }
+  delete-whitelabel-domains-id-ips-ip: func(params: delete-whitelabel-domains-id-ips-ip-params) -> result<string, string>;
 
   /// Validate a domain authentication.
-  post-whitelabel-domains-id-validate: func() -> result<string, string>;
+  record post-whitelabel-domains-id-validate-params {
+    on-behalf-of: option<string>
+  }
+  post-whitelabel-domains-id-validate: func(params: post-whitelabel-domains-id-validate-params) -> result<string, string>;
 
 }
 
@@ -2918,12 +3457,14 @@ interface reverse-dns {
     /// The point in the list of results to begin retrieving IP addresses from.
     offset: option<s32>,
     /// The IP address segment that you'd like to use in a prefix search.
-    ip: option<string>
+    ip: option<string>,
+    on-behalf-of: option<string>
   }
   get-whitelabel-ips: func(params: get-whitelabel-ips-params) -> result<string, string>;
 
   /// Set up reverse DNS
   record post-whitelabel-ips-params {
+    on-behalf-of: option<string>,
     /// The root, or sending, domain that will be used to send message from the IP address.
     domain: string,
     /// The IP address for which you want to set up reverse DNS.
@@ -2934,13 +3475,22 @@ interface reverse-dns {
   post-whitelabel-ips: func(params: post-whitelabel-ips-params) -> result<string, string>;
 
   /// Retrieve a reverse DNS record
-  get-whitelabel-ips-id: func() -> result<string, string>;
+  record get-whitelabel-ips-id-params {
+    on-behalf-of: option<string>
+  }
+  get-whitelabel-ips-id: func(params: get-whitelabel-ips-id-params) -> result<string, string>;
 
   /// Delete a reverse DNS record
-  delete-whitelabel-ips-id: func() -> result<string, string>;
+  record delete-whitelabel-ips-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-whitelabel-ips-id: func(params: delete-whitelabel-ips-id-params) -> result<string, string>;
 
   /// Validate a reverse DNS record
-  post-whitelabel-ips-id-validate: func() -> result<string, string>;
+  record post-whitelabel-ips-id-validate-params {
+    on-behalf-of: option<string>
+  }
+  post-whitelabel-ips-id-validate: func(params: post-whitelabel-ips-id-validate-params) -> result<string, string>;
 
 }
 
@@ -2948,12 +3498,14 @@ interface link-branding {
   /// Retrieve all branded links
   record get-whitelabel-links-params {
     /// Limits the number of results returned per page.
-    limit: option<s32>
+    limit: option<s32>,
+    on-behalf-of: option<string>
   }
   get-whitelabel-links: func(params: get-whitelabel-links-params) -> result<string, string>;
 
   /// Create a branded link
   record post-whitelabel-links-params {
+    on-behalf-of: option<string>,
     /// Indicates if you want to use this link branding as the default or fallback. When setting a new default, the existing default link branding will have its default status removed automatically.
     default: option<bool>,
     /// The root domain for the subdomain that you are creating the link branding for. This should match your FROM email address.
@@ -2966,7 +3518,8 @@ interface link-branding {
   /// Retrieve the default branded link
   record get-whitelabel-links-default-params {
     /// The domain to match against when finding the default branded link.
-    domain: option<string>
+    domain: option<string>,
+    on-behalf-of: option<string>
   }
   get-whitelabel-links-default: func(params: get-whitelabel-links-default-params) -> result<string, string>;
 
@@ -2985,20 +3538,30 @@ interface link-branding {
   delete-whitelabel-links-subuser: func(params: delete-whitelabel-links-subuser-params) -> result<string, string>;
 
   /// Retrieve a branded link
-  get-whitelabel-links-id: func() -> result<string, string>;
+  record get-whitelabel-links-id-params {
+    on-behalf-of: option<string>
+  }
+  get-whitelabel-links-id: func(params: get-whitelabel-links-id-params) -> result<string, string>;
 
   /// Update a branded link
   record patch-whitelabel-links-id-params {
+    on-behalf-of: option<string>,
     /// Indicates if the branded link is set as the default. When setting a new default, the existing default link branding will have its default status removed automatically.
     default: option<bool>
   }
   patch-whitelabel-links-id: func(params: patch-whitelabel-links-id-params) -> result<string, string>;
 
   /// Delete a branded link
-  delete-whitelabel-links-id: func() -> result<string, string>;
+  record delete-whitelabel-links-id-params {
+    on-behalf-of: option<string>
+  }
+  delete-whitelabel-links-id: func(params: delete-whitelabel-links-id-params) -> result<string, string>;
 
   /// Validate a branded link
-  post-whitelabel-links-id-validate: func() -> result<string, string>;
+  record post-whitelabel-links-id-validate-params {
+    on-behalf-of: option<string>
+  }
+  post-whitelabel-links-id-validate: func(params: post-whitelabel-links-id-validate-params) -> result<string, string>;
 
   /// Associate a branded link with a subuser
   record post-whitelabel-links-link-id-subuser-params {

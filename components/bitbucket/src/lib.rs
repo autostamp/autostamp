@@ -5536,7 +5536,7 @@ impl iface_snippets::Guest for crate::Component {
 }
 use crate::exports::autostamp::bitbucket::search as iface_search;
 
-const OP_SEARCH_SEARCH_TEAM: OpSpec = OpSpec {
+const OP_SEARCH_TEAM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/teams/{username}/search/code",
     fields: &[
@@ -5549,7 +5549,7 @@ const OP_SEARCH_SEARCH_TEAM: OpSpec = OpSpec {
     ],
 };
 
-const OP_SEARCH_SEARCH_ACCOUNT: OpSpec = OpSpec {
+const OP_SEARCH_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{selected_user}/search/code",
     fields: &[
@@ -5562,7 +5562,7 @@ const OP_SEARCH_SEARCH_ACCOUNT: OpSpec = OpSpec {
     ],
 };
 
-const OP_SEARCH_SEARCH_WORKSPACE: OpSpec = OpSpec {
+const OP_SEARCH_WORKSPACE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workspaces/{workspace}/search/code",
     fields: &[
@@ -5575,7 +5575,7 @@ const OP_SEARCH_SEARCH_WORKSPACE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_search__search_team_params__to_json(p: &iface_search::SearchTeamParams) -> Value {
+fn iface_search__team_params__to_json(p: &iface_search::TeamParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("search_query".into(), Value::String((&p.search_query).clone()));
@@ -5584,7 +5584,7 @@ fn iface_search__search_team_params__to_json(p: &iface_search::SearchTeamParams)
     Value::Object(m)
 }
 
-fn iface_search__search_account_params__to_json(p: &iface_search::SearchAccountParams) -> Value {
+fn iface_search__account_params__to_json(p: &iface_search::AccountParams) -> Value {
     let mut m = Map::new();
     m.insert("selected_user".into(), Value::String((&p.selected_user).clone()));
     m.insert("search_query".into(), Value::String((&p.search_query).clone()));
@@ -5593,7 +5593,7 @@ fn iface_search__search_account_params__to_json(p: &iface_search::SearchAccountP
     Value::Object(m)
 }
 
-fn iface_search__search_workspace_params__to_json(p: &iface_search::SearchWorkspaceParams) -> Value {
+fn iface_search__workspace_params__to_json(p: &iface_search::WorkspaceParams) -> Value {
     let mut m = Map::new();
     m.insert("workspace".into(), Value::String((&p.workspace).clone()));
     m.insert("search_query".into(), Value::String((&p.search_query).clone()));
@@ -5603,17 +5603,17 @@ fn iface_search__search_workspace_params__to_json(p: &iface_search::SearchWorksp
 }
 
 impl iface_search::Guest for crate::Component {
-    fn search_team(params: iface_search::SearchTeamParams) -> Result<String, String> {
-        let json = iface_search__search_team_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_TEAM, json)
+    fn team(params: iface_search::TeamParams) -> Result<String, String> {
+        let json = iface_search__team_params__to_json(&params);
+        dispatch(&OP_SEARCH_TEAM, json)
     }
-    fn search_account(params: iface_search::SearchAccountParams) -> Result<String, String> {
-        let json = iface_search__search_account_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_ACCOUNT, json)
+    fn account(params: iface_search::AccountParams) -> Result<String, String> {
+        let json = iface_search__account_params__to_json(&params);
+        dispatch(&OP_SEARCH_ACCOUNT, json)
     }
-    fn search_workspace(params: iface_search::SearchWorkspaceParams) -> Result<String, String> {
-        let json = iface_search__search_workspace_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_WORKSPACE, json)
+    fn workspace(params: iface_search::WorkspaceParams) -> Result<String, String> {
+        let json = iface_search__workspace_params__to_json(&params);
+        dispatch(&OP_SEARCH_WORKSPACE, json)
     }
 }
 use crate::exports::autostamp::bitbucket::users as iface_users;

@@ -364,10 +364,10 @@ const OP_WORDS_GET_WORDS: OpSpec = OpSpec {
         FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "limit", location: FieldLocation::Query },
         FieldSpec { snake: "username", location: FieldLocation::Query },
-        FieldSpec { snake: "api_key", location: FieldLocation::Query },
         FieldSpec { snake: "dicts", location: FieldLocation::Query },
     ],
     auth: &[
+        AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyQuery("apiKey") },
     ],
 };
 
@@ -402,7 +402,6 @@ fn iface_words__get_words_params__to_json(p: &iface_words::GetWordsParams) -> Va
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("username".into(), Value::String((&p.username).clone()));
-    m.insert("api_key".into(), Value::String((&p.api_key).clone()));
     m.insert("dicts".into(), match (&p.dicts) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }

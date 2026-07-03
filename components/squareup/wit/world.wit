@@ -7,7 +7,7 @@
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
 /// | `oauth2ClientSecret` | header `Authorization` |
-package autostamp:squareup@0.2.1;
+package autostamp:squareup@0.3.0;
 
 interface mobile-authorization {
   /// CreateMobileAuthorizationCode
@@ -773,9 +773,9 @@ interface cash-drawers {
 
 interface catalog {
   /// A batch of catalog objects.
-  record catalog-object-batch {
+  record object-batch {
     /// A list of CatalogObjects belonging to this batch.
-    objects: list<catalog-object>
+    objects: list<object>
   }
 
   /// The wrapper object for the Catalog entries of a given object type.
@@ -801,47 +801,47 @@ interface catalog {
   /// 
   /// For a more detailed discussion of the Catalog data model, please see the
   /// [Design a Catalog](https://developer.squareup.com/docs/catalog-api/design-a-catalog) guide.
-  record catalog-object {
+  record object {
     /// A list of locations where the object is not present, even if `present_at_all_locations` is `true`.
     /// This can include locations that are deactivated.
     absent-at-location-ids: option<list<string>>,
     /// The Connect v1 IDs for this object at each location where it is present, where they
     /// differ from the object's Connect V2 ID. The field will only be present for objects that
-    catalog-v1-ids: option<list<catalog-v1-id>>,
-    category-data: option<catalog-category>,
-    custom-attribute-definition-data: option<catalog-custom-attribute-definition>,
+    catalog-v1-ids: option<list<v1-id>>,
+    category-data: option<category>,
+    custom-attribute-definition-data: option<custom-attribute-definition>,
     /// A map (key-value pairs) of application-defined custom attribute values. The value of a key-value pair
     /// is a [CatalogCustomAttributeValue](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogCustomAttributeValue) object. The key is the `key` attribute
-    custom-attribute-values: option<catalog-object-custom-attribute-values>,
-    discount-data: option<catalog-discount>,
+    custom-attribute-values: option<object-custom-attribute-values>,
+    discount-data: option<discount>,
     /// An identifier to reference this object in the catalog. When a new `CatalogObject`
     /// is inserted, the client should set the id to a temporary identifier starting with
     id: string,
-    image-data: option<catalog-image>,
+    image-data: option<image>,
     /// Identifies the `CatalogImage` attached to this `CatalogObject`.
     image-id: option<string>,
     /// If `true`, the object has been deleted from the database. Must be `false` for new objects
     /// being inserted. When deleted, the `updated_at` field will equal the deletion time.
     is-deleted: option<bool>,
-    item-data: option<catalog-item>,
-    item-option-data: option<catalog-item-option>,
-    item-option-value-data: option<catalog-item-option-value>,
-    item-variation-data: option<catalog-item-variation>,
-    measurement-unit-data: option<catalog-measurement-unit>,
-    modifier-data: option<catalog-modifier>,
-    modifier-list-data: option<catalog-modifier-list>,
+    item-data: option<item>,
+    item-option-data: option<item-option>,
+    item-option-value-data: option<item-option-value>,
+    item-variation-data: option<item-variation>,
+    measurement-unit-data: option<measurement-unit>,
+    modifier-data: option<modifier>,
+    modifier-list-data: option<modifier-list>,
     /// If `true`, this object is present at all locations (including future locations), except where specified in
     /// the `absent_at_location_ids` field. If `false`, this object is not present at any locations (including future locations),
     present-at-all-locations: option<bool>,
     /// A list of locations where the object is present, even if `present_at_all_locations` is `false`.
     /// This can include locations that are deactivated.
     present-at-location-ids: option<list<string>>,
-    pricing-rule-data: option<catalog-pricing-rule>,
-    product-set-data: option<catalog-product-set>,
-    quick-amounts-settings-data: option<catalog-quick-amounts-settings>,
-    subscription-plan-data: option<catalog-subscription-plan>,
-    tax-data: option<catalog-tax>,
-    time-period-data: option<catalog-time-period>,
+    pricing-rule-data: option<pricing-rule>,
+    product-set-data: option<product-set>,
+    quick-amounts-settings-data: option<quick-amounts-settings>,
+    subscription-plan-data: option<subscription-plan>,
+    tax-data: option<tax>,
+    time-period-data: option<time-period>,
     /// The type of this object. Each object type has expected
     /// properties expressed in a structured format within its corresponding `*_data` field below.
     type-op: string,
@@ -854,7 +854,7 @@ interface catalog {
   }
 
   /// A Square API V1 identifier of an item, including the object ID and its associated location ID.
-  record catalog-v1-id {
+  record v1-id {
     /// The ID for an object used in the Square API V1, if the object ID differs from the Square API V2 object ID.
     catalog-v1-id: option<string>,
     /// The ID of the `Location` this Connect V1 ID is associated with.
@@ -862,7 +862,7 @@ interface catalog {
   }
 
   /// A category to which a `CatalogItem` instance belongs.
-  record catalog-category {
+  record category {
     /// The category name. This is a searchable attribute for use in applicable query filters, and its value length is of Unicode code points.
     name: option<string>
   }
@@ -872,7 +872,7 @@ interface catalog {
   /// catalog object with an entity in another system. Do not use custom attributes
   /// to store any sensitive information (personally identifiable information, card details, etc.).
   /// [Read more about custom attributes](https://developer.squareup.com/docs/catalog-api/add-custom-attributes)
-  record catalog-custom-attribute-definition {
+  record custom-attribute-definition {
     /// The set of Catalog Object Types that this Custom Attribute may be applied to.
     /// Currently, only `ITEM` and `ITEM_VARIATION` are allowed. At least one type must be included.
     allowed-object-types: list<string>,
@@ -891,36 +891,36 @@ interface catalog {
     ///  The name of this definition for API and seller-facing UI purposes.
     /// The name must be unique within the (merchant, application) pair. Required.
     name: string,
-    number-config: option<catalog-custom-attribute-definition-number-config>,
-    selection-config: option<catalog-custom-attribute-definition-selection-config>,
+    number-config: option<custom-attribute-definition-number-config>,
+    selection-config: option<custom-attribute-definition-selection-config>,
     /// The visibility of a custom attribute in seller-facing UIs (including Square Point
     /// of Sale applications and Square Dashboard). May be modified.
     seller-visibility: option<string>,
     source-application: option<source-application>,
-    string-config: option<catalog-custom-attribute-definition-string-config>,
+    string-config: option<custom-attribute-definition-string-config>,
     /// The type of this custom attribute. Cannot be modified after creation.
     /// Required.
     type-op: string
   }
 
-  record catalog-custom-attribute-definition-number-config {
+  record custom-attribute-definition-number-config {
     /// An integer between 0 and 5 that represents the maximum number of
     /// positions allowed after the decimal in number custom attribute values
     precision: option<s32>
   }
 
   /// Configuration associated with `SELECTION`-type custom attribute definitions.
-  record catalog-custom-attribute-definition-selection-config {
+  record custom-attribute-definition-selection-config {
     /// The set of valid `CatalogCustomAttributeSelections`. Up to a maximum of 100
     /// selections can be defined. Can be modified.
-    allowed-selections: option<list<catalog-custom-attribute-definition-selection-config-custom-attribute-selection>>,
+    allowed-selections: option<list<custom-attribute-definition-selection-config-custom-attribute-selection>>,
     /// The maximum number of selections that can be set. The maximum value for this
     /// attribute is 100. The default value is 1. The value can be modified, but changing the value will not
     max-allowed-selections: option<s32>
   }
 
   /// A named selection for this `SELECTION`-type custom attribute definition.
-  record catalog-custom-attribute-definition-selection-config-custom-attribute-selection {
+  record custom-attribute-definition-selection-config-custom-attribute-selection {
     /// Selection name, unique within `allowed_selections`.
     name: string,
     /// Unique ID set by Square.
@@ -940,7 +940,7 @@ interface catalog {
   }
 
   /// Configuration associated with Custom Attribute Definitions of type `STRING`.
-  record catalog-custom-attribute-definition-string-config {
+  record custom-attribute-definition-string-config {
     /// If true, each Custom Attribute instance associated with this Custom Attribute
     /// Definition must have a unique value within the seller's catalog. For
     enforce-uniqueness: option<bool>
@@ -962,13 +962,13 @@ interface catalog {
   /// Custom attribute values are intended to store additional information about a catalog object
   /// or associations with an entity in another system. Do not use custom attributes
   /// to store any sensitive information (personally identifiable information, card details, etc.).
-  record catalog-object-custom-attribute-values {
+  record object-custom-attribute-values {
     /// JSON-encoded free-form object payload
     data: option<string>
   }
 
   /// A discount applicable to items.
-  record catalog-discount {
+  record discount {
     amount-money: option<money>,
     /// Indicates whether the discount is a fixed amount or percentage, or entered at the time of sale.
     discount-type: option<string>,
@@ -1004,7 +1004,7 @@ interface catalog {
 
   /// An image file to use in Square catalogs. It can be associated with catalog
   /// items, item variations, and categories.
-  record catalog-image {
+  record image {
     /// A caption that describes what is shown in the image. Displayed in the
     /// Square Online Store. This is a searchable attribute for use in applicable query filters
     caption: option<string>,
@@ -1017,7 +1017,7 @@ interface catalog {
   }
 
   /// A [CatalogObject](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogObject) instance of the `ITEM` type, also referred to as an item, in the catalog.
-  record catalog-item {
+  record item {
     /// The text of the item's display label in the Square Point of Sale app. Only up to the first five characters of the string are used.
     /// This attribute is searchable, and its value length is of Unicode code points.
     abbreviation: option<string>,
@@ -1033,12 +1033,12 @@ interface catalog {
     description: option<string>,
     /// List of item options IDs for this item. Used to manage and group item
     /// variations in a specified order.
-    item-options: option<list<catalog-item-option-for-item>>,
+    item-options: option<list<item-option-for-item>>,
     /// The color of the item's display label in the Square Point of Sale app. This must be a valid hex color code.
     label-color: option<string>,
     /// A set of `CatalogItemModifierListInfo` objects
     /// representing the modifier lists that apply to this item, along with the overrides and min
-    modifier-list-info: option<list<catalog-item-modifier-list-info>>,
+    modifier-list-info: option<list<item-modifier-list-info>>,
     /// The item's name. This is a searchable attribute for use in applicable query filters, its value must not be empty, and the length is of Unicode code points.
     name: option<string>,
     /// The product type of the item. May not be changed once an item has been created.
@@ -1060,13 +1060,13 @@ interface catalog {
 
   ///  An option that can be assigned to an item.
   /// For example, a t-shirt item may offer a color option or a size option.
-  record catalog-item-option-for-item {
+  record item-option-for-item {
     /// The unique id of the item option, used to form the dimensions of the item option matrix in a specified order.
     item-option-id: option<string>
   }
 
   /// Options to control the properties of a `CatalogModifierList` applied to a `CatalogItem` instance.
-  record catalog-item-modifier-list-info {
+  record item-modifier-list-info {
     /// If `true`, enable this `CatalogModifierList`. The default value is `true`.
     enabled: option<bool>,
     /// If 0 or larger, the largest number of `CatalogModifier`s that can be selected from this `CatalogModifierList`.
@@ -1076,11 +1076,11 @@ interface catalog {
     /// The ID of the `CatalogModifierList` controlled by this `CatalogModifierListInfo`.
     modifier-list-id: string,
     /// A set of `CatalogModifierOverride` objects that override whether a given `CatalogModifier` is enabled by default.
-    modifier-overrides: option<list<catalog-modifier-override>>
+    modifier-overrides: option<list<modifier-override>>
   }
 
   /// Options to control how to override the default behavior of the specified modifier.
-  record catalog-modifier-override {
+  record modifier-override {
     /// The ID of the `CatalogModifier` whose default behavior is being overridden.
     modifier-id: string,
     /// If `true`, this `CatalogModifier` should be selected by default for this `CatalogItem`.
@@ -1088,7 +1088,7 @@ interface catalog {
   }
 
   /// A group of variations for a `CatalogItem`.
-  record catalog-item-option {
+  record item-option {
     /// The item option's human-readable description. Displayed in the Square
     /// Point of Sale app for the seller and in the Online Store or on receipts for
     description: option<string>,
@@ -1107,7 +1107,7 @@ interface catalog {
   /// An enumerated value that can link a
   /// `CatalogItemVariation` to an item option as one of
   /// its item option values.
-  record catalog-item-option-value {
+  record item-option-value {
     /// The HTML-supported hex color for the item option (e.g., "#ff8d4e85").
     /// Only displayed if `show_colors` is enabled on the parent `ItemOption`. When
     color: option<string>,
@@ -1123,7 +1123,7 @@ interface catalog {
 
   /// An item variation (i.e., product) in the Catalog object model. Each item
   /// may have a maximum of 250 item variations.
-  record catalog-item-variation {
+  record item-variation {
     /// If the `CatalogItem` that owns this item variation is of type
     /// `APPOINTMENTS_SERVICE`, a bool representing whether this service is available for booking.
     available-for-booking: option<bool>,
@@ -1137,7 +1137,7 @@ interface catalog {
     item-id: option<string>,
     /// List of item option values associated with this item variation. Listed
     /// in the same order as the item options of the parent item.
-    item-option-values: option<list<catalog-item-option-value-for-item-variation>>,
+    item-option-values: option<list<item-option-value-for-item-variation>>,
     /// Per-location price and inventory overrides.
     location-overrides: option<list<item-variation-location-overrides>>,
     /// ID of the ‘CatalogMeasurementUnit’ that is used to measure the quantity
@@ -1160,7 +1160,7 @@ interface catalog {
     /// Whether stock is counted directly on this variation (TRUE) or only on its components (FALSE).
     /// For backward compatibility missing values will be interpreted as TRUE.
     stockable: option<bool>,
-    stockable-conversion: option<catalog-stock-conversion>,
+    stockable-conversion: option<stock-conversion>,
     /// Tokens of employees that can perform the service represented by this variation. Only valid for
     /// variations of type `APPOINTMENTS_SERVICE`.
     team-member-ids: option<list<string>>,
@@ -1177,7 +1177,7 @@ interface catalog {
   /// an item option value. For example, a t-shirt item may offer a color option and
   /// a size option. An item option value would represent each variation of t-shirt:
   /// For example, "Color:Red, Size:Small" or "Color:Blue, Size:Medium".
-  record catalog-item-option-value-for-item-variation {
+  record item-option-value-for-item-variation {
     /// The unique id of an item option.
     item-option-id: option<string>,
     /// The unique id of the selected value for the item option.
@@ -1204,7 +1204,7 @@ interface catalog {
   /// Represents the rule of conversion between a stockable [CatalogItemVariation](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogItemVariation)
   /// and a non-stockable sell-by or receive-by `CatalogItemVariation` that
   /// share the same underlying stock.
-  record catalog-stock-conversion {
+  record stock-conversion {
     /// The converted equivalent quantity of the non-stockable [CatalogItemVariation](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogItemVariation) 
     /// in its measurement unit. The `stockable_quantity` value and this `nonstockable_quantity` value together
     nonstockable-quantity: string,
@@ -1218,8 +1218,8 @@ interface catalog {
 
   /// Represents the unit used to measure a `CatalogItemVariation` and
   /// specifies the precision for decimal quantities.
-  record catalog-measurement-unit {
-    measurement-unit: option<measurement-unit>,
+  record measurement-unit {
+    measurement-unit: option<measurement-unit-v2>,
     /// An integer between 0 and 5 that represents the maximum number of
     /// positions allowed after the decimal in quantities measured with this unit.
     precision: option<s32>
@@ -1228,7 +1228,7 @@ interface catalog {
   /// Represents a unit of measurement to use with a quantity, such as ounces
   /// or inches. Exactly one of the following fields are required: `custom_unit`,
   /// `area_unit`, `length_unit`, `volume_unit`, and `weight_unit`.
-  record measurement-unit {
+  record measurement-unit-v2 {
     /// Represents a standard area unit.
     area-unit: option<string>,
     custom-unit: option<measurement-unit-custom>,
@@ -1256,7 +1256,7 @@ interface catalog {
   }
 
   /// A modifier applicable to items at the time of sale.
-  record catalog-modifier {
+  record modifier {
     /// The ID of the `CatalogModifierList` associated with this modifier.
     modifier-list-id: option<string>,
     /// The modifier name.  This is a searchable attribute for use in applicable query filters, and its value length is of Unicode code points.
@@ -1272,7 +1272,7 @@ interface catalog {
   /// may contain "Ketchup", "Mustard", and "Relish" modifiers.
   /// Use the `selection_type` field to specify whether or not multiple selections from
   /// the modifier list are allowed.
-  record catalog-modifier-list {
+  record modifier-list {
     /// The options included in the `CatalogModifierList`.
     /// You must include at least one `CatalogModifier`.
     modifiers: option<list<string>>,
@@ -1287,7 +1287,7 @@ interface catalog {
 
   /// Defines how discounts are automatically applied to a set of items that match the pricing rule
   /// during the active time period.
-  record catalog-pricing-rule {
+  record pricing-rule {
     /// __Deprecated__: Please use the `exclude_products_id` field to apply
     /// an exclude set instead. Exclude sets allow better control over quantity
     apply-products-id: option<string>,
@@ -1329,7 +1329,7 @@ interface catalog {
   /// For example, including a category in a product set will include all of its
   /// items and associated item variations in the product set. Including an item in
   /// a product set will also include its item variations.
-  record catalog-product-set {
+  record product-set {
     /// If set to `true`, the product set will include every item in the catalog.
     /// Only one of `product_ids_all`, `product_ids_any`, or `all_products` can be set.
     all-products: option<bool>,
@@ -1354,9 +1354,9 @@ interface catalog {
   }
 
   /// A parent Catalog Object model represents a set of Quick Amounts and the settings control the amounts.
-  record catalog-quick-amounts-settings {
+  record quick-amounts-settings {
     /// Represents a set of Quick Amounts at this location.
-    amounts: option<list<catalog-quick-amount>>,
+    amounts: option<list<quick-amount>>,
     /// Represents location's eligibility for auto amounts
     /// The boolean should be consistent with whether there are AUTO amounts in the `amounts`.
     eligible-for-auto-amounts: option<bool>,
@@ -1365,7 +1365,7 @@ interface catalog {
   }
 
   /// Represents a Quick Amount in the Catalog.
-  record catalog-quick-amount {
+  record quick-amount {
     amount: money,
     /// The order in which this Quick Amount should be displayed.
     ordinal: option<s64>,
@@ -1378,7 +1378,7 @@ interface catalog {
 
   /// Describes a subscription plan. For more information, see
   /// [Set Up and Manage a Subscription Plan](https://developer.squareup.com/docs/subscriptions-api/setup-plan).
-  record catalog-subscription-plan {
+  record subscription-plan {
     /// The name of the plan.
     name: string,
     /// A list of SubscriptionPhase containing the [SubscriptionPhase](https://developer.squareup.com/reference/square_2021-08-18/objects/SubscriptionPhase) for this plan.
@@ -1400,7 +1400,7 @@ interface catalog {
   }
 
   /// A tax applicable to an item.
-  record catalog-tax {
+  record tax {
     /// If `true`, the fee applies to custom amounts entered into the Square Point of Sale
     /// app that are not associated with a particular `CatalogItem`.
     applies-to-custom-amounts: option<bool>,
@@ -1418,7 +1418,7 @@ interface catalog {
   }
 
   /// Represents a time period - either a single period or a repeating period.
-  record catalog-time-period {
+  record time-period {
     /// An iCalendar (RFC 5545) [event](https://tools.ietf.org/html/rfc5545#section-3.6.1), which
     /// specifies the name, timing, duration and recurrence of this time period.
     event: option<string>
@@ -1449,21 +1449,21 @@ interface catalog {
   /// 
   /// For example, to search for [CatalogItem](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogItem) objects by searchable attributes, you can use
   /// the `"name"`, `"description"`, or `"abbreviation"` attribute in an applicable query filter.
-  record catalog-query {
-    exact-query: option<catalog-query-exact>,
-    item-variations-for-item-option-values-query: option<catalog-query-item-variations-for-item-option-values>,
-    items-for-item-options-query: option<catalog-query-items-for-item-options>,
-    items-for-modifier-list-query: option<catalog-query-items-for-modifier-list>,
-    items-for-tax-query: option<catalog-query-items-for-tax>,
-    prefix-query: option<catalog-query-prefix>,
-    range-query: option<catalog-query-range>,
-    set-query: option<catalog-query-set>,
-    sorted-attribute-query: option<catalog-query-sorted-attribute>,
-    text-query: option<catalog-query-text>
+  record query {
+    exact-query: option<query-exact>,
+    item-variations-for-item-option-values-query: option<query-item-variations-for-item-option-values>,
+    items-for-item-options-query: option<query-items-for-item-options>,
+    items-for-modifier-list-query: option<query-items-for-modifier-list>,
+    items-for-tax-query: option<query-items-for-tax>,
+    prefix-query: option<query-prefix>,
+    range-query: option<query-range>,
+    set-query: option<query-set>,
+    sorted-attribute-query: option<query-sorted-attribute>,
+    text-query: option<query-text>
   }
 
   /// The query filter to return the search result by exact match of the specified attribute name and value.
-  record catalog-query-exact {
+  record query-exact {
     /// The name of the attribute to be searched. Matching of the attribute name is exact.
     attribute-name: string,
     /// The desired value of the search attribute. Matching of the attribute value is case insensitive and can be partial.
@@ -1472,33 +1472,33 @@ interface catalog {
   }
 
   /// The query filter to return the item variations containing the specified item option value IDs.
-  record catalog-query-item-variations-for-item-option-values {
+  record query-item-variations-for-item-option-values {
     /// A set of `CatalogItemOptionValue` IDs to be used to find associated
     /// `CatalogItemVariation`s. All ItemVariations that contain all of the given
     item-option-value-ids: option<list<string>>
   }
 
   /// The query filter to return the items containing the specified item option IDs.
-  record catalog-query-items-for-item-options {
+  record query-items-for-item-options {
     /// A set of `CatalogItemOption` IDs to be used to find associated
     /// `CatalogItem`s. All Items that contain all of the given Item Options (in any order)
     item-option-ids: option<list<string>>
   }
 
   /// The query filter to return the items containing the specified modifier list IDs.
-  record catalog-query-items-for-modifier-list {
+  record query-items-for-modifier-list {
     /// A set of `CatalogModifierList` IDs to be used to find associated `CatalogItem`s.
     modifier-list-ids: list<string>
   }
 
   /// The query filter to return the items containing the specified tax IDs.
-  record catalog-query-items-for-tax {
+  record query-items-for-tax {
     /// A set of `CatalogTax` IDs to be used to find associated `CatalogItem`s.
     tax-ids: list<string>
   }
 
   /// The query filter to return the search result whose named attribute values are prefixed by the specified attribute value.
-  record catalog-query-prefix {
+  record query-prefix {
     /// The name of the attribute to be searched.
     attribute-name: string,
     /// The desired prefix of the search attribute value.
@@ -1506,7 +1506,7 @@ interface catalog {
   }
 
   /// The query filter to return the search result whose named attribute values fall between the specified range.
-  record catalog-query-range {
+  record query-range {
     /// The desired maximum value for the search attribute (inclusive).
     attribute-max-value: option<s64>,
     /// The desired minimum value for the search attribute (inclusive).
@@ -1517,7 +1517,7 @@ interface catalog {
 
   /// The query filter to return the search result(s) by exact match of the specified `attribute_name` and any of
   /// the `attribute_values`.
-  record catalog-query-set {
+  record query-set {
     /// The name of the attribute to be searched. Matching of the attribute name is exact.
     attribute-name: string,
     /// The desired values of the search attribute. Matching of the attribute values is exact and case insensitive.
@@ -1526,7 +1526,7 @@ interface catalog {
   }
 
   /// The query expression to specify the key to sort search results.
-  record catalog-query-sorted-attribute {
+  record query-sorted-attribute {
     /// The attribute whose value is used as the sort key.
     attribute-name: string,
     /// The first attribute value to be returned by the query. Ascending sorts will return only
@@ -1537,7 +1537,7 @@ interface catalog {
   }
 
   /// The query filter to return the search result whose searchable attribute values contain all of the specified keywords or tokens, independent of the token order or case.
-  record catalog-query-text {
+  record query-text {
     /// A list of 1, 2, or 3 search keywords. Keywords with fewer than 3 characters are ignored.
     keywords: list<string>
   }
@@ -1597,7 +1597,7 @@ interface catalog {
   record batch-upsert-catalog-objects-params {
     /// A batch of CatalogObjects to be inserted/updated atomically.
     /// The objects within a batch will be inserted in an all-or-nothing fashion, i.e., if an error occurs
-    batches: list<catalog-object-batch>,
+    batches: list<object-batch>,
     /// A value you specify that uniquely identifies this
     /// request among all your requests. A common way to create
     idempotency-key: string
@@ -1605,7 +1605,7 @@ interface catalog {
   batch-upsert-catalog-objects: func(params: batch-upsert-catalog-objects-params) -> result<string, string>;
 
   /// CatalogInfo
-  catalog-info: func() -> result<string, string>;
+  info: func() -> result<string, string>;
 
   /// ListCatalog
   record list-catalog-params {
@@ -1626,7 +1626,7 @@ interface catalog {
     /// A value you specify that uniquely identifies this
     /// request among all your requests. A common way to create
     idempotency-key: string,
-    object: catalog-object
+    object: object
   }
   upsert-catalog-object: func(params: upsert-catalog-object-params) -> result<string, string>;
 
@@ -1670,7 +1670,7 @@ interface catalog {
     limit: option<s32>,
     /// The desired set of object types to appear in the search results.
     object-types: option<list<string>>,
-    query: option<catalog-query>
+    query: option<query>
   }
   search-catalog-objects: func(params: search-catalog-objects-params) -> result<string, string>;
 
@@ -2591,13 +2591,13 @@ interface inventory {
   /// Represents a single physical count, inventory, adjustment, or transfer
   /// that is part of the history of inventory changes for a particular
   /// [CatalogObject](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogObject) instance.
-  record inventory-change {
-    adjustment: option<inventory-adjustment>,
+  record change {
+    adjustment: option<adjustment>,
     measurement-unit: option<catalog-measurement-unit>,
     /// The ID of the [CatalogMeasurementUnit](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogMeasurementUnit) object representing the catalog measurement unit associated with the inventory change.
     measurement-unit-id: option<string>,
-    physical-count: option<inventory-physical-count>,
-    transfer: option<inventory-transfer>,
+    physical-count: option<physical-count>,
+    transfer: option<transfer>,
     /// Indicates how the inventory change is applied. See
     /// [InventoryChangeType](https://developer.squareup.com/reference/square_2021-08-18/enums/InventoryChangeType) for all possible values.
     type-op: option<string>
@@ -2605,8 +2605,8 @@ interface inventory {
 
   /// Represents a change in state or quantity of product inventory at a
   /// particular time and location.
-  record inventory-adjustment {
-    adjustment-group: option<inventory-adjustment-group>,
+  record adjustment {
+    adjustment-group: option<adjustment-group>,
     /// The Square-generated ID of the
     /// [CatalogObject](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogObject) being tracked.
     catalog-object-id: option<string>,
@@ -2655,7 +2655,7 @@ interface inventory {
     transaction-id: option<string>
   }
 
-  record inventory-adjustment-group {
+  record adjustment-group {
     /// Representative `from_state` for adjustments within the group. For example, for a group adjustment from `IN_STOCK` to `SOLD`,
     /// there can be two component adjustments in the group: one from `IN_STOCK`to `COMPOSED` and the other one from `COMPOSED` to `SOLD`.
     from-state: option<string>,
@@ -2739,7 +2739,7 @@ interface inventory {
   /// at a specific location, verified by a seller or a seller's employee. For example,
   /// a physical count might come from an employee counting the item variations on
   /// hand or from syncing with an external system.
-  record inventory-physical-count {
+  record physical-count {
     /// The Square-generated ID of the
     /// [CatalogObject](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogObject) being tracked.
     catalog-object-id: option<string>,
@@ -2774,7 +2774,7 @@ interface inventory {
 
   /// Represents the transfer of a quantity of product inventory at a
   /// particular time from one location to another.
-  record inventory-transfer {
+  record transfer {
     /// The Square-generated ID of the
     /// [CatalogObject](https://developer.squareup.com/reference/square_2021-08-18/objects/CatalogObject) being tracked.
     catalog-object-id: option<string>,
@@ -2829,7 +2829,7 @@ interface inventory {
   record deprecated-batch-change-inventory-params {
     /// The set of physical counts and inventory adjustments to be made.
     /// Changes are applied based on the client-supplied timestamp and may be sent
-    changes: option<list<inventory-change>>,
+    changes: option<list<change>>,
     /// A client-supplied, universally unique identifier (UUID) for the
     /// request.
     idempotency-key: string,
@@ -2889,7 +2889,7 @@ interface inventory {
   record batch-change-inventory-params {
     /// The set of physical counts and inventory adjustments to be made.
     /// Changes are applied based on the client-supplied timestamp and may be sent
-    changes: option<list<inventory-change>>,
+    changes: option<list<change>>,
     /// A client-supplied, universally unique identifier (UUID) for the
     /// request.
     idempotency-key: string,
@@ -5161,7 +5161,7 @@ interface transactions {
 interface loyalty {
   /// Describes a loyalty account. For more information, see
   /// [Manage Loyalty Accounts Using the Loyalty API](https://developer.squareup.com/docs/loyalty-api/overview).
-  record loyalty-account {
+  record account {
     /// The available point balance in the loyalty account. If points are scheduled to expire, they are listed in the `expiring_point_deadlines` field.
     /// 
     balance: option<s32>,
@@ -5173,12 +5173,12 @@ interface loyalty {
     enrolled-at: option<string>,
     /// The schedule for when points expire in the loyalty account balance. This field is present only if the account has points that are scheduled to expire. 
     /// 
-    expiring-point-deadlines: option<list<loyalty-account-expiring-point-deadline>>,
+    expiring-point-deadlines: option<list<account-expiring-point-deadline>>,
     /// The Square-assigned ID of the loyalty account.
     id: option<string>,
     /// The total points accrued during the lifetime of the account.
     lifetime-points: option<s32>,
-    mapping: option<loyalty-account-mapping>,
+    mapping: option<account-mapping>,
     /// The Square-assigned ID of the [loyalty program](https://developer.squareup.com/reference/square_2021-08-18/objects/LoyaltyProgram) to which the account belongs.
     program-id: string,
     /// The timestamp when the loyalty account was last updated, in RFC 3339 format.
@@ -5186,7 +5186,7 @@ interface loyalty {
   }
 
   /// Represents a set of points for a loyalty account that are scheduled to expire on a specific date.
-  record loyalty-account-expiring-point-deadline {
+  record account-expiring-point-deadline {
     /// The timestamp of when the points are scheduled to expire, in RFC 3339 format.
     expires-at: string,
     /// The number of points scheduled to expire at the `expires_at` timestamp.
@@ -5197,7 +5197,7 @@ interface loyalty {
   /// 
   /// Currently, a loyalty account can only be mapped to a buyer by phone number. For more information, see 
   /// [Loyalty Overview](https://developer.squareup.com/docs/loyalty/overview).
-  record loyalty-account-mapping {
+  record account-mapping {
     /// The timestamp when the mapping was created, in RFC 3339 format.
     created-at: option<string>,
     /// The Square-assigned ID of the mapping.
@@ -5213,11 +5213,11 @@ interface loyalty {
     customer-ids: option<list<string>>,
     /// The set of mappings to use in the loyalty account search.  
     /// 
-    mappings: option<list<loyalty-account-mapping>>
+    mappings: option<list<account-mapping>>
   }
 
   /// Provides metadata when the event `type` is `ACCUMULATE_POINTS`.
-  record loyalty-event-accumulate-points {
+  record event-accumulate-points {
     /// The ID of the [loyalty program](https://developer.squareup.com/reference/square_2021-08-18/objects/LoyaltyProgram).
     loyalty-program-id: option<string>,
     /// The ID of the [order](https://developer.squareup.com/reference/square_2021-08-18/objects/Order) for which the buyer accumulated the points.
@@ -5228,7 +5228,7 @@ interface loyalty {
   }
 
   /// Provides metadata when the event `type` is `ADJUST_POINTS`.
-  record loyalty-event-adjust-points {
+  record event-adjust-points {
     /// The Square-assigned ID of the [loyalty program](https://developer.squareup.com/reference/square_2021-08-18/objects/LoyaltyProgram).
     loyalty-program-id: option<string>,
     /// The number of points added or removed.
@@ -5238,22 +5238,22 @@ interface loyalty {
   }
 
   /// Represents a query used to search for loyalty events.
-  record loyalty-event-query {
-    filter: option<loyalty-event-filter>
+  record event-query {
+    filter: option<event-filter>
   }
 
   /// The filtering criteria. If the request specifies multiple filters, 
   /// the endpoint uses a logical AND to evaluate them.
-  record loyalty-event-filter {
-    date-time-filter: option<loyalty-event-date-time-filter>,
-    location-filter: option<loyalty-event-location-filter>,
-    loyalty-account-filter: option<loyalty-event-loyalty-account-filter>,
-    order-filter: option<loyalty-event-order-filter>,
-    type-filter: option<loyalty-event-type-filter>
+  record event-filter {
+    date-time-filter: option<event-date-time-filter>,
+    location-filter: option<event-location-filter>,
+    loyalty-account-filter: option<event-loyalty-account-filter>,
+    order-filter: option<event-order-filter>,
+    type-filter: option<event-type-filter>
   }
 
   /// Filter events by date time range.
-  record loyalty-event-date-time-filter {
+  record event-date-time-filter {
     created-at: time-range
   }
 
@@ -5272,26 +5272,26 @@ interface loyalty {
   }
 
   /// Filter events by location.
-  record loyalty-event-location-filter {
+  record event-location-filter {
     /// The [location](https://developer.squareup.com/reference/square_2021-08-18/objects/Location) IDs for loyalty events to query.
     /// If multiple values are specified, the endpoint uses 
     location-ids: list<string>
   }
 
   /// Filter events by loyalty account.
-  record loyalty-event-loyalty-account-filter {
+  record event-loyalty-account-filter {
     /// The ID of the [loyalty account](https://developer.squareup.com/reference/square_2021-08-18/objects/LoyaltyAccount) associated with loyalty events.
     loyalty-account-id: string
   }
 
   /// Filter events by the order associated with the event.
-  record loyalty-event-order-filter {
+  record event-order-filter {
     /// The ID of the [order](https://developer.squareup.com/reference/square_2021-08-18/objects/Order) associated with the event.
     order-id: string
   }
 
   /// Filter events by event type.
-  record loyalty-event-type-filter {
+  record event-type-filter {
     /// The loyalty event types used to filter the result.
     /// If multiple values are specified, the endpoint uses a 
     types: list<string>
@@ -5313,7 +5313,7 @@ interface loyalty {
   }
 
   /// Represents a contract to redeem loyalty points for a [reward tier](https://developer.squareup.com/reference/square_2021-08-18/objects/LoyaltyProgramRewardTier) discount. Loyalty rewards can be in an ISSUED, REDEEMED, or DELETED state. For more information, see [Redeem loyalty rewards](https://developer.squareup.com/docs/loyalty-api/overview#redeem-loyalty-rewards).
-  record loyalty-reward {
+  record reward {
     /// The timestamp when the reward was created, in RFC 3339 format.
     created-at: option<string>,
     /// The Square-assigned ID of the loyalty reward.
@@ -5347,7 +5347,7 @@ interface loyalty {
     /// A unique string that identifies this `CreateLoyaltyAccount` request. 
     /// Keys can be any valid string, but must be unique for every request.
     idempotency-key: string,
-    loyalty-account: loyalty-account
+    loyalty-account: account
   }
   create-loyalty-account: func(params: create-loyalty-account-params) -> result<string, string>;
 
@@ -5373,7 +5373,7 @@ interface loyalty {
   record accumulate-loyalty-points-params {
     /// The [loyalty account](https://developer.squareup.com/reference/square_2021-08-18/objects/LoyaltyAccount) ID to which to add the points.
     account-id: string,
-    accumulate-points: loyalty-event-accumulate-points,
+    accumulate-points: event-accumulate-points,
     /// A unique string that identifies the `AccumulateLoyaltyPoints` request. 
     /// Keys can be any valid string but must be unique for every request.
     idempotency-key: string,
@@ -5386,7 +5386,7 @@ interface loyalty {
   record adjust-loyalty-points-params {
     /// The ID of the [loyalty account](https://developer.squareup.com/reference/square_2021-08-18/objects/LoyaltyAccount) in which to adjust the points.
     account-id: string,
-    adjust-points: loyalty-event-adjust-points,
+    adjust-points: event-adjust-points,
     /// A unique string that identifies this `AdjustLoyaltyPoints` request. 
     /// Keys can be any valid string, but must be unique for every request.
     idempotency-key: string
@@ -5401,7 +5401,7 @@ interface loyalty {
     /// The maximum number of results to include in the response. 
     /// The last page might contain fewer events. 
     limit: option<s32>,
-    query: option<loyalty-event-query>
+    query: option<event-query>
   }
   search-loyalty-events: func(params: search-loyalty-events-params) -> result<string, string>;
 
@@ -5431,7 +5431,7 @@ interface loyalty {
     /// A unique string that identifies this `CreateLoyaltyReward` request. 
     /// Keys can be any valid string, but must be unique for every request.
     idempotency-key: string,
-    reward: loyalty-reward
+    reward: reward
   }
   create-loyalty-reward: func(params: create-loyalty-reward-params) -> result<string, string>;
 
@@ -7429,8 +7429,8 @@ interface subscriptions {
 
 interface team {
   /// A record representing an individual team member for a business.
-  record team-member {
-    assigned-locations: option<team-member-assigned-locations>,
+  record member {
+    assigned-locations: option<member-assigned-locations>,
     /// The timestamp, in RFC 3339 format, describing when the team member was created.
     /// For example, "2018-10-04T04:00:00-07:00" or "2019-02-05T12:00:00Z".
     created-at: option<string>,
@@ -7457,7 +7457,7 @@ interface team {
   }
 
   /// An object that represents a team member's assignment to locations.
-  record team-member-assigned-locations {
+  record member-assigned-locations {
     /// The current assignment type of the team member.
     assignment-type: option<string>,
     /// The locations that the team member is assigned to.
@@ -7550,7 +7550,7 @@ interface team {
     /// A unique string that identifies this `CreateTeamMember` request.
     /// Keys can be any valid string, but must be unique for every request.
     idempotency-key: option<string>,
-    team-member: option<team-member>
+    team-member: option<member>
   }
   create-team-member: func(params: create-team-member-params) -> result<string, string>;
 
@@ -7590,7 +7590,7 @@ interface team {
   record update-team-member-params {
     /// The ID of the team member to update.
     team-member-id: string,
-    team-member: option<team-member>
+    team-member: option<member>
   }
   update-team-member: func(params: update-team-member-params) -> result<string, string>;
 
@@ -7612,7 +7612,7 @@ interface team {
 }
 
 interface terminal {
-  record terminal-checkout {
+  record checkout {
     amount-money: money,
     /// The ID of the application that created the checkout.
     app-id: option<string>,
@@ -7684,12 +7684,12 @@ interface terminal {
     tip-percentages: option<list<s32>>
   }
 
-  record terminal-checkout-query {
-    filter: option<terminal-checkout-query-filter>,
-    sort: option<terminal-checkout-query-sort>
+  record checkout-query {
+    filter: option<checkout-query-filter>,
+    sort: option<checkout-query-sort>
   }
 
-  record terminal-checkout-query-filter {
+  record checkout-query-filter {
     created-at: option<time-range>,
     /// The `TerminalCheckout` objects associated with a specific device. If no device is specified, then all
     /// `TerminalCheckout` objects for the merchant are displayed.
@@ -7713,13 +7713,13 @@ interface terminal {
     start-at: option<string>
   }
 
-  record terminal-checkout-query-sort {
+  record checkout-query-sort {
     /// The order in which results are listed.
     /// - `ASC` - Oldest to newest.
     sort-order: option<string>
   }
 
-  record terminal-refund {
+  record refund {
     amount-money: money,
     /// The ID of the application that created the refund.
     app-id: option<string>,
@@ -7753,12 +7753,12 @@ interface terminal {
     updated-at: option<string>
   }
 
-  record terminal-refund-query {
-    filter: option<terminal-refund-query-filter>,
-    sort: option<terminal-refund-query-sort>
+  record refund-query {
+    filter: option<refund-query-filter>,
+    sort: option<refund-query-sort>
   }
 
-  record terminal-refund-query-filter {
+  record refund-query-filter {
     created-at: option<time-range>,
     /// `TerminalRefund` objects associated with a specific device. If no device is specified, then all
     /// `TerminalRefund` objects for the signed-in account are displayed.
@@ -7768,7 +7768,7 @@ interface terminal {
     status: option<string>
   }
 
-  record terminal-refund-query-sort {
+  record refund-query-sort {
     /// The order in which results are listed.
     /// - `ASC` - Oldest to newest.
     sort-order: option<string>
@@ -7776,7 +7776,7 @@ interface terminal {
 
   /// CreateTerminalCheckout
   record create-terminal-checkout-params {
-    checkout: terminal-checkout,
+    checkout: checkout,
     /// A unique string that identifies this `CreateCheckout` request. Keys can be any valid string but
     /// must be unique for every `CreateCheckout` request.
     idempotency-key: string
@@ -7790,7 +7790,7 @@ interface terminal {
     cursor: option<string>,
     /// Limits the number of results returned for a single request.
     limit: option<s32>,
-    query: option<terminal-checkout-query>
+    query: option<checkout-query>
   }
   search-terminal-checkouts: func(params: search-terminal-checkouts-params) -> result<string, string>;
 
@@ -7813,7 +7813,7 @@ interface terminal {
     /// A unique string that identifies this `CreateRefund` request. Keys can be any valid string but
     /// must be unique for every `CreateRefund` request.
     idempotency-key: string,
-    refund: option<terminal-refund>
+    refund: option<refund>
   }
   create-terminal-refund: func(params: create-terminal-refund-params) -> result<string, string>;
 
@@ -7824,7 +7824,7 @@ interface terminal {
     cursor: option<string>,
     /// Limits the number of results returned for a single request.
     limit: option<s32>,
-    query: option<terminal-refund-query>
+    query: option<refund-query>
   }
   search-terminal-refunds: func(params: search-terminal-refunds-params) -> result<string, string>;
 

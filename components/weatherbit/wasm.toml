@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:weatherbit"
-version = "0.2.1+weatherbit-2.0.0"
+version = "0.3.0+weatherbit-2.0.0"
 registry = "ghcr.io/autostamp/weatherbit"
 kind = "component"
 file = "build/weatherbit.wasm"

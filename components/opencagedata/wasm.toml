@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:opencagedata"
-version = "0.2.1+opencagedata-1"
+version = "0.3.0+opencagedata-1"
 registry = "ghcr.io/autostamp/opencagedata"
 kind = "component"
 file = "build/opencagedata.wasm"

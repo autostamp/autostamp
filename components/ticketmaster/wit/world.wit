@@ -1,4 +1,4 @@
-package autostamp:ticketmaster@0.2.1;
+package autostamp:ticketmaster@0.3.0;
 
 interface discovery {
   enum find-source-enum {

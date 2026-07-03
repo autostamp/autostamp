@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:zapier"
-version = "0.2.1+zapier-1.0.0"
+version = "0.3.0+zapier-1.0.0"
 registry = "ghcr.io/autostamp/zapier"
 kind = "component"
 file = "build/zapier.wasm"

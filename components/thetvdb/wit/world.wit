@@ -1,7 +1,13 @@
-package autostamp:thetvdb@0.2.1;
+package autostamp:thetvdb@0.3.0;
 
 interface episodes {
-  get-episodes-id: func() -> result<string, string>;
+  record get-episodes-id-params {
+    /// ID of the episode
+    id: string,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-episodes-id: func(params: get-episodes-id-params) -> result<string, string>;
 
 }
 
@@ -9,7 +15,11 @@ interface episodes {
 interface languages {
   get-languages: func() -> result<string, string>;
 
-  get-languages-id: func() -> result<string, string>;
+  record get-languages-id-params {
+    /// ID of the language
+    id: string
+  }
+  get-languages-id: func(params: get-languages-id-params) -> result<string, string>;
 
 }
 
@@ -26,46 +36,158 @@ interface authentication {
 }
 
 interface movies {
-  get-movies-id: func() -> result<string, string>;
+  record get-movies-id-params {
+    /// ID of the movie
+    id: string,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-movies-id: func(params: get-movies-id-params) -> result<string, string>;
 
-  get-movieupdates: func() -> result<string, string>;
+  record get-movieupdates-params {
+    /// Epoch time to start your date range.
+    since: string
+  }
+  get-movieupdates: func(params: get-movieupdates-params) -> result<string, string>;
 
 }
 
 interface search {
-  get-search-series: func() -> result<string, string>;
+  record get-search-series-params {
+    /// Name of the series to search for.
+    name: option<string>,
+    /// IMDB id of the series
+    imdb-id: option<string>,
+    /// Zap2it ID of the series to search for.
+    zap2it-id: option<string>,
+    /// Slug from site URL of series (https://www.thetvdb.com/series/$SLUG)
+    slug: option<string>,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-search-series: func(params: get-search-series-params) -> result<string, string>;
 
   get-search-series-params-v2: func() -> result<string, string>;
 
 }
 
 interface series {
-  get-series-id: func() -> result<string, string>;
+  record get-series-id-params {
+    /// ID of the series
+    id: string,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-series-id: func(params: get-series-id-params) -> result<string, string>;
 
-  get-series-id-actors: func() -> result<string, string>;
+  record get-series-id-actors-params {
+    /// ID of the series
+    id: string
+  }
+  get-series-id-actors: func(params: get-series-id-actors-params) -> result<string, string>;
 
-  get-series-id-episodes: func() -> result<string, string>;
+  record get-series-id-episodes-params {
+    /// ID of the series
+    id: string,
+    /// Page of results to fetch. Defaults to page 1 if not provided.
+    page: option<string>
+  }
+  get-series-id-episodes: func(params: get-series-id-episodes-params) -> result<string, string>;
 
-  get-series-id-episodes-query: func() -> result<string, string>;
+  record get-series-id-episodes-query-params {
+    /// ID of the series
+    id: string,
+    /// Absolute number of the episode
+    absolute-number: option<string>,
+    /// Aired season number
+    aired-season: option<string>,
+    /// Aired episode number
+    aired-episode: option<string>,
+    /// DVD season number
+    dvd-season: option<string>,
+    /// DVD episode number
+    dvd-episode: option<string>,
+    /// IMDB id of the series
+    imdb-id: option<string>,
+    /// Page of results to fetch. Defaults to page 1 if not provided.
+    page: option<string>,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-series-id-episodes-query: func(params: get-series-id-episodes-query-params) -> result<string, string>;
 
-  get-series-id-episodes-query-params-v2: func() -> result<string, string>;
+  record get-series-id-episodes-query-params-v2-params {
+    /// ID of the series
+    id: string
+  }
+  get-series-id-episodes-query-params-v2: func(params: get-series-id-episodes-query-params-v2-params) -> result<string, string>;
 
-  get-series-id-episodes-summary: func() -> result<string, string>;
+  record get-series-id-episodes-summary-params {
+    /// ID of the series
+    id: string
+  }
+  get-series-id-episodes-summary: func(params: get-series-id-episodes-summary-params) -> result<string, string>;
 
-  get-series-id-filter: func() -> result<string, string>;
+  record get-series-id-filter-params {
+    /// ID of the series
+    id: string,
+    /// Comma-separated list of keys to filter by
+    keys: string,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-series-id-filter: func(params: get-series-id-filter-params) -> result<string, string>;
 
-  get-series-id-filter-params-v2: func() -> result<string, string>;
+  record get-series-id-filter-params-v2-params {
+    /// ID of the series
+    id: string,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-series-id-filter-params-v2: func(params: get-series-id-filter-params-v2-params) -> result<string, string>;
 
-  get-series-id-images: func() -> result<string, string>;
+  record get-series-id-images-params {
+    /// ID of the series
+    id: string,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-series-id-images: func(params: get-series-id-images-params) -> result<string, string>;
 
-  get-series-id-images-query: func() -> result<string, string>;
+  record get-series-id-images-query-params {
+    /// ID of the series
+    id: string,
+    /// Type of image you're querying for (fanart, poster, etc. See ../images/query/params for more details).
+    key-type: option<string>,
+    /// Resolution to filter by (1280x1024, for example)
+    resolution: option<string>,
+    /// Subkey for the above query keys. See /series/{id}/images/query/params for more information
+    sub-key: option<string>,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-series-id-images-query: func(params: get-series-id-images-query-params) -> result<string, string>;
 
-  get-series-id-images-query-params-v2: func() -> result<string, string>;
+  record get-series-id-images-query-params-v2-params {
+    /// ID of the series
+    id: string,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-series-id-images-query-params-v2: func(params: get-series-id-images-query-params-v2-params) -> result<string, string>;
 
 }
 
 interface updates {
-  get-updated-query: func() -> result<string, string>;
+  record get-updated-query-params {
+    /// Epoch time to start your date range.
+    from-time: string,
+    /// Epoch time to end your date range. Must be one week from `fromTime`.
+    to-time: option<string>,
+    /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
+    accept-language: option<string>
+  }
+  get-updated-query: func(params: get-updated-query-params) -> result<string, string>;
 
   get-updated-query-params-v2: func() -> result<string, string>;
 
@@ -76,19 +198,45 @@ interface users {
 
   get-user-favorites: func() -> result<string, string>;
 
-  put-user-favorites-id: func() -> result<string, string>;
+  record put-user-favorites-id-params {
+    /// ID of the series
+    id: string
+  }
+  put-user-favorites-id: func(params: put-user-favorites-id-params) -> result<string, string>;
 
-  delete-user-favorites-id: func() -> result<string, string>;
+  record delete-user-favorites-id-params {
+    /// ID of the series
+    id: string
+  }
+  delete-user-favorites-id: func(params: delete-user-favorites-id-params) -> result<string, string>;
 
   get-user-ratings: func() -> result<string, string>;
 
-  get-user-ratings-query: func() -> result<string, string>;
+  record get-user-ratings-query-params {
+    /// Item to query. Can be either 'series', 'episode', or 'banner'
+    item-type: option<string>
+  }
+  get-user-ratings-query: func(params: get-user-ratings-query-params) -> result<string, string>;
 
   get-user-ratings-query-params-v2: func() -> result<string, string>;
 
-  delete-user-ratings-item-type-item-id: func() -> result<string, string>;
+  record delete-user-ratings-item-type-item-id-params {
+    /// Item to update. Can be either 'series', 'episode', or 'image'
+    item-type: string,
+    /// ID of the ratings record that you wish to modify
+    item-id: string
+  }
+  delete-user-ratings-item-type-item-id: func(params: delete-user-ratings-item-type-item-id-params) -> result<string, string>;
 
-  put-user-ratings-item-type-item-id-item-rating: func() -> result<string, string>;
+  record put-user-ratings-item-type-item-id-item-rating-params {
+    /// Item to update. Can be either 'series', 'episode', or 'image'
+    item-type: string,
+    /// ID of the ratings record that you wish to modify
+    item-id: string,
+    /// The updated rating number
+    item-rating: string
+  }
+  put-user-ratings-item-type-item-id-item-rating: func(params: put-user-ratings-item-type-item-id-item-rating-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

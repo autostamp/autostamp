@@ -11,8 +11,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:mastercard@0.2.1` |
-| Published version | `0.2.1+mastercard-1.0` |
+| Package | `autostamp:mastercard@0.3.0` |
+| Published version | `0.3.0+mastercard-1.0` |
 | Tag filter | all tags |
 | Operations generated | 1 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

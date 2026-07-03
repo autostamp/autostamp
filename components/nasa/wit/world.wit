@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `api_key` | query `api_key` |
-package autostamp:nasa@0.2.1;
+package autostamp:nasa@0.3.0;
 
 interface request-tag {
   /// Returns images

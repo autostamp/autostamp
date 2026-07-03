@@ -620,7 +620,7 @@ const OP_PAYMENTS_RETRIEVE_ALL_PAYMENT_CREDITOR_ACCOUNTS: OpSpec = OpSpec {
     ],
 };
 
-const OP_PAYMENTS_PAYMENTS_CREDITORS_LIST: OpSpec = OpSpec {
+const OP_PAYMENTS_CREDITORS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/v2/payments/creditors/",
     fields: &[
@@ -638,7 +638,7 @@ const OP_PAYMENTS_PAYMENTS_CREDITORS_LIST: OpSpec = OpSpec {
     ],
 };
 
-const OP_PAYMENTS_PAYMENTS_CREDITORS_CREATE: OpSpec = OpSpec {
+const OP_PAYMENTS_CREDITORS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/api/v2/payments/creditors/",
     fields: &[
@@ -658,7 +658,7 @@ const OP_PAYMENTS_PAYMENTS_CREDITORS_CREATE: OpSpec = OpSpec {
     ],
 };
 
-const OP_PAYMENTS_PAYMENTS_CREDITORS_RETRIEVE: OpSpec = OpSpec {
+const OP_PAYMENTS_CREDITORS_RETRIEVE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/v2/payments/creditors/{id}/",
     fields: &[
@@ -669,7 +669,7 @@ const OP_PAYMENTS_PAYMENTS_CREDITORS_RETRIEVE: OpSpec = OpSpec {
     ],
 };
 
-const OP_PAYMENTS_PAYMENTS_CREDITORS_DESTROY: OpSpec = OpSpec {
+const OP_PAYMENTS_CREDITORS_DESTROY: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/api/v2/payments/creditors/{id}/",
     fields: &[
@@ -713,7 +713,7 @@ const OP_PAYMENTS_DELETE_PERIODIC_PAYMENT: OpSpec = OpSpec {
     ],
 };
 
-const OP_PAYMENTS_PAYMENTS_SUBMIT_CREATE: OpSpec = OpSpec {
+const OP_PAYMENTS_SUBMIT_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/api/v2/payments/{id}/submit/",
     fields: &[
@@ -786,7 +786,7 @@ fn iface_payments__create_payment_params__to_json(p: &iface_payments::CreatePaym
     Value::Object(m)
 }
 
-fn iface_payments__payments_creditors_list_params__to_json(p: &iface_payments::PaymentsCreditorsListParams) -> Value {
+fn iface_payments__creditors_list_params__to_json(p: &iface_payments::CreditorsListParams) -> Value {
     let mut m = Map::new();
     m.insert("account".into(), match (&p.account) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("address_country".into(), match (&p.address_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -799,7 +799,7 @@ fn iface_payments__payments_creditors_list_params__to_json(p: &iface_payments::P
     Value::Object(m)
 }
 
-fn iface_payments__payments_creditors_create_params__to_json(p: &iface_payments::PaymentsCreditorsCreateParams) -> Value {
+fn iface_payments__creditors_create_params__to_json(p: &iface_payments::CreditorsCreateParams) -> Value {
     let mut m = Map::new();
     m.insert("account".into(), Value::String((&p.account).clone()));
     m.insert("address_country".into(), match (&p.address_country) { Some(v) => iface_payments__address_country_enum__to_json(v), None => Value::Null });
@@ -814,13 +814,13 @@ fn iface_payments__payments_creditors_create_params__to_json(p: &iface_payments:
     Value::Object(m)
 }
 
-fn iface_payments__payments_creditors_retrieve_params__to_json(p: &iface_payments::PaymentsCreditorsRetrieveParams) -> Value {
+fn iface_payments__creditors_retrieve_params__to_json(p: &iface_payments::CreditorsRetrieveParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
-fn iface_payments__payments_creditors_destroy_params__to_json(p: &iface_payments::PaymentsCreditorsDestroyParams) -> Value {
+fn iface_payments__creditors_destroy_params__to_json(p: &iface_payments::CreditorsDestroyParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
@@ -844,7 +844,7 @@ fn iface_payments__delete_periodic_payment_params__to_json(p: &iface_payments::D
     Value::Object(m)
 }
 
-fn iface_payments__payments_submit_create_params__to_json(p: &iface_payments::PaymentsSubmitCreateParams) -> Value {
+fn iface_payments__submit_create_params__to_json(p: &iface_payments::SubmitCreateParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("creditor_account".into(), match (&p.creditor_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -871,21 +871,21 @@ impl iface_payments::Guest for crate::Component {
     fn retrieve_all_payment_creditor_accounts() -> Result<String, String> {
         dispatch(&OP_PAYMENTS_RETRIEVE_ALL_PAYMENT_CREDITOR_ACCOUNTS, Value::Object(Map::new()))
     }
-    fn payments_creditors_list(params: iface_payments::PaymentsCreditorsListParams) -> Result<String, String> {
-        let json = iface_payments__payments_creditors_list_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_PAYMENTS_CREDITORS_LIST, json)
+    fn creditors_list(params: iface_payments::CreditorsListParams) -> Result<String, String> {
+        let json = iface_payments__creditors_list_params__to_json(&params);
+        dispatch(&OP_PAYMENTS_CREDITORS_LIST, json)
     }
-    fn payments_creditors_create(params: iface_payments::PaymentsCreditorsCreateParams) -> Result<String, String> {
-        let json = iface_payments__payments_creditors_create_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_PAYMENTS_CREDITORS_CREATE, json)
+    fn creditors_create(params: iface_payments::CreditorsCreateParams) -> Result<String, String> {
+        let json = iface_payments__creditors_create_params__to_json(&params);
+        dispatch(&OP_PAYMENTS_CREDITORS_CREATE, json)
     }
-    fn payments_creditors_retrieve(params: iface_payments::PaymentsCreditorsRetrieveParams) -> Result<String, String> {
-        let json = iface_payments__payments_creditors_retrieve_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_PAYMENTS_CREDITORS_RETRIEVE, json)
+    fn creditors_retrieve(params: iface_payments::CreditorsRetrieveParams) -> Result<String, String> {
+        let json = iface_payments__creditors_retrieve_params__to_json(&params);
+        dispatch(&OP_PAYMENTS_CREDITORS_RETRIEVE, json)
     }
-    fn payments_creditors_destroy(params: iface_payments::PaymentsCreditorsDestroyParams) -> Result<String, String> {
-        let json = iface_payments__payments_creditors_destroy_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_PAYMENTS_CREDITORS_DESTROY, json)
+    fn creditors_destroy(params: iface_payments::CreditorsDestroyParams) -> Result<String, String> {
+        let json = iface_payments__creditors_destroy_params__to_json(&params);
+        dispatch(&OP_PAYMENTS_CREDITORS_DESTROY, json)
     }
     fn list_minimum_required_fields_for_institution(params: iface_payments::ListMinimumRequiredFieldsForInstitutionParams) -> Result<String, String> {
         let json = iface_payments__list_minimum_required_fields_for_institution_params__to_json(&params);
@@ -899,9 +899,9 @@ impl iface_payments::Guest for crate::Component {
         let json = iface_payments__delete_periodic_payment_params__to_json(&params);
         dispatch(&OP_PAYMENTS_DELETE_PERIODIC_PAYMENT, json)
     }
-    fn payments_submit_create(params: iface_payments::PaymentsSubmitCreateParams) -> Result<String, String> {
-        let json = iface_payments__payments_submit_create_params__to_json(&params);
-        dispatch(&OP_PAYMENTS_PAYMENTS_SUBMIT_CREATE, json)
+    fn submit_create(params: iface_payments::SubmitCreateParams) -> Result<String, String> {
+        let json = iface_payments__submit_create_params__to_json(&params);
+        dispatch(&OP_PAYMENTS_SUBMIT_CREATE, json)
     }
 }
 use crate::exports::autostamp::nordigen::requisitions as iface_requisitions;

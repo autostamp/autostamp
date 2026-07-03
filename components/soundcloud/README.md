@@ -21,8 +21,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:soundcloud@0.2.1` |
-| Published version | `0.2.1+soundcloud-1.0.0` |
+| Package | `autostamp:soundcloud@0.3.0` |
+| Published version | `0.3.0+soundcloud-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 59 |
-| Prune duplicate credential fields | enabled — not triggered |
+| Infer API-key credentials | enabled — not triggered |
+| Prune duplicate credential fields | enabled — **triggered**, 1 field pruned |

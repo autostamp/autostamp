@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `ApiKey` | header `Api-Key` |
-package autostamp:pinecone@0.2.1;
+package autostamp:pinecone@0.3.0;
 
 interface index-operations {
   /// The unique name of a collection.

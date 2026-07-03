@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:notion"
-version = "0.2.1+notion-1.0.0"
+version = "0.3.0+notion-1.0.0"
 registry = "ghcr.io/autostamp/notion"
 kind = "component"
 file = "build/notion.wasm"

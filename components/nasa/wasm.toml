@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:nasa"
-version = "0.2.1+nasa-1.0.0"
+version = "0.3.0+nasa-1.0.0"
 registry = "ghcr.io/autostamp/nasa"
 kind = "component"
 file = "build/nasa.wasm"

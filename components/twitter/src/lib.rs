@@ -290,6 +290,7 @@ const OP_COMPLIANCE_LIST_BATCH_COMPLIANCE_JOBS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "type", location: FieldLocation::Query },
         FieldSpec { snake: "status", location: FieldLocation::Query },
+        FieldSpec { snake: "compliance_job_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -314,6 +315,7 @@ const OP_COMPLIANCE_GET_BATCH_COMPLIANCE_JOB: OpSpec = OpSpec {
     path_template: "/2/compliance/jobs/{id}",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "compliance_job_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -377,7 +379,22 @@ fn iface_compliance__list_batch_compliance_jobs_status_enum__to_str(e: &iface_co
     }
 }
 
-fn iface_compliance__compliance_job_name__to_json(p: &iface_compliance::ComplianceJobName) -> Value {
+fn iface_compliance__list_batch_compliance_jobs_compliance_job_fields_item_enum__to_str(e: &iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum) -> &'static str {
+    match e {
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::CreatedAt => "created_at",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::DownloadExpiresAt => "download_expires_at",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::DownloadUrl => "download_url",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::Id => "id",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::Name => "name",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::Resumable => "resumable",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::Status => "status",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::TypeOp => "type",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::UploadExpiresAt => "upload_expires_at",
+        iface_compliance::ListBatchComplianceJobsComplianceJobFieldsItemEnum::UploadUrl => "upload_url",
+    }
+}
+
+fn iface_compliance__job_name__to_json(p: &iface_compliance::JobName) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
@@ -387,12 +404,13 @@ fn iface_compliance__list_batch_compliance_jobs_params__to_json(p: &iface_compli
     let mut m = Map::new();
     m.insert("type".into(), Value::String(iface_compliance__list_batch_compliance_jobs_type_op_enum__to_str(&p.type_op).into()));
     m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_compliance__list_batch_compliance_jobs_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("compliance_job_fields".into(), match (&p.compliance_job_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_compliance__list_batch_compliance_jobs_compliance_job_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_compliance__create_batch_compliance_job_params__to_json(p: &iface_compliance::CreateBatchComplianceJobParams) -> Value {
     let mut m = Map::new();
-    m.insert("name".into(), match (&p.name) { Some(v) => iface_compliance__compliance_job_name__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => iface_compliance__job_name__to_json(v), None => Value::Null });
     m.insert("resumable".into(), match (&p.resumable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("type".into(), Value::String(iface_compliance__list_batch_compliance_jobs_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
@@ -401,6 +419,7 @@ fn iface_compliance__create_batch_compliance_job_params__to_json(p: &iface_compl
 fn iface_compliance__get_batch_compliance_job_params__to_json(p: &iface_compliance::GetBatchComplianceJobParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("compliance_job_fields".into(), match (&p.compliance_job_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_compliance__list_batch_compliance_jobs_compliance_job_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -479,6 +498,11 @@ const OP_DIRECT_MESSAGES_GET_DM_CONVERSATIONS_WITH_PARTICIPANT_ID_DM_EVENTS: OpS
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "event_types", location: FieldLocation::Query },
+        FieldSpec { snake: "dm_event_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -517,6 +541,11 @@ const OP_DIRECT_MESSAGES_GET_DM_CONVERSATIONS_ID_DM_EVENTS: OpSpec = OpSpec {
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "event_types", location: FieldLocation::Query },
+        FieldSpec { snake: "dm_event_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -530,6 +559,11 @@ const OP_DIRECT_MESSAGES_GET_DM_EVENTS: OpSpec = OpSpec {
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "event_types", location: FieldLocation::Query },
+        FieldSpec { snake: "dm_event_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -547,6 +581,94 @@ fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_eve
         iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsEventTypesItemEnum::MessageCreate => "MessageCreate",
         iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsEventTypesItemEnum::ParticipantsJoin => "ParticipantsJoin",
         iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsEventTypesItemEnum::ParticipantsLeave => "ParticipantsLeave",
+    }
+}
+
+fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_dm_event_fields_item_enum__to_str(e: &iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum) -> &'static str {
+    match e {
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::Attachments => "attachments",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::CreatedAt => "created_at",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::DmConversationId => "dm_conversation_id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::EventType => "event_type",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::Id => "id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::ParticipantIds => "participant_ids",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::ReferencedTweets => "referenced_tweets",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::SenderId => "sender_id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsDmEventFieldsItemEnum::Text => "text",
+    }
+}
+
+fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_expansions_item_enum__to_str(e: &iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsExpansionsItemEnum::AttachmentsMediaKeys => "attachments.media_keys",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsExpansionsItemEnum::ParticipantIds => "participant_ids",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsExpansionsItemEnum::ReferencedTweetsId => "referenced_tweets.id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsExpansionsItemEnum::SenderId => "sender_id",
+    }
+}
+
+fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_media_fields_item_enum__to_str(e: &iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum) -> &'static str {
+    match e {
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::AltText => "alt_text",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::DurationMs => "duration_ms",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::Height => "height",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::MediaKey => "media_key",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::PreviewImageUrl => "preview_image_url",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::TypeOp => "type",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::Url => "url",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::Variants => "variants",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsMediaFieldsItemEnum::Width => "width",
+    }
+}
+
+fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_user_fields_item_enum__to_str(e: &iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum) -> &'static str {
+    match e {
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::CreatedAt => "created_at",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Description => "description",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Entities => "entities",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Id => "id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Location => "location",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Name => "name",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::PinnedTweetId => "pinned_tweet_id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::ProfileImageUrl => "profile_image_url",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Protected => "protected",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Url => "url",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Username => "username",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Verified => "verified",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::VerifiedType => "verified_type",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsUserFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_tweet_fields_item_enum__to_str(e: &iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum) -> &'static str {
+    match e {
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Attachments => "attachments",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::AuthorId => "author_id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::ContextAnnotations => "context_annotations",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::ConversationId => "conversation_id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::CreatedAt => "created_at",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::EditControls => "edit_controls",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Entities => "entities",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Geo => "geo",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Id => "id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Lang => "lang",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::PossiblySensitive => "possibly_sensitive",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::ReferencedTweets => "referenced_tweets",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::ReplySettings => "reply_settings",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Source => "source",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Text => "text",
+        iface_direct_messages::GetDmConversationsWithParticipantIdDmEventsTweetFieldsItemEnum::Withheld => "withheld",
     }
 }
 
@@ -582,6 +704,11 @@ fn iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_par
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_direct_messages__pagination_token32__to_json(v), None => Value::Null });
     m.insert("event_types".into(), match (&p.event_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_event_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("dm_event_fields".into(), match (&p.dm_event_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_dm_event_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -605,6 +732,11 @@ fn iface_direct_messages__get_dm_conversations_id_dm_events_params__to_json(p: &
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_direct_messages__pagination_token32__to_json(v), None => Value::Null });
     m.insert("event_types".into(), match (&p.event_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_event_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("dm_event_fields".into(), match (&p.dm_event_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_dm_event_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -613,6 +745,11 @@ fn iface_direct_messages__get_dm_events_params__to_json(p: &iface_direct_message
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_direct_messages__pagination_token32__to_json(v), None => Value::Null });
     m.insert("event_types".into(), match (&p.event_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_event_types_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("dm_event_fields".into(), match (&p.dm_event_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_dm_event_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_direct_messages__get_dm_conversations_with_participant_id_dm_events_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -662,6 +799,9 @@ const OP_LISTS_LIST_ID_GET: OpSpec = OpSpec {
     path_template: "/2/lists/{id}",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -724,6 +864,9 @@ const OP_LISTS_USER_FOLLOWED_LISTS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -761,6 +904,9 @@ const OP_LISTS_GET_USER_LIST_MEMBERSHIPS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -774,6 +920,9 @@ const OP_LISTS_LIST_USER_OWNED_LISTS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -785,6 +934,9 @@ const OP_LISTS_LIST_USER_PINNED_LISTS: OpSpec = OpSpec {
     path_template: "/2/users/{id}/pinned_lists",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -815,6 +967,45 @@ const OP_LISTS_LIST_USER_UNPIN: OpSpec = OpSpec {
     ],
 };
 
+fn iface_lists__list_id_get_list_fields_item_enum__to_str(e: &iface_lists::ListIdGetListFieldsItemEnum) -> &'static str {
+    match e {
+        iface_lists::ListIdGetListFieldsItemEnum::CreatedAt => "created_at",
+        iface_lists::ListIdGetListFieldsItemEnum::Description => "description",
+        iface_lists::ListIdGetListFieldsItemEnum::FollowerCount => "follower_count",
+        iface_lists::ListIdGetListFieldsItemEnum::Id => "id",
+        iface_lists::ListIdGetListFieldsItemEnum::MemberCount => "member_count",
+        iface_lists::ListIdGetListFieldsItemEnum::Name => "name",
+        iface_lists::ListIdGetListFieldsItemEnum::OwnerId => "owner_id",
+        iface_lists::ListIdGetListFieldsItemEnum::Private => "private",
+    }
+}
+
+fn iface_lists__list_id_get_expansions_item_enum__to_str(e: &iface_lists::ListIdGetExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_lists::ListIdGetExpansionsItemEnum::OwnerId => "owner_id",
+    }
+}
+
+fn iface_lists__list_id_get_user_fields_item_enum__to_str(e: &iface_lists::ListIdGetUserFieldsItemEnum) -> &'static str {
+    match e {
+        iface_lists::ListIdGetUserFieldsItemEnum::CreatedAt => "created_at",
+        iface_lists::ListIdGetUserFieldsItemEnum::Description => "description",
+        iface_lists::ListIdGetUserFieldsItemEnum::Entities => "entities",
+        iface_lists::ListIdGetUserFieldsItemEnum::Id => "id",
+        iface_lists::ListIdGetUserFieldsItemEnum::Location => "location",
+        iface_lists::ListIdGetUserFieldsItemEnum::Name => "name",
+        iface_lists::ListIdGetUserFieldsItemEnum::PinnedTweetId => "pinned_tweet_id",
+        iface_lists::ListIdGetUserFieldsItemEnum::ProfileImageUrl => "profile_image_url",
+        iface_lists::ListIdGetUserFieldsItemEnum::Protected => "protected",
+        iface_lists::ListIdGetUserFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_lists::ListIdGetUserFieldsItemEnum::Url => "url",
+        iface_lists::ListIdGetUserFieldsItemEnum::Username => "username",
+        iface_lists::ListIdGetUserFieldsItemEnum::Verified => "verified",
+        iface_lists::ListIdGetUserFieldsItemEnum::VerifiedType => "verified_type",
+        iface_lists::ListIdGetUserFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
 fn iface_lists__user_id__to_json(p: &iface_lists::UserId) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
@@ -844,6 +1035,9 @@ fn iface_lists__list_id_create_params__to_json(p: &iface_lists::ListIdCreatePara
 fn iface_lists__list_id_get_params__to_json(p: &iface_lists::ListIdGetParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("list_fields".into(), match (&p.list_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_list_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -881,6 +1075,9 @@ fn iface_lists__user_followed_lists_params__to_json(p: &iface_lists::UserFollowe
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_lists__pagination_token_long__to_json(v), None => Value::Null });
+    m.insert("list_fields".into(), match (&p.list_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_list_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -903,6 +1100,9 @@ fn iface_lists__get_user_list_memberships_params__to_json(p: &iface_lists::GetUs
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_lists__pagination_token_long__to_json(v), None => Value::Null });
+    m.insert("list_fields".into(), match (&p.list_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_list_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -911,12 +1111,18 @@ fn iface_lists__list_user_owned_lists_params__to_json(p: &iface_lists::ListUserO
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_lists__pagination_token_long__to_json(v), None => Value::Null });
+    m.insert("list_fields".into(), match (&p.list_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_list_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_lists__list_user_pinned_lists_params__to_json(p: &iface_lists::ListUserPinnedListsParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("list_fields".into(), match (&p.list_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_list_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_lists__list_id_get_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1001,6 +1207,9 @@ const OP_USERS_LIST_GET_FOLLOWERS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1014,6 +1223,9 @@ const OP_USERS_LIST_GET_MEMBERS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1027,6 +1239,9 @@ const OP_USERS_TWEETS_ID_LIKING_USERS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1040,6 +1255,9 @@ const OP_USERS_TWEETS_ID_RETWEETING_USERS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1051,6 +1269,9 @@ const OP_USERS_FIND_USERS_BY_ID: OpSpec = OpSpec {
     path_template: "/2/users",
     fields: &[
         FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1062,6 +1283,9 @@ const OP_USERS_FIND_USERS_BY_USERNAME: OpSpec = OpSpec {
     path_template: "/2/users/by",
     fields: &[
         FieldSpec { snake: "usernames", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1073,6 +1297,9 @@ const OP_USERS_FIND_USER_BY_USERNAME: OpSpec = OpSpec {
     path_template: "/2/users/by/username/{username}",
     fields: &[
         FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1083,6 +1310,9 @@ const OP_USERS_FIND_MY_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/2/users/me",
     fields: &[
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -1094,26 +1324,32 @@ const OP_USERS_FIND_USER_BY_ID: OpSpec = OpSpec {
     path_template: "/2/users/{id}",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_USERS_USERS_ID_BLOCKING: OpSpec = OpSpec {
+const OP_USERS_ID_BLOCKING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/2/users/{id}/blocking",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_USERS_USERS_ID_BLOCK: OpSpec = OpSpec {
+const OP_USERS_ID_BLOCK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/2/users/{id}/blocking",
     fields: &[
@@ -1125,33 +1361,39 @@ const OP_USERS_USERS_ID_BLOCK: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_ID_FOLLOWERS: OpSpec = OpSpec {
+const OP_USERS_ID_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/2/users/{id}/followers",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_USERS_USERS_ID_FOLLOWING: OpSpec = OpSpec {
+const OP_USERS_ID_FOLLOWING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/2/users/{id}/following",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_USERS_USERS_ID_FOLLOW: OpSpec = OpSpec {
+const OP_USERS_ID_FOLLOW: OpSpec = OpSpec {
     method: "POST",
     path_template: "/2/users/{id}/following",
     fields: &[
@@ -1163,20 +1405,23 @@ const OP_USERS_USERS_ID_FOLLOW: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_ID_MUTING: OpSpec = OpSpec {
+const OP_USERS_ID_MUTING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/2/users/{id}/muting",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_USERS_USERS_ID_MUTE: OpSpec = OpSpec {
+const OP_USERS_ID_MUTE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/2/users/{id}/muting",
     fields: &[
@@ -1188,7 +1433,7 @@ const OP_USERS_USERS_ID_MUTE: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_ID_UNBLOCK: OpSpec = OpSpec {
+const OP_USERS_ID_UNBLOCK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/2/users/{source_user_id}/blocking/{target_user_id}",
     fields: &[
@@ -1200,7 +1445,7 @@ const OP_USERS_USERS_ID_UNBLOCK: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_ID_UNFOLLOW: OpSpec = OpSpec {
+const OP_USERS_ID_UNFOLLOW: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/2/users/{source_user_id}/following/{target_user_id}",
     fields: &[
@@ -1212,7 +1457,7 @@ const OP_USERS_USERS_ID_UNFOLLOW: OpSpec = OpSpec {
     ],
 };
 
-const OP_USERS_USERS_ID_UNMUTE: OpSpec = OpSpec {
+const OP_USERS_ID_UNMUTE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/2/users/{source_user_id}/muting/{target_user_id}",
     fields: &[
@@ -1223,6 +1468,59 @@ const OP_USERS_USERS_ID_UNMUTE: OpSpec = OpSpec {
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_users__list_get_followers_user_fields_item_enum__to_str(e: &iface_users::ListGetFollowersUserFieldsItemEnum) -> &'static str {
+    match e {
+        iface_users::ListGetFollowersUserFieldsItemEnum::CreatedAt => "created_at",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Description => "description",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Entities => "entities",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Id => "id",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Location => "location",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Name => "name",
+        iface_users::ListGetFollowersUserFieldsItemEnum::PinnedTweetId => "pinned_tweet_id",
+        iface_users::ListGetFollowersUserFieldsItemEnum::ProfileImageUrl => "profile_image_url",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Protected => "protected",
+        iface_users::ListGetFollowersUserFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Url => "url",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Username => "username",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Verified => "verified",
+        iface_users::ListGetFollowersUserFieldsItemEnum::VerifiedType => "verified_type",
+        iface_users::ListGetFollowersUserFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_users__list_get_followers_expansions_item_enum__to_str(e: &iface_users::ListGetFollowersExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_users::ListGetFollowersExpansionsItemEnum::PinnedTweetId => "pinned_tweet_id",
+    }
+}
+
+fn iface_users__list_get_followers_tweet_fields_item_enum__to_str(e: &iface_users::ListGetFollowersTweetFieldsItemEnum) -> &'static str {
+    match e {
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Attachments => "attachments",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::AuthorId => "author_id",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::ContextAnnotations => "context_annotations",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::ConversationId => "conversation_id",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::CreatedAt => "created_at",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::EditControls => "edit_controls",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Entities => "entities",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Geo => "geo",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Id => "id",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Lang => "lang",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::PossiblySensitive => "possibly_sensitive",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::ReferencedTweets => "referenced_tweets",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::ReplySettings => "reply_settings",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Source => "source",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Text => "text",
+        iface_users::ListGetFollowersTweetFieldsItemEnum::Withheld => "withheld",
+    }
+}
 
 fn iface_users__pagination_token_long__to_json(p: &iface_users::PaginationTokenLong) -> Value {
     let mut m = Map::new();
@@ -1253,6 +1551,9 @@ fn iface_users__list_get_followers_params__to_json(p: &iface_users::ListGetFollo
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token_long__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1261,6 +1562,9 @@ fn iface_users__list_get_members_params__to_json(p: &iface_users::ListGetMembers
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token_long__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1269,6 +1573,9 @@ fn iface_users__tweets_id_liking_users_params__to_json(p: &iface_users::TweetsId
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1277,101 +1584,136 @@ fn iface_users__tweets_id_retweeting_users_params__to_json(p: &iface_users::Twee
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_users__find_users_by_id_params__to_json(p: &iface_users::FindUsersByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::Array((&p.ids).iter().map(|v| iface_users__user_id__to_json(v)).collect()));
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_users__find_users_by_username_params__to_json(p: &iface_users::FindUsersByUsernameParams) -> Value {
     let mut m = Map::new();
     m.insert("usernames".into(), Value::Array((&p.usernames).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_users__find_user_by_username_params__to_json(p: &iface_users::FindUserByUsernameParams) -> Value {
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__find_my_user_params__to_json(p: &iface_users::FindMyUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_users__find_user_by_id_params__to_json(p: &iface_users::FindUserByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__users_id_blocking_params__to_json(p: &iface_users::UsersIdBlockingParams) -> Value {
+fn iface_users__id_blocking_params__to_json(p: &iface_users::IdBlockingParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token32__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__users_id_block_params__to_json(p: &iface_users::UsersIdBlockParams) -> Value {
+fn iface_users__id_block_params__to_json(p: &iface_users::IdBlockParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("target_user_id".into(), iface_users__user_id__to_json(&p.target_user_id));
     Value::Object(m)
 }
 
-fn iface_users__users_id_followers_params__to_json(p: &iface_users::UsersIdFollowersParams) -> Value {
+fn iface_users__id_followers_params__to_json(p: &iface_users::IdFollowersParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token32__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__users_id_following_params__to_json(p: &iface_users::UsersIdFollowingParams) -> Value {
+fn iface_users__id_following_params__to_json(p: &iface_users::IdFollowingParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token32__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__users_id_follow_params__to_json(p: &iface_users::UsersIdFollowParams) -> Value {
+fn iface_users__id_follow_params__to_json(p: &iface_users::IdFollowParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("target_user_id".into(), iface_users__user_id__to_json(&p.target_user_id));
     Value::Object(m)
 }
 
-fn iface_users__users_id_muting_params__to_json(p: &iface_users::UsersIdMutingParams) -> Value {
+fn iface_users__id_muting_params__to_json(p: &iface_users::IdMutingParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_users__pagination_token_long__to_json(v), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_users__list_get_followers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_users__users_id_mute_params__to_json(p: &iface_users::UsersIdMuteParams) -> Value {
+fn iface_users__id_mute_params__to_json(p: &iface_users::IdMuteParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("target_user_id".into(), iface_users__user_id__to_json(&p.target_user_id));
     Value::Object(m)
 }
 
-fn iface_users__users_id_unblock_params__to_json(p: &iface_users::UsersIdUnblockParams) -> Value {
+fn iface_users__id_unblock_params__to_json(p: &iface_users::IdUnblockParams) -> Value {
     let mut m = Map::new();
     m.insert("source_user_id".into(), Value::String((&p.source_user_id).clone()));
     m.insert("target_user_id".into(), Value::String((&p.target_user_id).clone()));
     Value::Object(m)
 }
 
-fn iface_users__users_id_unfollow_params__to_json(p: &iface_users::UsersIdUnfollowParams) -> Value {
+fn iface_users__id_unfollow_params__to_json(p: &iface_users::IdUnfollowParams) -> Value {
     let mut m = Map::new();
     m.insert("source_user_id".into(), Value::String((&p.source_user_id).clone()));
     m.insert("target_user_id".into(), Value::String((&p.target_user_id).clone()));
     Value::Object(m)
 }
 
-fn iface_users__users_id_unmute_params__to_json(p: &iface_users::UsersIdUnmuteParams) -> Value {
+fn iface_users__id_unmute_params__to_json(p: &iface_users::IdUnmuteParams) -> Value {
     let mut m = Map::new();
     m.insert("source_user_id".into(), Value::String((&p.source_user_id).clone()));
     m.insert("target_user_id".into(), Value::String((&p.target_user_id).clone()));
@@ -1407,52 +1749,53 @@ impl iface_users::Guest for crate::Component {
         let json = iface_users__find_user_by_username_params__to_json(&params);
         dispatch(&OP_USERS_FIND_USER_BY_USERNAME, json)
     }
-    fn find_my_user() -> Result<String, String> {
-        dispatch(&OP_USERS_FIND_MY_USER, Value::Object(Map::new()))
+    fn find_my_user(params: iface_users::FindMyUserParams) -> Result<String, String> {
+        let json = iface_users__find_my_user_params__to_json(&params);
+        dispatch(&OP_USERS_FIND_MY_USER, json)
     }
     fn find_user_by_id(params: iface_users::FindUserByIdParams) -> Result<String, String> {
         let json = iface_users__find_user_by_id_params__to_json(&params);
         dispatch(&OP_USERS_FIND_USER_BY_ID, json)
     }
-    fn users_id_blocking(params: iface_users::UsersIdBlockingParams) -> Result<String, String> {
-        let json = iface_users__users_id_blocking_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_BLOCKING, json)
+    fn id_blocking(params: iface_users::IdBlockingParams) -> Result<String, String> {
+        let json = iface_users__id_blocking_params__to_json(&params);
+        dispatch(&OP_USERS_ID_BLOCKING, json)
     }
-    fn users_id_block(params: iface_users::UsersIdBlockParams) -> Result<String, String> {
-        let json = iface_users__users_id_block_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_BLOCK, json)
+    fn id_block(params: iface_users::IdBlockParams) -> Result<String, String> {
+        let json = iface_users__id_block_params__to_json(&params);
+        dispatch(&OP_USERS_ID_BLOCK, json)
     }
-    fn users_id_followers(params: iface_users::UsersIdFollowersParams) -> Result<String, String> {
-        let json = iface_users__users_id_followers_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_FOLLOWERS, json)
+    fn id_followers(params: iface_users::IdFollowersParams) -> Result<String, String> {
+        let json = iface_users__id_followers_params__to_json(&params);
+        dispatch(&OP_USERS_ID_FOLLOWERS, json)
     }
-    fn users_id_following(params: iface_users::UsersIdFollowingParams) -> Result<String, String> {
-        let json = iface_users__users_id_following_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_FOLLOWING, json)
+    fn id_following(params: iface_users::IdFollowingParams) -> Result<String, String> {
+        let json = iface_users__id_following_params__to_json(&params);
+        dispatch(&OP_USERS_ID_FOLLOWING, json)
     }
-    fn users_id_follow(params: iface_users::UsersIdFollowParams) -> Result<String, String> {
-        let json = iface_users__users_id_follow_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_FOLLOW, json)
+    fn id_follow(params: iface_users::IdFollowParams) -> Result<String, String> {
+        let json = iface_users__id_follow_params__to_json(&params);
+        dispatch(&OP_USERS_ID_FOLLOW, json)
     }
-    fn users_id_muting(params: iface_users::UsersIdMutingParams) -> Result<String, String> {
-        let json = iface_users__users_id_muting_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_MUTING, json)
+    fn id_muting(params: iface_users::IdMutingParams) -> Result<String, String> {
+        let json = iface_users__id_muting_params__to_json(&params);
+        dispatch(&OP_USERS_ID_MUTING, json)
     }
-    fn users_id_mute(params: iface_users::UsersIdMuteParams) -> Result<String, String> {
-        let json = iface_users__users_id_mute_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_MUTE, json)
+    fn id_mute(params: iface_users::IdMuteParams) -> Result<String, String> {
+        let json = iface_users__id_mute_params__to_json(&params);
+        dispatch(&OP_USERS_ID_MUTE, json)
     }
-    fn users_id_unblock(params: iface_users::UsersIdUnblockParams) -> Result<String, String> {
-        let json = iface_users__users_id_unblock_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_UNBLOCK, json)
+    fn id_unblock(params: iface_users::IdUnblockParams) -> Result<String, String> {
+        let json = iface_users__id_unblock_params__to_json(&params);
+        dispatch(&OP_USERS_ID_UNBLOCK, json)
     }
-    fn users_id_unfollow(params: iface_users::UsersIdUnfollowParams) -> Result<String, String> {
-        let json = iface_users__users_id_unfollow_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_UNFOLLOW, json)
+    fn id_unfollow(params: iface_users::IdUnfollowParams) -> Result<String, String> {
+        let json = iface_users__id_unfollow_params__to_json(&params);
+        dispatch(&OP_USERS_ID_UNFOLLOW, json)
     }
-    fn users_id_unmute(params: iface_users::UsersIdUnmuteParams) -> Result<String, String> {
-        let json = iface_users__users_id_unmute_params__to_json(&params);
-        dispatch(&OP_USERS_USERS_ID_UNMUTE, json)
+    fn id_unmute(params: iface_users::IdUnmuteParams) -> Result<String, String> {
+        let json = iface_users__id_unmute_params__to_json(&params);
+        dispatch(&OP_USERS_ID_UNMUTE, json)
     }
 }
 use crate::exports::autostamp::twitter::tweets as iface_tweets;
@@ -1464,6 +1807,12 @@ const OP_TWEETS_LISTS_ID_TWEETS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1475,6 +1824,12 @@ const OP_TWEETS_FIND_TWEETS_BY_ID: OpSpec = OpSpec {
     path_template: "/2/tweets",
     fields: &[
         FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1514,6 +1869,7 @@ const OP_TWEETS_TWEET_COUNTS_FULL_ARCHIVE_SEARCH: OpSpec = OpSpec {
         FieldSpec { snake: "next_token", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "granularity", location: FieldLocation::Query },
+        FieldSpec { snake: "search_count_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1532,6 +1888,7 @@ const OP_TWEETS_TWEET_COUNTS_RECENT_SEARCH: OpSpec = OpSpec {
         FieldSpec { snake: "next_token", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "granularity", location: FieldLocation::Query },
+        FieldSpec { snake: "search_count_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1546,6 +1903,12 @@ const OP_TWEETS_GET_TWEETS_FIREHOSE_STREAM: OpSpec = OpSpec {
         FieldSpec { snake: "partition", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1557,6 +1920,12 @@ const OP_TWEETS_SAMPLE_STREAM: OpSpec = OpSpec {
     path_template: "/2/tweets/sample/stream",
     fields: &[
         FieldSpec { snake: "backfill_minutes", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1571,13 +1940,19 @@ const OP_TWEETS_GET_TWEETS_SAMPLE10_STREAM: OpSpec = OpSpec {
         FieldSpec { snake: "partition", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_TWEETS_TWEETS_FULLARCHIVE_SEARCH: OpSpec = OpSpec {
+const OP_TWEETS_FULLARCHIVE_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/2/tweets/search/all",
     fields: &[
@@ -1590,13 +1965,19 @@ const OP_TWEETS_TWEETS_FULLARCHIVE_SEARCH: OpSpec = OpSpec {
         FieldSpec { snake: "next_token", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "sort_order", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
     ],
 };
 
-const OP_TWEETS_TWEETS_RECENT_SEARCH: OpSpec = OpSpec {
+const OP_TWEETS_RECENT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/2/tweets/search/recent",
     fields: &[
@@ -1609,6 +1990,12 @@ const OP_TWEETS_TWEETS_RECENT_SEARCH: OpSpec = OpSpec {
         FieldSpec { snake: "next_token", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "sort_order", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1622,6 +2009,12 @@ const OP_TWEETS_SEARCH_STREAM: OpSpec = OpSpec {
         FieldSpec { snake: "backfill_minutes", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1658,6 +2051,12 @@ const OP_TWEETS_FIND_TWEET_BY_ID: OpSpec = OpSpec {
     path_template: "/2/tweets/{id}",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1683,6 +2082,12 @@ const OP_TWEETS_FIND_TWEETS_THAT_QUOTE_A_TWEET: OpSpec = OpSpec {
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "exclude", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1708,6 +2113,12 @@ const OP_TWEETS_USERS_ID_LIKED_TWEETS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1749,6 +2160,12 @@ const OP_TWEETS_USERS_ID_MENTIONS: OpSpec = OpSpec {
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -1791,6 +2208,12 @@ const OP_TWEETS_USERS_ID_TIMELINE: OpSpec = OpSpec {
         FieldSpec { snake: "exclude", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -1809,11 +2232,119 @@ const OP_TWEETS_USERS_ID_TWEETS: OpSpec = OpSpec {
         FieldSpec { snake: "exclude", location: FieldLocation::Query },
         FieldSpec { snake: "start_time", location: FieldLocation::Query },
         FieldSpec { snake: "end_time", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(e: &iface_tweets::ListsIdTweetsTweetFieldsItemEnum) -> &'static str {
+    match e {
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Attachments => "attachments",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::AuthorId => "author_id",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::ContextAnnotations => "context_annotations",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::ConversationId => "conversation_id",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::CreatedAt => "created_at",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::EditControls => "edit_controls",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Entities => "entities",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Geo => "geo",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Id => "id",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Lang => "lang",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::PossiblySensitive => "possibly_sensitive",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::ReferencedTweets => "referenced_tweets",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::ReplySettings => "reply_settings",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Source => "source",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Text => "text",
+        iface_tweets::ListsIdTweetsTweetFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_tweets__lists_id_tweets_expansions_item_enum__to_str(e: &iface_tweets::ListsIdTweetsExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::AttachmentsMediaKeys => "attachments.media_keys",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::AttachmentsPollIds => "attachments.poll_ids",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::AuthorId => "author_id",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::EntitiesMentionsUsername => "entities.mentions.username",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::GeoPlaceId => "geo.place_id",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::ReferencedTweetsId => "referenced_tweets.id",
+        iface_tweets::ListsIdTweetsExpansionsItemEnum::ReferencedTweetsIdAuthorId => "referenced_tweets.id.author_id",
+    }
+}
+
+fn iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(e: &iface_tweets::ListsIdTweetsMediaFieldsItemEnum) -> &'static str {
+    match e {
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::AltText => "alt_text",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::DurationMs => "duration_ms",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::Height => "height",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::MediaKey => "media_key",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::PreviewImageUrl => "preview_image_url",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::TypeOp => "type",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::Url => "url",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::Variants => "variants",
+        iface_tweets::ListsIdTweetsMediaFieldsItemEnum::Width => "width",
+    }
+}
+
+fn iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(e: &iface_tweets::ListsIdTweetsPollFieldsItemEnum) -> &'static str {
+    match e {
+        iface_tweets::ListsIdTweetsPollFieldsItemEnum::DurationMinutes => "duration_minutes",
+        iface_tweets::ListsIdTweetsPollFieldsItemEnum::EndDatetime => "end_datetime",
+        iface_tweets::ListsIdTweetsPollFieldsItemEnum::Id => "id",
+        iface_tweets::ListsIdTweetsPollFieldsItemEnum::Options => "options",
+        iface_tweets::ListsIdTweetsPollFieldsItemEnum::VotingStatus => "voting_status",
+    }
+}
+
+fn iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(e: &iface_tweets::ListsIdTweetsUserFieldsItemEnum) -> &'static str {
+    match e {
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::CreatedAt => "created_at",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Description => "description",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Entities => "entities",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Id => "id",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Location => "location",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Name => "name",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::PinnedTweetId => "pinned_tweet_id",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::ProfileImageUrl => "profile_image_url",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Protected => "protected",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Url => "url",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Username => "username",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Verified => "verified",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::VerifiedType => "verified_type",
+        iface_tweets::ListsIdTweetsUserFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(e: &iface_tweets::ListsIdTweetsPlaceFieldsItemEnum) -> &'static str {
+    match e {
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::ContainedWithin => "contained_within",
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::Country => "country",
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::CountryCode => "country_code",
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::FullName => "full_name",
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::Geo => "geo",
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::Id => "id",
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::Name => "name",
+        iface_tweets::ListsIdTweetsPlaceFieldsItemEnum::PlaceType => "place_type",
+    }
+}
 
 fn iface_tweets__tweet_create_request_poll_reply_settings_enum__to_str(e: &iface_tweets::TweetCreateRequestPollReplySettingsEnum) -> &'static str {
     match e {
@@ -1830,10 +2361,18 @@ fn iface_tweets__tweet_counts_full_archive_search_granularity_enum__to_str(e: &i
     }
 }
 
-fn iface_tweets__tweets_fullarchive_search_sort_order_enum__to_str(e: &iface_tweets::TweetsFullarchiveSearchSortOrderEnum) -> &'static str {
+fn iface_tweets__tweet_counts_full_archive_search_search_count_fields_item_enum__to_str(e: &iface_tweets::TweetCountsFullArchiveSearchSearchCountFieldsItemEnum) -> &'static str {
     match e {
-        iface_tweets::TweetsFullarchiveSearchSortOrderEnum::Recency => "recency",
-        iface_tweets::TweetsFullarchiveSearchSortOrderEnum::Relevancy => "relevancy",
+        iface_tweets::TweetCountsFullArchiveSearchSearchCountFieldsItemEnum::End => "end",
+        iface_tweets::TweetCountsFullArchiveSearchSearchCountFieldsItemEnum::Start => "start",
+        iface_tweets::TweetCountsFullArchiveSearchSearchCountFieldsItemEnum::TweetCount => "tweet_count",
+    }
+}
+
+fn iface_tweets__fullarchive_search_sort_order_enum__to_str(e: &iface_tweets::FullarchiveSearchSortOrderEnum) -> &'static str {
+    match e {
+        iface_tweets::FullarchiveSearchSortOrderEnum::Recency => "recency",
+        iface_tweets::FullarchiveSearchSortOrderEnum::Relevancy => "relevancy",
     }
 }
 
@@ -1913,12 +2452,24 @@ fn iface_tweets__lists_id_tweets_params__to_json(p: &iface_tweets::ListsIdTweets
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tweets__find_tweets_by_id_params__to_json(p: &iface_tweets::FindTweetsByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::Array((&p.ids).iter().map(|v| iface_tweets__tweet_id__to_json(v)).collect()));
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1948,6 +2499,7 @@ fn iface_tweets__tweet_counts_full_archive_search_params__to_json(p: &iface_twee
     m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String(iface_tweets__tweet_counts_full_archive_search_granularity_enum__to_str(v).into()), None => Value::Null });
+    m.insert("search_count_fields".into(), match (&p.search_count_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__tweet_counts_full_archive_search_search_count_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1961,6 +2513,7 @@ fn iface_tweets__tweet_counts_recent_search_params__to_json(p: &iface_tweets::Tw
     m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String(iface_tweets__tweet_counts_full_archive_search_granularity_enum__to_str(v).into()), None => Value::Null });
+    m.insert("search_count_fields".into(), match (&p.search_count_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__tweet_counts_full_archive_search_search_count_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1970,12 +2523,24 @@ fn iface_tweets__get_tweets_firehose_stream_params__to_json(p: &iface_tweets::Ge
     m.insert("partition".into(), Value::Number(serde_json::Number::from(*(&p.partition))));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tweets__sample_stream_params__to_json(p: &iface_tweets::SampleStreamParams) -> Value {
     let mut m = Map::new();
     m.insert("backfill_minutes".into(), match (&p.backfill_minutes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1985,10 +2550,16 @@ fn iface_tweets__get_tweets_sample10_stream_params__to_json(p: &iface_tweets::Ge
     m.insert("partition".into(), Value::Number(serde_json::Number::from(*(&p.partition))));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tweets__tweets_fullarchive_search_params__to_json(p: &iface_tweets::TweetsFullarchiveSearchParams) -> Value {
+fn iface_tweets__fullarchive_search_params__to_json(p: &iface_tweets::FullarchiveSearchParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1998,11 +2569,17 @@ fn iface_tweets__tweets_fullarchive_search_params__to_json(p: &iface_tweets::Twe
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
-    m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String(iface_tweets__tweets_fullarchive_search_sort_order_enum__to_str(v).into()), None => Value::Null });
+    m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String(iface_tweets__fullarchive_search_sort_order_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_tweets__tweets_recent_search_params__to_json(p: &iface_tweets::TweetsRecentSearchParams) -> Value {
+fn iface_tweets__recent_search_params__to_json(p: &iface_tweets::RecentSearchParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2012,7 +2589,13 @@ fn iface_tweets__tweets_recent_search_params__to_json(p: &iface_tweets::TweetsRe
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("next_token".into(), match (&p.next_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
-    m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String(iface_tweets__tweets_fullarchive_search_sort_order_enum__to_str(v).into()), None => Value::Null });
+    m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String(iface_tweets__fullarchive_search_sort_order_enum__to_str(v).into()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2021,6 +2604,12 @@ fn iface_tweets__search_stream_params__to_json(p: &iface_tweets::SearchStreamPar
     m.insert("backfill_minutes".into(), match (&p.backfill_minutes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2042,6 +2631,12 @@ fn iface_tweets__add_or_delete_rules_params__to_json(p: &iface_tweets::AddOrDele
 fn iface_tweets__find_tweet_by_id_params__to_json(p: &iface_tweets::FindTweetByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2057,6 +2652,12 @@ fn iface_tweets__find_tweets_that_quote_a_tweet_params__to_json(p: &iface_tweets
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("exclude".into(), match (&p.exclude) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__find_tweets_that_quote_a_tweet_exclude_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2072,6 +2673,12 @@ fn iface_tweets__users_id_liked_tweets_params__to_json(p: &iface_tweets::UsersId
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2098,6 +2705,12 @@ fn iface_tweets__users_id_mentions_params__to_json(p: &iface_tweets::UsersIdMent
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_tweets__pagination_token36__to_json(v), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2125,6 +2738,12 @@ fn iface_tweets__users_id_timeline_params__to_json(p: &iface_tweets::UsersIdTime
     m.insert("exclude".into(), match (&p.exclude) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__find_tweets_that_quote_a_tweet_exclude_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2138,6 +2757,12 @@ fn iface_tweets__users_id_tweets_params__to_json(p: &iface_tweets::UsersIdTweets
     m.insert("exclude".into(), match (&p.exclude) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__find_tweets_that_quote_a_tweet_exclude_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tweets__lists_id_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2174,13 +2799,13 @@ impl iface_tweets::Guest for crate::Component {
         let json = iface_tweets__get_tweets_sample10_stream_params__to_json(&params);
         dispatch(&OP_TWEETS_GET_TWEETS_SAMPLE10_STREAM, json)
     }
-    fn tweets_fullarchive_search(params: iface_tweets::TweetsFullarchiveSearchParams) -> Result<String, String> {
-        let json = iface_tweets__tweets_fullarchive_search_params__to_json(&params);
-        dispatch(&OP_TWEETS_TWEETS_FULLARCHIVE_SEARCH, json)
+    fn fullarchive_search(params: iface_tweets::FullarchiveSearchParams) -> Result<String, String> {
+        let json = iface_tweets__fullarchive_search_params__to_json(&params);
+        dispatch(&OP_TWEETS_FULLARCHIVE_SEARCH, json)
     }
-    fn tweets_recent_search(params: iface_tweets::TweetsRecentSearchParams) -> Result<String, String> {
-        let json = iface_tweets__tweets_recent_search_params__to_json(&params);
-        dispatch(&OP_TWEETS_TWEETS_RECENT_SEARCH, json)
+    fn recent_search(params: iface_tweets::RecentSearchParams) -> Result<String, String> {
+        let json = iface_tweets__recent_search_params__to_json(&params);
+        dispatch(&OP_TWEETS_RECENT_SEARCH, json)
     }
     fn search_stream(params: iface_tweets::SearchStreamParams) -> Result<String, String> {
         let json = iface_tweets__search_stream_params__to_json(&params);
@@ -2266,6 +2891,10 @@ const OP_SPACES_FIND_SPACES_BY_IDS: OpSpec = OpSpec {
     path_template: "/2/spaces",
     fields: &[
         FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "space_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "topic_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -2277,6 +2906,10 @@ const OP_SPACES_FIND_SPACES_BY_CREATOR_IDS: OpSpec = OpSpec {
     path_template: "/2/spaces/by/creator_ids",
     fields: &[
         FieldSpec { snake: "user_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "space_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "topic_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -2290,6 +2923,10 @@ const OP_SPACES_SEARCH_SPACES: OpSpec = OpSpec {
         FieldSpec { snake: "query", location: FieldLocation::Query },
         FieldSpec { snake: "state", location: FieldLocation::Query },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
+        FieldSpec { snake: "space_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "topic_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -2301,6 +2938,10 @@ const OP_SPACES_FIND_SPACE_BY_ID: OpSpec = OpSpec {
     path_template: "/2/spaces/{id}",
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "space_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "topic_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
@@ -2314,6 +2955,9 @@ const OP_SPACES_SPACE_BUYERS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -2326,17 +2970,171 @@ const OP_SPACES_SPACE_TWEETS: OpSpec = OpSpec {
     fields: &[
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "BearerToken", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_spaces__find_spaces_by_ids_space_fields_item_enum__to_str(e: &iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::CreatedAt => "created_at",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::CreatorId => "creator_id",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::EndedAt => "ended_at",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::HostIds => "host_ids",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::Id => "id",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::InvitedUserIds => "invited_user_ids",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::IsTicketed => "is_ticketed",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::Lang => "lang",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::ParticipantCount => "participant_count",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::ScheduledStart => "scheduled_start",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::SpeakerIds => "speaker_ids",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::StartedAt => "started_at",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::State => "state",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::SubscriberCount => "subscriber_count",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::Title => "title",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::TopicIds => "topic_ids",
+        iface_spaces::FindSpacesByIdsSpaceFieldsItemEnum::UpdatedAt => "updated_at",
+    }
+}
+
+fn iface_spaces__find_spaces_by_ids_expansions_item_enum__to_str(e: &iface_spaces::FindSpacesByIdsExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::FindSpacesByIdsExpansionsItemEnum::CreatorId => "creator_id",
+        iface_spaces::FindSpacesByIdsExpansionsItemEnum::HostIds => "host_ids",
+        iface_spaces::FindSpacesByIdsExpansionsItemEnum::InvitedUserIds => "invited_user_ids",
+        iface_spaces::FindSpacesByIdsExpansionsItemEnum::SpeakerIds => "speaker_ids",
+        iface_spaces::FindSpacesByIdsExpansionsItemEnum::TopicIds => "topic_ids",
+    }
+}
+
+fn iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(e: &iface_spaces::FindSpacesByIdsUserFieldsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::CreatedAt => "created_at",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Description => "description",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Entities => "entities",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Id => "id",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Location => "location",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Name => "name",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::PinnedTweetId => "pinned_tweet_id",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::ProfileImageUrl => "profile_image_url",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Protected => "protected",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Url => "url",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Username => "username",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Verified => "verified",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::VerifiedType => "verified_type",
+        iface_spaces::FindSpacesByIdsUserFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_spaces__find_spaces_by_ids_topic_fields_item_enum__to_str(e: &iface_spaces::FindSpacesByIdsTopicFieldsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::FindSpacesByIdsTopicFieldsItemEnum::Description => "description",
+        iface_spaces::FindSpacesByIdsTopicFieldsItemEnum::Id => "id",
+        iface_spaces::FindSpacesByIdsTopicFieldsItemEnum::Name => "name",
+    }
+}
+
 fn iface_spaces__search_spaces_state_enum__to_str(e: &iface_spaces::SearchSpacesStateEnum) -> &'static str {
     match e {
         iface_spaces::SearchSpacesStateEnum::Live => "live",
         iface_spaces::SearchSpacesStateEnum::Scheduled => "scheduled",
         iface_spaces::SearchSpacesStateEnum::All => "all",
+    }
+}
+
+fn iface_spaces__space_buyers_expansions_item_enum__to_str(e: &iface_spaces::SpaceBuyersExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::SpaceBuyersExpansionsItemEnum::PinnedTweetId => "pinned_tweet_id",
+    }
+}
+
+fn iface_spaces__space_buyers_tweet_fields_item_enum__to_str(e: &iface_spaces::SpaceBuyersTweetFieldsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Attachments => "attachments",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::AuthorId => "author_id",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::ContextAnnotations => "context_annotations",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::ConversationId => "conversation_id",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::CreatedAt => "created_at",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::EditControls => "edit_controls",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Entities => "entities",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Geo => "geo",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Id => "id",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Lang => "lang",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::PossiblySensitive => "possibly_sensitive",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::ReferencedTweets => "referenced_tweets",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::ReplySettings => "reply_settings",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Source => "source",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Text => "text",
+        iface_spaces::SpaceBuyersTweetFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_spaces__space_tweets_expansions_item_enum__to_str(e: &iface_spaces::SpaceTweetsExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::SpaceTweetsExpansionsItemEnum::AttachmentsMediaKeys => "attachments.media_keys",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::AttachmentsPollIds => "attachments.poll_ids",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::AuthorId => "author_id",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::EntitiesMentionsUsername => "entities.mentions.username",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::GeoPlaceId => "geo.place_id",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::ReferencedTweetsId => "referenced_tweets.id",
+        iface_spaces::SpaceTweetsExpansionsItemEnum::ReferencedTweetsIdAuthorId => "referenced_tweets.id.author_id",
+    }
+}
+
+fn iface_spaces__space_tweets_media_fields_item_enum__to_str(e: &iface_spaces::SpaceTweetsMediaFieldsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::AltText => "alt_text",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::DurationMs => "duration_ms",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::Height => "height",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::MediaKey => "media_key",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::PreviewImageUrl => "preview_image_url",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::TypeOp => "type",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::Url => "url",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::Variants => "variants",
+        iface_spaces::SpaceTweetsMediaFieldsItemEnum::Width => "width",
+    }
+}
+
+fn iface_spaces__space_tweets_poll_fields_item_enum__to_str(e: &iface_spaces::SpaceTweetsPollFieldsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::SpaceTweetsPollFieldsItemEnum::DurationMinutes => "duration_minutes",
+        iface_spaces::SpaceTweetsPollFieldsItemEnum::EndDatetime => "end_datetime",
+        iface_spaces::SpaceTweetsPollFieldsItemEnum::Id => "id",
+        iface_spaces::SpaceTweetsPollFieldsItemEnum::Options => "options",
+        iface_spaces::SpaceTweetsPollFieldsItemEnum::VotingStatus => "voting_status",
+    }
+}
+
+fn iface_spaces__space_tweets_place_fields_item_enum__to_str(e: &iface_spaces::SpaceTweetsPlaceFieldsItemEnum) -> &'static str {
+    match e {
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::ContainedWithin => "contained_within",
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::Country => "country",
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::CountryCode => "country_code",
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::FullName => "full_name",
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::Geo => "geo",
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::Id => "id",
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::Name => "name",
+        iface_spaces::SpaceTweetsPlaceFieldsItemEnum::PlaceType => "place_type",
     }
 }
 
@@ -2355,12 +3153,20 @@ fn iface_spaces__pagination_token32__to_json(p: &iface_spaces::PaginationToken32
 fn iface_spaces__find_spaces_by_ids_params__to_json(p: &iface_spaces::FindSpacesByIdsParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::Array((&p.ids).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("space_fields".into(), match (&p.space_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_space_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("topic_fields".into(), match (&p.topic_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_topic_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_spaces__find_spaces_by_creator_ids_params__to_json(p: &iface_spaces::FindSpacesByCreatorIdsParams) -> Value {
     let mut m = Map::new();
     m.insert("user_ids".into(), Value::Array((&p.user_ids).iter().map(|v| iface_spaces__user_id__to_json(v)).collect()));
+    m.insert("space_fields".into(), match (&p.space_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_space_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("topic_fields".into(), match (&p.topic_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_topic_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2369,12 +3175,20 @@ fn iface_spaces__search_spaces_params__to_json(p: &iface_spaces::SearchSpacesPar
     m.insert("query".into(), Value::String((&p.query).clone()));
     m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_spaces__search_spaces_state_enum__to_str(v).into()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("space_fields".into(), match (&p.space_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_space_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("topic_fields".into(), match (&p.topic_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_topic_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_spaces__find_space_by_id_params__to_json(p: &iface_spaces::FindSpaceByIdParams) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("space_fields".into(), match (&p.space_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_space_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("topic_fields".into(), match (&p.topic_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_topic_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2383,6 +3197,9 @@ fn iface_spaces__space_buyers_params__to_json(p: &iface_spaces::SpaceBuyersParam
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_spaces__pagination_token32__to_json(v), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_buyers_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_buyers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2390,6 +3207,12 @@ fn iface_spaces__space_tweets_params__to_json(p: &iface_spaces::SpaceTweetsParam
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_buyers_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_tweets_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_tweets_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_tweets_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__find_spaces_by_ids_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_spaces__space_tweets_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2428,6 +3251,12 @@ const OP_BOOKMARKS_GET_USERS_ID_BOOKMARKS: OpSpec = OpSpec {
         FieldSpec { snake: "id", location: FieldLocation::Path },
         FieldSpec { snake: "max_results", location: FieldLocation::Query },
         FieldSpec { snake: "pagination_token", location: FieldLocation::Query },
+        FieldSpec { snake: "tweet_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "expansions", location: FieldLocation::Query },
+        FieldSpec { snake: "media_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "poll_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "user_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "place_fields", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "OAuth2UserToken", kind: AuthKind::Bearer },
@@ -2458,6 +3287,108 @@ const OP_BOOKMARKS_USERS_ID_BOOKMARKS_DELETE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_bookmarks__get_users_id_bookmarks_tweet_fields_item_enum__to_str(e: &iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum) -> &'static str {
+    match e {
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Attachments => "attachments",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::AuthorId => "author_id",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::ContextAnnotations => "context_annotations",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::ConversationId => "conversation_id",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::CreatedAt => "created_at",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::EditControls => "edit_controls",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Entities => "entities",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Geo => "geo",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Id => "id",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Lang => "lang",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::PossiblySensitive => "possibly_sensitive",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::ReferencedTweets => "referenced_tweets",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::ReplySettings => "reply_settings",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Source => "source",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Text => "text",
+        iface_bookmarks::GetUsersIdBookmarksTweetFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_bookmarks__get_users_id_bookmarks_expansions_item_enum__to_str(e: &iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum) -> &'static str {
+    match e {
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::AttachmentsMediaKeys => "attachments.media_keys",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::AttachmentsPollIds => "attachments.poll_ids",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::AuthorId => "author_id",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::EditHistoryTweetIds => "edit_history_tweet_ids",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::EntitiesMentionsUsername => "entities.mentions.username",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::GeoPlaceId => "geo.place_id",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::InReplyToUserId => "in_reply_to_user_id",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::ReferencedTweetsId => "referenced_tweets.id",
+        iface_bookmarks::GetUsersIdBookmarksExpansionsItemEnum::ReferencedTweetsIdAuthorId => "referenced_tweets.id.author_id",
+    }
+}
+
+fn iface_bookmarks__get_users_id_bookmarks_media_fields_item_enum__to_str(e: &iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum) -> &'static str {
+    match e {
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::AltText => "alt_text",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::DurationMs => "duration_ms",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::Height => "height",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::MediaKey => "media_key",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::NonPublicMetrics => "non_public_metrics",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::OrganicMetrics => "organic_metrics",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::PreviewImageUrl => "preview_image_url",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::PromotedMetrics => "promoted_metrics",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::TypeOp => "type",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::Url => "url",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::Variants => "variants",
+        iface_bookmarks::GetUsersIdBookmarksMediaFieldsItemEnum::Width => "width",
+    }
+}
+
+fn iface_bookmarks__get_users_id_bookmarks_poll_fields_item_enum__to_str(e: &iface_bookmarks::GetUsersIdBookmarksPollFieldsItemEnum) -> &'static str {
+    match e {
+        iface_bookmarks::GetUsersIdBookmarksPollFieldsItemEnum::DurationMinutes => "duration_minutes",
+        iface_bookmarks::GetUsersIdBookmarksPollFieldsItemEnum::EndDatetime => "end_datetime",
+        iface_bookmarks::GetUsersIdBookmarksPollFieldsItemEnum::Id => "id",
+        iface_bookmarks::GetUsersIdBookmarksPollFieldsItemEnum::Options => "options",
+        iface_bookmarks::GetUsersIdBookmarksPollFieldsItemEnum::VotingStatus => "voting_status",
+    }
+}
+
+fn iface_bookmarks__get_users_id_bookmarks_user_fields_item_enum__to_str(e: &iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum) -> &'static str {
+    match e {
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::CreatedAt => "created_at",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Description => "description",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Entities => "entities",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Id => "id",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Location => "location",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Name => "name",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::PinnedTweetId => "pinned_tweet_id",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::ProfileImageUrl => "profile_image_url",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Protected => "protected",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::PublicMetrics => "public_metrics",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Url => "url",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Username => "username",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Verified => "verified",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::VerifiedType => "verified_type",
+        iface_bookmarks::GetUsersIdBookmarksUserFieldsItemEnum::Withheld => "withheld",
+    }
+}
+
+fn iface_bookmarks__get_users_id_bookmarks_place_fields_item_enum__to_str(e: &iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum) -> &'static str {
+    match e {
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::ContainedWithin => "contained_within",
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::Country => "country",
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::CountryCode => "country_code",
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::FullName => "full_name",
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::Geo => "geo",
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::Id => "id",
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::Name => "name",
+        iface_bookmarks::GetUsersIdBookmarksPlaceFieldsItemEnum::PlaceType => "place_type",
+    }
+}
+
 fn iface_bookmarks__pagination_token36__to_json(p: &iface_bookmarks::PaginationToken36) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
@@ -2475,6 +3406,12 @@ fn iface_bookmarks__get_users_id_bookmarks_params__to_json(p: &iface_bookmarks::
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("pagination_token".into(), match (&p.pagination_token) { Some(v) => iface_bookmarks__pagination_token36__to_json(v), None => Value::Null });
+    m.insert("tweet_fields".into(), match (&p.tweet_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_bookmarks__get_users_id_bookmarks_tweet_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("expansions".into(), match (&p.expansions) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_bookmarks__get_users_id_bookmarks_expansions_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("media_fields".into(), match (&p.media_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_bookmarks__get_users_id_bookmarks_media_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("poll_fields".into(), match (&p.poll_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_bookmarks__get_users_id_bookmarks_poll_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("user_fields".into(), match (&p.user_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_bookmarks__get_users_id_bookmarks_user_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("place_fields".into(), match (&p.place_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_bookmarks__get_users_id_bookmarks_place_fields_item_enum__to_str(v).into())).collect()), None => Value::Null });
     Value::Object(m)
 }
 

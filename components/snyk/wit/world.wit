@@ -1,4 +1,4 @@
-package autostamp:snyk@0.2.1;
+package autostamp:snyk@0.3.0;
 
 interface audit-logs {
   enum get-group-level-audit-logs-body-filters-event-enum {
@@ -252,11 +252,11 @@ interface groups {
 
 interface monitor {
   /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
-  record monitor-dep-graph-body-dep-graph {
+  record dep-graph-body-dep-graph {
     /// Graph object references each pkg and how they depend on each other through the deps property.
-    graph: monitor-dep-graph-body-dep-graph-graph,
+    graph: dep-graph-body-dep-graph-graph,
     /// Package manager information.
-    pkg-manager: monitor-dep-graph-body-dep-graph-pkg-manager,
+    pkg-manager: dep-graph-body-dep-graph-pkg-manager,
     /// Array of package dependencies.
     pkgs: list<string>,
     /// Snyk DepGraph library schema version.
@@ -264,7 +264,7 @@ interface monitor {
   }
 
   /// Graph object references each pkg and how they depend on each other through the deps property.
-  record monitor-dep-graph-body-dep-graph-graph {
+  record dep-graph-body-dep-graph-graph {
     /// Array of node objects.
     nodes: list<string>,
     /// Root node id. Note the root node name is used as your project name.
@@ -272,7 +272,7 @@ interface monitor {
   }
 
   /// Package manager information.
-  record monitor-dep-graph-body-dep-graph-pkg-manager {
+  record dep-graph-body-dep-graph-pkg-manager {
     /// Package manager name.
     name: string,
     /// A list of package repositories (i.e. maven-central, or npm) that defaults to the canonical package registry for the given package manager.
@@ -280,21 +280,21 @@ interface monitor {
   }
 
   /// Project metadata
-  record monitor-dep-graph-body-meta {
+  record dep-graph-body-meta {
     /// Required for a NuGet or Paket DepGraph only. Specify the target framework in your project file using Target Framework Monikers (TFMs). For example, netstandard1.0, netcoreapp1.0 or net452. Test each framework separately if you have multiple defined.
     target-framework: option<string>
   }
 
   /// Monitor Dep Graph
-  record monitor-dep-graph-params {
+  record dep-graph-params {
     /// The organization to test the package with. See "The Snyk organization for a request" above.
     org: option<string>,
     /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
-    dep-graph: monitor-dep-graph-body-dep-graph,
+    dep-graph: dep-graph-body-dep-graph,
     /// Project metadata
-    meta: option<monitor-dep-graph-body-meta>
+    meta: option<dep-graph-body-meta>
   }
-  monitor-dep-graph: func(params: monitor-dep-graph-params) -> result<string, string>;
+  dep-graph: func(params: dep-graph-params) -> result<string, string>;
 
 }
 
@@ -1562,30 +1562,30 @@ interface reporting-api {
 }
 
 interface test {
-  enum test-composer-json-composer-lock-file-body-encoding-enum {
+  enum composer-json-composer-lock-file-body-encoding-enum {
     plain,
     base64,
   }
 
   /// The manifest files:
-  record test-composer-json-composer-lock-file-body-files {
+  record composer-json-composer-lock-file-body-files {
     /// a lockfile encoded according the the "encoding" field.
     additional: list<string>,
     /// the `composer.json` file, encoded according the the "encoding" field.
-    target: test-composer-json-composer-lock-file-body-files-target
+    target: composer-json-composer-lock-file-body-files-target
   }
 
   /// the `composer.json` file, encoded according the the "encoding" field.
-  record test-composer-json-composer-lock-file-body-files-target {
+  record composer-json-composer-lock-file-body-files-target {
     contents: option<string>
   }
 
   /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
-  record test-dep-graph-body-dep-graph {
+  record dep-graph-body-dep-graph {
     /// Graph object references each pkg and how they depend on each other through the deps property.
-    graph: test-dep-graph-body-dep-graph-graph,
+    graph: dep-graph-body-dep-graph-graph,
     /// Package manager information.
-    pkg-manager: test-dep-graph-body-dep-graph-pkg-manager,
+    pkg-manager: dep-graph-body-dep-graph-pkg-manager,
     /// Array of package dependencies.
     pkgs: list<string>,
     /// Snyk DepGraph library schema version.
@@ -1593,7 +1593,7 @@ interface test {
   }
 
   /// Graph object references each pkg and how they depend on each other through the deps property.
-  record test-dep-graph-body-dep-graph-graph {
+  record dep-graph-body-dep-graph-graph {
     /// Array of node objects.
     nodes: list<string>,
     /// Root node id.
@@ -1601,7 +1601,7 @@ interface test {
   }
 
   /// Package manager information.
-  record test-dep-graph-body-dep-graph-pkg-manager {
+  record dep-graph-body-dep-graph-pkg-manager {
     /// Package manager name.
     name: string,
     /// A list of package repositories (i.e. maven-central, or npm) that defaults to the canonical package registry for the given package manager.
@@ -1609,168 +1609,168 @@ interface test {
   }
 
   /// The manifest files:
-  record test-gopkg-toml-gopkg-lock-file-body-files {
+  record gopkg-toml-gopkg-lock-file-body-files {
     /// a lockfile encoded according the the "encoding" field.
     additional: list<string>,
     /// the `Gopkg.toml` file, encoded according the the "encoding" field.
-    target: test-gopkg-toml-gopkg-lock-file-body-files-target
+    target: gopkg-toml-gopkg-lock-file-body-files-target
   }
 
   /// the `Gopkg.toml` file, encoded according the the "encoding" field.
-  record test-gopkg-toml-gopkg-lock-file-body-files-target {
+  record gopkg-toml-gopkg-lock-file-body-files-target {
     contents: option<string>
   }
 
   /// The manifest files:
-  record test-vendor-json-file-body-files {
+  record vendor-json-file-body-files {
     /// the `vendor.json` file, encoded according the the "encoding" field.
-    target: test-vendor-json-file-body-files-target
+    target: vendor-json-file-body-files-target
   }
 
   /// the `vendor.json` file, encoded according the the "encoding" field.
-  record test-vendor-json-file-body-files-target {
+  record vendor-json-file-body-files-target {
     contents: option<string>
   }
 
   /// The manifest files:
-  record test-gradle-file-body-files {
+  record gradle-file-body-files {
     /// the manifest file, encoded according the the "encoding" field.
-    target: test-gradle-file-body-files-target
+    target: gradle-file-body-files-target
   }
 
   /// the manifest file, encoded according the the "encoding" field.
-  record test-gradle-file-body-files-target {
+  record gradle-file-body-files-target {
     /// The contents of the file, encoded according to the `encoding` field.
     contents: string
   }
 
   /// The manifest files:
-  record test-maven-file-body-files {
+  record maven-file-body-files {
     /// additional manifest files (if needed), encoded according the the "encoding" field.
     additional: option<list<string>>,
     /// the main/root manifest file, encoded according the the "encoding" field.
-    target: test-maven-file-body-files-target
+    target: maven-file-body-files-target
   }
 
   /// the main/root manifest file, encoded according the the "encoding" field.
-  record test-maven-file-body-files-target {
+  record maven-file-body-files-target {
     /// The contents of the file, encoded according to the `encoding` field.
     contents: string
   }
 
   /// The manifest files:
-  record test-package-json-package-lock-json-file-body-files {
+  record package-json-package-lock-json-file-body-files {
     /// a lockfile can be sent (if needed), encoded according the the "encoding" field.
     additional: option<list<string>>,
     /// the `package.json` file, encoded according the the "encoding" field.
-    target: test-package-json-package-lock-json-file-body-files-target
+    target: package-json-package-lock-json-file-body-files-target
   }
 
   /// the `package.json` file, encoded according the the "encoding" field.
-  record test-package-json-package-lock-json-file-body-files-target {
+  record package-json-package-lock-json-file-body-files-target {
     /// the contents of `package.json` as a string.
     contents: string
   }
 
   /// The manifest files:
-  record test-requirements-txt-file-body-files {
+  record requirements-txt-file-body-files {
     /// the `requirements.txt` file, encoded according the the "encoding" field.
-    target: test-requirements-txt-file-body-files-target
+    target: requirements-txt-file-body-files-target
   }
 
   /// the `requirements.txt` file, encoded according the the "encoding" field.
-  record test-requirements-txt-file-body-files-target {
+  record requirements-txt-file-body-files-target {
     /// the contents of `requirements.txt` as a string, encoded according to `encoding` above.
     contents: string
   }
 
   /// The manifest files:
-  record test-gemfile-lock-file-body-files {
+  record gemfile-lock-file-body-files {
     /// the `Gemfile.lock` file, encoded according the the "encoding" field.
-    target: test-gemfile-lock-file-body-files-target
+    target: gemfile-lock-file-body-files-target
   }
 
   /// the `Gemfile.lock` file, encoded according the the "encoding" field.
-  record test-gemfile-lock-file-body-files-target {
+  record gemfile-lock-file-body-files-target {
     /// the contents of `Gemfile.lock` as a string.
     contents: string
   }
 
   /// The manifest files:
-  record test-sbt-file-body-files {
+  record sbt-file-body-files {
     /// the manifest file, encoded according the the "encoding" field.
-    target: test-sbt-file-body-files-target
+    target: sbt-file-body-files-target
   }
 
   /// the manifest file, encoded according the the "encoding" field.
-  record test-sbt-file-body-files-target {
+  record sbt-file-body-files-target {
     /// The contents of the file, encoded according to the `encoding` field.
     contents: string
   }
 
   /// The manifest files:
-  record test-package-json-yarn-lock-file-body-files {
+  record package-json-yarn-lock-file-body-files {
     /// a lockfile can be sent (if needed), encoded according the the "encoding" field.
     additional: option<list<string>>,
     /// the `package.json` file, encoded according the the "encoding" field.
-    target: test-package-json-yarn-lock-file-body-files-target
+    target: package-json-yarn-lock-file-body-files-target
   }
 
   /// the `package.json` file, encoded according the the "encoding" field.
-  record test-package-json-yarn-lock-file-body-files-target {
+  record package-json-yarn-lock-file-body-files-target {
     /// the contents of `package.json` as a string.
     contents: string
   }
 
   /// Test composer.json & composer.lock file
-  record test-composer-json-composer-lock-file-params {
+  record composer-json-composer-lock-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-composer-json-composer-lock-file-body-files
+    files: composer-json-composer-lock-file-body-files
   }
-  test-composer-json-composer-lock-file: func(params: test-composer-json-composer-lock-file-params) -> result<string, string>;
+  composer-json-composer-lock-file: func(params: composer-json-composer-lock-file-params) -> result<string, string>;
 
   /// Test Dep Graph
-  record test-dep-graph-params {
+  record dep-graph-params {
     /// The organization to test the package with. See "The Snyk organization for a request" above.
     org: option<string>,
     /// A [DepGraph data object](https://github.com/snyk/dep-graph#depgraphdata) defining all packages and their relationships.
-    dep-graph: test-dep-graph-body-dep-graph
+    dep-graph: dep-graph-body-dep-graph
   }
-  test-dep-graph: func(params: test-dep-graph-params) -> result<string, string>;
+  dep-graph: func(params: dep-graph-params) -> result<string, string>;
 
   /// Test Gopkg.toml & Gopkg.lock File
-  record test-gopkg-toml-gopkg-lock-file-params {
+  record gopkg-toml-gopkg-lock-file-params {
     /// The organization to test the package with. See "The Snyk organization for a request" above.
     org: option<string>,
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-gopkg-toml-gopkg-lock-file-body-files
+    files: gopkg-toml-gopkg-lock-file-body-files
   }
-  test-gopkg-toml-gopkg-lock-file: func(params: test-gopkg-toml-gopkg-lock-file-params) -> result<string, string>;
+  gopkg-toml-gopkg-lock-file: func(params: gopkg-toml-gopkg-lock-file-params) -> result<string, string>;
 
   /// Test vendor.json File
-  record test-vendor-json-file-params {
+  record vendor-json-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-vendor-json-file-body-files
+    files: vendor-json-file-body-files
   }
-  test-vendor-json-file: func(params: test-vendor-json-file-params) -> result<string, string>;
+  vendor-json-file: func(params: vendor-json-file-params) -> result<string, string>;
 
   /// Test gradle file
-  record test-gradle-file-params {
+  record gradle-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-gradle-file-body-files
+    files: gradle-file-body-files
   }
-  test-gradle-file: func(params: test-gradle-file-params) -> result<string, string>;
+  gradle-file: func(params: gradle-file-params) -> result<string, string>;
 
   /// Test for issues in a public package by group, name and version
-  record test-for-issues-in-a-public-package-by-group-name-and-version-params {
+  record for-issues-in-a-public-package-by-group-name-and-version-params {
     /// The package's group ID.
     group: string,
     /// The package's artifact ID.
@@ -1782,23 +1782,23 @@ interface test {
     /// The repository hosting this package. The default value is Maven Central. More than one value is supported, in order.
     repository: option<string>
   }
-  test-for-issues-in-a-public-package-by-group-name-and-version: func(params: test-for-issues-in-a-public-package-by-group-name-and-version-params) -> result<string, string>;
+  for-issues-in-a-public-package-by-group-name-and-version: func(params: for-issues-in-a-public-package-by-group-name-and-version-params) -> result<string, string>;
 
   /// Test maven file
-  record test-maven-file-params {
+  record maven-file-params {
     /// The organization to test the package with. See "The Snyk organization for a request" above.
     org: option<string>,
     /// The Maven repository hosting this package. The default value is Maven Central. More than one value is supported, in order.
     repository: option<string>,
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-maven-file-body-files
+    files: maven-file-body-files
   }
-  test-maven-file: func(params: test-maven-file-params) -> result<string, string>;
+  maven-file: func(params: maven-file-params) -> result<string, string>;
 
   /// Test for issues in a public package by group id, artifact id and version
-  record test-for-issues-in-a-public-package-by-group-id-artifact-id-and-version-params {
+  record for-issues-in-a-public-package-by-group-id-artifact-id-and-version-params {
     /// The package's group ID.
     group-id: string,
     /// The package's artifact ID.
@@ -1810,19 +1810,19 @@ interface test {
     /// The Maven repository hosting this package. The default value is Maven Central. More than one value is supported, in order.
     repository: option<string>
   }
-  test-for-issues-in-a-public-package-by-group-id-artifact-id-and-version: func(params: test-for-issues-in-a-public-package-by-group-id-artifact-id-and-version-params) -> result<string, string>;
+  for-issues-in-a-public-package-by-group-id-artifact-id-and-version: func(params: for-issues-in-a-public-package-by-group-id-artifact-id-and-version-params) -> result<string, string>;
 
   /// Test package.json & package-lock.json File
-  record test-package-json-package-lock-json-file-params {
+  record package-json-package-lock-json-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-package-json-package-lock-json-file-body-files
+    files: package-json-package-lock-json-file-body-files
   }
-  test-package-json-package-lock-json-file: func(params: test-package-json-package-lock-json-file-params) -> result<string, string>;
+  package-json-package-lock-json-file: func(params: package-json-package-lock-json-file-params) -> result<string, string>;
 
   /// Test for issues in a public package by name and version
-  record test-for-issues-in-a-public-package-by-name-and-version-params {
+  record for-issues-in-a-public-package-by-name-and-version-params {
     /// The package name. For scoped packages, **must** be url-encoded, so to test "@angular/core" version 4.3.2, one should `GET /test/npm/%40angular%2Fcore/4.3.2`.
     package-name: string,
     /// The Package version to test.
@@ -1830,16 +1830,16 @@ interface test {
     /// The organization to test the package with. See "The Snyk organization for a request" above.
     org: option<string>
   }
-  test-for-issues-in-a-public-package-by-name-and-version: func(params: test-for-issues-in-a-public-package-by-name-and-version-params) -> result<string, string>;
+  for-issues-in-a-public-package-by-name-and-version: func(params: for-issues-in-a-public-package-by-name-and-version-params) -> result<string, string>;
 
   /// Test requirements.txt file
-  record test-requirements-txt-file-params {
+  record requirements-txt-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-requirements-txt-file-body-files
+    files: requirements-txt-file-body-files
   }
-  test-requirements-txt-file: func(params: test-requirements-txt-file-params) -> result<string, string>;
+  requirements-txt-file: func(params: requirements-txt-file-params) -> result<string, string>;
 
   /// Test for issues in a public package by name and version
   record get-test-pip-package-name-version-params {
@@ -1853,16 +1853,16 @@ interface test {
   get-test-pip-package-name-version: func(params: get-test-pip-package-name-version-params) -> result<string, string>;
 
   /// Test gemfile.lock file
-  record test-gemfile-lock-file-params {
+  record gemfile-lock-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-gemfile-lock-file-body-files
+    files: gemfile-lock-file-body-files
   }
-  test-gemfile-lock-file: func(params: test-gemfile-lock-file-params) -> result<string, string>;
+  gemfile-lock-file: func(params: gemfile-lock-file-params) -> result<string, string>;
 
   /// Test for issues in a public gem by name and version
-  record test-for-issues-in-a-public-gem-by-name-and-version-params {
+  record for-issues-in-a-public-gem-by-name-and-version-params {
     /// The gem name.
     gem-name: string,
     /// The gem version to test.
@@ -1870,16 +1870,16 @@ interface test {
     /// The organization to test the package with. See "The Snyk organization for a request" above.
     org: option<string>
   }
-  test-for-issues-in-a-public-gem-by-name-and-version: func(params: test-for-issues-in-a-public-gem-by-name-and-version-params) -> result<string, string>;
+  for-issues-in-a-public-gem-by-name-and-version: func(params: for-issues-in-a-public-gem-by-name-and-version-params) -> result<string, string>;
 
   /// Test sbt file
-  record test-sbt-file-params {
+  record sbt-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-sbt-file-body-files
+    files: sbt-file-body-files
   }
-  test-sbt-file: func(params: test-sbt-file-params) -> result<string, string>;
+  sbt-file: func(params: sbt-file-params) -> result<string, string>;
 
   /// Test for issues in a public package by group id, artifact id and version
   record get-test-sbt-group-id-artifact-id-version-params {
@@ -1897,13 +1897,13 @@ interface test {
   get-test-sbt-group-id-artifact-id-version: func(params: get-test-sbt-group-id-artifact-id-version-params) -> result<string, string>;
 
   /// Test package.json & yarn.lock File
-  record test-package-json-yarn-lock-file-params {
+  record package-json-yarn-lock-file-params {
     /// the encoding for the manifest files sent.
-    encoding: option<test-composer-json-composer-lock-file-body-encoding-enum>,
+    encoding: option<composer-json-composer-lock-file-body-encoding-enum>,
     /// The manifest files:
-    files: test-package-json-yarn-lock-file-body-files
+    files: package-json-yarn-lock-file-body-files
   }
-  test-package-json-yarn-lock-file: func(params: test-package-json-yarn-lock-file-params) -> result<string, string>;
+  package-json-yarn-lock-file: func(params: package-json-yarn-lock-file-params) -> result<string, string>;
 
 }
 

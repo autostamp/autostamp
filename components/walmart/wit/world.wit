@@ -1,4 +1,4 @@
-package autostamp:walmart@0.2.1;
+package autostamp:walmart@0.3.0;
 
 interface inventory {
   enum update-bulk-inventory-feed-type-enum {

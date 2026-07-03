@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:braze"
-version = "0.2.1+braze-1.0.0"
+version = "0.3.0+braze-1.0.0"
 registry = "ghcr.io/autostamp/braze"
 kind = "component"
 file = "build/braze.wasm"

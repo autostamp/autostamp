@@ -7,11 +7,27 @@
 /// | --- | --- |
 /// | `AuthHeader` | header `Authorization` |
 /// | `ClientId` | query `client_id` |
-package autostamp:soundcloud@0.2.1;
+package autostamp:soundcloud@0.3.0;
 
 interface oauth {
+  enum get-connect-response-type-enum {
+    code,
+    token,
+    code-and-token,
+  }
+
   /// The OAuth2 authorization endpoint. Your app redirects a user to this endpoint, allowing them to delegate access to their account.
-  get-connect: func() -> result<string, string>;
+  record get-connect-params {
+    /// The redirect uri you have configured for your application
+    redirect-uri: string,
+    /// It's recommended to use "code" here
+    response-type: get-connect-response-type-enum,
+    /// Scope
+    scope: string,
+    /// Any value included here will be appended to the redirect URI. Use this for CSRF protection.
+    state: option<string>
+  }
+  get-connect: func(params: get-connect-params) -> result<string, string>;
 
   /// This endpoint accepts POST requests and is used to provision access tokens once a user has authorized your application.
   post-oauth2-token: func() -> result<string, string>;
@@ -21,88 +37,254 @@ interface oauth {
 
 interface likes {
   /// Likes a playlist.
-  post-likes-playlists-playlist-id: func() -> result<string, string>;
+  record post-likes-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string
+  }
+  post-likes-playlists-playlist-id: func(params: post-likes-playlists-playlist-id-params) -> result<string, string>;
 
   /// Unlikes a playlist.
-  delete-likes-playlists-playlist-id: func() -> result<string, string>;
+  record delete-likes-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string
+  }
+  delete-likes-playlists-playlist-id: func(params: delete-likes-playlists-playlist-id-params) -> result<string, string>;
 
   /// Likes a track.
-  post-likes-tracks-track-id: func() -> result<string, string>;
+  record post-likes-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string
+  }
+  post-likes-tracks-track-id: func(params: post-likes-tracks-track-id-params) -> result<string, string>;
 
   /// Unlikes a track.
-  delete-likes-tracks-track-id: func() -> result<string, string>;
+  record delete-likes-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string
+  }
+  delete-likes-tracks-track-id: func(params: delete-likes-tracks-track-id-params) -> result<string, string>;
 
 }
 
 interface me {
+  enum get-me-activities-access-item-enum {
+    playable,
+    preview,
+    blocked,
+  }
+
   /// Returns the authenticated user’s information.
   get-me: func() -> result<string, string>;
 
   /// Returns the authenticated user's activities.
-  get-me-activities: func() -> result<string, string>;
+  record get-me-activities-params {
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-me-activities-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-me-activities: func(params: get-me-activities-params) -> result<string, string>;
 
   /// Recent the authenticated user's activities.
-  get-me-activities-all-own: func() -> result<string, string>;
+  record get-me-activities-all-own-params {
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-me-activities-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-me-activities-all-own: func(params: get-me-activities-all-own-params) -> result<string, string>;
 
   /// Returns the authenticated user's recent track related activities.
-  get-me-activities-tracks: func() -> result<string, string>;
+  record get-me-activities-tracks-params {
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-me-activities-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-me-activities-tracks: func(params: get-me-activities-tracks-params) -> result<string, string>;
 
   /// Returns a list of the authenticated user's connected social accounts.
-  get-me-connections: func() -> result<string, string>;
+  record get-me-connections-params {
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>
+  }
+  get-me-connections: func(params: get-me-connections-params) -> result<string, string>;
 
   /// Returns the authenticated user's connected social account.
-  get-me-connections-connection-id: func() -> result<string, string>;
+  record get-me-connections-connection-id-params {
+    /// SoundCloud connection id
+    connection-id: string
+  }
+  get-me-connections-connection-id: func(params: get-me-connections-connection-id-params) -> result<string, string>;
 
   /// Returns user’s favorites ids. (use /me/likes/tracks instead to fetch the authenticated user's likes)
-  get-me-favorites-ids: func() -> result<string, string>;
+  record get-me-favorites-ids-params {
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-me-favorites-ids: func(params: get-me-favorites-ids-params) -> result<string, string>;
 
   /// Returns a list of users who are following the authenticated user.
-  get-me-followers: func() -> result<string, string>;
+  record get-me-followers-params {
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-me-followers: func(params: get-me-followers-params) -> result<string, string>;
 
   /// Returns a user who is following the authenticated user. (use /users/{user_id} instead, to fetch the user details)
-  get-me-followers-follower-id: func() -> result<string, string>;
+  record get-me-followers-follower-id-params {
+    /// SoundCloud User id to denote a Follower
+    follower-id: string
+  }
+  get-me-followers-follower-id: func(params: get-me-followers-follower-id-params) -> result<string, string>;
 
   /// Returns a list of users who are followed by the authenticated user.
-  get-me-followings: func() -> result<string, string>;
+  record get-me-followings-params {
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>
+  }
+  get-me-followings: func(params: get-me-followings-params) -> result<string, string>;
 
   /// Returns a list of recent tracks from users followed by the authenticated user.
-  get-me-followings-tracks: func() -> result<string, string>;
+  record get-me-followings-tracks-params {
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-me-activities-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>
+  }
+  get-me-followings-tracks: func(params: get-me-followings-tracks-params) -> result<string, string>;
 
   /// Returns a user who is followed by the authenticated user. (use /users/{user_id} instead, to fetch the user details)
-  get-me-followings-user-id: func() -> result<string, string>;
+  record get-me-followings-user-id-params {
+    /// SoundCloud User id
+    user-id: string
+  }
+  get-me-followings-user-id: func(params: get-me-followings-user-id-params) -> result<string, string>;
 
   /// Follows a user.
-  put-me-followings-user-id: func() -> result<string, string>;
+  record put-me-followings-user-id-params {
+    /// SoundCloud User id
+    user-id: string
+  }
+  put-me-followings-user-id: func(params: put-me-followings-user-id-params) -> result<string, string>;
 
   /// Deletes a user who is followed by the authenticated user.
-  delete-me-followings-user-id: func() -> result<string, string>;
+  record delete-me-followings-user-id-params {
+    /// SoundCloud User id
+    user-id: string
+  }
+  delete-me-followings-user-id: func(params: delete-me-followings-user-id-params) -> result<string, string>;
 
   /// Returns a list of favorited or liked tracks of the authenticated user.
-  get-me-likes-tracks: func() -> result<string, string>;
+  record get-me-likes-tracks-params {
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-me-likes-tracks: func(params: get-me-likes-tracks-params) -> result<string, string>;
 
   /// Returns user’s playlists (sets).
-  get-me-playlists: func() -> result<string, string>;
+  record get-me-playlists-params {
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-me-playlists: func(params: get-me-playlists-params) -> result<string, string>;
 
   /// Returns playlist. (use /playlists/{playlist_id} instead, to fetch the playlist details)
-  get-me-playlists-playlist-id: func() -> result<string, string>;
+  record get-me-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string
+  }
+  get-me-playlists-playlist-id: func(params: get-me-playlists-playlist-id-params) -> result<string, string>;
 
   /// Returns a list of user's tracks.
-  get-me-tracks: func() -> result<string, string>;
+  record get-me-tracks-params {
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-me-tracks: func(params: get-me-tracks-params) -> result<string, string>;
 
   /// Returns a specified track. (use /tracks/{track_id} instead, to fetch the track details)
-  get-me-tracks-track-id: func() -> result<string, string>;
+  record get-me-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string
+  }
+  get-me-tracks-track-id: func(params: get-me-tracks-track-id-params) -> result<string, string>;
 
 }
 
 interface search {
+  enum get-playlists-access-item-enum {
+    playable,
+    preview,
+    blocked,
+  }
+
   /// Performs a playlist search based on a query
-  get-playlists: func() -> result<string, string>;
+  record get-playlists-params {
+    /// search
+    q: string,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-playlists-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-playlists: func(params: get-playlists-params) -> result<string, string>;
 
   /// Performs a track search based on a query
-  get-tracks: func() -> result<string, string>;
+  record get-tracks-params {
+    /// search
+    q: string,
+    /// A comma separated list of track ids to filter on
+    ids: option<string>,
+    /// A comma separated list of genres
+    genres: option<string>,
+    /// A comma separated list of tags
+    tags: option<string>,
+    /// Return tracks with a specified bpm[from], bpm[to]
+    bpm: option<string>,
+    /// Return tracks within a specified duration range
+    duration: option<string>,
+    /// (yyyy-mm-dd hh:mm:ss) return tracks created within the specified dates
+    created-at: option<string>,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-playlists-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-tracks: func(params: get-tracks-params) -> result<string, string>;
 
   /// Performs a user search based on a query
-  get-users: func() -> result<string, string>;
+  record get-users-params {
+    /// search
+    q: string,
+    /// A comma separated list of track ids to filter on
+    ids: option<string>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-users: func(params: get-users-params) -> result<string, string>;
 
 }
 
@@ -110,6 +292,12 @@ interface playlists {
   enum create-update-playlist-request-playlist-sharing-enum {
     public,
     private,
+  }
+
+  enum get-playlists-playlist-id-access-item-enum {
+    playable,
+    preview,
+    blocked,
   }
 
   record create-update-playlist-request-playlist {
@@ -135,43 +323,93 @@ interface playlists {
   post-playlists: func(params: post-playlists-params) -> result<string, string>;
 
   /// Returns a playlist.
-  get-playlists-playlist-id: func() -> result<string, string>;
+  record get-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string,
+    /// A secret token to fetch private playlists/tracks
+    secret-token: option<string>,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-playlists-playlist-id-access-item-enum>>
+  }
+  get-playlists-playlist-id: func(params: get-playlists-playlist-id-params) -> result<string, string>;
 
   /// Updates a playlist.
   record put-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string,
     playlist: option<create-update-playlist-request-playlist>
   }
   put-playlists-playlist-id: func(params: put-playlists-playlist-id-params) -> result<string, string>;
 
   /// Deletes a playlist.
-  delete-playlists-playlist-id: func() -> result<string, string>;
+  record delete-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string
+  }
+  delete-playlists-playlist-id: func(params: delete-playlists-playlist-id-params) -> result<string, string>;
 
   /// Returns a collection of playlist's reposters.
-  get-playlists-playlist-id-reposters: func() -> result<string, string>;
+  record get-playlists-playlist-id-reposters-params {
+    /// SoundCloud playlist id
+    playlist-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-playlists-playlist-id-reposters: func(params: get-playlists-playlist-id-reposters-params) -> result<string, string>;
 
   /// Returns tracks under a playlist.
-  get-playlists-playlist-id-tracks: func() -> result<string, string>;
+  record get-playlists-playlist-id-tracks-params {
+    /// SoundCloud playlist id
+    playlist-id: string,
+    /// A secret token to fetch private playlists/tracks
+    secret-token: option<string>,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-playlists-playlist-id-access-item-enum>>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-playlists-playlist-id-tracks: func(params: get-playlists-playlist-id-tracks-params) -> result<string, string>;
 
 }
 
 interface reposts {
   /// Reposts a playlist as the authenticated user
-  post-reposts-playlists-playlist-id: func() -> result<string, string>;
+  record post-reposts-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string
+  }
+  post-reposts-playlists-playlist-id: func(params: post-reposts-playlists-playlist-id-params) -> result<string, string>;
 
   /// Removes a repost on a playlist as the authenticated user
-  delete-reposts-playlists-playlist-id: func() -> result<string, string>;
+  record delete-reposts-playlists-playlist-id-params {
+    /// SoundCloud playlist id
+    playlist-id: string
+  }
+  delete-reposts-playlists-playlist-id: func(params: delete-reposts-playlists-playlist-id-params) -> result<string, string>;
 
   /// Reposts a track as the authenticated user
-  post-reposts-tracks-track-id: func() -> result<string, string>;
+  record post-reposts-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string
+  }
+  post-reposts-tracks-track-id: func(params: post-reposts-tracks-track-id-params) -> result<string, string>;
 
   /// Removes a repost on a track as the authenticated user
-  delete-reposts-tracks-track-id: func() -> result<string, string>;
+  record delete-reposts-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string
+  }
+  delete-reposts-tracks-track-id: func(params: delete-reposts-tracks-track-id-params) -> result<string, string>;
 
 }
 
 interface miscellaneous {
   /// Resolves soundcloud.com URLs to Resource URLs to use with the API.
-  get-resolve: func() -> result<string, string>;
+  record get-resolve-params {
+    /// SoundCloud URL
+    url: string
+  }
+  get-resolve: func(params: get-resolve-params) -> result<string, string>;
 
 }
 
@@ -196,6 +434,12 @@ interface tracks {
   enum track-metadata-request-track-sharing-enum {
     public,
     private,
+  }
+
+  enum get-tracks-track-id-related-access-item-enum {
+    playable,
+    preview,
+    blocked,
   }
 
   record track-metadata-request-track {
@@ -225,67 +469,205 @@ interface tracks {
   post-tracks: func() -> result<string, string>;
 
   /// Returns a track.
-  get-tracks-track-id: func() -> result<string, string>;
+  record get-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string,
+    /// A secret token to fetch private playlists/tracks
+    secret-token: option<string>
+  }
+  get-tracks-track-id: func(params: get-tracks-track-id-params) -> result<string, string>;
 
   /// Updates a track's information.
   record put-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string,
     track: option<track-metadata-request-track>
   }
   put-tracks-track-id: func(params: put-tracks-track-id-params) -> result<string, string>;
 
   /// Deletes a track.
-  delete-tracks-track-id: func() -> result<string, string>;
+  record delete-tracks-track-id-params {
+    /// SoundCloud Track id
+    track-id: string
+  }
+  delete-tracks-track-id: func(params: delete-tracks-track-id-params) -> result<string, string>;
 
   /// Returns the comments posted on the track(track_id).
-  get-tracks-track-id-comments: func() -> result<string, string>;
+  record get-tracks-track-id-comments-params {
+    /// SoundCloud Track id
+    track-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-tracks-track-id-comments: func(params: get-tracks-track-id-comments-params) -> result<string, string>;
 
   /// Returns the newly created comment on success
-  post-tracks-track-id-comments: func() -> result<string, string>;
+  record post-tracks-track-id-comments-params {
+    /// SoundCloud Track id
+    track-id: string
+  }
+  post-tracks-track-id-comments: func(params: post-tracks-track-id-comments-params) -> result<string, string>;
 
   /// Returns a list of users who have favorited or liked the track.
-  get-tracks-track-id-favoriters: func() -> result<string, string>;
+  record get-tracks-track-id-favoriters-params {
+    /// SoundCloud Track id
+    track-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>
+  }
+  get-tracks-track-id-favoriters: func(params: get-tracks-track-id-favoriters-params) -> result<string, string>;
 
   /// Returns all related tracks of track on SoundCloud.
-  get-tracks-track-id-related: func() -> result<string, string>;
+  record get-tracks-track-id-related-params {
+    /// SoundCloud Track id
+    track-id: string,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-tracks-track-id-related-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-tracks-track-id-related: func(params: get-tracks-track-id-related-params) -> result<string, string>;
 
   /// Returns a collection of track's reposters.
-  get-tracks-track-id-reposters: func() -> result<string, string>;
+  record get-tracks-track-id-reposters-params {
+    /// SoundCloud Track id
+    track-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-tracks-track-id-reposters: func(params: get-tracks-track-id-reposters-params) -> result<string, string>;
 
   /// Returns a track's streamable URLs
-  get-tracks-track-id-streams: func() -> result<string, string>;
+  record get-tracks-track-id-streams-params {
+    /// SoundCloud Track id
+    track-id: string,
+    /// A secret token to fetch private playlists/tracks
+    secret-token: option<string>
+  }
+  get-tracks-track-id-streams: func(params: get-tracks-track-id-streams-params) -> result<string, string>;
 
 }
 
 interface users {
+  enum get-users-user-id-likes-tracks-access-item-enum {
+    playable,
+    preview,
+    blocked,
+  }
+
   /// Returns a user.
-  get-users-user-id: func() -> result<string, string>;
+  record get-users-user-id-params {
+    /// SoundCloud User id
+    user-id: string
+  }
+  get-users-user-id: func(params: get-users-user-id-params) -> result<string, string>;
 
   /// Returns a list of user's comments.
-  get-users-user-id-comments: func() -> result<string, string>;
+  record get-users-user-id-comments-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Offset of first result. Deprecated, use `linked_partitioning` instead.
+    offset: option<s32>
+  }
+  get-users-user-id-comments: func(params: get-users-user-id-comments-params) -> result<string, string>;
 
   /// Returns a list of user's favorited or liked tracks. (use /users/:userId/likes/tracks instead, to fetch a user's likes)
-  get-users-user-id-favorites: func() -> result<string, string>;
+  record get-users-user-id-favorites-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-users-user-id-favorites: func(params: get-users-user-id-favorites-params) -> result<string, string>;
 
   /// Returns a list of user’s followers.
-  get-users-user-id-followers: func() -> result<string, string>;
+  record get-users-user-id-followers-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-users-user-id-followers: func(params: get-users-user-id-followers-params) -> result<string, string>;
 
   /// Returns a list of user’s followings.
-  get-users-user-id-followings: func() -> result<string, string>;
+  record get-users-user-id-followings-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-users-user-id-followings: func(params: get-users-user-id-followings-params) -> result<string, string>;
 
   /// Returns a user's following. (use /users/{user_id} instead, to fetch the user details)
-  get-users-user-id-followings-following-id: func() -> result<string, string>;
+  record get-users-user-id-followings-following-id-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// SoundCloud User id to denote a Following of a user
+    following-id: string
+  }
+  get-users-user-id-followings-following-id: func(params: get-users-user-id-followings-following-id-params) -> result<string, string>;
 
   /// Returns a list of user's liked tracks.
-  get-users-user-id-likes-tracks: func() -> result<string, string>;
+  record get-users-user-id-likes-tracks-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-users-user-id-likes-tracks-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-users-user-id-likes-tracks: func(params: get-users-user-id-likes-tracks-params) -> result<string, string>;
 
   /// Returns a list of user's playlists.
-  get-users-user-id-playlists: func() -> result<string, string>;
+  record get-users-user-id-playlists-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-users-user-id-likes-tracks-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-users-user-id-playlists: func(params: get-users-user-id-playlists-params) -> result<string, string>;
 
   /// Returns a list of user's tracks.
-  get-users-user-id-tracks: func() -> result<string, string>;
+  record get-users-user-id-tracks-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Filters content by level of access the user (logged in or anonymous) has to the track. The result list will include only tracks with the specified access. Include all options if you'd like to see all possible tracks. See `Track#access` schema for more details.
+    access: option<list<get-users-user-id-likes-tracks-access-item-enum>>,
+    /// Number of results to return in the collection.
+    limit: option<s32>,
+    /// Returns paginated collection of items (recommended, returning a list without pagination is deprecated and should not be used)
+    linked-partitioning: option<bool>
+  }
+  get-users-user-id-tracks: func(params: get-users-user-id-tracks-params) -> result<string, string>;
 
   /// Returns list of user's links added to their profile (website, facebook, instagram).
-  get-users-user-id-web-profiles: func() -> result<string, string>;
+  record get-users-user-id-web-profiles-params {
+    /// SoundCloud User id
+    user-id: string,
+    /// Number of results to return in the collection.
+    limit: option<s32>
+  }
+  get-users-user-id-web-profiles: func(params: get-users-user-id-web-profiles-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability

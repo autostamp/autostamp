@@ -322,6 +322,7 @@ const OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/relay-auto-configs/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -331,6 +332,7 @@ const OP_RELAY_PROXY_CONFIGURATIONS_PATCH_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/account/relay-auto-configs/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -340,6 +342,7 @@ const OP_RELAY_PROXY_CONFIGURATIONS_DELETE_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/account/relay-auto-configs/{id}",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -349,10 +352,37 @@ const OP_RELAY_PROXY_CONFIGURATIONS_RESET_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/account/relay-auto-configs/{id}/reset",
     fields: &[
+        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_relay_proxy_configurations__get_relay_proxy_config_params__to_json(p: &iface_relay_proxy_configurations::GetRelayProxyConfigParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__patch_relay_proxy_config_params__to_json(p: &iface_relay_proxy_configurations::PatchRelayProxyConfigParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__delete_relay_proxy_config_params__to_json(p: &iface_relay_proxy_configurations::DeleteRelayProxyConfigParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__reset_relay_proxy_config_params__to_json(p: &iface_relay_proxy_configurations::ResetRelayProxyConfigParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 impl iface_relay_proxy_configurations::Guest for crate::Component {
     fn get_relay_proxy_configs() -> Result<String, String> {
@@ -361,17 +391,21 @@ impl iface_relay_proxy_configurations::Guest for crate::Component {
     fn post_relay_auto_config() -> Result<String, String> {
         dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_POST_RELAY_AUTO_CONFIG, Value::Object(Map::new()))
     }
-    fn get_relay_proxy_config() -> Result<String, String> {
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIG, Value::Object(Map::new()))
+    fn get_relay_proxy_config(params: iface_relay_proxy_configurations::GetRelayProxyConfigParams) -> Result<String, String> {
+        let json = iface_relay_proxy_configurations__get_relay_proxy_config_params__to_json(&params);
+        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIG, json)
     }
-    fn patch_relay_proxy_config() -> Result<String, String> {
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_PATCH_RELAY_PROXY_CONFIG, Value::Object(Map::new()))
+    fn patch_relay_proxy_config(params: iface_relay_proxy_configurations::PatchRelayProxyConfigParams) -> Result<String, String> {
+        let json = iface_relay_proxy_configurations__patch_relay_proxy_config_params__to_json(&params);
+        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_PATCH_RELAY_PROXY_CONFIG, json)
     }
-    fn delete_relay_proxy_config() -> Result<String, String> {
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_DELETE_RELAY_PROXY_CONFIG, Value::Object(Map::new()))
+    fn delete_relay_proxy_config(params: iface_relay_proxy_configurations::DeleteRelayProxyConfigParams) -> Result<String, String> {
+        let json = iface_relay_proxy_configurations__delete_relay_proxy_config_params__to_json(&params);
+        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_DELETE_RELAY_PROXY_CONFIG, json)
     }
-    fn reset_relay_proxy_config() -> Result<String, String> {
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_RESET_RELAY_PROXY_CONFIG, Value::Object(Map::new()))
+    fn reset_relay_proxy_config(params: iface_relay_proxy_configurations::ResetRelayProxyConfigParams) -> Result<String, String> {
+        let json = iface_relay_proxy_configurations__reset_relay_proxy_config_params__to_json(&params);
+        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_RESET_RELAY_PROXY_CONFIG, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::audit_log as iface_audit_log;
@@ -380,6 +414,11 @@ const OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auditlog",
     fields: &[
+        FieldSpec { snake: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "after", location: FieldLocation::Query },
+        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "spec", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -389,17 +428,36 @@ const OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auditlog/{resource_id}",
     fields: &[
+        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_audit_log__get_audit_log_entries_params__to_json(p: &iface_audit_log::GetAuditLogEntriesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("before".into(), match (&p.before) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("after".into(), match (&p.after) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("q".into(), match (&p.q) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("spec".into(), match (&p.spec) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__get_audit_log_entry_params__to_json(p: &iface_audit_log::GetAuditLogEntryParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_id".into(), Value::String((&p.resource_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_audit_log::Guest for crate::Component {
-    fn get_audit_log_entries() -> Result<String, String> {
-        dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRIES, Value::Object(Map::new()))
+    fn get_audit_log_entries(params: iface_audit_log::GetAuditLogEntriesParams) -> Result<String, String> {
+        let json = iface_audit_log__get_audit_log_entries_params__to_json(&params);
+        dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRIES, json)
     }
-    fn get_audit_log_entry() -> Result<String, String> {
-        dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRY, Value::Object(Map::new()))
+    fn get_audit_log_entry(params: iface_audit_log::GetAuditLogEntryParams) -> Result<String, String> {
+        let json = iface_audit_log__get_audit_log_entry_params__to_json(&params);
+        dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRY, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::data_export_destinations as iface_data_export_destinations;
@@ -417,6 +475,8 @@ const OP_DATA_EXPORT_DESTINATIONS_POST_DESTINATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/destinations/{project_key}/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -426,6 +486,9 @@ const OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/destinations/{project_key}/{environment_key}/{destination_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "destination_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -435,6 +498,9 @@ const OP_DATA_EXPORT_DESTINATIONS_PATCH_DESTINATION: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/destinations/{project_key}/{environment_key}/{destination_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "destination_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -444,26 +510,64 @@ const OP_DATA_EXPORT_DESTINATIONS_DELETE_DESTINATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/destinations/{project_key}/{environment_key}/{destination_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "destination_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_data_export_destinations__post_destination_params__to_json(p: &iface_data_export_destinations::PostDestinationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_data_export_destinations__get_destination_params__to_json(p: &iface_data_export_destinations::GetDestinationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("destination_id".into(), Value::String((&p.destination_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_data_export_destinations__patch_destination_params__to_json(p: &iface_data_export_destinations::PatchDestinationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("destination_id".into(), Value::String((&p.destination_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_data_export_destinations__delete_destination_params__to_json(p: &iface_data_export_destinations::DeleteDestinationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("destination_id".into(), Value::String((&p.destination_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_data_export_destinations::Guest for crate::Component {
     fn get_destinations() -> Result<String, String> {
         dispatch(&OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATIONS, Value::Object(Map::new()))
     }
-    fn post_destination() -> Result<String, String> {
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_POST_DESTINATION, Value::Object(Map::new()))
+    fn post_destination(params: iface_data_export_destinations::PostDestinationParams) -> Result<String, String> {
+        let json = iface_data_export_destinations__post_destination_params__to_json(&params);
+        dispatch(&OP_DATA_EXPORT_DESTINATIONS_POST_DESTINATION, json)
     }
-    fn get_destination() -> Result<String, String> {
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATION, Value::Object(Map::new()))
+    fn get_destination(params: iface_data_export_destinations::GetDestinationParams) -> Result<String, String> {
+        let json = iface_data_export_destinations__get_destination_params__to_json(&params);
+        dispatch(&OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATION, json)
     }
-    fn patch_destination() -> Result<String, String> {
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_PATCH_DESTINATION, Value::Object(Map::new()))
+    fn patch_destination(params: iface_data_export_destinations::PatchDestinationParams) -> Result<String, String> {
+        let json = iface_data_export_destinations__patch_destination_params__to_json(&params);
+        dispatch(&OP_DATA_EXPORT_DESTINATIONS_PATCH_DESTINATION, json)
     }
-    fn delete_destination() -> Result<String, String> {
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_DELETE_DESTINATION, Value::Object(Map::new()))
+    fn delete_destination(params: iface_data_export_destinations::DeleteDestinationParams) -> Result<String, String> {
+        let json = iface_data_export_destinations__delete_destination_params__to_json(&params);
+        dispatch(&OP_DATA_EXPORT_DESTINATIONS_DELETE_DESTINATION, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::feature_flags as iface_feature_flags;
@@ -472,6 +576,8 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS_ACROSS_ENVIRONMENTS: OpSpec = OpS
     method: "GET",
     path_template: "/flag-status/{project_key}/{feature_flag_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -481,6 +587,8 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUSES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flag-statuses/{project_key}/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -490,6 +598,9 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flag-statuses/{project_key}/{environment_key}/{feature_flag_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -499,6 +610,15 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flags/{project_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "env", location: FieldLocation::Query },
+        FieldSpec { snake: "summary", location: FieldLocation::Query },
+        FieldSpec { snake: "archived", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "tag", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -508,6 +628,8 @@ const OP_FEATURE_FLAGS_POST_FEATURE_FLAG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/flags/{project_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "clone", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -517,6 +639,9 @@ const OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_ENVIRONMENT_KEY_FEATURE_FLAG_KEY_DE
     method: "GET",
     path_template: "/flags/{project_key}/{environment_key}/{feature_flag_key}/dependent-flags",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -526,6 +651,9 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flags/{project_key}/{feature_flag_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "env", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -535,6 +663,8 @@ const OP_FEATURE_FLAGS_PATCH_FEATURE_FLAG: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/flags/{project_key}/{feature_flag_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -544,6 +674,8 @@ const OP_FEATURE_FLAGS_DELETE_FEATURE_FLAG: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/flags/{project_key}/{feature_flag_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -553,6 +685,8 @@ const OP_FEATURE_FLAGS_COPY_FEATURE_FLAG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/flags/{project_key}/{feature_flag_key}/copy",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -562,6 +696,8 @@ const OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS: O
     method: "GET",
     path_template: "/flags/{project_key}/{feature_flag_key}/dependent-flags",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -571,6 +707,9 @@ const OP_FEATURE_FLAGS_GET_EXPIRING_USER_TARGETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flags/{project_key}/{feature_flag_key}/expiring-user-targets/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -580,6 +719,9 @@ const OP_FEATURE_FLAGS_PATCH_EXPIRING_USER_TARGETS: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/flags/{project_key}/{feature_flag_key}/expiring-user-targets/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -589,6 +731,9 @@ const OP_FEATURE_FLAGS_GET_APPROVAL_REQUESTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -598,6 +743,10 @@ const OP_FEATURE_FLAGS_GET_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -607,6 +756,10 @@ const OP_FEATURE_FLAGS_POST_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -616,6 +769,10 @@ const OP_FEATURE_FLAGS_DELETE_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -625,6 +782,10 @@ const OP_FEATURE_FLAGS_POST_APPLY_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}/apply",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -634,6 +795,10 @@ const OP_FEATURE_FLAGS_POST_REVIEW_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}/review",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -643,6 +808,9 @@ const OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -652,6 +820,9 @@ const OP_FEATURE_FLAGS_POST_FLAG_CONFIG_SCHEDULED_CHANGES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -661,6 +832,9 @@ const OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES_CONFLICTS: OpSpec = OpS
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes-conflicts",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -670,6 +844,10 @@ const OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes/{scheduled_change_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "scheduled_change_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -679,6 +857,10 @@ const OP_FEATURE_FLAGS_PATCH_FLAG_CONFIG_SCHEDULED_CHANGE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes/{scheduled_change_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "scheduled_change_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -688,86 +870,322 @@ const OP_FEATURE_FLAGS_DELETE_FLAG_CONFIG_SCHEDULED_CHANGES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes/{scheduled_change_id}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "scheduled_change_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_feature_flags__get_feature_flag_status_across_environments_params__to_json(p: &iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_feature_flag_statuses_params__to_json(p: &iface_feature_flags::GetFeatureFlagStatusesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_feature_flag_status_params__to_json(p: &iface_feature_flags::GetFeatureFlagStatusParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_feature_flags_params__to_json(p: &iface_feature_flags::GetFeatureFlagsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("env".into(), match (&p.env) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__post_feature_flag_params__to_json(p: &iface_feature_flags::PostFeatureFlagParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("clone".into(), match (&p.clone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_flags_project_key_environment_key_feature_flag_key_dependent_flags_params__to_json(p: &iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_feature_flag_params__to_json(p: &iface_feature_flags::GetFeatureFlagParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("env".into(), match (&p.env) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__patch_feature_flag_params__to_json(p: &iface_feature_flags::PatchFeatureFlagParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__delete_feature_flag_params__to_json(p: &iface_feature_flags::DeleteFeatureFlagParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__copy_feature_flag_params__to_json(p: &iface_feature_flags::CopyFeatureFlagParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_flags_project_key_feature_flag_key_dependent_flags_params__to_json(p: &iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_expiring_user_targets_params__to_json(p: &iface_feature_flags::GetExpiringUserTargetsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__patch_expiring_user_targets_params__to_json(p: &iface_feature_flags::PatchExpiringUserTargetsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_approval_requests_params__to_json(p: &iface_feature_flags::GetApprovalRequestsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_approval_request_params__to_json(p: &iface_feature_flags::GetApprovalRequestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("approval_request_id".into(), Value::String((&p.approval_request_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__post_approval_request_params__to_json(p: &iface_feature_flags::PostApprovalRequestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("approval_request_id".into(), Value::String((&p.approval_request_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__delete_approval_request_params__to_json(p: &iface_feature_flags::DeleteApprovalRequestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("approval_request_id".into(), Value::String((&p.approval_request_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__post_apply_approval_request_params__to_json(p: &iface_feature_flags::PostApplyApprovalRequestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("approval_request_id".into(), Value::String((&p.approval_request_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__post_review_approval_request_params__to_json(p: &iface_feature_flags::PostReviewApprovalRequestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("approval_request_id".into(), Value::String((&p.approval_request_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_changes_params__to_json(p: &iface_feature_flags::GetFlagConfigScheduledChangesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__post_flag_config_scheduled_changes_params__to_json(p: &iface_feature_flags::PostFlagConfigScheduledChangesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_changes_conflicts_params__to_json(p: &iface_feature_flags::GetFlagConfigScheduledChangesConflictsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_change_params__to_json(p: &iface_feature_flags::GetFlagConfigScheduledChangeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("scheduled_change_id".into(), Value::String((&p.scheduled_change_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__patch_flag_config_scheduled_change_params__to_json(p: &iface_feature_flags::PatchFlagConfigScheduledChangeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("scheduled_change_id".into(), Value::String((&p.scheduled_change_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__delete_flag_config_scheduled_changes_params__to_json(p: &iface_feature_flags::DeleteFlagConfigScheduledChangesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("scheduled_change_id".into(), Value::String((&p.scheduled_change_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_feature_flags::Guest for crate::Component {
-    fn get_feature_flag_status_across_environments() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS_ACROSS_ENVIRONMENTS, Value::Object(Map::new()))
+    fn get_feature_flag_status_across_environments(params: iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_feature_flag_status_across_environments_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS_ACROSS_ENVIRONMENTS, json)
     }
-    fn get_feature_flag_statuses() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUSES, Value::Object(Map::new()))
+    fn get_feature_flag_statuses(params: iface_feature_flags::GetFeatureFlagStatusesParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_feature_flag_statuses_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUSES, json)
     }
-    fn get_feature_flag_status() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS, Value::Object(Map::new()))
+    fn get_feature_flag_status(params: iface_feature_flags::GetFeatureFlagStatusParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_feature_flag_status_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS, json)
     }
-    fn get_feature_flags() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAGS, Value::Object(Map::new()))
+    fn get_feature_flags(params: iface_feature_flags::GetFeatureFlagsParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_feature_flags_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAGS, json)
     }
-    fn post_feature_flag() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_POST_FEATURE_FLAG, Value::Object(Map::new()))
+    fn post_feature_flag(params: iface_feature_flags::PostFeatureFlagParams) -> Result<String, String> {
+        let json = iface_feature_flags__post_feature_flag_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_POST_FEATURE_FLAG, json)
     }
-    fn get_flags_project_key_environment_key_feature_flag_key_dependent_flags() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_ENVIRONMENT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, Value::Object(Map::new()))
+    fn get_flags_project_key_environment_key_feature_flag_key_dependent_flags(params: iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_flags_project_key_environment_key_feature_flag_key_dependent_flags_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_ENVIRONMENT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, json)
     }
-    fn get_feature_flag() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG, Value::Object(Map::new()))
+    fn get_feature_flag(params: iface_feature_flags::GetFeatureFlagParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_feature_flag_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG, json)
     }
-    fn patch_feature_flag() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_PATCH_FEATURE_FLAG, Value::Object(Map::new()))
+    fn patch_feature_flag(params: iface_feature_flags::PatchFeatureFlagParams) -> Result<String, String> {
+        let json = iface_feature_flags__patch_feature_flag_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_PATCH_FEATURE_FLAG, json)
     }
-    fn delete_feature_flag() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_DELETE_FEATURE_FLAG, Value::Object(Map::new()))
+    fn delete_feature_flag(params: iface_feature_flags::DeleteFeatureFlagParams) -> Result<String, String> {
+        let json = iface_feature_flags__delete_feature_flag_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_DELETE_FEATURE_FLAG, json)
     }
-    fn copy_feature_flag() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_COPY_FEATURE_FLAG, Value::Object(Map::new()))
+    fn copy_feature_flag(params: iface_feature_flags::CopyFeatureFlagParams) -> Result<String, String> {
+        let json = iface_feature_flags__copy_feature_flag_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_COPY_FEATURE_FLAG, json)
     }
-    fn get_flags_project_key_feature_flag_key_dependent_flags() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, Value::Object(Map::new()))
+    fn get_flags_project_key_feature_flag_key_dependent_flags(params: iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_flags_project_key_feature_flag_key_dependent_flags_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, json)
     }
-    fn get_expiring_user_targets() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_EXPIRING_USER_TARGETS, Value::Object(Map::new()))
+    fn get_expiring_user_targets(params: iface_feature_flags::GetExpiringUserTargetsParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_expiring_user_targets_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_EXPIRING_USER_TARGETS, json)
     }
-    fn patch_expiring_user_targets() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_PATCH_EXPIRING_USER_TARGETS, Value::Object(Map::new()))
+    fn patch_expiring_user_targets(params: iface_feature_flags::PatchExpiringUserTargetsParams) -> Result<String, String> {
+        let json = iface_feature_flags__patch_expiring_user_targets_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_PATCH_EXPIRING_USER_TARGETS, json)
     }
-    fn get_approval_requests() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUESTS, Value::Object(Map::new()))
+    fn get_approval_requests(params: iface_feature_flags::GetApprovalRequestsParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_approval_requests_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUESTS, json)
     }
-    fn get_approval_request() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUEST, Value::Object(Map::new()))
+    fn get_approval_request(params: iface_feature_flags::GetApprovalRequestParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_approval_request_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUEST, json)
     }
-    fn post_approval_request() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_POST_APPROVAL_REQUEST, Value::Object(Map::new()))
+    fn post_approval_request(params: iface_feature_flags::PostApprovalRequestParams) -> Result<String, String> {
+        let json = iface_feature_flags__post_approval_request_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_POST_APPROVAL_REQUEST, json)
     }
-    fn delete_approval_request() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_DELETE_APPROVAL_REQUEST, Value::Object(Map::new()))
+    fn delete_approval_request(params: iface_feature_flags::DeleteApprovalRequestParams) -> Result<String, String> {
+        let json = iface_feature_flags__delete_approval_request_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_DELETE_APPROVAL_REQUEST, json)
     }
-    fn post_apply_approval_request() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_POST_APPLY_APPROVAL_REQUEST, Value::Object(Map::new()))
+    fn post_apply_approval_request(params: iface_feature_flags::PostApplyApprovalRequestParams) -> Result<String, String> {
+        let json = iface_feature_flags__post_apply_approval_request_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_POST_APPLY_APPROVAL_REQUEST, json)
     }
-    fn post_review_approval_request() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_POST_REVIEW_APPROVAL_REQUEST, Value::Object(Map::new()))
+    fn post_review_approval_request(params: iface_feature_flags::PostReviewApprovalRequestParams) -> Result<String, String> {
+        let json = iface_feature_flags__post_review_approval_request_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_POST_REVIEW_APPROVAL_REQUEST, json)
     }
-    fn get_flag_config_scheduled_changes() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES, Value::Object(Map::new()))
+    fn get_flag_config_scheduled_changes(params: iface_feature_flags::GetFlagConfigScheduledChangesParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_flag_config_scheduled_changes_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES, json)
     }
-    fn post_flag_config_scheduled_changes() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_POST_FLAG_CONFIG_SCHEDULED_CHANGES, Value::Object(Map::new()))
+    fn post_flag_config_scheduled_changes(params: iface_feature_flags::PostFlagConfigScheduledChangesParams) -> Result<String, String> {
+        let json = iface_feature_flags__post_flag_config_scheduled_changes_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_POST_FLAG_CONFIG_SCHEDULED_CHANGES, json)
     }
-    fn get_flag_config_scheduled_changes_conflicts() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES_CONFLICTS, Value::Object(Map::new()))
+    fn get_flag_config_scheduled_changes_conflicts(params: iface_feature_flags::GetFlagConfigScheduledChangesConflictsParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_flag_config_scheduled_changes_conflicts_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES_CONFLICTS, json)
     }
-    fn get_flag_config_scheduled_change() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGE, Value::Object(Map::new()))
+    fn get_flag_config_scheduled_change(params: iface_feature_flags::GetFlagConfigScheduledChangeParams) -> Result<String, String> {
+        let json = iface_feature_flags__get_flag_config_scheduled_change_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGE, json)
     }
-    fn patch_flag_config_scheduled_change() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_PATCH_FLAG_CONFIG_SCHEDULED_CHANGE, Value::Object(Map::new()))
+    fn patch_flag_config_scheduled_change(params: iface_feature_flags::PatchFlagConfigScheduledChangeParams) -> Result<String, String> {
+        let json = iface_feature_flags__patch_flag_config_scheduled_change_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_PATCH_FLAG_CONFIG_SCHEDULED_CHANGE, json)
     }
-    fn delete_flag_config_scheduled_changes() -> Result<String, String> {
-        dispatch(&OP_FEATURE_FLAGS_DELETE_FLAG_CONFIG_SCHEDULED_CHANGES, Value::Object(Map::new()))
+    fn delete_flag_config_scheduled_changes(params: iface_feature_flags::DeleteFlagConfigScheduledChangesParams) -> Result<String, String> {
+        let json = iface_feature_flags__delete_flag_config_scheduled_changes_params__to_json(&params);
+        dispatch(&OP_FEATURE_FLAGS_DELETE_FLAG_CONFIG_SCHEDULED_CHANGES, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::integrations as iface_integrations;
@@ -785,6 +1203,7 @@ const OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/integrations/{integration_key}",
     fields: &[
+        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -794,6 +1213,7 @@ const OP_INTEGRATIONS_POST_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/integrations/{integration_key}",
     fields: &[
+        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -803,6 +1223,8 @@ const OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/integrations/{integration_key}/{integration_id}",
     fields: &[
+        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -812,6 +1234,8 @@ const OP_INTEGRATIONS_PATCH_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/integrations/{integration_key}/{integration_id}",
     fields: &[
+        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -821,29 +1245,69 @@ const OP_INTEGRATIONS_DELETE_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/integrations/{integration_key}/{integration_id}",
     fields: &[
+        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_integrations__get_integration_subscriptions_params__to_json(p: &iface_integrations::GetIntegrationSubscriptionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("integration_key".into(), Value::String((&p.integration_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_integrations__post_integration_subscription_params__to_json(p: &iface_integrations::PostIntegrationSubscriptionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("integration_key".into(), Value::String((&p.integration_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_integrations__get_integration_subscription_params__to_json(p: &iface_integrations::GetIntegrationSubscriptionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("integration_key".into(), Value::String((&p.integration_key).clone()));
+    m.insert("integration_id".into(), Value::String((&p.integration_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_integrations__patch_integration_subscription_params__to_json(p: &iface_integrations::PatchIntegrationSubscriptionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("integration_key".into(), Value::String((&p.integration_key).clone()));
+    m.insert("integration_id".into(), Value::String((&p.integration_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_integrations__delete_integration_subscription_params__to_json(p: &iface_integrations::DeleteIntegrationSubscriptionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("integration_key".into(), Value::String((&p.integration_key).clone()));
+    m.insert("integration_id".into(), Value::String((&p.integration_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_integrations::Guest for crate::Component {
     fn get_integrations() -> Result<String, String> {
         dispatch(&OP_INTEGRATIONS_GET_INTEGRATIONS, Value::Object(Map::new()))
     }
-    fn get_integration_subscriptions() -> Result<String, String> {
-        dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTIONS, Value::Object(Map::new()))
+    fn get_integration_subscriptions(params: iface_integrations::GetIntegrationSubscriptionsParams) -> Result<String, String> {
+        let json = iface_integrations__get_integration_subscriptions_params__to_json(&params);
+        dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTIONS, json)
     }
-    fn post_integration_subscription() -> Result<String, String> {
-        dispatch(&OP_INTEGRATIONS_POST_INTEGRATION_SUBSCRIPTION, Value::Object(Map::new()))
+    fn post_integration_subscription(params: iface_integrations::PostIntegrationSubscriptionParams) -> Result<String, String> {
+        let json = iface_integrations__post_integration_subscription_params__to_json(&params);
+        dispatch(&OP_INTEGRATIONS_POST_INTEGRATION_SUBSCRIPTION, json)
     }
-    fn get_integration_subscription() -> Result<String, String> {
-        dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTION, Value::Object(Map::new()))
+    fn get_integration_subscription(params: iface_integrations::GetIntegrationSubscriptionParams) -> Result<String, String> {
+        let json = iface_integrations__get_integration_subscription_params__to_json(&params);
+        dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTION, json)
     }
-    fn patch_integration_subscription() -> Result<String, String> {
-        dispatch(&OP_INTEGRATIONS_PATCH_INTEGRATION_SUBSCRIPTION, Value::Object(Map::new()))
+    fn patch_integration_subscription(params: iface_integrations::PatchIntegrationSubscriptionParams) -> Result<String, String> {
+        let json = iface_integrations__patch_integration_subscription_params__to_json(&params);
+        dispatch(&OP_INTEGRATIONS_PATCH_INTEGRATION_SUBSCRIPTION, json)
     }
-    fn delete_integration_subscription() -> Result<String, String> {
-        dispatch(&OP_INTEGRATIONS_DELETE_INTEGRATION_SUBSCRIPTION, Value::Object(Map::new()))
+    fn delete_integration_subscription(params: iface_integrations::DeleteIntegrationSubscriptionParams) -> Result<String, String> {
+        let json = iface_integrations__delete_integration_subscription_params__to_json(&params);
+        dispatch(&OP_INTEGRATIONS_DELETE_INTEGRATION_SUBSCRIPTION, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::team_members as iface_team_members;
@@ -852,6 +1316,10 @@ const OP_TEAM_MEMBERS_GET_MEMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -879,6 +1347,7 @@ const OP_TEAM_MEMBERS_GET_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{member_id}",
     fields: &[
+        FieldSpec { snake: "member_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -888,6 +1357,7 @@ const OP_TEAM_MEMBERS_PATCH_MEMBER: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/members/{member_id}",
     fields: &[
+        FieldSpec { snake: "member_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -897,14 +1367,43 @@ const OP_TEAM_MEMBERS_DELETE_MEMBER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/members/{member_id}",
     fields: &[
+        FieldSpec { snake: "member_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_team_members__get_members_params__to_json(p: &iface_team_members::GetMembersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team_members__get_member_params__to_json(p: &iface_team_members::GetMemberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("member_id".into(), Value::String((&p.member_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_team_members__patch_member_params__to_json(p: &iface_team_members::PatchMemberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("member_id".into(), Value::String((&p.member_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_team_members__delete_member_params__to_json(p: &iface_team_members::DeleteMemberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("member_id".into(), Value::String((&p.member_id).clone()));
+    Value::Object(m)
+}
+
 impl iface_team_members::Guest for crate::Component {
-    fn get_members() -> Result<String, String> {
-        dispatch(&OP_TEAM_MEMBERS_GET_MEMBERS, Value::Object(Map::new()))
+    fn get_members(params: iface_team_members::GetMembersParams) -> Result<String, String> {
+        let json = iface_team_members__get_members_params__to_json(&params);
+        dispatch(&OP_TEAM_MEMBERS_GET_MEMBERS, json)
     }
     fn post_members() -> Result<String, String> {
         dispatch(&OP_TEAM_MEMBERS_POST_MEMBERS, Value::Object(Map::new()))
@@ -912,14 +1411,17 @@ impl iface_team_members::Guest for crate::Component {
     fn get_me() -> Result<String, String> {
         dispatch(&OP_TEAM_MEMBERS_GET_ME, Value::Object(Map::new()))
     }
-    fn get_member() -> Result<String, String> {
-        dispatch(&OP_TEAM_MEMBERS_GET_MEMBER, Value::Object(Map::new()))
+    fn get_member(params: iface_team_members::GetMemberParams) -> Result<String, String> {
+        let json = iface_team_members__get_member_params__to_json(&params);
+        dispatch(&OP_TEAM_MEMBERS_GET_MEMBER, json)
     }
-    fn patch_member() -> Result<String, String> {
-        dispatch(&OP_TEAM_MEMBERS_PATCH_MEMBER, Value::Object(Map::new()))
+    fn patch_member(params: iface_team_members::PatchMemberParams) -> Result<String, String> {
+        let json = iface_team_members__patch_member_params__to_json(&params);
+        dispatch(&OP_TEAM_MEMBERS_PATCH_MEMBER, json)
     }
-    fn delete_member() -> Result<String, String> {
-        dispatch(&OP_TEAM_MEMBERS_DELETE_MEMBER, Value::Object(Map::new()))
+    fn delete_member(params: iface_team_members::DeleteMemberParams) -> Result<String, String> {
+        let json = iface_team_members__delete_member_params__to_json(&params);
+        dispatch(&OP_TEAM_MEMBERS_DELETE_MEMBER, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::projects as iface_projects;
@@ -946,6 +1448,7 @@ const OP_PROJECTS_GET_PROJECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -955,6 +1458,7 @@ const OP_PROJECTS_PATCH_PROJECT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/projects/{project_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -964,10 +1468,29 @@ const OP_PROJECTS_DELETE_PROJECT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_projects__get_project_params__to_json(p: &iface_projects::GetProjectParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__patch_project_params__to_json(p: &iface_projects::PatchProjectParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__delete_project_params__to_json(p: &iface_projects::DeleteProjectParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    Value::Object(m)
+}
 
 impl iface_projects::Guest for crate::Component {
     fn get_projects() -> Result<String, String> {
@@ -976,14 +1499,17 @@ impl iface_projects::Guest for crate::Component {
     fn post_project() -> Result<String, String> {
         dispatch(&OP_PROJECTS_POST_PROJECT, Value::Object(Map::new()))
     }
-    fn get_project() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_GET_PROJECT, Value::Object(Map::new()))
+    fn get_project(params: iface_projects::GetProjectParams) -> Result<String, String> {
+        let json = iface_projects__get_project_params__to_json(&params);
+        dispatch(&OP_PROJECTS_GET_PROJECT, json)
     }
-    fn patch_project() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_PATCH_PROJECT, Value::Object(Map::new()))
+    fn patch_project(params: iface_projects::PatchProjectParams) -> Result<String, String> {
+        let json = iface_projects__patch_project_params__to_json(&params);
+        dispatch(&OP_PROJECTS_PATCH_PROJECT, json)
     }
-    fn delete_project() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_DELETE_PROJECT, Value::Object(Map::new()))
+    fn delete_project(params: iface_projects::DeleteProjectParams) -> Result<String, String> {
+        let json = iface_projects__delete_project_params__to_json(&params);
+        dispatch(&OP_PROJECTS_DELETE_PROJECT, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::environments as iface_environments;
@@ -992,6 +1518,7 @@ const OP_ENVIRONMENTS_POST_ENVIRONMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/environments",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1001,6 +1528,8 @@ const OP_ENVIRONMENTS_GET_ENVIRONMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/environments/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1010,6 +1539,8 @@ const OP_ENVIRONMENTS_PATCH_ENVIRONMENT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/projects/{project_key}/environments/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1019,6 +1550,8 @@ const OP_ENVIRONMENTS_DELETE_ENVIRONMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}/environments/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1028,6 +1561,9 @@ const OP_ENVIRONMENTS_RESET_ENVIRONMENT_SDK_KEY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/environments/{environment_key}/apiKey",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1037,29 +1573,81 @@ const OP_ENVIRONMENTS_RESET_ENVIRONMENT_MOBILE_KEY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/environments/{environment_key}/mobileKey",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
 
+fn iface_environments__post_environment_params__to_json(p: &iface_environments::PostEnvironmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_environments__get_environment_params__to_json(p: &iface_environments::GetEnvironmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_environments__patch_environment_params__to_json(p: &iface_environments::PatchEnvironmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_environments__delete_environment_params__to_json(p: &iface_environments::DeleteEnvironmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_environments__reset_environment_sdk_key_params__to_json(p: &iface_environments::ResetEnvironmentSdkKeyParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__reset_environment_mobile_key_params__to_json(p: &iface_environments::ResetEnvironmentMobileKeyParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_environments::Guest for crate::Component {
-    fn post_environment() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_POST_ENVIRONMENT, Value::Object(Map::new()))
+    fn post_environment(params: iface_environments::PostEnvironmentParams) -> Result<String, String> {
+        let json = iface_environments__post_environment_params__to_json(&params);
+        dispatch(&OP_ENVIRONMENTS_POST_ENVIRONMENT, json)
     }
-    fn get_environment() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_GET_ENVIRONMENT, Value::Object(Map::new()))
+    fn get_environment(params: iface_environments::GetEnvironmentParams) -> Result<String, String> {
+        let json = iface_environments__get_environment_params__to_json(&params);
+        dispatch(&OP_ENVIRONMENTS_GET_ENVIRONMENT, json)
     }
-    fn patch_environment() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_PATCH_ENVIRONMENT, Value::Object(Map::new()))
+    fn patch_environment(params: iface_environments::PatchEnvironmentParams) -> Result<String, String> {
+        let json = iface_environments__patch_environment_params__to_json(&params);
+        dispatch(&OP_ENVIRONMENTS_PATCH_ENVIRONMENT, json)
     }
-    fn delete_environment() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_DELETE_ENVIRONMENT, Value::Object(Map::new()))
+    fn delete_environment(params: iface_environments::DeleteEnvironmentParams) -> Result<String, String> {
+        let json = iface_environments__delete_environment_params__to_json(&params);
+        dispatch(&OP_ENVIRONMENTS_DELETE_ENVIRONMENT, json)
     }
-    fn reset_environment_sdk_key() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_SDK_KEY, Value::Object(Map::new()))
+    fn reset_environment_sdk_key(params: iface_environments::ResetEnvironmentSdkKeyParams) -> Result<String, String> {
+        let json = iface_environments__reset_environment_sdk_key_params__to_json(&params);
+        dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_SDK_KEY, json)
     }
-    fn reset_environment_mobile_key() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_MOBILE_KEY, Value::Object(Map::new()))
+    fn reset_environment_mobile_key(params: iface_environments::ResetEnvironmentMobileKeyParams) -> Result<String, String> {
+        let json = iface_environments__reset_environment_mobile_key_params__to_json(&params);
+        dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_MOBILE_KEY, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::custom_roles as iface_custom_roles;
@@ -1086,6 +1674,7 @@ const OP_CUSTOM_ROLES_GET_CUSTOM_ROLE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/roles/{custom_role_key}",
     fields: &[
+        FieldSpec { snake: "custom_role_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1095,6 +1684,7 @@ const OP_CUSTOM_ROLES_PATCH_CUSTOM_ROLE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/roles/{custom_role_key}",
     fields: &[
+        FieldSpec { snake: "custom_role_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1104,10 +1694,29 @@ const OP_CUSTOM_ROLES_DELETE_CUSTOM_ROLE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/roles/{custom_role_key}",
     fields: &[
+        FieldSpec { snake: "custom_role_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_custom_roles__get_custom_role_params__to_json(p: &iface_custom_roles::GetCustomRoleParams) -> Value {
+    let mut m = Map::new();
+    m.insert("custom_role_key".into(), Value::String((&p.custom_role_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_custom_roles__patch_custom_role_params__to_json(p: &iface_custom_roles::PatchCustomRoleParams) -> Value {
+    let mut m = Map::new();
+    m.insert("custom_role_key".into(), Value::String((&p.custom_role_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_custom_roles__delete_custom_role_params__to_json(p: &iface_custom_roles::DeleteCustomRoleParams) -> Value {
+    let mut m = Map::new();
+    m.insert("custom_role_key".into(), Value::String((&p.custom_role_key).clone()));
+    Value::Object(m)
+}
 
 impl iface_custom_roles::Guest for crate::Component {
     fn get_custom_roles() -> Result<String, String> {
@@ -1116,14 +1725,17 @@ impl iface_custom_roles::Guest for crate::Component {
     fn post_custom_role() -> Result<String, String> {
         dispatch(&OP_CUSTOM_ROLES_POST_CUSTOM_ROLE, Value::Object(Map::new()))
     }
-    fn get_custom_role() -> Result<String, String> {
-        dispatch(&OP_CUSTOM_ROLES_GET_CUSTOM_ROLE, Value::Object(Map::new()))
+    fn get_custom_role(params: iface_custom_roles::GetCustomRoleParams) -> Result<String, String> {
+        let json = iface_custom_roles__get_custom_role_params__to_json(&params);
+        dispatch(&OP_CUSTOM_ROLES_GET_CUSTOM_ROLE, json)
     }
-    fn patch_custom_role() -> Result<String, String> {
-        dispatch(&OP_CUSTOM_ROLES_PATCH_CUSTOM_ROLE, Value::Object(Map::new()))
+    fn patch_custom_role(params: iface_custom_roles::PatchCustomRoleParams) -> Result<String, String> {
+        let json = iface_custom_roles__patch_custom_role_params__to_json(&params);
+        dispatch(&OP_CUSTOM_ROLES_PATCH_CUSTOM_ROLE, json)
     }
-    fn delete_custom_role() -> Result<String, String> {
-        dispatch(&OP_CUSTOM_ROLES_DELETE_CUSTOM_ROLE, Value::Object(Map::new()))
+    fn delete_custom_role(params: iface_custom_roles::DeleteCustomRoleParams) -> Result<String, String> {
+        let json = iface_custom_roles__delete_custom_role_params__to_json(&params);
+        dispatch(&OP_CUSTOM_ROLES_DELETE_CUSTOM_ROLE, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::user_segments as iface_user_segments;
@@ -1132,6 +1744,9 @@ const OP_USER_SEGMENTS_GET_USER_SEGMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/{project_key}/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "tag", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1141,6 +1756,8 @@ const OP_USER_SEGMENTS_POST_USER_SEGMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/segments/{project_key}/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1150,6 +1767,9 @@ const OP_USER_SEGMENTS_GET_USER_SEGMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1159,6 +1779,9 @@ const OP_USER_SEGMENTS_PATCH_USER_SEGMENT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1168,6 +1791,9 @@ const OP_USER_SEGMENTS_DELETE_USER_SEGMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1177,6 +1803,9 @@ const OP_USER_SEGMENTS_UPDATE_BIG_SEGMENT_TARGETS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}/users",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1186,6 +1815,9 @@ const OP_USER_SEGMENTS_GET_EXPIRING_USER_TARGETS_ON_SEGMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/{project_key}/{user_segment_key}/expiring-user-targets/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1195,35 +1827,109 @@ const OP_USER_SEGMENTS_PATCH_EXPIRING_USER_TARGETS_ON_SEGMENT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/segments/{project_key}/{user_segment_key}/expiring-user-targets/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_user_segments__get_user_segments_params__to_json(p: &iface_user_segments::GetUserSegmentsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__post_user_segment_params__to_json(p: &iface_user_segments::PostUserSegmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_segments__get_user_segment_params__to_json(p: &iface_user_segments::GetUserSegmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_segment_key".into(), Value::String((&p.user_segment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_segments__patch_user_segment_params__to_json(p: &iface_user_segments::PatchUserSegmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_segment_key".into(), Value::String((&p.user_segment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_segments__delete_user_segment_params__to_json(p: &iface_user_segments::DeleteUserSegmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_segment_key".into(), Value::String((&p.user_segment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_segments__update_big_segment_targets_params__to_json(p: &iface_user_segments::UpdateBigSegmentTargetsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_segment_key".into(), Value::String((&p.user_segment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_segments__get_expiring_user_targets_on_segment_params__to_json(p: &iface_user_segments::GetExpiringUserTargetsOnSegmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_segment_key".into(), Value::String((&p.user_segment_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_segments__patch_expiring_user_targets_on_segment_params__to_json(p: &iface_user_segments::PatchExpiringUserTargetsOnSegmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_segment_key".into(), Value::String((&p.user_segment_key).clone()));
+    Value::Object(m)
+}
+
 impl iface_user_segments::Guest for crate::Component {
-    fn get_user_segments() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENTS, Value::Object(Map::new()))
+    fn get_user_segments(params: iface_user_segments::GetUserSegmentsParams) -> Result<String, String> {
+        let json = iface_user_segments__get_user_segments_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENTS, json)
     }
-    fn post_user_segment() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_POST_USER_SEGMENT, Value::Object(Map::new()))
+    fn post_user_segment(params: iface_user_segments::PostUserSegmentParams) -> Result<String, String> {
+        let json = iface_user_segments__post_user_segment_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_POST_USER_SEGMENT, json)
     }
-    fn get_user_segment() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENT, Value::Object(Map::new()))
+    fn get_user_segment(params: iface_user_segments::GetUserSegmentParams) -> Result<String, String> {
+        let json = iface_user_segments__get_user_segment_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENT, json)
     }
-    fn patch_user_segment() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_PATCH_USER_SEGMENT, Value::Object(Map::new()))
+    fn patch_user_segment(params: iface_user_segments::PatchUserSegmentParams) -> Result<String, String> {
+        let json = iface_user_segments__patch_user_segment_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_PATCH_USER_SEGMENT, json)
     }
-    fn delete_user_segment() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_DELETE_USER_SEGMENT, Value::Object(Map::new()))
+    fn delete_user_segment(params: iface_user_segments::DeleteUserSegmentParams) -> Result<String, String> {
+        let json = iface_user_segments__delete_user_segment_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_DELETE_USER_SEGMENT, json)
     }
-    fn update_big_segment_targets() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_UPDATE_BIG_SEGMENT_TARGETS, Value::Object(Map::new()))
+    fn update_big_segment_targets(params: iface_user_segments::UpdateBigSegmentTargetsParams) -> Result<String, String> {
+        let json = iface_user_segments__update_big_segment_targets_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_UPDATE_BIG_SEGMENT_TARGETS, json)
     }
-    fn get_expiring_user_targets_on_segment() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_GET_EXPIRING_USER_TARGETS_ON_SEGMENT, Value::Object(Map::new()))
+    fn get_expiring_user_targets_on_segment(params: iface_user_segments::GetExpiringUserTargetsOnSegmentParams) -> Result<String, String> {
+        let json = iface_user_segments__get_expiring_user_targets_on_segment_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_GET_EXPIRING_USER_TARGETS_ON_SEGMENT, json)
     }
-    fn patch_expiring_user_targets_on_segment() -> Result<String, String> {
-        dispatch(&OP_USER_SEGMENTS_PATCH_EXPIRING_USER_TARGETS_ON_SEGMENT, Value::Object(Map::new()))
+    fn patch_expiring_user_targets_on_segment(params: iface_user_segments::PatchExpiringUserTargetsOnSegmentParams) -> Result<String, String> {
+        let json = iface_user_segments__patch_expiring_user_targets_on_segment_params__to_json(&params);
+        dispatch(&OP_USER_SEGMENTS_PATCH_EXPIRING_USER_TARGETS_ON_SEGMENT, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::access_tokens as iface_access_tokens;
@@ -1232,6 +1938,7 @@ const OP_ACCESS_TOKENS_GET_TOKENS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens",
     fields: &[
+        FieldSpec { snake: "show_all", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1250,6 +1957,7 @@ const OP_ACCESS_TOKENS_GET_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token_id}",
     fields: &[
+        FieldSpec { snake: "token_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1259,6 +1967,7 @@ const OP_ACCESS_TOKENS_PATCH_TOKEN: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/tokens/{token_id}",
     fields: &[
+        FieldSpec { snake: "token_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1268,6 +1977,7 @@ const OP_ACCESS_TOKENS_DELETE_TOKEN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/tokens/{token_id}",
     fields: &[
+        FieldSpec { snake: "token_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1277,29 +1987,67 @@ const OP_ACCESS_TOKENS_RESET_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tokens/{token_id}/reset",
     fields: &[
+        FieldSpec { snake: "token_id", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
 
+fn iface_access_tokens__get_tokens_params__to_json(p: &iface_access_tokens::GetTokensParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_all".into(), match (&p.show_all) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__get_token_params__to_json(p: &iface_access_tokens::GetTokenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("token_id".into(), Value::String((&p.token_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_access_tokens__patch_token_params__to_json(p: &iface_access_tokens::PatchTokenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("token_id".into(), Value::String((&p.token_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_access_tokens__delete_token_params__to_json(p: &iface_access_tokens::DeleteTokenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("token_id".into(), Value::String((&p.token_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_access_tokens__reset_token_params__to_json(p: &iface_access_tokens::ResetTokenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("token_id".into(), Value::String((&p.token_id).clone()));
+    m.insert("expiry".into(), match (&p.expiry) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_access_tokens::Guest for crate::Component {
-    fn get_tokens() -> Result<String, String> {
-        dispatch(&OP_ACCESS_TOKENS_GET_TOKENS, Value::Object(Map::new()))
+    fn get_tokens(params: iface_access_tokens::GetTokensParams) -> Result<String, String> {
+        let json = iface_access_tokens__get_tokens_params__to_json(&params);
+        dispatch(&OP_ACCESS_TOKENS_GET_TOKENS, json)
     }
     fn post_token() -> Result<String, String> {
         dispatch(&OP_ACCESS_TOKENS_POST_TOKEN, Value::Object(Map::new()))
     }
-    fn get_token() -> Result<String, String> {
-        dispatch(&OP_ACCESS_TOKENS_GET_TOKEN, Value::Object(Map::new()))
+    fn get_token(params: iface_access_tokens::GetTokenParams) -> Result<String, String> {
+        let json = iface_access_tokens__get_token_params__to_json(&params);
+        dispatch(&OP_ACCESS_TOKENS_GET_TOKEN, json)
     }
-    fn patch_token() -> Result<String, String> {
-        dispatch(&OP_ACCESS_TOKENS_PATCH_TOKEN, Value::Object(Map::new()))
+    fn patch_token(params: iface_access_tokens::PatchTokenParams) -> Result<String, String> {
+        let json = iface_access_tokens__patch_token_params__to_json(&params);
+        dispatch(&OP_ACCESS_TOKENS_PATCH_TOKEN, json)
     }
-    fn delete_token() -> Result<String, String> {
-        dispatch(&OP_ACCESS_TOKENS_DELETE_TOKEN, Value::Object(Map::new()))
+    fn delete_token(params: iface_access_tokens::DeleteTokenParams) -> Result<String, String> {
+        let json = iface_access_tokens__delete_token_params__to_json(&params);
+        dispatch(&OP_ACCESS_TOKENS_DELETE_TOKEN, json)
     }
-    fn reset_token() -> Result<String, String> {
-        dispatch(&OP_ACCESS_TOKENS_RESET_TOKEN, Value::Object(Map::new()))
+    fn reset_token(params: iface_access_tokens::ResetTokenParams) -> Result<String, String> {
+        let json = iface_access_tokens__reset_token_params__to_json(&params);
+        dispatch(&OP_ACCESS_TOKENS_RESET_TOKEN, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::customer_metrics as iface_customer_metrics;
@@ -1317,6 +2065,8 @@ const OP_CUSTOMER_METRICS_GET_EVALUATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/evaluations/{env_id}/{flag_key}",
     fields: &[
+        FieldSpec { snake: "env_id", location: FieldLocation::Path },
+        FieldSpec { snake: "flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1335,6 +2085,7 @@ const OP_CUSTOMER_METRICS_GET_EVENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/events/{type}",
     fields: &[
+        FieldSpec { snake: "type", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1371,6 +2122,7 @@ const OP_CUSTOMER_METRICS_GET_STREAM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/streams/{source}",
     fields: &[
+        FieldSpec { snake: "source", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1380,6 +2132,7 @@ const OP_CUSTOMER_METRICS_GET_STREAM_BY_SDK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/streams/{source}/bysdkversion",
     fields: &[
+        FieldSpec { snake: "source", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1389,23 +2142,57 @@ const OP_CUSTOMER_METRICS_GET_STREAM_SDK_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/streams/{source}/sdkversions",
     fields: &[
+        FieldSpec { snake: "source", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_customer_metrics__get_evaluations_params__to_json(p: &iface_customer_metrics::GetEvaluationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("env_id".into(), Value::String((&p.env_id).clone()));
+    m.insert("flag_key".into(), Value::String((&p.flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__get_event_params__to_json(p: &iface_customer_metrics::GetEventParams) -> Value {
+    let mut m = Map::new();
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__get_stream_params__to_json(p: &iface_customer_metrics::GetStreamParams) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), Value::String((&p.source).clone()));
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__get_stream_by_sdk_params__to_json(p: &iface_customer_metrics::GetStreamBySdkParams) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), Value::String((&p.source).clone()));
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__get_stream_sdk_version_params__to_json(p: &iface_customer_metrics::GetStreamSdkVersionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), Value::String((&p.source).clone()));
+    Value::Object(m)
+}
+
 impl iface_customer_metrics::Guest for crate::Component {
     fn get_usage() -> Result<String, String> {
         dispatch(&OP_CUSTOMER_METRICS_GET_USAGE, Value::Object(Map::new()))
     }
-    fn get_evaluations() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_EVALUATIONS, Value::Object(Map::new()))
+    fn get_evaluations(params: iface_customer_metrics::GetEvaluationsParams) -> Result<String, String> {
+        let json = iface_customer_metrics__get_evaluations_params__to_json(&params);
+        dispatch(&OP_CUSTOMER_METRICS_GET_EVALUATIONS, json)
     }
     fn get_events() -> Result<String, String> {
         dispatch(&OP_CUSTOMER_METRICS_GET_EVENTS, Value::Object(Map::new()))
     }
-    fn get_event() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_EVENT, Value::Object(Map::new()))
+    fn get_event(params: iface_customer_metrics::GetEventParams) -> Result<String, String> {
+        let json = iface_customer_metrics__get_event_params__to_json(&params);
+        dispatch(&OP_CUSTOMER_METRICS_GET_EVENT, json)
     }
     fn get_mau() -> Result<String, String> {
         dispatch(&OP_CUSTOMER_METRICS_GET_MAU, Value::Object(Map::new()))
@@ -1416,14 +2203,17 @@ impl iface_customer_metrics::Guest for crate::Component {
     fn get_streams() -> Result<String, String> {
         dispatch(&OP_CUSTOMER_METRICS_GET_STREAMS, Value::Object(Map::new()))
     }
-    fn get_stream() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM, Value::Object(Map::new()))
+    fn get_stream(params: iface_customer_metrics::GetStreamParams) -> Result<String, String> {
+        let json = iface_customer_metrics__get_stream_params__to_json(&params);
+        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM, json)
     }
-    fn get_stream_by_sdk() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_BY_SDK, Value::Object(Map::new()))
+    fn get_stream_by_sdk(params: iface_customer_metrics::GetStreamBySdkParams) -> Result<String, String> {
+        let json = iface_customer_metrics__get_stream_by_sdk_params__to_json(&params);
+        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_BY_SDK, json)
     }
-    fn get_stream_sdk_version() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_SDK_VERSION, Value::Object(Map::new()))
+    fn get_stream_sdk_version(params: iface_customer_metrics::GetStreamSdkVersionParams) -> Result<String, String> {
+        let json = iface_customer_metrics__get_stream_sdk_version_params__to_json(&params);
+        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_SDK_VERSION, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::users as iface_users;
@@ -1432,6 +2222,12 @@ const OP_USERS_GET_SEARCH_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user-search/{project_key}/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "after", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1441,6 +2237,11 @@ const OP_USERS_GET_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "h", location: FieldLocation::Query },
+        FieldSpec { snake: "scroll_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1450,6 +2251,9 @@ const OP_USERS_GET_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}/{user_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1459,23 +2263,67 @@ const OP_USERS_DELETE_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/users/{project_key}/{environment_key}/{user_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_users__get_search_users_params__to_json(p: &iface_users::GetSearchUsersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("q".into(), match (&p.q) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("after".into(), match (&p.after) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_users_params__to_json(p: &iface_users::GetUsersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("h".into(), match (&p.h) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("scroll_id".into(), match (&p.scroll_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_user_params__to_json(p: &iface_users::GetUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_key".into(), Value::String((&p.user_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__delete_user_params__to_json(p: &iface_users::DeleteUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_key".into(), Value::String((&p.user_key).clone()));
+    Value::Object(m)
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_search_users() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_SEARCH_USERS, Value::Object(Map::new()))
+    fn get_search_users(params: iface_users::GetSearchUsersParams) -> Result<String, String> {
+        let json = iface_users__get_search_users_params__to_json(&params);
+        dispatch(&OP_USERS_GET_SEARCH_USERS, json)
     }
-    fn get_users() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USERS, Value::Object(Map::new()))
+    fn get_users(params: iface_users::GetUsersParams) -> Result<String, String> {
+        let json = iface_users__get_users_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USERS, json)
     }
-    fn get_user() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_USER, Value::Object(Map::new()))
+    fn get_user(params: iface_users::GetUserParams) -> Result<String, String> {
+        let json = iface_users__get_user_params__to_json(&params);
+        dispatch(&OP_USERS_GET_USER, json)
     }
-    fn delete_user() -> Result<String, String> {
-        dispatch(&OP_USERS_DELETE_USER, Value::Object(Map::new()))
+    fn delete_user(params: iface_users::DeleteUserParams) -> Result<String, String> {
+        let json = iface_users__delete_user_params__to_json(&params);
+        dispatch(&OP_USERS_DELETE_USER, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::user_settings as iface_user_settings;
@@ -1484,6 +2332,9 @@ const OP_USER_SETTINGS_GET_USER_FLAG_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}/{user_key}/flags",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1493,6 +2344,10 @@ const OP_USER_SETTINGS_GET_USER_FLAG_SETTING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}/{user_key}/flags/{feature_flag_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1502,6 +2357,10 @@ const OP_USER_SETTINGS_PUT_FLAG_SETTING: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/users/{project_key}/{environment_key}/{user_key}/flags/{feature_flag_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1511,6 +2370,9 @@ const OP_USER_SETTINGS_GET_EXPIRING_USER_TARGETS_FOR_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{user_key}/expiring-user-targets/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1520,26 +2382,76 @@ const OP_USER_SETTINGS_PATCH_EXPIRING_USER_TARGETS_FOR_FLAGS: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/users/{project_key}/{user_key}/expiring-user-targets/{environment_key}",
     fields: &[
+        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_user_settings__get_user_flag_settings_params__to_json(p: &iface_user_settings::GetUserFlagSettingsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_key".into(), Value::String((&p.user_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_settings__get_user_flag_setting_params__to_json(p: &iface_user_settings::GetUserFlagSettingParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_key".into(), Value::String((&p.user_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_settings__put_flag_setting_params__to_json(p: &iface_user_settings::PutFlagSettingParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_key".into(), Value::String((&p.user_key).clone()));
+    m.insert("feature_flag_key".into(), Value::String((&p.feature_flag_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_settings__get_expiring_user_targets_for_user_params__to_json(p: &iface_user_settings::GetExpiringUserTargetsForUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_key".into(), Value::String((&p.user_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user_settings__patch_expiring_user_targets_for_flags_params__to_json(p: &iface_user_settings::PatchExpiringUserTargetsForFlagsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_key".into(), Value::String((&p.project_key).clone()));
+    m.insert("environment_key".into(), Value::String((&p.environment_key).clone()));
+    m.insert("user_key".into(), Value::String((&p.user_key).clone()));
+    Value::Object(m)
+}
+
 impl iface_user_settings::Guest for crate::Component {
-    fn get_user_flag_settings() -> Result<String, String> {
-        dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTINGS, Value::Object(Map::new()))
+    fn get_user_flag_settings(params: iface_user_settings::GetUserFlagSettingsParams) -> Result<String, String> {
+        let json = iface_user_settings__get_user_flag_settings_params__to_json(&params);
+        dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTINGS, json)
     }
-    fn get_user_flag_setting() -> Result<String, String> {
-        dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTING, Value::Object(Map::new()))
+    fn get_user_flag_setting(params: iface_user_settings::GetUserFlagSettingParams) -> Result<String, String> {
+        let json = iface_user_settings__get_user_flag_setting_params__to_json(&params);
+        dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTING, json)
     }
-    fn put_flag_setting() -> Result<String, String> {
-        dispatch(&OP_USER_SETTINGS_PUT_FLAG_SETTING, Value::Object(Map::new()))
+    fn put_flag_setting(params: iface_user_settings::PutFlagSettingParams) -> Result<String, String> {
+        let json = iface_user_settings__put_flag_setting_params__to_json(&params);
+        dispatch(&OP_USER_SETTINGS_PUT_FLAG_SETTING, json)
     }
-    fn get_expiring_user_targets_for_user() -> Result<String, String> {
-        dispatch(&OP_USER_SETTINGS_GET_EXPIRING_USER_TARGETS_FOR_USER, Value::Object(Map::new()))
+    fn get_expiring_user_targets_for_user(params: iface_user_settings::GetExpiringUserTargetsForUserParams) -> Result<String, String> {
+        let json = iface_user_settings__get_expiring_user_targets_for_user_params__to_json(&params);
+        dispatch(&OP_USER_SETTINGS_GET_EXPIRING_USER_TARGETS_FOR_USER, json)
     }
-    fn patch_expiring_user_targets_for_flags() -> Result<String, String> {
-        dispatch(&OP_USER_SETTINGS_PATCH_EXPIRING_USER_TARGETS_FOR_FLAGS, Value::Object(Map::new()))
+    fn patch_expiring_user_targets_for_flags(params: iface_user_settings::PatchExpiringUserTargetsForFlagsParams) -> Result<String, String> {
+        let json = iface_user_settings__patch_expiring_user_targets_for_flags_params__to_json(&params);
+        dispatch(&OP_USER_SETTINGS_PATCH_EXPIRING_USER_TARGETS_FOR_FLAGS, json)
     }
 }
 use crate::exports::autostamp::launchdarkly::webhooks as iface_webhooks;
@@ -1566,6 +2478,7 @@ const OP_WEBHOOKS_GET_WEBHOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/webhooks/{resource_id}",
     fields: &[
+        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1575,6 +2488,7 @@ const OP_WEBHOOKS_PATCH_WEBHOOK: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/webhooks/{resource_id}",
     fields: &[
+        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1584,10 +2498,29 @@ const OP_WEBHOOKS_DELETE_WEBHOOK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/webhooks/{resource_id}",
     fields: &[
+        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_webhooks__get_webhook_params__to_json(p: &iface_webhooks::GetWebhookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_id".into(), Value::String((&p.resource_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_webhooks__patch_webhook_params__to_json(p: &iface_webhooks::PatchWebhookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_id".into(), Value::String((&p.resource_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_webhooks__delete_webhook_params__to_json(p: &iface_webhooks::DeleteWebhookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_id".into(), Value::String((&p.resource_id).clone()));
+    Value::Object(m)
+}
 
 impl iface_webhooks::Guest for crate::Component {
     fn get_webhooks() -> Result<String, String> {
@@ -1596,14 +2529,17 @@ impl iface_webhooks::Guest for crate::Component {
     fn post_webhook() -> Result<String, String> {
         dispatch(&OP_WEBHOOKS_POST_WEBHOOK, Value::Object(Map::new()))
     }
-    fn get_webhook() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_GET_WEBHOOK, Value::Object(Map::new()))
+    fn get_webhook(params: iface_webhooks::GetWebhookParams) -> Result<String, String> {
+        let json = iface_webhooks__get_webhook_params__to_json(&params);
+        dispatch(&OP_WEBHOOKS_GET_WEBHOOK, json)
     }
-    fn patch_webhook() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_PATCH_WEBHOOK, Value::Object(Map::new()))
+    fn patch_webhook(params: iface_webhooks::PatchWebhookParams) -> Result<String, String> {
+        let json = iface_webhooks__patch_webhook_params__to_json(&params);
+        dispatch(&OP_WEBHOOKS_PATCH_WEBHOOK, json)
     }
-    fn delete_webhook() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_DELETE_WEBHOOK, Value::Object(Map::new()))
+    fn delete_webhook(params: iface_webhooks::DeleteWebhookParams) -> Result<String, String> {
+        let json = iface_webhooks__delete_webhook_params__to_json(&params);
+        dispatch(&OP_WEBHOOKS_DELETE_WEBHOOK, json)
     }
 }
 

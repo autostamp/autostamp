@@ -6,17 +6,27 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `bearerAuth` | `Authorization: Bearer <secret>` |
-package autostamp:vonage@0.2.1;
+package autostamp:vonage@0.3.0;
 
 interface api {
   /// Get account data by ID
-  account-ctrl-get-account-services-by-account-id: func() -> result<string, string>;
+  record account-ctrl-get-account-services-by-account-id-params {
+    /// The Vonage Business Cloud account ID
+    account-id: string
+  }
+  account-ctrl-get-account-services-by-account-id: func(params: account-ctrl-get-account-services-by-account-id-params) -> result<string, string>;
 
   /// Get account locations data by account ID
-  account-ctrl-get-locations-by-account-id: func() -> result<string, string>;
+  record account-ctrl-get-locations-by-account-id-params {
+    /// The Vonage Business Cloud account ID
+    account-id: string
+  }
+  account-ctrl-get-locations-by-account-id: func(params: account-ctrl-get-locations-by-account-id-params) -> result<string, string>;
 
   /// Get location data by account ID and location ID
   record account-ctrl-get-location-by-id-params {
+    /// The Vonage Business Cloud account ID
+    account-id: string,
     /// The Vonage Business Cloud location ID
     location-id: string
   }

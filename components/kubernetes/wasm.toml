@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:kubernetes"
-version = "0.2.1+kubernetes-unversioned"
+version = "0.3.0+kubernetes-unversioned"
 registry = "ghcr.io/autostamp/kubernetes"
 kind = "component"
 file = "build/kubernetes.wasm"

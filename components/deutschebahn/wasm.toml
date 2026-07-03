@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:deutschebahn"
-version = "0.2.1+deutschebahn-v1"
+version = "0.3.0+deutschebahn-v1"
 registry = "ghcr.io/autostamp/deutschebahn"
 kind = "component"
 file = "build/deutschebahn.wasm"

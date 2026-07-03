@@ -6,17 +6,17 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `auth` | `Authorization: Bearer <secret>` |
-package autostamp:lufthansa@0.2.1;
+package autostamp:lufthansa@0.3.0;
 
 interface baggage {
   /// Baggage Trip and Contact
-  record baggage-trip-and-contact-params {
+  record trip-and-contact-params {
     /// Bag tag number, PNR, boarding card or FQTV ID
     search-id: string,
     /// http header: application/json or application/xml (Acceptable values are: "application/json", "application/xml")
     accept: string
   }
-  baggage-trip-and-contact: func(params: baggage-trip-and-contact-params) -> result<string, string>;
+  trip-and-contact: func(params: trip-and-contact-params) -> result<string, string>;
 
 }
 

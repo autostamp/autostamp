@@ -1,4 +1,4 @@
-package autostamp:klarna@0.2.1;
+package autostamp:klarna@0.3.0;
 
 interface open-ai-product-endpoint {
   /// API for fetching Klarna product information

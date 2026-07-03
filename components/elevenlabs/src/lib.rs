@@ -396,7 +396,7 @@ impl iface_history::Guest for crate::Component {
 }
 use crate::exports::autostamp::elevenlabs::text_to_speech as iface_text_to_speech;
 
-const OP_TEXT_TO_SPEECH_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST: OpSpec = OpSpec {
+const OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/text-to-speech/{voice_id}",
     fields: &[
@@ -409,7 +409,7 @@ const OP_TEXT_TO_SPEECH_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST: OpSpec =
     ],
 };
 
-const OP_TEXT_TO_SPEECH_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST: OpSpec = OpSpec {
+const OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/text-to-speech/{voice_id}/stream",
     fields: &[
@@ -422,7 +422,7 @@ const OP_TEXT_TO_SPEECH_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST: O
     ],
 };
 
-fn iface_text_to_speech__text_to_speech_v1_text_to_speech_voice_id_post_params__to_json(p: &iface_text_to_speech::TextToSpeechV1TextToSpeechVoiceIdPostParams) -> Value {
+fn iface_text_to_speech__v1_text_to_speech_voice_id_post_params__to_json(p: &iface_text_to_speech::V1TextToSpeechVoiceIdPostParams) -> Value {
     let mut m = Map::new();
     m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
     m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -431,7 +431,7 @@ fn iface_text_to_speech__text_to_speech_v1_text_to_speech_voice_id_post_params__
     Value::Object(m)
 }
 
-fn iface_text_to_speech__text_to_speech_v1_text_to_speech_voice_id_stream_post_params__to_json(p: &iface_text_to_speech::TextToSpeechV1TextToSpeechVoiceIdStreamPostParams) -> Value {
+fn iface_text_to_speech__v1_text_to_speech_voice_id_stream_post_params__to_json(p: &iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostParams) -> Value {
     let mut m = Map::new();
     m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
     m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -441,13 +441,13 @@ fn iface_text_to_speech__text_to_speech_v1_text_to_speech_voice_id_stream_post_p
 }
 
 impl iface_text_to_speech::Guest for crate::Component {
-    fn text_to_speech_v1_text_to_speech_voice_id_post(params: iface_text_to_speech::TextToSpeechV1TextToSpeechVoiceIdPostParams) -> Result<String, String> {
-        let json = iface_text_to_speech__text_to_speech_v1_text_to_speech_voice_id_post_params__to_json(&params);
-        dispatch(&OP_TEXT_TO_SPEECH_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST, json)
+    fn v1_text_to_speech_voice_id_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdPostParams) -> Result<String, String> {
+        let json = iface_text_to_speech__v1_text_to_speech_voice_id_post_params__to_json(&params);
+        dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST, json)
     }
-    fn text_to_speech_v1_text_to_speech_voice_id_stream_post(params: iface_text_to_speech::TextToSpeechV1TextToSpeechVoiceIdStreamPostParams) -> Result<String, String> {
-        let json = iface_text_to_speech__text_to_speech_v1_text_to_speech_voice_id_stream_post_params__to_json(&params);
-        dispatch(&OP_TEXT_TO_SPEECH_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST, json)
+    fn v1_text_to_speech_voice_id_stream_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostParams) -> Result<String, String> {
+        let json = iface_text_to_speech__v1_text_to_speech_voice_id_stream_post_params__to_json(&params);
+        dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST, json)
     }
 }
 use crate::exports::autostamp::elevenlabs::user as iface_user;

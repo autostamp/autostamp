@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `hmac` | header `Authorization` |
-package autostamp:amazonaws@0.2.1;
+package autostamp:amazonaws@0.3.0;
 
 interface archive-rule {
   record apply-archive-rule-params {
@@ -315,7 +315,7 @@ interface finding {
     order-by: option<string>
   }
 
-  record finding-id {
+  record id {
     /// opaque schema; raw JSON
     value: string
   }
@@ -348,7 +348,7 @@ interface finding {
     /// The state represents the action to take to update the finding Status. Use <code>ARCHIVE</code> to change an Active finding to an Archived finding. Use <code>ACTIVE</code> to change an Archived finding to an Active finding.
     status: update-findings-body-status-enum,
     /// The IDs of the findings to update.
-    ids: option<list<finding-id>>,
+    ids: option<list<id>>,
     /// The ARN of the resource identified in the finding.
     resource-arn: option<string>,
     /// A client token.

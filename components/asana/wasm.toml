@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:asana"
-version = "0.2.1+asana-1.0"
+version = "0.3.0+asana-1.0"
 registry = "ghcr.io/autostamp/asana"
 kind = "component"
 file = "build/asana.wasm"

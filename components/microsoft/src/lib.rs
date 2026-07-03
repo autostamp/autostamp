@@ -284,11 +284,13 @@ use serde_json::{Map, Value};
 
 use crate::exports::autostamp::microsoft::analyze as iface_analyze;
 
-const OP_ANALYZE_ANALYZE_IMAGE: OpSpec = OpSpec {
+const OP_ANALYZE_IMAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/analyze",
     fields: &[
+        FieldSpec { snake: "visual_features", location: FieldLocation::Query },
         FieldSpec { snake: "details", location: FieldLocation::Query },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
         FieldSpec { snake: "url", location: FieldLocation::Body },
     ],
     auth: &[
@@ -296,24 +298,50 @@ const OP_ANALYZE_ANALYZE_IMAGE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_analyze__analyze_image_details_item_enum__to_str(e: &iface_analyze::AnalyzeImageDetailsItemEnum) -> &'static str {
+fn iface_analyze__image_visual_features_item_enum__to_str(e: &iface_analyze::ImageVisualFeaturesItemEnum) -> &'static str {
     match e {
-        iface_analyze::AnalyzeImageDetailsItemEnum::Celebrities => "Celebrities",
-        iface_analyze::AnalyzeImageDetailsItemEnum::Landmarks => "Landmarks",
+        iface_analyze::ImageVisualFeaturesItemEnum::ImageType => "ImageType",
+        iface_analyze::ImageVisualFeaturesItemEnum::Faces => "Faces",
+        iface_analyze::ImageVisualFeaturesItemEnum::Adult => "Adult",
+        iface_analyze::ImageVisualFeaturesItemEnum::Categories => "Categories",
+        iface_analyze::ImageVisualFeaturesItemEnum::Color => "Color",
+        iface_analyze::ImageVisualFeaturesItemEnum::Tags => "Tags",
+        iface_analyze::ImageVisualFeaturesItemEnum::Description => "Description",
+        iface_analyze::ImageVisualFeaturesItemEnum::Objects => "Objects",
+        iface_analyze::ImageVisualFeaturesItemEnum::Brands => "Brands",
     }
 }
 
-fn iface_analyze__analyze_image_params__to_json(p: &iface_analyze::AnalyzeImageParams) -> Value {
+fn iface_analyze__image_details_item_enum__to_str(e: &iface_analyze::ImageDetailsItemEnum) -> &'static str {
+    match e {
+        iface_analyze::ImageDetailsItemEnum::Celebrities => "Celebrities",
+        iface_analyze::ImageDetailsItemEnum::Landmarks => "Landmarks",
+    }
+}
+
+fn iface_analyze__image_language_enum__to_str(e: &iface_analyze::ImageLanguageEnum) -> &'static str {
+    match e {
+        iface_analyze::ImageLanguageEnum::En => "en",
+        iface_analyze::ImageLanguageEnum::Es => "es",
+        iface_analyze::ImageLanguageEnum::Ja => "ja",
+        iface_analyze::ImageLanguageEnum::Pt => "pt",
+        iface_analyze::ImageLanguageEnum::Zh => "zh",
+    }
+}
+
+fn iface_analyze__image_params__to_json(p: &iface_analyze::ImageParams) -> Value {
     let mut m = Map::new();
-    m.insert("details".into(), match (&p.details) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_analyze__analyze_image_details_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("visual_features".into(), match (&p.visual_features) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_analyze__image_visual_features_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("details".into(), match (&p.details) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_analyze__image_details_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_analyze__image_language_enum__to_str(v).into()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 impl iface_analyze::Guest for crate::Component {
-    fn analyze_image(params: iface_analyze::AnalyzeImageParams) -> Result<String, String> {
-        let json = iface_analyze__analyze_image_params__to_json(&params);
-        dispatch(&OP_ANALYZE_ANALYZE_IMAGE, json)
+    fn image(params: iface_analyze::ImageParams) -> Result<String, String> {
+        let json = iface_analyze__image_params__to_json(&params);
+        dispatch(&OP_ANALYZE_IMAGE, json)
     }
 }
 use crate::exports::autostamp::microsoft::area_of_interest as iface_area_of_interest;
@@ -343,11 +371,12 @@ impl iface_area_of_interest::Guest for crate::Component {
 }
 use crate::exports::autostamp::microsoft::describe as iface_describe;
 
-const OP_DESCRIBE_DESCRIBE_IMAGE: OpSpec = OpSpec {
+const OP_DESCRIBE_IMAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/describe",
     fields: &[
         FieldSpec { snake: "max_candidates", location: FieldLocation::Query },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
         FieldSpec { snake: "url", location: FieldLocation::Body },
     ],
     auth: &[
@@ -355,22 +384,33 @@ const OP_DESCRIBE_DESCRIBE_IMAGE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_describe__describe_image_params__to_json(p: &iface_describe::DescribeImageParams) -> Value {
+fn iface_describe__image_language_enum__to_str(e: &iface_describe::ImageLanguageEnum) -> &'static str {
+    match e {
+        iface_describe::ImageLanguageEnum::En => "en",
+        iface_describe::ImageLanguageEnum::Es => "es",
+        iface_describe::ImageLanguageEnum::Ja => "ja",
+        iface_describe::ImageLanguageEnum::Pt => "pt",
+        iface_describe::ImageLanguageEnum::Zh => "zh",
+    }
+}
+
+fn iface_describe__image_params__to_json(p: &iface_describe::ImageParams) -> Value {
     let mut m = Map::new();
     m.insert("max_candidates".into(), match (&p.max_candidates) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_describe__image_language_enum__to_str(v).into()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 impl iface_describe::Guest for crate::Component {
-    fn describe_image(params: iface_describe::DescribeImageParams) -> Result<String, String> {
-        let json = iface_describe__describe_image_params__to_json(&params);
-        dispatch(&OP_DESCRIBE_DESCRIBE_IMAGE, json)
+    fn image(params: iface_describe::ImageParams) -> Result<String, String> {
+        let json = iface_describe__image_params__to_json(&params);
+        dispatch(&OP_DESCRIBE_IMAGE, json)
     }
 }
 use crate::exports::autostamp::microsoft::detect as iface_detect;
 
-const OP_DETECT_DETECT_OBJECTS: OpSpec = OpSpec {
+const OP_DETECT_OBJECTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/detect",
     fields: &[
@@ -381,16 +421,16 @@ const OP_DETECT_DETECT_OBJECTS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_detect__detect_objects_params__to_json(p: &iface_detect::DetectObjectsParams) -> Value {
+fn iface_detect__objects_params__to_json(p: &iface_detect::ObjectsParams) -> Value {
     let mut m = Map::new();
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 impl iface_detect::Guest for crate::Component {
-    fn detect_objects(params: iface_detect::DetectObjectsParams) -> Result<String, String> {
-        let json = iface_detect__detect_objects_params__to_json(&params);
-        dispatch(&OP_DETECT_DETECT_OBJECTS, json)
+    fn objects(params: iface_detect::ObjectsParams) -> Result<String, String> {
+        let json = iface_detect__objects_params__to_json(&params);
+        dispatch(&OP_DETECT_OBJECTS, json)
     }
 }
 use crate::exports::autostamp::microsoft::generate_thumbnail as iface_generate_thumbnail;
@@ -441,6 +481,7 @@ const OP_MODELS_ANALYZE_IMAGE_BY_DOMAIN: OpSpec = OpSpec {
     path_template: "/models/{model}/analyze",
     fields: &[
         FieldSpec { snake: "model", location: FieldLocation::Path },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
         FieldSpec { snake: "url", location: FieldLocation::Body },
     ],
     auth: &[
@@ -448,9 +489,20 @@ const OP_MODELS_ANALYZE_IMAGE_BY_DOMAIN: OpSpec = OpSpec {
     ],
 };
 
+fn iface_models__analyze_image_by_domain_language_enum__to_str(e: &iface_models::AnalyzeImageByDomainLanguageEnum) -> &'static str {
+    match e {
+        iface_models::AnalyzeImageByDomainLanguageEnum::En => "en",
+        iface_models::AnalyzeImageByDomainLanguageEnum::Es => "es",
+        iface_models::AnalyzeImageByDomainLanguageEnum::Ja => "ja",
+        iface_models::AnalyzeImageByDomainLanguageEnum::Pt => "pt",
+        iface_models::AnalyzeImageByDomainLanguageEnum::Zh => "zh",
+    }
+}
+
 fn iface_models__analyze_image_by_domain_params__to_json(p: &iface_models::AnalyzeImageByDomainParams) -> Value {
     let mut m = Map::new();
     m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_models__analyze_image_by_domain_language_enum__to_str(v).into()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
@@ -470,6 +522,8 @@ const OP_OCR_RECOGNIZE_PRINTED_TEXT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/ocr",
     fields: &[
+        FieldSpec { snake: "detect_orientation", location: FieldLocation::Query },
+        FieldSpec { snake: "language", location: FieldLocation::Query },
         FieldSpec { snake: "url", location: FieldLocation::Body },
     ],
     auth: &[
@@ -477,8 +531,42 @@ const OP_OCR_RECOGNIZE_PRINTED_TEXT: OpSpec = OpSpec {
     ],
 };
 
+fn iface_ocr__recognize_printed_text_language_enum__to_str(e: &iface_ocr::RecognizePrintedTextLanguageEnum) -> &'static str {
+    match e {
+        iface_ocr::RecognizePrintedTextLanguageEnum::Unk => "unk",
+        iface_ocr::RecognizePrintedTextLanguageEnum::ZhHans => "zh-Hans",
+        iface_ocr::RecognizePrintedTextLanguageEnum::ZhHant => "zh-Hant",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Cs => "cs",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Da => "da",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Nl => "nl",
+        iface_ocr::RecognizePrintedTextLanguageEnum::En => "en",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Fi => "fi",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Fr => "fr",
+        iface_ocr::RecognizePrintedTextLanguageEnum::De => "de",
+        iface_ocr::RecognizePrintedTextLanguageEnum::El => "el",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Hu => "hu",
+        iface_ocr::RecognizePrintedTextLanguageEnum::It => "it",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Ja => "ja",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Ko => "ko",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Nb => "nb",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Pl => "pl",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Pt => "pt",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Ru => "ru",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Es => "es",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Sv => "sv",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Tr => "tr",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Ar => "ar",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Ro => "ro",
+        iface_ocr::RecognizePrintedTextLanguageEnum::SrCyrl => "sr-Cyrl",
+        iface_ocr::RecognizePrintedTextLanguageEnum::SrLatn => "sr-Latn",
+        iface_ocr::RecognizePrintedTextLanguageEnum::Sk => "sk",
+    }
+}
+
 fn iface_ocr__recognize_printed_text_params__to_json(p: &iface_ocr::RecognizePrintedTextParams) -> Value {
     let mut m = Map::new();
+    m.insert("detect_orientation".into(), Value::Bool(*(&p.detect_orientation)));
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_ocr__recognize_printed_text_language_enum__to_str(v).into()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
@@ -491,10 +579,11 @@ impl iface_ocr::Guest for crate::Component {
 }
 use crate::exports::autostamp::microsoft::tag as iface_tag;
 
-const OP_TAG_TAG_IMAGE: OpSpec = OpSpec {
+const OP_TAG_IMAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tag",
     fields: &[
+        FieldSpec { snake: "language", location: FieldLocation::Query },
         FieldSpec { snake: "url", location: FieldLocation::Body },
     ],
     auth: &[
@@ -502,16 +591,27 @@ const OP_TAG_TAG_IMAGE: OpSpec = OpSpec {
     ],
 };
 
-fn iface_tag__tag_image_params__to_json(p: &iface_tag::TagImageParams) -> Value {
+fn iface_tag__image_language_enum__to_str(e: &iface_tag::ImageLanguageEnum) -> &'static str {
+    match e {
+        iface_tag::ImageLanguageEnum::En => "en",
+        iface_tag::ImageLanguageEnum::Es => "es",
+        iface_tag::ImageLanguageEnum::Ja => "ja",
+        iface_tag::ImageLanguageEnum::Pt => "pt",
+        iface_tag::ImageLanguageEnum::Zh => "zh",
+    }
+}
+
+fn iface_tag__image_params__to_json(p: &iface_tag::ImageParams) -> Value {
     let mut m = Map::new();
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_tag__image_language_enum__to_str(v).into()), None => Value::Null });
     m.insert("url".into(), Value::String((&p.url).clone()));
     Value::Object(m)
 }
 
 impl iface_tag::Guest for crate::Component {
-    fn tag_image(params: iface_tag::TagImageParams) -> Result<String, String> {
-        let json = iface_tag__tag_image_params__to_json(&params);
-        dispatch(&OP_TAG_TAG_IMAGE, json)
+    fn image(params: iface_tag::ImageParams) -> Result<String, String> {
+        let json = iface_tag__image_params__to_json(&params);
+        dispatch(&OP_TAG_IMAGE, json)
     }
 }
 

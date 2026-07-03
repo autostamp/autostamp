@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:tvmaze"
-version = "0.2.1+tvmaze-1.0"
+version = "0.3.0+tvmaze-1.0"
 registry = "ghcr.io/autostamp/tvmaze"
 kind = "component"
 file = "build/tvmaze.wasm"

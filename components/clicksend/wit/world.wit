@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `basic` | `Authorization: Basic base64(<secret>)` |
-package autostamp:clicksend@0.2.1;
+package autostamp:clicksend@0.3.0;
 
 interface account {
   /// Get account
@@ -78,7 +78,7 @@ interface account {
   verify-new-account: func(params: verify-new-account-params) -> result<string, string>;
 
   /// Account Usage
-  record account-usage-params {
+  record usage-params {
     /// Your account usage year.
     year: string,
     /// Your account usage month.
@@ -86,7 +86,7 @@ interface account {
     /// The account type. Value can only be either email or subaccount.
     type-op: string
   }
-  account-usage: func(params: account-usage-params) -> result<string, string>;
+  usage: func(params: usage-params) -> result<string, string>;
 
 }
 
@@ -1441,11 +1441,11 @@ interface reseller {
   update-reseller-setting: func(params: update-reseller-setting-params) -> result<string, string>;
 
   /// Reseller By Subdomain
-  record reseller-by-subdomain-params {
+  record by-subdomain-params {
     /// Subdomain
     subdomain: string
   }
-  reseller-by-subdomain: func(params: reseller-by-subdomain-params) -> result<string, string>;
+  by-subdomain: func(params: by-subdomain-params) -> result<string, string>;
 
 }
 
@@ -1542,21 +1542,21 @@ interface reseller-accounts {
 
 interface sdk {
   /// SDK Download
-  record sdk-download-params {
+  record download-params {
     /// Supported types.
     type-op: string
   }
-  sdk-download: func(params: sdk-download-params) -> result<string, string>;
+  download: func(params: download-params) -> result<string, string>;
 
 }
 
 interface search {
   /// Search Contacts-Lists
-  record search-contacts-lists-params {
+  record contacts-lists-params {
     /// Your keyword or query.
     q: string
   }
-  search-contacts-lists: func(params: search-contacts-lists-params) -> result<string, string>;
+  contacts-lists: func(params: contacts-lists-params) -> result<string, string>;
 
 }
 
@@ -2017,7 +2017,7 @@ interface voice {
   get-voice-history: func(params: get-voice-history-params) -> result<string, string>;
 
   /// Voice Languages
-  voice-languages: func() -> result<string, string>;
+  languages: func() -> result<string, string>;
 
   /// Calculate Price
   record post-voice-price-params {

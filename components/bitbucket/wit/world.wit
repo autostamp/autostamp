@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
-package autostamp:bitbucket@0.2.1;
+package autostamp:bitbucket@0.3.0;
 
 interface addon {
   /// Update an installed app
@@ -2061,7 +2061,7 @@ interface snippets {
 
 interface search {
   /// Search for code in a team's repositories
-  record search-team-params {
+  record team-params {
     /// The account to search in; either the username or the UUID in curly braces
     username: string,
     /// The search query
@@ -2071,10 +2071,10 @@ interface search {
     /// How many search results to retrieve per page
     pagelen: option<s32>
   }
-  search-team: func(params: search-team-params) -> result<string, string>;
+  team: func(params: team-params) -> result<string, string>;
 
   /// Search for code in a user's repositories
-  record search-account-params {
+  record account-params {
     /// Either the UUID of the account surrounded by curly-braces, for example `{account UUID}`, OR an Atlassian Account ID.
     selected-user: string,
     /// The search query
@@ -2084,10 +2084,10 @@ interface search {
     /// How many search results to retrieve per page
     pagelen: option<s32>
   }
-  search-account: func(params: search-account-params) -> result<string, string>;
+  account: func(params: account-params) -> result<string, string>;
 
   /// Search for code in a workspace
-  record search-workspace-params {
+  record workspace-params {
     /// The workspace to search in; either the slug or the UUID in curly braces
     workspace: string,
     /// The search query
@@ -2097,7 +2097,7 @@ interface search {
     /// How many search results to retrieve per page
     pagelen: option<s32>
   }
-  search-workspace: func(params: search-workspace-params) -> result<string, string>;
+  workspace: func(params: workspace-params) -> result<string, string>;
 
 }
 

@@ -288,6 +288,8 @@ const OP_ATTACHMENTS_GET_ATTACHMENTS_FOR_OBJECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/attachments",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "parent", location: FieldLocation::Query },
     ],
     auth: &[
@@ -327,6 +329,8 @@ const OP_ATTACHMENTS_DELETE_ATTACHMENT: OpSpec = OpSpec {
 
 fn iface_attachments__get_attachments_for_object_params__to_json(p: &iface_attachments::GetAttachmentsForObjectParams) -> Value {
     let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
@@ -602,6 +606,8 @@ const OP_GOAL_RELATIONSHIPS_GET_GOAL_RELATIONSHIPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/goal_relationships",
     fields: &[
+        FieldSpec { snake: "opt_pretty", location: FieldLocation::Query },
+        FieldSpec { snake: "opt_fields", location: FieldLocation::Query },
         FieldSpec { snake: "supported_goal", location: FieldLocation::Query },
         FieldSpec { snake: "resource_subtype", location: FieldLocation::Query },
     ],
@@ -676,6 +682,8 @@ fn iface_goal_relationships__goal_remove_supporting_relationship_request__to_jso
 
 fn iface_goal_relationships__get_goal_relationships_params__to_json(p: &iface_goal_relationships::GetGoalRelationshipsParams) -> Value {
     let mut m = Map::new();
+    m.insert("opt_pretty".into(), match (&p.opt_pretty) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("opt_fields".into(), match (&p.opt_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("supported_goal".into(), Value::String((&p.supported_goal).clone()));
     m.insert("resource_subtype".into(), match (&p.resource_subtype) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -1054,6 +1062,8 @@ const OP_PORTFOLIOS_GET_PORTFOLIOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/portfolios",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "workspace", location: FieldLocation::Query },
         FieldSpec { snake: "owner", location: FieldLocation::Query },
     ],
@@ -1229,6 +1239,8 @@ fn iface_portfolios__remove_members_request__to_json(p: &iface_portfolios::Remov
 
 fn iface_portfolios__get_portfolios_params__to_json(p: &iface_portfolios::GetPortfoliosParams) -> Value {
     let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workspace".into(), Value::String((&p.workspace).clone()));
     m.insert("owner".into(), Value::String((&p.owner).clone()));
     Value::Object(m)
@@ -1493,6 +1505,11 @@ const OP_PROJECT_STATUSES_GET_PROJECT_STATUSES_FOR_PROJECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_gid}/project_statuses",
     fields: &[
+        FieldSpec { snake: "project_gid", location: FieldLocation::Path },
+        FieldSpec { snake: "opt_pretty", location: FieldLocation::Query },
+        FieldSpec { snake: "opt_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1516,6 +1533,16 @@ fn iface_project_statuses__project_status_request__to_json(p: &iface_project_sta
     Value::Object(m)
 }
 
+fn iface_project_statuses__get_project_statuses_for_project_params__to_json(p: &iface_project_statuses::GetProjectStatusesForProjectParams) -> Value {
+    let mut m = Map::new();
+    m.insert("project_gid".into(), Value::String((&p.project_gid).clone()));
+    m.insert("opt_pretty".into(), match (&p.opt_pretty) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("opt_fields".into(), match (&p.opt_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_project_statuses__create_project_status_for_project_params__to_json(p: &iface_project_statuses::CreateProjectStatusForProjectParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_project_statuses__project_status_request__to_json(v), None => Value::Null });
@@ -1529,8 +1556,9 @@ impl iface_project_statuses::Guest for crate::Component {
     fn delete_project_status() -> Result<String, String> {
         dispatch(&OP_PROJECT_STATUSES_DELETE_PROJECT_STATUS, Value::Object(Map::new()))
     }
-    fn get_project_statuses_for_project() -> Result<String, String> {
-        dispatch(&OP_PROJECT_STATUSES_GET_PROJECT_STATUSES_FOR_PROJECT, Value::Object(Map::new()))
+    fn get_project_statuses_for_project(params: iface_project_statuses::GetProjectStatusesForProjectParams) -> Result<String, String> {
+        let json = iface_project_statuses__get_project_statuses_for_project_params__to_json(&params);
+        dispatch(&OP_PROJECT_STATUSES_GET_PROJECT_STATUSES_FOR_PROJECT, json)
     }
     fn create_project_status_for_project(params: iface_project_statuses::CreateProjectStatusForProjectParams) -> Result<String, String> {
         let json = iface_project_statuses__create_project_status_for_project_params__to_json(&params);
@@ -1543,6 +1571,10 @@ const OP_PROJECT_TEMPLATES_GET_PROJECT_TEMPLATES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/project_templates",
     fields: &[
+        FieldSpec { snake: "workspace", location: FieldLocation::Query },
+        FieldSpec { snake: "team", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1574,6 +1606,8 @@ const OP_PROJECT_TEMPLATES_GET_PROJECT_TEMPLATES_FOR_TEAM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/teams/{team_gid}/project_templates",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1598,15 +1632,32 @@ fn iface_project_templates__date_variable_request__to_json(p: &iface_project_tem
     Value::Object(m)
 }
 
+fn iface_project_templates__get_project_templates_params__to_json(p: &iface_project_templates::GetProjectTemplatesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("workspace".into(), match (&p.workspace) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team".into(), match (&p.team) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_project_templates__instantiate_project_params__to_json(p: &iface_project_templates::InstantiateProjectParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_project_templates__project_template_instantiate_project_request__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_project_templates__get_project_templates_for_team_params__to_json(p: &iface_project_templates::GetProjectTemplatesForTeamParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 impl iface_project_templates::Guest for crate::Component {
-    fn get_project_templates() -> Result<String, String> {
-        dispatch(&OP_PROJECT_TEMPLATES_GET_PROJECT_TEMPLATES, Value::Object(Map::new()))
+    fn get_project_templates(params: iface_project_templates::GetProjectTemplatesParams) -> Result<String, String> {
+        let json = iface_project_templates__get_project_templates_params__to_json(&params);
+        dispatch(&OP_PROJECT_TEMPLATES_GET_PROJECT_TEMPLATES, json)
     }
     fn get_project_template() -> Result<String, String> {
         dispatch(&OP_PROJECT_TEMPLATES_GET_PROJECT_TEMPLATE, Value::Object(Map::new()))
@@ -1615,8 +1666,9 @@ impl iface_project_templates::Guest for crate::Component {
         let json = iface_project_templates__instantiate_project_params__to_json(&params);
         dispatch(&OP_PROJECT_TEMPLATES_INSTANTIATE_PROJECT, json)
     }
-    fn get_project_templates_for_team() -> Result<String, String> {
-        dispatch(&OP_PROJECT_TEMPLATES_GET_PROJECT_TEMPLATES_FOR_TEAM, Value::Object(Map::new()))
+    fn get_project_templates_for_team(params: iface_project_templates::GetProjectTemplatesForTeamParams) -> Result<String, String> {
+        let json = iface_project_templates__get_project_templates_for_team_params__to_json(&params);
+        dispatch(&OP_PROJECT_TEMPLATES_GET_PROJECT_TEMPLATES_FOR_TEAM, json)
     }
 }
 use crate::exports::autostamp::asana::projects as iface_projects;
@@ -1625,8 +1677,11 @@ const OP_PROJECTS_GET_PROJECTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "workspace", location: FieldLocation::Query },
         FieldSpec { snake: "team", location: FieldLocation::Query },
+        FieldSpec { snake: "archived", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1787,6 +1842,9 @@ const OP_PROJECTS_GET_PROJECTS_FOR_TEAM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/teams/{team_gid}/projects",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "archived", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1808,6 +1866,9 @@ const OP_PROJECTS_GET_PROJECTS_FOR_WORKSPACE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workspaces/{workspace_gid}/projects",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "archived", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -1915,8 +1976,11 @@ fn iface_projects__project_save_as_template_request__to_json(p: &iface_projects:
 
 fn iface_projects__get_projects_params__to_json(p: &iface_projects::GetProjectsParams) -> Value {
     let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workspace".into(), match (&p.workspace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("team".into(), match (&p.team) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1980,9 +2044,25 @@ fn iface_projects__project_save_as_template_params__to_json(p: &iface_projects::
     Value::Object(m)
 }
 
+fn iface_projects__get_projects_for_team_params__to_json(p: &iface_projects::GetProjectsForTeamParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_projects__create_project_for_team_params__to_json(p: &iface_projects::CreateProjectForTeamParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_projects__project_request__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__get_projects_for_workspace_params__to_json(p: &iface_projects::GetProjectsForWorkspaceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2049,15 +2129,17 @@ impl iface_projects::Guest for crate::Component {
     fn get_projects_for_task() -> Result<String, String> {
         dispatch(&OP_PROJECTS_GET_PROJECTS_FOR_TASK, Value::Object(Map::new()))
     }
-    fn get_projects_for_team() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_GET_PROJECTS_FOR_TEAM, Value::Object(Map::new()))
+    fn get_projects_for_team(params: iface_projects::GetProjectsForTeamParams) -> Result<String, String> {
+        let json = iface_projects__get_projects_for_team_params__to_json(&params);
+        dispatch(&OP_PROJECTS_GET_PROJECTS_FOR_TEAM, json)
     }
     fn create_project_for_team(params: iface_projects::CreateProjectForTeamParams) -> Result<String, String> {
         let json = iface_projects__create_project_for_team_params__to_json(&params);
         dispatch(&OP_PROJECTS_CREATE_PROJECT_FOR_TEAM, json)
     }
-    fn get_projects_for_workspace() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_GET_PROJECTS_FOR_WORKSPACE, Value::Object(Map::new()))
+    fn get_projects_for_workspace(params: iface_projects::GetProjectsForWorkspaceParams) -> Result<String, String> {
+        let json = iface_projects__get_projects_for_workspace_params__to_json(&params);
+        dispatch(&OP_PROJECTS_GET_PROJECTS_FOR_WORKSPACE, json)
     }
     fn create_project_for_workspace(params: iface_projects::CreateProjectForWorkspaceParams) -> Result<String, String> {
         let json = iface_projects__create_project_for_workspace_params__to_json(&params);
@@ -2070,6 +2152,8 @@ const OP_SECTIONS_GET_SECTIONS_FOR_PROJECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_gid}/sections",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2165,6 +2249,13 @@ fn iface_sections__section_task_insert_request__to_json(p: &iface_sections::Sect
     Value::Object(m)
 }
 
+fn iface_sections__get_sections_for_project_params__to_json(p: &iface_sections::GetSectionsForProjectParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_sections__create_section_for_project_params__to_json(p: &iface_sections::CreateSectionForProjectParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_sections__section_request__to_json(v), None => Value::Null });
@@ -2190,8 +2281,9 @@ fn iface_sections__add_task_for_section_params__to_json(p: &iface_sections::AddT
 }
 
 impl iface_sections::Guest for crate::Component {
-    fn get_sections_for_project() -> Result<String, String> {
-        dispatch(&OP_SECTIONS_GET_SECTIONS_FOR_PROJECT, Value::Object(Map::new()))
+    fn get_sections_for_project(params: iface_sections::GetSectionsForProjectParams) -> Result<String, String> {
+        let json = iface_sections__get_sections_for_project_params__to_json(&params);
+        dispatch(&OP_SECTIONS_GET_SECTIONS_FOR_PROJECT, json)
     }
     fn create_section_for_project(params: iface_sections::CreateSectionForProjectParams) -> Result<String, String> {
         let json = iface_sections__create_section_for_project_params__to_json(&params);
@@ -2252,6 +2344,8 @@ const OP_TASKS_GET_TASKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tasks",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "assignee", location: FieldLocation::Query },
         FieldSpec { snake: "project", location: FieldLocation::Query },
         FieldSpec { snake: "section", location: FieldLocation::Query },
@@ -2462,6 +2556,8 @@ const OP_TASKS_GET_SUBTASKS_FOR_TASK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tasks/{task_gid}/subtasks",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2588,6 +2684,8 @@ fn iface_tasks__task_set_parent_request__to_json(p: &iface_tasks::TaskSetParentR
 
 fn iface_tasks__get_tasks_params__to_json(p: &iface_tasks::GetTasksParams) -> Value {
     let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("assignee".into(), match (&p.assignee) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("section".into(), match (&p.section) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2681,6 +2779,13 @@ fn iface_tasks__set_parent_for_task_params__to_json(p: &iface_tasks::SetParentFo
     Value::Object(m)
 }
 
+fn iface_tasks__get_subtasks_for_task_params__to_json(p: &iface_tasks::GetSubtasksForTaskParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_tasks__create_subtask_for_task_params__to_json(p: &iface_tasks::CreateSubtaskForTaskParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_tasks__task_request__to_json(v), None => Value::Null });
@@ -2769,8 +2874,9 @@ impl iface_tasks::Guest for crate::Component {
         let json = iface_tasks__set_parent_for_task_params__to_json(&params);
         dispatch(&OP_TASKS_SET_PARENT_FOR_TASK, json)
     }
-    fn get_subtasks_for_task() -> Result<String, String> {
-        dispatch(&OP_TASKS_GET_SUBTASKS_FOR_TASK, Value::Object(Map::new()))
+    fn get_subtasks_for_task(params: iface_tasks::GetSubtasksForTaskParams) -> Result<String, String> {
+        let json = iface_tasks__get_subtasks_for_task_params__to_json(&params);
+        dispatch(&OP_TASKS_GET_SUBTASKS_FOR_TASK, json)
     }
     fn create_subtask_for_task(params: iface_tasks::CreateSubtaskForTaskParams) -> Result<String, String> {
         let json = iface_tasks__create_subtask_for_task_params__to_json(&params);
@@ -2869,6 +2975,8 @@ const OP_STORIES_GET_STORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stories/{story_gid}",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2900,6 +3008,8 @@ const OP_STORIES_GET_STORIES_FOR_TASK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tasks/{task_gid}/stories",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -2923,9 +3033,23 @@ fn iface_stories__story_request__to_json(p: &iface_stories::StoryRequest) -> Val
     Value::Object(m)
 }
 
+fn iface_stories__get_story_params__to_json(p: &iface_stories::GetStoryParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_stories__update_story_params__to_json(p: &iface_stories::UpdateStoryParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_stories__story_request__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stories__get_stories_for_task_params__to_json(p: &iface_stories::GetStoriesForTaskParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2936,8 +3060,9 @@ fn iface_stories__create_story_for_task_params__to_json(p: &iface_stories::Creat
 }
 
 impl iface_stories::Guest for crate::Component {
-    fn get_story() -> Result<String, String> {
-        dispatch(&OP_STORIES_GET_STORY, Value::Object(Map::new()))
+    fn get_story(params: iface_stories::GetStoryParams) -> Result<String, String> {
+        let json = iface_stories__get_story_params__to_json(&params);
+        dispatch(&OP_STORIES_GET_STORY, json)
     }
     fn update_story(params: iface_stories::UpdateStoryParams) -> Result<String, String> {
         let json = iface_stories__update_story_params__to_json(&params);
@@ -2946,8 +3071,9 @@ impl iface_stories::Guest for crate::Component {
     fn delete_story() -> Result<String, String> {
         dispatch(&OP_STORIES_DELETE_STORY, Value::Object(Map::new()))
     }
-    fn get_stories_for_task() -> Result<String, String> {
-        dispatch(&OP_STORIES_GET_STORIES_FOR_TASK, Value::Object(Map::new()))
+    fn get_stories_for_task(params: iface_stories::GetStoriesForTaskParams) -> Result<String, String> {
+        let json = iface_stories__get_stories_for_task_params__to_json(&params);
+        dispatch(&OP_STORIES_GET_STORIES_FOR_TASK, json)
     }
     fn create_story_for_task(params: iface_stories::CreateStoryForTaskParams) -> Result<String, String> {
         let json = iface_stories__create_story_for_task_params__to_json(&params);
@@ -2960,6 +3086,8 @@ const OP_TAGS_GET_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "workspace", location: FieldLocation::Query },
     ],
     auth: &[
@@ -3022,6 +3150,8 @@ const OP_TAGS_GET_TAGS_FOR_WORKSPACE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workspaces/{workspace_gid}/tags",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "personalAccessToken", kind: AuthKind::Bearer },
@@ -3053,6 +3183,8 @@ fn iface_tags__tag_response__to_json(p: &iface_tags::TagResponse) -> Value {
 
 fn iface_tags__get_tags_params__to_json(p: &iface_tags::GetTagsParams) -> Value {
     let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workspace".into(), match (&p.workspace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -3060,6 +3192,13 @@ fn iface_tags__get_tags_params__to_json(p: &iface_tags::GetTagsParams) -> Value 
 fn iface_tags__create_tag_params__to_json(p: &iface_tags::CreateTagParams) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => iface_tags__tag_request__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__get_tags_for_workspace_params__to_json(p: &iface_tags::GetTagsForWorkspaceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3090,8 +3229,9 @@ impl iface_tags::Guest for crate::Component {
     fn get_tags_for_task() -> Result<String, String> {
         dispatch(&OP_TAGS_GET_TAGS_FOR_TASK, Value::Object(Map::new()))
     }
-    fn get_tags_for_workspace() -> Result<String, String> {
-        dispatch(&OP_TAGS_GET_TAGS_FOR_WORKSPACE, Value::Object(Map::new()))
+    fn get_tags_for_workspace(params: iface_tags::GetTagsForWorkspaceParams) -> Result<String, String> {
+        let json = iface_tags__get_tags_for_workspace_params__to_json(&params);
+        dispatch(&OP_TAGS_GET_TAGS_FOR_WORKSPACE, json)
     }
     fn create_tag_for_workspace(params: iface_tags::CreateTagForWorkspaceParams) -> Result<String, String> {
         let json = iface_tags__create_tag_for_workspace_params__to_json(&params);
@@ -3509,6 +3649,8 @@ const OP_WEBHOOKS_GET_WEBHOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/webhooks",
     fields: &[
+        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", location: FieldLocation::Query },
         FieldSpec { snake: "workspace", location: FieldLocation::Query },
         FieldSpec { snake: "resource", location: FieldLocation::Query },
     ],
@@ -3575,6 +3717,8 @@ fn iface_webhooks__webhook_update_request__to_json(p: &iface_webhooks::WebhookUp
 
 fn iface_webhooks__get_webhooks_params__to_json(p: &iface_webhooks::GetWebhooksParams) -> Value {
     let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("workspace".into(), Value::String((&p.workspace).clone()));
     m.insert("resource".into(), match (&p.resource_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -3742,7 +3886,7 @@ impl iface_audit_log_api::Guest for crate::Component {
 }
 use crate::exports::autostamp::asana::typeahead as iface_typeahead;
 
-const OP_TYPEAHEAD_TYPEAHEAD_FOR_WORKSPACE: OpSpec = OpSpec {
+const OP_TYPEAHEAD_FOR_WORKSPACE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workspaces/{workspace_gid}/typeahead",
     fields: &[
@@ -3753,8 +3897,8 @@ const OP_TYPEAHEAD_TYPEAHEAD_FOR_WORKSPACE: OpSpec = OpSpec {
 };
 
 impl iface_typeahead::Guest for crate::Component {
-    fn typeahead_for_workspace() -> Result<String, String> {
-        dispatch(&OP_TYPEAHEAD_TYPEAHEAD_FOR_WORKSPACE, Value::Object(Map::new()))
+    fn for_workspace() -> Result<String, String> {
+        dispatch(&OP_TYPEAHEAD_FOR_WORKSPACE, Value::Object(Map::new()))
     }
 }
 

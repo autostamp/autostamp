@@ -309,7 +309,7 @@ const OP_STATS_HEALTH: OpSpec = OpSpec {
     ],
 };
 
-const OP_STATS_STATS_OF_AN_INDEX: OpSpec = OpSpec {
+const OP_STATS_OF_AN_INDEX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/indexes/books/stats",
     fields: &[
@@ -340,8 +340,8 @@ impl iface_stats::Guest for crate::Component {
     fn health() -> Result<String, String> {
         dispatch(&OP_STATS_HEALTH, Value::Object(Map::new()))
     }
-    fn stats_of_an_index() -> Result<String, String> {
-        dispatch(&OP_STATS_STATS_OF_AN_INDEX, Value::Object(Map::new()))
+    fn of_an_index() -> Result<String, String> {
+        dispatch(&OP_STATS_OF_AN_INDEX, Value::Object(Map::new()))
     }
     fn global_stats() -> Result<String, String> {
         dispatch(&OP_STATS_GLOBAL_STATS, Value::Object(Map::new()))
@@ -628,7 +628,7 @@ impl iface_documents::Guest for crate::Component {
 }
 use crate::exports::autostamp::meilisearch::search as iface_search;
 
-const OP_SEARCH_SEARCH_IN_INDEX: OpSpec = OpSpec {
+const OP_SEARCH_IN_INDEX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/indexes/books/search",
     fields: &[
@@ -654,7 +654,7 @@ const OP_SEARCH_SEARCH_IN_INDEX: OpSpec = OpSpec {
     ],
 };
 
-const OP_SEARCH_SEARCH_IN_INDEX1: OpSpec = OpSpec {
+const OP_SEARCH_IN_INDEX1: OpSpec = OpSpec {
     method: "POST",
     path_template: "/indexes/books/search",
     fields: &[
@@ -665,7 +665,7 @@ const OP_SEARCH_SEARCH_IN_INDEX1: OpSpec = OpSpec {
     ],
 };
 
-fn iface_search__search_in_index_params__to_json(p: &iface_search::SearchInIndexParams) -> Value {
+fn iface_search__in_index_params__to_json(p: &iface_search::InIndexParams) -> Value {
     let mut m = Map::new();
     m.insert("q".into(), match (&p.q) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -687,7 +687,7 @@ fn iface_search__search_in_index_params__to_json(p: &iface_search::SearchInIndex
     Value::Object(m)
 }
 
-fn iface_search__search_in_index1_params__to_json(p: &iface_search::SearchInIndex1Params) -> Value {
+fn iface_search__in_index1_params__to_json(p: &iface_search::InIndex1Params) -> Value {
     let mut m = Map::new();
     m.insert("attributes_to_highlight".into(), match (&p.attributes_to_highlight) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("q".into(), match (&p.q) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -695,13 +695,13 @@ fn iface_search__search_in_index1_params__to_json(p: &iface_search::SearchInInde
 }
 
 impl iface_search::Guest for crate::Component {
-    fn search_in_index(params: iface_search::SearchInIndexParams) -> Result<String, String> {
-        let json = iface_search__search_in_index_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_IN_INDEX, json)
+    fn in_index(params: iface_search::InIndexParams) -> Result<String, String> {
+        let json = iface_search__in_index_params__to_json(&params);
+        dispatch(&OP_SEARCH_IN_INDEX, json)
     }
-    fn search_in_index1(params: iface_search::SearchInIndex1Params) -> Result<String, String> {
-        let json = iface_search__search_in_index1_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_IN_INDEX1, json)
+    fn in_index1(params: iface_search::InIndex1Params) -> Result<String, String> {
+        let json = iface_search__in_index1_params__to_json(&params);
+        dispatch(&OP_SEARCH_IN_INDEX1, json)
     }
 }
 use crate::exports::autostamp::meilisearch::settings as iface_settings;

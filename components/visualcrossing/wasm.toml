@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:visualcrossing"
-version = "0.2.1+visualcrossing-4.6"
+version = "0.3.0+visualcrossing-4.6"
 registry = "ghcr.io/autostamp/visualcrossing"
 kind = "component"
 file = "build/visualcrossing.wasm"

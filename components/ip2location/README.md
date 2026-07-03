@@ -4,6 +4,15 @@
 
 WebAssembly component bindings generated from an OpenAPI document.
 
+## Authentication
+
+Reads credentials from the host via `wasmcloud:secrets`; operations never take a token.
+Provision these named secrets:
+
+| Secret name | Applied to each request as |
+| --- | --- |
+| `key` | query `key` |
+
 ## Generator Diagnostics
 
 The options this component was generated with, and whether each generation heuristic
@@ -11,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:ip2location@0.2.1` |
-| Published version | `0.2.1+ip2location-1.0` |
+| Package | `autostamp:ip2location@0.3.0` |
+| Published version | `0.3.0+ip2location-1.0` |
 | Tag filter | all tags |
 | Operations generated | 1 |
+| Infer API-key credentials | enabled — **triggered**, inferred 1 secret: `key` |
 | Prune duplicate credential fields | enabled — not triggered |

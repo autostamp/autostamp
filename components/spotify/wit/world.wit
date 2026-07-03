@@ -6,43 +6,65 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth_2_0` | `Authorization: Bearer <secret>` |
-package autostamp:spotify@0.2.1;
+package autostamp:spotify@0.3.0;
 
 interface albums {
   /// Get Several Albums
-  get-multiple-albums: func() -> result<string, string>;
+  record get-multiple-albums-params {
+    ids: string,
+    market: option<string>
+  }
+  get-multiple-albums: func(params: get-multiple-albums-params) -> result<string, string>;
 
   /// Get Album
-  get-an-album: func() -> result<string, string>;
+  record get-an-album-params {
+    id: string,
+    market: option<string>
+  }
+  get-an-album: func(params: get-an-album-params) -> result<string, string>;
 
   /// Get Album Tracks
-  get-an-albums-tracks: func() -> result<string, string>;
+  record get-an-albums-tracks-params {
+    id: string,
+    market: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-an-albums-tracks: func(params: get-an-albums-tracks-params) -> result<string, string>;
 
   /// Get New Releases
   record get-new-releases-params {
-    country: option<string>
+    country: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
   }
   get-new-releases: func(params: get-new-releases-params) -> result<string, string>;
 
   /// Get User's Saved Albums
-  get-users-saved-albums: func() -> result<string, string>;
+  record get-users-saved-albums-params {
+    limit: option<s32>,
+    offset: option<s32>,
+    market: option<string>
+  }
+  get-users-saved-albums: func(params: get-users-saved-albums-params) -> result<string, string>;
 
   /// Save Albums for Current User
   record save-albums-user-params {
-    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
-    ids: option<list<string>>
+    ids: string
   }
   save-albums-user: func(params: save-albums-user-params) -> result<string, string>;
 
   /// Remove Users' Saved Albums
   record remove-albums-user-params {
-    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
-    ids: option<list<string>>
+    ids: string
   }
   remove-albums-user: func(params: remove-albums-user-params) -> result<string, string>;
 
   /// Check User's Saved Albums
-  check-users-saved-albums: func() -> result<string, string>;
+  record check-users-saved-albums-params {
+    ids: string
+  }
+  check-users-saved-albums: func(params: check-users-saved-albums-params) -> result<string, string>;
 
 }
 
@@ -55,16 +77,33 @@ interface artists {
   get-multiple-artists: func(params: get-multiple-artists-params) -> result<string, string>;
 
   /// Get Artist
-  get-an-artist: func() -> result<string, string>;
+  record get-an-artist-params {
+    id: string
+  }
+  get-an-artist: func(params: get-an-artist-params) -> result<string, string>;
 
   /// Get Artist's Albums
-  get-an-artists-albums: func() -> result<string, string>;
+  record get-an-artists-albums-params {
+    id: string,
+    include-groups: option<string>,
+    market: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-an-artists-albums: func(params: get-an-artists-albums-params) -> result<string, string>;
 
   /// Get Artist's Related Artists
-  get-an-artists-related-artists: func() -> result<string, string>;
+  record get-an-artists-related-artists-params {
+    id: string
+  }
+  get-an-artists-related-artists: func(params: get-an-artists-related-artists-params) -> result<string, string>;
 
   /// Get Artist's Top Tracks
-  get-an-artists-top-tracks: func() -> result<string, string>;
+  record get-an-artists-top-tracks-params {
+    id: string,
+    market: option<string>
+  }
+  get-an-artists-top-tracks: func(params: get-an-artists-top-tracks-params) -> result<string, string>;
 
 }
 
@@ -88,28 +127,35 @@ interface tracks {
   get-audio-features: func(params: get-audio-features-params) -> result<string, string>;
 
   /// Get User's Saved Tracks
-  get-users-saved-tracks: func() -> result<string, string>;
+  record get-users-saved-tracks-params {
+    market: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-users-saved-tracks: func(params: get-users-saved-tracks-params) -> result<string, string>;
 
   /// Save Tracks for Current User
   record save-tracks-user-params {
-    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
-    ids: option<list<string>>
+    ids: string
   }
   save-tracks-user: func(params: save-tracks-user-params) -> result<string, string>;
 
   /// Remove User's Saved Tracks
   record remove-tracks-user-params {
-    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). For example: `["4iV5W9uYEdYUVa79Axb7Rh", "1301WleyT98MSxVHPZCA6M"]`<br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
-    ids: option<list<string>>
+    ids: string
   }
   remove-tracks-user: func(params: remove-tracks-user-params) -> result<string, string>;
 
   /// Check User's Saved Tracks
-  check-users-saved-tracks: func() -> result<string, string>;
+  record check-users-saved-tracks-params {
+    ids: string
+  }
+  check-users-saved-tracks: func(params: check-users-saved-tracks-params) -> result<string, string>;
 
   /// Get Recommendations
   record get-recommendations-params {
     limit: option<s32>,
+    market: option<string>,
     seed-artists: string,
     seed-genres: string,
     seed-tracks: string,
@@ -159,11 +205,16 @@ interface tracks {
   get-recommendations: func(params: get-recommendations-params) -> result<string, string>;
 
   /// Get Several Tracks
-  get-several-tracks: func() -> result<string, string>;
+  record get-several-tracks-params {
+    market: option<string>,
+    ids: string
+  }
+  get-several-tracks: func(params: get-several-tracks-params) -> result<string, string>;
 
   /// Get Track
   record get-track-params {
-    id: string
+    id: string,
+    market: option<string>
   }
   get-track: func(params: get-track-params) -> result<string, string>;
 
@@ -171,25 +222,52 @@ interface tracks {
 
 interface audiobooks {
   /// Get Several Audiobooks
-  get-multiple-audiobooks: func() -> result<string, string>;
+  record get-multiple-audiobooks-params {
+    ids: string,
+    market: option<string>
+  }
+  get-multiple-audiobooks: func(params: get-multiple-audiobooks-params) -> result<string, string>;
 
   /// Get an Audiobook
-  get-an-audiobook: func() -> result<string, string>;
+  record get-an-audiobook-params {
+    id: string,
+    market: option<string>
+  }
+  get-an-audiobook: func(params: get-an-audiobook-params) -> result<string, string>;
 
   /// Get Audiobook Chapters
-  get-audiobook-chapters: func() -> result<string, string>;
+  record get-audiobook-chapters-params {
+    id: string,
+    market: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-audiobook-chapters: func(params: get-audiobook-chapters-params) -> result<string, string>;
 
   /// Get User's Saved Audiobooks
-  get-users-saved-audiobooks: func() -> result<string, string>;
+  record get-users-saved-audiobooks-params {
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-users-saved-audiobooks: func(params: get-users-saved-audiobooks-params) -> result<string, string>;
 
   /// Save Audiobooks for Current User
-  save-audiobooks-user: func() -> result<string, string>;
+  record save-audiobooks-user-params {
+    ids: string
+  }
+  save-audiobooks-user: func(params: save-audiobooks-user-params) -> result<string, string>;
 
   /// Remove User's Saved Audiobooks
-  remove-audiobooks-user: func() -> result<string, string>;
+  record remove-audiobooks-user-params {
+    ids: string
+  }
+  remove-audiobooks-user: func(params: remove-audiobooks-user-params) -> result<string, string>;
 
   /// Check User's Saved Audiobooks
-  check-users-saved-audiobooks: func() -> result<string, string>;
+  record check-users-saved-audiobooks-params {
+    ids: string
+  }
+  check-users-saved-audiobooks: func(params: check-users-saved-audiobooks-params) -> result<string, string>;
 
 }
 
@@ -197,7 +275,9 @@ interface categories {
   /// Get Several Browse Categories
   record get-categories-params {
     country: option<string>,
-    locale: option<string>
+    locale: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
   }
   get-categories: func(params: get-categories-params) -> result<string, string>;
 
@@ -220,7 +300,9 @@ interface playlists {
   /// Get Category's Playlists
   record get-a-categories-playlists-params {
     category-id: string,
-    country: option<string>
+    country: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
   }
   get-a-categories-playlists: func(params: get-a-categories-playlists-params) -> result<string, string>;
 
@@ -228,24 +310,31 @@ interface playlists {
   record get-featured-playlists-params {
     country: option<string>,
     locale: option<string>,
-    timestamp: option<string>
+    timestamp: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
   }
   get-featured-playlists: func(params: get-featured-playlists-params) -> result<string, string>;
 
   /// Get Current User's Playlists
   record get-a-list-of-current-users-playlists-params {
+    limit: option<s32>,
     offset: option<s32>
   }
   get-a-list-of-current-users-playlists: func(params: get-a-list-of-current-users-playlists-params) -> result<string, string>;
 
   /// Get Playlist
   record get-playlist-params {
-    fields: option<string>
+    playlist-id: string,
+    market: option<string>,
+    fields: option<string>,
+    additional-types: option<string>
   }
   get-playlist: func(params: get-playlist-params) -> result<string, string>;
 
   /// Change Playlist Details
   record change-playlist-details-params {
+    playlist-id: string,
     /// If `true`, the playlist will become collaborative and other users will be able to modify the playlist in their Spotify client. <br/>
     /// _**Note**: You can only set `collaborative` to `true` on non-public playlists._
     collaborative: option<bool>,
@@ -259,19 +348,31 @@ interface playlists {
   change-playlist-details: func(params: change-playlist-details-params) -> result<string, string>;
 
   /// Get Playlist Cover Image
-  get-playlist-cover: func() -> result<string, string>;
+  record get-playlist-cover-params {
+    playlist-id: string
+  }
+  get-playlist-cover: func(params: get-playlist-cover-params) -> result<string, string>;
 
   /// Add Custom Playlist Cover Image
-  upload-custom-playlist-cover: func() -> result<string, string>;
+  record upload-custom-playlist-cover-params {
+    playlist-id: string
+  }
+  upload-custom-playlist-cover: func(params: upload-custom-playlist-cover-params) -> result<string, string>;
 
   /// Get Playlist Items
   record get-playlists-tracks-params {
-    fields: option<string>
+    playlist-id: string,
+    market: option<string>,
+    fields: option<string>,
+    limit: option<s32>,
+    offset: option<s32>,
+    additional-types: option<string>
   }
   get-playlists-tracks: func(params: get-playlists-tracks-params) -> result<string, string>;
 
   /// Add Items to Playlist
   record add-tracks-to-playlist-params {
+    playlist-id: string,
     position: option<s32>,
     uris: option<string>
   }
@@ -279,6 +380,7 @@ interface playlists {
 
   /// Update Playlist Items
   record reorder-or-replace-playlists-tracks-params {
+    playlist-id: string,
     uris: option<string>,
     /// The position where the items should be inserted.<br/>To reorder the items to the end of the playlist, simply set _insert_before_ to the position after the last item.<br/>Examples:<br/>To reorder the first item to the last position in a playlist with 10 items, set _range_start_ to 0, and _insert_before_ to 10.<br/>To reorder the last item in a playlist with 10 items to the start of the playlist, set _range_start_ to 9, and _insert_before_ to 0.
     insert-before: option<s32>,
@@ -293,6 +395,7 @@ interface playlists {
 
   /// Remove Playlist Items
   record remove-tracks-playlist-params {
+    playlist-id: string,
     /// The playlist's snapshot ID against which you want to make the changes.
     /// The API will validate that the specified items exist and in the specified positions and make the changes,
     snapshot-id: option<string>,
@@ -304,12 +407,15 @@ interface playlists {
 
   /// Get User's Playlists
   record get-list-users-playlists-params {
+    user-id: string,
+    limit: option<s32>,
     offset: option<s32>
   }
   get-list-users-playlists: func(params: get-list-users-playlists-params) -> result<string, string>;
 
   /// Create Playlist
   record create-playlist-params {
+    user-id: string,
     /// Defaults to `false`. If `true` the playlist will be collaborative. _**Note**: to create a collaborative playlist you must also set `public` to `false`. To create collaborative playlists you must have granted `playlist-modify-private` and `playlist-modify-public` [scopes](/documentation/web-api/concepts/scopes/#list-of-scopes)._
     collaborative: option<bool>,
     /// value for playlist description as displayed in Spotify Clients and in the Web API.
@@ -325,28 +431,43 @@ interface playlists {
 
 interface chapters {
   /// Get Several Chapters
-  get-several-chapters: func() -> result<string, string>;
+  record get-several-chapters-params {
+    ids: string,
+    market: option<string>
+  }
+  get-several-chapters: func(params: get-several-chapters-params) -> result<string, string>;
 
   /// Get a Chapter
-  get-a-chapter: func() -> result<string, string>;
+  record get-a-chapter-params {
+    id: string,
+    market: option<string>
+  }
+  get-a-chapter: func(params: get-a-chapter-params) -> result<string, string>;
 
 }
 
 interface episodes {
   /// Get Several Episodes
   record get-multiple-episodes-params {
-    ids: string
+    ids: string,
+    market: option<string>
   }
   get-multiple-episodes: func(params: get-multiple-episodes-params) -> result<string, string>;
 
   /// Get Episode
   record get-an-episode-params {
-    id: string
+    id: string,
+    market: option<string>
   }
   get-an-episode: func(params: get-an-episode-params) -> result<string, string>;
 
   /// Get User's Saved Episodes
-  get-users-saved-episodes: func() -> result<string, string>;
+  record get-users-saved-episodes-params {
+    market: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-users-saved-episodes: func(params: get-users-saved-episodes-params) -> result<string, string>;
 
   /// Save Episodes for Current User
   record save-episodes-user-params {
@@ -356,8 +477,7 @@ interface episodes {
 
   /// Remove User's Saved Episodes
   record remove-episodes-user-params {
-    /// A JSON array of the [Spotify IDs](/documentation/web-api/concepts/spotify-uris-ids). <br/>A maximum of 50 items can be specified in one request. _**Note**: if the `ids` parameter is present in the query string, any IDs listed here in the body will be ignored._
-    ids: option<list<string>>
+    ids: string
   }
   remove-episodes-user: func(params: remove-episodes-user-params) -> result<string, string>;
 
@@ -420,28 +540,38 @@ interface users {
   /// Get User's Top Items
   record get-users-top-artists-and-tracks-params {
     type-op: string,
-    time-range: option<string>
+    time-range: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
   }
   get-users-top-artists-and-tracks: func(params: get-users-top-artists-and-tracks-params) -> result<string, string>;
 
   /// Follow Playlist
   record follow-playlist-params {
+    playlist-id: string,
     /// Defaults to `true`. If `true` the playlist will be included in user's public playlists, if `false` it will remain private.
     public: option<bool>
   }
   follow-playlist: func(params: follow-playlist-params) -> result<string, string>;
 
   /// Unfollow Playlist
-  unfollow-playlist: func() -> result<string, string>;
+  record unfollow-playlist-params {
+    playlist-id: string
+  }
+  unfollow-playlist: func(params: unfollow-playlist-params) -> result<string, string>;
 
   /// Check if Users Follow Playlist
   record check-if-user-follows-playlist-params {
+    playlist-id: string,
     ids: string
   }
   check-if-user-follows-playlist: func(params: check-if-user-follows-playlist-params) -> result<string, string>;
 
   /// Get User's Profile
-  get-users-profile: func() -> result<string, string>;
+  record get-users-profile-params {
+    user-id: string
+  }
+  get-users-profile: func(params: get-users-profile-params) -> result<string, string>;
 
 }
 
@@ -455,7 +585,11 @@ interface player {
   }
 
   /// Get Playback State
-  get-information-about-the-users-current-playback: func() -> result<string, string>;
+  record get-information-about-the-users-current-playback-params {
+    market: option<string>,
+    additional-types: option<string>
+  }
+  get-information-about-the-users-current-playback: func(params: get-information-about-the-users-current-playback-params) -> result<string, string>;
 
   /// Transfer Playback
   record transfer-a-users-playback-params {
@@ -467,7 +601,11 @@ interface player {
   transfer-a-users-playback: func(params: transfer-a-users-playback-params) -> result<string, string>;
 
   /// Get Currently Playing Track
-  get-the-users-currently-playing-track: func() -> result<string, string>;
+  record get-the-users-currently-playing-track-params {
+    market: option<string>,
+    additional-types: option<string>
+  }
+  get-the-users-currently-playing-track: func(params: get-the-users-currently-playing-track-params) -> result<string, string>;
 
   /// Get Available Devices
   get-a-users-available-devices: func() -> result<string, string>;
@@ -557,25 +695,53 @@ interface player {
 
 interface shows {
   /// Get User's Saved Shows
-  get-users-saved-shows: func() -> result<string, string>;
+  record get-users-saved-shows-params {
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-users-saved-shows: func(params: get-users-saved-shows-params) -> result<string, string>;
 
   /// Save Shows for Current User
-  save-shows-user: func() -> result<string, string>;
+  record save-shows-user-params {
+    ids: string
+  }
+  save-shows-user: func(params: save-shows-user-params) -> result<string, string>;
 
   /// Remove User's Saved Shows
-  remove-shows-user: func() -> result<string, string>;
+  record remove-shows-user-params {
+    ids: string,
+    market: option<string>
+  }
+  remove-shows-user: func(params: remove-shows-user-params) -> result<string, string>;
 
   /// Check User's Saved Shows
-  check-users-saved-shows: func() -> result<string, string>;
+  record check-users-saved-shows-params {
+    ids: string
+  }
+  check-users-saved-shows: func(params: check-users-saved-shows-params) -> result<string, string>;
 
   /// Get Several Shows
-  get-multiple-shows: func() -> result<string, string>;
+  record get-multiple-shows-params {
+    market: option<string>,
+    ids: string
+  }
+  get-multiple-shows: func(params: get-multiple-shows-params) -> result<string, string>;
 
   /// Get Show
-  get-a-show: func() -> result<string, string>;
+  record get-a-show-params {
+    market: option<string>,
+    id: string
+  }
+  get-a-show: func(params: get-a-show-params) -> result<string, string>;
 
   /// Get Show Episodes
-  get-a-shows-episodes: func() -> result<string, string>;
+  record get-a-shows-episodes-params {
+    id: string,
+    market: option<string>,
+    limit: option<s32>,
+    offset: option<s32>
+  }
+  get-a-shows-episodes: func(params: get-a-shows-episodes-params) -> result<string, string>;
 
 }
 
@@ -604,6 +770,7 @@ interface search {
   record search-params {
     q: string,
     type-op: list<search-type-op-item-enum>,
+    market: option<string>,
     limit: option<s32>,
     offset: option<s32>,
     include-external: option<search-include-external-enum>

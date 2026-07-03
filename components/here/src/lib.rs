@@ -318,6 +318,12 @@ const OP_LOCATION_POST_LOCATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/locate",
     fields: &[
+        FieldSpec { snake: "confidence", location: FieldLocation::Query },
+        FieldSpec { snake: "content_encoding", location: FieldLocation::Header },
+        FieldSpec { snake: "fallback", location: FieldLocation::Query },
+        FieldSpec { snake: "desired", location: FieldLocation::Query },
+        FieldSpec { snake: "x_request_id", location: FieldLocation::Header },
+        FieldSpec { snake: "required", location: FieldLocation::Query },
         FieldSpec { snake: "cdma", location: FieldLocation::Body },
         FieldSpec { snake: "client", location: FieldLocation::Body },
         FieldSpec { snake: "gsm", location: FieldLocation::Body },
@@ -330,6 +336,26 @@ const OP_LOCATION_POST_LOCATE: OpSpec = OpSpec {
         AuthApply { secret_key: "APIKey", kind: AuthKind::ApiKeyQuery("apiKey") },
     ],
 };
+
+fn iface_location__post_locate_content_encoding_enum__to_str(e: &iface_location::PostLocateContentEncodingEnum) -> &'static str {
+    match e {
+        iface_location::PostLocateContentEncodingEnum::Gzip => "gzip",
+    }
+}
+
+fn iface_location__post_locate_fallback_item_enum__to_str(e: &iface_location::PostLocateFallbackItemEnum) -> &'static str {
+    match e {
+        iface_location::PostLocateFallbackItemEnum::Any => "any",
+        iface_location::PostLocateFallbackItemEnum::Area => "area",
+        iface_location::PostLocateFallbackItemEnum::SingleWifi => "singleWifi",
+    }
+}
+
+fn iface_location__post_locate_desired_item_enum__to_str(e: &iface_location::PostLocateDesiredItemEnum) -> &'static str {
+    match e {
+        iface_location::PostLocateDesiredItemEnum::Altitude => "altitude",
+    }
+}
 
 fn iface_location__cdma__to_json(p: &iface_location::Cdma) -> Value {
     let mut m = Map::new();
@@ -682,6 +708,12 @@ fn iface_location__rss__to_json(p: &iface_location::Rss) -> Value {
 
 fn iface_location__post_locate_params__to_json(p: &iface_location::PostLocateParams) -> Value {
     let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("content_encoding".into(), match (&p.content_encoding) { Some(v) => Value::String(iface_location__post_locate_content_encoding_enum__to_str(v).into()), None => Value::Null });
+    m.insert("fallback".into(), match (&p.fallback) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_location__post_locate_fallback_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("desired".into(), match (&p.desired) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_location__post_locate_desired_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("x_request_id".into(), match (&p.x_request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("required".into(), match (&p.required) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_location__post_locate_desired_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("cdma".into(), match (&p.cdma) { Some(v) => Value::Array((v).iter().map(|v| iface_location__cdma__to_json(v)).collect()), None => Value::Null });
     m.insert("client".into(), match (&p.client) { Some(v) => iface_location__client_info__to_json(v), None => Value::Null });
     m.insert("gsm".into(), match (&p.gsm) { Some(v) => Value::Array((v).iter().map(|v| iface_location__gsm__to_json(v)).collect()), None => Value::Null });

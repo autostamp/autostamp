@@ -1,4 +1,4 @@
-package autostamp:deutschebahn@0.2.1;
+package autostamp:deutschebahn@0.3.0;
 
 interface reisezentren {
   /// Get all station infos

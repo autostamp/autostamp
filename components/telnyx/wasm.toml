@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:telnyx"
-version = "0.2.1+telnyx-2.0.0"
+version = "0.3.0+telnyx-2.0.0"
 registry = "ghcr.io/autostamp/telnyx"
 kind = "component"
 file = "build/telnyx.wasm"

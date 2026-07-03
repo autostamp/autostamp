@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:languagetool"
-version = "0.2.1+languagetool-1.1.2"
+version = "0.3.0+languagetool-1.1.2"
 registry = "ghcr.io/autostamp/languagetool"
 kind = "component"
 file = "build/languagetool.wasm"

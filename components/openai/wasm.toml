@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:openai"
-version = "0.2.1+openai-1.2.0"
+version = "0.3.0+openai-1.2.0"
 registry = "ghcr.io/autostamp/openai"
 kind = "component"
 file = "build/openai.wasm"

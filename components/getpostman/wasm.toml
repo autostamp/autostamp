@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:getpostman"
-version = "0.2.1+getpostman-1.20.0"
+version = "0.3.0+getpostman-1.20.0"
 registry = "ghcr.io/autostamp/getpostman"
 kind = "component"
 file = "build/getpostman.wasm"

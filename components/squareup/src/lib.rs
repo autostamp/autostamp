@@ -1520,7 +1520,7 @@ const OP_CATALOG_BATCH_UPSERT_CATALOG_OBJECTS: OpSpec = OpSpec {
     ],
 };
 
-const OP_CATALOG_CATALOG_INFO: OpSpec = OpSpec {
+const OP_CATALOG_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v2/catalog/info",
     fields: &[
@@ -1641,59 +1641,59 @@ const OP_CATALOG_UPDATE_ITEM_TAXES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_catalog__catalog_object_batch__to_json(p: &iface_catalog::CatalogObjectBatch) -> Value {
+fn iface_catalog__object_batch__to_json(p: &iface_catalog::ObjectBatch) -> Value {
     let mut m = Map::new();
-    m.insert("objects".into(), Value::Array((&p.objects).iter().map(|v| iface_catalog__catalog_object__to_json(v)).collect()));
+    m.insert("objects".into(), Value::Array((&p.objects).iter().map(|v| iface_catalog__object__to_json(v)).collect()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_object__to_json(p: &iface_catalog::CatalogObject) -> Value {
+fn iface_catalog__object__to_json(p: &iface_catalog::Object) -> Value {
     let mut m = Map::new();
     m.insert("absent_at_location_ids".into(), match (&p.absent_at_location_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("catalog_v1_ids".into(), match (&p.catalog_v1_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__catalog_v1_id__to_json(v)).collect()), None => Value::Null });
-    m.insert("category_data".into(), match (&p.category_data) { Some(v) => iface_catalog__catalog_category__to_json(v), None => Value::Null });
-    m.insert("custom_attribute_definition_data".into(), match (&p.custom_attribute_definition_data) { Some(v) => iface_catalog__catalog_custom_attribute_definition__to_json(v), None => Value::Null });
-    m.insert("custom_attribute_values".into(), match (&p.custom_attribute_values) { Some(v) => iface_catalog__catalog_object_custom_attribute_values__to_json(v), None => Value::Null });
-    m.insert("discount_data".into(), match (&p.discount_data) { Some(v) => iface_catalog__catalog_discount__to_json(v), None => Value::Null });
+    m.insert("catalog_v1_ids".into(), match (&p.catalog_v1_ids) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__v1_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("category_data".into(), match (&p.category_data) { Some(v) => iface_catalog__category__to_json(v), None => Value::Null });
+    m.insert("custom_attribute_definition_data".into(), match (&p.custom_attribute_definition_data) { Some(v) => iface_catalog__custom_attribute_definition__to_json(v), None => Value::Null });
+    m.insert("custom_attribute_values".into(), match (&p.custom_attribute_values) { Some(v) => iface_catalog__object_custom_attribute_values__to_json(v), None => Value::Null });
+    m.insert("discount_data".into(), match (&p.discount_data) { Some(v) => iface_catalog__discount__to_json(v), None => Value::Null });
     m.insert("id".into(), Value::String((&p.id).clone()));
-    m.insert("image_data".into(), match (&p.image_data) { Some(v) => iface_catalog__catalog_image__to_json(v), None => Value::Null });
+    m.insert("image_data".into(), match (&p.image_data) { Some(v) => iface_catalog__image__to_json(v), None => Value::Null });
     m.insert("image_id".into(), match (&p.image_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("is_deleted".into(), match (&p.is_deleted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("item_data".into(), match (&p.item_data) { Some(v) => iface_catalog__catalog_item__to_json(v), None => Value::Null });
-    m.insert("item_option_data".into(), match (&p.item_option_data) { Some(v) => iface_catalog__catalog_item_option__to_json(v), None => Value::Null });
-    m.insert("item_option_value_data".into(), match (&p.item_option_value_data) { Some(v) => iface_catalog__catalog_item_option_value__to_json(v), None => Value::Null });
-    m.insert("item_variation_data".into(), match (&p.item_variation_data) { Some(v) => iface_catalog__catalog_item_variation__to_json(v), None => Value::Null });
-    m.insert("measurement_unit_data".into(), match (&p.measurement_unit_data) { Some(v) => iface_catalog__catalog_measurement_unit__to_json(v), None => Value::Null });
-    m.insert("modifier_data".into(), match (&p.modifier_data) { Some(v) => iface_catalog__catalog_modifier__to_json(v), None => Value::Null });
-    m.insert("modifier_list_data".into(), match (&p.modifier_list_data) { Some(v) => iface_catalog__catalog_modifier_list__to_json(v), None => Value::Null });
+    m.insert("item_data".into(), match (&p.item_data) { Some(v) => iface_catalog__item__to_json(v), None => Value::Null });
+    m.insert("item_option_data".into(), match (&p.item_option_data) { Some(v) => iface_catalog__item_option__to_json(v), None => Value::Null });
+    m.insert("item_option_value_data".into(), match (&p.item_option_value_data) { Some(v) => iface_catalog__item_option_value__to_json(v), None => Value::Null });
+    m.insert("item_variation_data".into(), match (&p.item_variation_data) { Some(v) => iface_catalog__item_variation__to_json(v), None => Value::Null });
+    m.insert("measurement_unit_data".into(), match (&p.measurement_unit_data) { Some(v) => iface_catalog__measurement_unit__to_json(v), None => Value::Null });
+    m.insert("modifier_data".into(), match (&p.modifier_data) { Some(v) => iface_catalog__modifier__to_json(v), None => Value::Null });
+    m.insert("modifier_list_data".into(), match (&p.modifier_list_data) { Some(v) => iface_catalog__modifier_list__to_json(v), None => Value::Null });
     m.insert("present_at_all_locations".into(), match (&p.present_at_all_locations) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("present_at_location_ids".into(), match (&p.present_at_location_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("pricing_rule_data".into(), match (&p.pricing_rule_data) { Some(v) => iface_catalog__catalog_pricing_rule__to_json(v), None => Value::Null });
-    m.insert("product_set_data".into(), match (&p.product_set_data) { Some(v) => iface_catalog__catalog_product_set__to_json(v), None => Value::Null });
-    m.insert("quick_amounts_settings_data".into(), match (&p.quick_amounts_settings_data) { Some(v) => iface_catalog__catalog_quick_amounts_settings__to_json(v), None => Value::Null });
-    m.insert("subscription_plan_data".into(), match (&p.subscription_plan_data) { Some(v) => iface_catalog__catalog_subscription_plan__to_json(v), None => Value::Null });
-    m.insert("tax_data".into(), match (&p.tax_data) { Some(v) => iface_catalog__catalog_tax__to_json(v), None => Value::Null });
-    m.insert("time_period_data".into(), match (&p.time_period_data) { Some(v) => iface_catalog__catalog_time_period__to_json(v), None => Value::Null });
+    m.insert("pricing_rule_data".into(), match (&p.pricing_rule_data) { Some(v) => iface_catalog__pricing_rule__to_json(v), None => Value::Null });
+    m.insert("product_set_data".into(), match (&p.product_set_data) { Some(v) => iface_catalog__product_set__to_json(v), None => Value::Null });
+    m.insert("quick_amounts_settings_data".into(), match (&p.quick_amounts_settings_data) { Some(v) => iface_catalog__quick_amounts_settings__to_json(v), None => Value::Null });
+    m.insert("subscription_plan_data".into(), match (&p.subscription_plan_data) { Some(v) => iface_catalog__subscription_plan__to_json(v), None => Value::Null });
+    m.insert("tax_data".into(), match (&p.tax_data) { Some(v) => iface_catalog__tax__to_json(v), None => Value::Null });
+    m.insert("time_period_data".into(), match (&p.time_period_data) { Some(v) => iface_catalog__time_period__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_v1_id__to_json(p: &iface_catalog::CatalogV1Id) -> Value {
+fn iface_catalog__v1_id__to_json(p: &iface_catalog::V1Id) -> Value {
     let mut m = Map::new();
     m.insert("catalog_v1_id".into(), match (&p.catalog_v1_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("location_id".into(), match (&p.location_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_category__to_json(p: &iface_catalog::CatalogCategory) -> Value {
+fn iface_catalog__category__to_json(p: &iface_catalog::Category) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_custom_attribute_definition__to_json(p: &iface_catalog::CatalogCustomAttributeDefinition) -> Value {
+fn iface_catalog__custom_attribute_definition__to_json(p: &iface_catalog::CustomAttributeDefinition) -> Value {
     let mut m = Map::new();
     m.insert("allowed_object_types".into(), Value::Array((&p.allowed_object_types).iter().map(|v| Value::String((v).clone())).collect()));
     m.insert("app_visibility".into(), match (&p.app_visibility) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1701,29 +1701,29 @@ fn iface_catalog__catalog_custom_attribute_definition__to_json(p: &iface_catalog
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
-    m.insert("number_config".into(), match (&p.number_config) { Some(v) => iface_catalog__catalog_custom_attribute_definition_number_config__to_json(v), None => Value::Null });
-    m.insert("selection_config".into(), match (&p.selection_config) { Some(v) => iface_catalog__catalog_custom_attribute_definition_selection_config__to_json(v), None => Value::Null });
+    m.insert("number_config".into(), match (&p.number_config) { Some(v) => iface_catalog__custom_attribute_definition_number_config__to_json(v), None => Value::Null });
+    m.insert("selection_config".into(), match (&p.selection_config) { Some(v) => iface_catalog__custom_attribute_definition_selection_config__to_json(v), None => Value::Null });
     m.insert("seller_visibility".into(), match (&p.seller_visibility) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("source_application".into(), match (&p.source_application) { Some(v) => iface_catalog__source_application__to_json(v), None => Value::Null });
-    m.insert("string_config".into(), match (&p.string_config) { Some(v) => iface_catalog__catalog_custom_attribute_definition_string_config__to_json(v), None => Value::Null });
+    m.insert("string_config".into(), match (&p.string_config) { Some(v) => iface_catalog__custom_attribute_definition_string_config__to_json(v), None => Value::Null });
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_custom_attribute_definition_number_config__to_json(p: &iface_catalog::CatalogCustomAttributeDefinitionNumberConfig) -> Value {
+fn iface_catalog__custom_attribute_definition_number_config__to_json(p: &iface_catalog::CustomAttributeDefinitionNumberConfig) -> Value {
     let mut m = Map::new();
     m.insert("precision".into(), match (&p.precision) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_custom_attribute_definition_selection_config__to_json(p: &iface_catalog::CatalogCustomAttributeDefinitionSelectionConfig) -> Value {
+fn iface_catalog__custom_attribute_definition_selection_config__to_json(p: &iface_catalog::CustomAttributeDefinitionSelectionConfig) -> Value {
     let mut m = Map::new();
-    m.insert("allowed_selections".into(), match (&p.allowed_selections) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__catalog_custom_attribute_definition_selection_config_custom_attribute_selection__to_json(v)).collect()), None => Value::Null });
+    m.insert("allowed_selections".into(), match (&p.allowed_selections) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__custom_attribute_definition_selection_config_custom_attribute_selection__to_json(v)).collect()), None => Value::Null });
     m.insert("max_allowed_selections".into(), match (&p.max_allowed_selections) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_custom_attribute_definition_selection_config_custom_attribute_selection__to_json(p: &iface_catalog::CatalogCustomAttributeDefinitionSelectionConfigCustomAttributeSelection) -> Value {
+fn iface_catalog__custom_attribute_definition_selection_config_custom_attribute_selection__to_json(p: &iface_catalog::CustomAttributeDefinitionSelectionConfigCustomAttributeSelection) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1738,19 +1738,19 @@ fn iface_catalog__source_application__to_json(p: &iface_catalog::SourceApplicati
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_custom_attribute_definition_string_config__to_json(p: &iface_catalog::CatalogCustomAttributeDefinitionStringConfig) -> Value {
+fn iface_catalog__custom_attribute_definition_string_config__to_json(p: &iface_catalog::CustomAttributeDefinitionStringConfig) -> Value {
     let mut m = Map::new();
     m.insert("enforce_uniqueness".into(), match (&p.enforce_uniqueness) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_object_custom_attribute_values__to_json(p: &iface_catalog::CatalogObjectCustomAttributeValues) -> Value {
+fn iface_catalog__object_custom_attribute_values__to_json(p: &iface_catalog::ObjectCustomAttributeValues) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_discount__to_json(p: &iface_catalog::CatalogDiscount) -> Value {
+fn iface_catalog__discount__to_json(p: &iface_catalog::Discount) -> Value {
     let mut m = Map::new();
     m.insert("amount_money".into(), match (&p.amount_money) { Some(v) => iface_catalog__money__to_json(v), None => Value::Null });
     m.insert("discount_type".into(), match (&p.discount_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1769,7 +1769,7 @@ fn iface_catalog__money__to_json(p: &iface_catalog::Money) -> Value {
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_image__to_json(p: &iface_catalog::CatalogImage) -> Value {
+fn iface_catalog__image__to_json(p: &iface_catalog::Image) -> Value {
     let mut m = Map::new();
     m.insert("caption".into(), match (&p.caption) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1777,7 +1777,7 @@ fn iface_catalog__catalog_image__to_json(p: &iface_catalog::CatalogImage) -> Val
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_item__to_json(p: &iface_catalog::CatalogItem) -> Value {
+fn iface_catalog__item__to_json(p: &iface_catalog::Item) -> Value {
     let mut m = Map::new();
     m.insert("abbreviation".into(), match (&p.abbreviation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("available_electronically".into(), match (&p.available_electronically) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1785,9 +1785,9 @@ fn iface_catalog__catalog_item__to_json(p: &iface_catalog::CatalogItem) -> Value
     m.insert("available_online".into(), match (&p.available_online) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("category_id".into(), match (&p.category_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("item_options".into(), match (&p.item_options) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__catalog_item_option_for_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("item_options".into(), match (&p.item_options) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__item_option_for_item__to_json(v)).collect()), None => Value::Null });
     m.insert("label_color".into(), match (&p.label_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("modifier_list_info".into(), match (&p.modifier_list_info) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__catalog_item_modifier_list_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("modifier_list_info".into(), match (&p.modifier_list_info) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__item_modifier_list_info__to_json(v)).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("product_type".into(), match (&p.product_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("skip_modifier_screen".into(), match (&p.skip_modifier_screen) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1797,30 +1797,30 @@ fn iface_catalog__catalog_item__to_json(p: &iface_catalog::CatalogItem) -> Value
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_item_option_for_item__to_json(p: &iface_catalog::CatalogItemOptionForItem) -> Value {
+fn iface_catalog__item_option_for_item__to_json(p: &iface_catalog::ItemOptionForItem) -> Value {
     let mut m = Map::new();
     m.insert("item_option_id".into(), match (&p.item_option_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_item_modifier_list_info__to_json(p: &iface_catalog::CatalogItemModifierListInfo) -> Value {
+fn iface_catalog__item_modifier_list_info__to_json(p: &iface_catalog::ItemModifierListInfo) -> Value {
     let mut m = Map::new();
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("max_selected_modifiers".into(), match (&p.max_selected_modifiers) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("min_selected_modifiers".into(), match (&p.min_selected_modifiers) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("modifier_list_id".into(), Value::String((&p.modifier_list_id).clone()));
-    m.insert("modifier_overrides".into(), match (&p.modifier_overrides) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__catalog_modifier_override__to_json(v)).collect()), None => Value::Null });
+    m.insert("modifier_overrides".into(), match (&p.modifier_overrides) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__modifier_override__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_modifier_override__to_json(p: &iface_catalog::CatalogModifierOverride) -> Value {
+fn iface_catalog__modifier_override__to_json(p: &iface_catalog::ModifierOverride) -> Value {
     let mut m = Map::new();
     m.insert("modifier_id".into(), Value::String((&p.modifier_id).clone()));
     m.insert("on_by_default".into(), match (&p.on_by_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_item_option__to_json(p: &iface_catalog::CatalogItemOption) -> Value {
+fn iface_catalog__item_option__to_json(p: &iface_catalog::ItemOption) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1830,7 +1830,7 @@ fn iface_catalog__catalog_item_option__to_json(p: &iface_catalog::CatalogItemOpt
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_item_option_value__to_json(p: &iface_catalog::CatalogItemOptionValue) -> Value {
+fn iface_catalog__item_option_value__to_json(p: &iface_catalog::ItemOptionValue) -> Value {
     let mut m = Map::new();
     m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1840,13 +1840,13 @@ fn iface_catalog__catalog_item_option_value__to_json(p: &iface_catalog::CatalogI
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_item_variation__to_json(p: &iface_catalog::CatalogItemVariation) -> Value {
+fn iface_catalog__item_variation__to_json(p: &iface_catalog::ItemVariation) -> Value {
     let mut m = Map::new();
     m.insert("available_for_booking".into(), match (&p.available_for_booking) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("inventory_alert_threshold".into(), match (&p.inventory_alert_threshold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("inventory_alert_type".into(), match (&p.inventory_alert_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("item_id".into(), match (&p.item_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("item_option_values".into(), match (&p.item_option_values) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__catalog_item_option_value_for_item_variation__to_json(v)).collect()), None => Value::Null });
+    m.insert("item_option_values".into(), match (&p.item_option_values) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__item_option_value_for_item_variation__to_json(v)).collect()), None => Value::Null });
     m.insert("location_overrides".into(), match (&p.location_overrides) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__item_variation_location_overrides__to_json(v)).collect()), None => Value::Null });
     m.insert("measurement_unit_id".into(), match (&p.measurement_unit_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1856,7 +1856,7 @@ fn iface_catalog__catalog_item_variation__to_json(p: &iface_catalog::CatalogItem
     m.insert("service_duration".into(), match (&p.service_duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("sku".into(), match (&p.sku) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("stockable".into(), match (&p.stockable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("stockable_conversion".into(), match (&p.stockable_conversion) { Some(v) => iface_catalog__catalog_stock_conversion__to_json(v), None => Value::Null });
+    m.insert("stockable_conversion".into(), match (&p.stockable_conversion) { Some(v) => iface_catalog__stock_conversion__to_json(v), None => Value::Null });
     m.insert("team_member_ids".into(), match (&p.team_member_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("track_inventory".into(), match (&p.track_inventory) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("upc".into(), match (&p.upc) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1864,7 +1864,7 @@ fn iface_catalog__catalog_item_variation__to_json(p: &iface_catalog::CatalogItem
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_item_option_value_for_item_variation__to_json(p: &iface_catalog::CatalogItemOptionValueForItemVariation) -> Value {
+fn iface_catalog__item_option_value_for_item_variation__to_json(p: &iface_catalog::ItemOptionValueForItemVariation) -> Value {
     let mut m = Map::new();
     m.insert("item_option_id".into(), match (&p.item_option_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("item_option_value_id".into(), match (&p.item_option_value_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1882,7 +1882,7 @@ fn iface_catalog__item_variation_location_overrides__to_json(p: &iface_catalog::
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_stock_conversion__to_json(p: &iface_catalog::CatalogStockConversion) -> Value {
+fn iface_catalog__stock_conversion__to_json(p: &iface_catalog::StockConversion) -> Value {
     let mut m = Map::new();
     m.insert("nonstockable_quantity".into(), Value::String((&p.nonstockable_quantity).clone()));
     m.insert("stockable_item_variation_id".into(), Value::String((&p.stockable_item_variation_id).clone()));
@@ -1890,14 +1890,14 @@ fn iface_catalog__catalog_stock_conversion__to_json(p: &iface_catalog::CatalogSt
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_measurement_unit__to_json(p: &iface_catalog::CatalogMeasurementUnit) -> Value {
+fn iface_catalog__measurement_unit__to_json(p: &iface_catalog::MeasurementUnit) -> Value {
     let mut m = Map::new();
-    m.insert("measurement_unit".into(), match (&p.measurement_unit) { Some(v) => iface_catalog__measurement_unit__to_json(v), None => Value::Null });
+    m.insert("measurement_unit".into(), match (&p.measurement_unit) { Some(v) => iface_catalog__measurement_unit_v2__to_json(v), None => Value::Null });
     m.insert("precision".into(), match (&p.precision) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__measurement_unit__to_json(p: &iface_catalog::MeasurementUnit) -> Value {
+fn iface_catalog__measurement_unit_v2__to_json(p: &iface_catalog::MeasurementUnitV2) -> Value {
     let mut m = Map::new();
     m.insert("area_unit".into(), match (&p.area_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("custom_unit".into(), match (&p.custom_unit) { Some(v) => iface_catalog__measurement_unit_custom__to_json(v), None => Value::Null });
@@ -1917,7 +1917,7 @@ fn iface_catalog__measurement_unit_custom__to_json(p: &iface_catalog::Measuremen
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_modifier__to_json(p: &iface_catalog::CatalogModifier) -> Value {
+fn iface_catalog__modifier__to_json(p: &iface_catalog::Modifier) -> Value {
     let mut m = Map::new();
     m.insert("modifier_list_id".into(), match (&p.modifier_list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1926,7 +1926,7 @@ fn iface_catalog__catalog_modifier__to_json(p: &iface_catalog::CatalogModifier) 
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_modifier_list__to_json(p: &iface_catalog::CatalogModifierList) -> Value {
+fn iface_catalog__modifier_list__to_json(p: &iface_catalog::ModifierList) -> Value {
     let mut m = Map::new();
     m.insert("modifiers".into(), match (&p.modifiers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1935,7 +1935,7 @@ fn iface_catalog__catalog_modifier_list__to_json(p: &iface_catalog::CatalogModif
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_pricing_rule__to_json(p: &iface_catalog::CatalogPricingRule) -> Value {
+fn iface_catalog__pricing_rule__to_json(p: &iface_catalog::PricingRule) -> Value {
     let mut m = Map::new();
     m.insert("apply_products_id".into(), match (&p.apply_products_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("customer_group_ids_any".into(), match (&p.customer_group_ids_any) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -1952,7 +1952,7 @@ fn iface_catalog__catalog_pricing_rule__to_json(p: &iface_catalog::CatalogPricin
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_product_set__to_json(p: &iface_catalog::CatalogProductSet) -> Value {
+fn iface_catalog__product_set__to_json(p: &iface_catalog::ProductSet) -> Value {
     let mut m = Map::new();
     m.insert("all_products".into(), match (&p.all_products) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1964,15 +1964,15 @@ fn iface_catalog__catalog_product_set__to_json(p: &iface_catalog::CatalogProduct
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_quick_amounts_settings__to_json(p: &iface_catalog::CatalogQuickAmountsSettings) -> Value {
+fn iface_catalog__quick_amounts_settings__to_json(p: &iface_catalog::QuickAmountsSettings) -> Value {
     let mut m = Map::new();
-    m.insert("amounts".into(), match (&p.amounts) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__catalog_quick_amount__to_json(v)).collect()), None => Value::Null });
+    m.insert("amounts".into(), match (&p.amounts) { Some(v) => Value::Array((v).iter().map(|v| iface_catalog__quick_amount__to_json(v)).collect()), None => Value::Null });
     m.insert("eligible_for_auto_amounts".into(), match (&p.eligible_for_auto_amounts) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("option".into(), Value::String((&p.option_op).clone()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_quick_amount__to_json(p: &iface_catalog::CatalogQuickAmount) -> Value {
+fn iface_catalog__quick_amount__to_json(p: &iface_catalog::QuickAmount) -> Value {
     let mut m = Map::new();
     m.insert("amount".into(), iface_catalog__money__to_json(&p.amount));
     m.insert("ordinal".into(), match (&p.ordinal) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1981,7 +1981,7 @@ fn iface_catalog__catalog_quick_amount__to_json(p: &iface_catalog::CatalogQuickA
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_subscription_plan__to_json(p: &iface_catalog::CatalogSubscriptionPlan) -> Value {
+fn iface_catalog__subscription_plan__to_json(p: &iface_catalog::SubscriptionPlan) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("phases".into(), Value::Array((&p.phases).iter().map(|v| iface_catalog__subscription_phase__to_json(v)).collect()));
@@ -1998,7 +1998,7 @@ fn iface_catalog__subscription_phase__to_json(p: &iface_catalog::SubscriptionPha
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_tax__to_json(p: &iface_catalog::CatalogTax) -> Value {
+fn iface_catalog__tax__to_json(p: &iface_catalog::Tax) -> Value {
     let mut m = Map::new();
     m.insert("applies_to_custom_amounts".into(), match (&p.applies_to_custom_amounts) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("calculation_phase".into(), match (&p.calculation_phase) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2009,66 +2009,66 @@ fn iface_catalog__catalog_tax__to_json(p: &iface_catalog::CatalogTax) -> Value {
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_time_period__to_json(p: &iface_catalog::CatalogTimePeriod) -> Value {
+fn iface_catalog__time_period__to_json(p: &iface_catalog::TimePeriod) -> Value {
     let mut m = Map::new();
     m.insert("event".into(), match (&p.event) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query__to_json(p: &iface_catalog::CatalogQuery) -> Value {
+fn iface_catalog__query__to_json(p: &iface_catalog::Query) -> Value {
     let mut m = Map::new();
-    m.insert("exact_query".into(), match (&p.exact_query) { Some(v) => iface_catalog__catalog_query_exact__to_json(v), None => Value::Null });
-    m.insert("item_variations_for_item_option_values_query".into(), match (&p.item_variations_for_item_option_values_query) { Some(v) => iface_catalog__catalog_query_item_variations_for_item_option_values__to_json(v), None => Value::Null });
-    m.insert("items_for_item_options_query".into(), match (&p.items_for_item_options_query) { Some(v) => iface_catalog__catalog_query_items_for_item_options__to_json(v), None => Value::Null });
-    m.insert("items_for_modifier_list_query".into(), match (&p.items_for_modifier_list_query) { Some(v) => iface_catalog__catalog_query_items_for_modifier_list__to_json(v), None => Value::Null });
-    m.insert("items_for_tax_query".into(), match (&p.items_for_tax_query) { Some(v) => iface_catalog__catalog_query_items_for_tax__to_json(v), None => Value::Null });
-    m.insert("prefix_query".into(), match (&p.prefix_query) { Some(v) => iface_catalog__catalog_query_prefix__to_json(v), None => Value::Null });
-    m.insert("range_query".into(), match (&p.range_query) { Some(v) => iface_catalog__catalog_query_range__to_json(v), None => Value::Null });
-    m.insert("set_query".into(), match (&p.set_query) { Some(v) => iface_catalog__catalog_query_set__to_json(v), None => Value::Null });
-    m.insert("sorted_attribute_query".into(), match (&p.sorted_attribute_query) { Some(v) => iface_catalog__catalog_query_sorted_attribute__to_json(v), None => Value::Null });
-    m.insert("text_query".into(), match (&p.text_query) { Some(v) => iface_catalog__catalog_query_text__to_json(v), None => Value::Null });
+    m.insert("exact_query".into(), match (&p.exact_query) { Some(v) => iface_catalog__query_exact__to_json(v), None => Value::Null });
+    m.insert("item_variations_for_item_option_values_query".into(), match (&p.item_variations_for_item_option_values_query) { Some(v) => iface_catalog__query_item_variations_for_item_option_values__to_json(v), None => Value::Null });
+    m.insert("items_for_item_options_query".into(), match (&p.items_for_item_options_query) { Some(v) => iface_catalog__query_items_for_item_options__to_json(v), None => Value::Null });
+    m.insert("items_for_modifier_list_query".into(), match (&p.items_for_modifier_list_query) { Some(v) => iface_catalog__query_items_for_modifier_list__to_json(v), None => Value::Null });
+    m.insert("items_for_tax_query".into(), match (&p.items_for_tax_query) { Some(v) => iface_catalog__query_items_for_tax__to_json(v), None => Value::Null });
+    m.insert("prefix_query".into(), match (&p.prefix_query) { Some(v) => iface_catalog__query_prefix__to_json(v), None => Value::Null });
+    m.insert("range_query".into(), match (&p.range_query) { Some(v) => iface_catalog__query_range__to_json(v), None => Value::Null });
+    m.insert("set_query".into(), match (&p.set_query) { Some(v) => iface_catalog__query_set__to_json(v), None => Value::Null });
+    m.insert("sorted_attribute_query".into(), match (&p.sorted_attribute_query) { Some(v) => iface_catalog__query_sorted_attribute__to_json(v), None => Value::Null });
+    m.insert("text_query".into(), match (&p.text_query) { Some(v) => iface_catalog__query_text__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_exact__to_json(p: &iface_catalog::CatalogQueryExact) -> Value {
+fn iface_catalog__query_exact__to_json(p: &iface_catalog::QueryExact) -> Value {
     let mut m = Map::new();
     m.insert("attribute_name".into(), Value::String((&p.attribute_name).clone()));
     m.insert("attribute_value".into(), Value::String((&p.attribute_value).clone()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_item_variations_for_item_option_values__to_json(p: &iface_catalog::CatalogQueryItemVariationsForItemOptionValues) -> Value {
+fn iface_catalog__query_item_variations_for_item_option_values__to_json(p: &iface_catalog::QueryItemVariationsForItemOptionValues) -> Value {
     let mut m = Map::new();
     m.insert("item_option_value_ids".into(), match (&p.item_option_value_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_items_for_item_options__to_json(p: &iface_catalog::CatalogQueryItemsForItemOptions) -> Value {
+fn iface_catalog__query_items_for_item_options__to_json(p: &iface_catalog::QueryItemsForItemOptions) -> Value {
     let mut m = Map::new();
     m.insert("item_option_ids".into(), match (&p.item_option_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_items_for_modifier_list__to_json(p: &iface_catalog::CatalogQueryItemsForModifierList) -> Value {
+fn iface_catalog__query_items_for_modifier_list__to_json(p: &iface_catalog::QueryItemsForModifierList) -> Value {
     let mut m = Map::new();
     m.insert("modifier_list_ids".into(), Value::Array((&p.modifier_list_ids).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_items_for_tax__to_json(p: &iface_catalog::CatalogQueryItemsForTax) -> Value {
+fn iface_catalog__query_items_for_tax__to_json(p: &iface_catalog::QueryItemsForTax) -> Value {
     let mut m = Map::new();
     m.insert("tax_ids".into(), Value::Array((&p.tax_ids).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_prefix__to_json(p: &iface_catalog::CatalogQueryPrefix) -> Value {
+fn iface_catalog__query_prefix__to_json(p: &iface_catalog::QueryPrefix) -> Value {
     let mut m = Map::new();
     m.insert("attribute_name".into(), Value::String((&p.attribute_name).clone()));
     m.insert("attribute_prefix".into(), Value::String((&p.attribute_prefix).clone()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_range__to_json(p: &iface_catalog::CatalogQueryRange) -> Value {
+fn iface_catalog__query_range__to_json(p: &iface_catalog::QueryRange) -> Value {
     let mut m = Map::new();
     m.insert("attribute_max_value".into(), match (&p.attribute_max_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("attribute_min_value".into(), match (&p.attribute_min_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -2076,14 +2076,14 @@ fn iface_catalog__catalog_query_range__to_json(p: &iface_catalog::CatalogQueryRa
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_set__to_json(p: &iface_catalog::CatalogQuerySet) -> Value {
+fn iface_catalog__query_set__to_json(p: &iface_catalog::QuerySet) -> Value {
     let mut m = Map::new();
     m.insert("attribute_name".into(), Value::String((&p.attribute_name).clone()));
     m.insert("attribute_values".into(), Value::Array((&p.attribute_values).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_sorted_attribute__to_json(p: &iface_catalog::CatalogQuerySortedAttribute) -> Value {
+fn iface_catalog__query_sorted_attribute__to_json(p: &iface_catalog::QuerySortedAttribute) -> Value {
     let mut m = Map::new();
     m.insert("attribute_name".into(), Value::String((&p.attribute_name).clone()));
     m.insert("initial_attribute_value".into(), match (&p.initial_attribute_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2091,7 +2091,7 @@ fn iface_catalog__catalog_query_sorted_attribute__to_json(p: &iface_catalog::Cat
     Value::Object(m)
 }
 
-fn iface_catalog__catalog_query_text__to_json(p: &iface_catalog::CatalogQueryText) -> Value {
+fn iface_catalog__query_text__to_json(p: &iface_catalog::QueryText) -> Value {
     let mut m = Map::new();
     m.insert("keywords".into(), Value::Array((&p.keywords).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
@@ -2131,7 +2131,7 @@ fn iface_catalog__batch_retrieve_catalog_objects_params__to_json(p: &iface_catal
 
 fn iface_catalog__batch_upsert_catalog_objects_params__to_json(p: &iface_catalog::BatchUpsertCatalogObjectsParams) -> Value {
     let mut m = Map::new();
-    m.insert("batches".into(), Value::Array((&p.batches).iter().map(|v| iface_catalog__catalog_object_batch__to_json(v)).collect()));
+    m.insert("batches".into(), Value::Array((&p.batches).iter().map(|v| iface_catalog__object_batch__to_json(v)).collect()));
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
     Value::Object(m)
 }
@@ -2147,7 +2147,7 @@ fn iface_catalog__list_catalog_params__to_json(p: &iface_catalog::ListCatalogPar
 fn iface_catalog__upsert_catalog_object_params__to_json(p: &iface_catalog::UpsertCatalogObjectParams) -> Value {
     let mut m = Map::new();
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
-    m.insert("object".into(), iface_catalog__catalog_object__to_json(&p.object));
+    m.insert("object".into(), iface_catalog__object__to_json(&p.object));
     Value::Object(m)
 }
 
@@ -2173,7 +2173,7 @@ fn iface_catalog__search_catalog_objects_params__to_json(p: &iface_catalog::Sear
     m.insert("include_related_objects".into(), match (&p.include_related_objects) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("object_types".into(), match (&p.object_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("query".into(), match (&p.query) { Some(v) => iface_catalog__catalog_query__to_json(v), None => Value::Null });
+    m.insert("query".into(), match (&p.query) { Some(v) => iface_catalog__query__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2220,8 +2220,8 @@ impl iface_catalog::Guest for crate::Component {
         let json = iface_catalog__batch_upsert_catalog_objects_params__to_json(&params);
         dispatch(&OP_CATALOG_BATCH_UPSERT_CATALOG_OBJECTS, json)
     }
-    fn catalog_info() -> Result<String, String> {
-        dispatch(&OP_CATALOG_CATALOG_INFO, Value::Object(Map::new()))
+    fn info() -> Result<String, String> {
+        dispatch(&OP_CATALOG_INFO, Value::Object(Map::new()))
     }
     fn list_catalog(params: iface_catalog::ListCatalogParams) -> Result<String, String> {
         let json = iface_catalog__list_catalog_params__to_json(&params);
@@ -3695,20 +3695,20 @@ const OP_INVENTORY_RETRIEVE_INVENTORY_CHANGES: OpSpec = OpSpec {
     ],
 };
 
-fn iface_inventory__inventory_change__to_json(p: &iface_inventory::InventoryChange) -> Value {
+fn iface_inventory__change__to_json(p: &iface_inventory::Change) -> Value {
     let mut m = Map::new();
-    m.insert("adjustment".into(), match (&p.adjustment) { Some(v) => iface_inventory__inventory_adjustment__to_json(v), None => Value::Null });
+    m.insert("adjustment".into(), match (&p.adjustment) { Some(v) => iface_inventory__adjustment__to_json(v), None => Value::Null });
     m.insert("measurement_unit".into(), match (&p.measurement_unit) { Some(v) => iface_inventory__catalog_measurement_unit__to_json(v), None => Value::Null });
     m.insert("measurement_unit_id".into(), match (&p.measurement_unit_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("physical_count".into(), match (&p.physical_count) { Some(v) => iface_inventory__inventory_physical_count__to_json(v), None => Value::Null });
-    m.insert("transfer".into(), match (&p.transfer) { Some(v) => iface_inventory__inventory_transfer__to_json(v), None => Value::Null });
+    m.insert("physical_count".into(), match (&p.physical_count) { Some(v) => iface_inventory__physical_count__to_json(v), None => Value::Null });
+    m.insert("transfer".into(), match (&p.transfer) { Some(v) => iface_inventory__transfer__to_json(v), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_inventory__inventory_adjustment__to_json(p: &iface_inventory::InventoryAdjustment) -> Value {
+fn iface_inventory__adjustment__to_json(p: &iface_inventory::Adjustment) -> Value {
     let mut m = Map::new();
-    m.insert("adjustment_group".into(), match (&p.adjustment_group) { Some(v) => iface_inventory__inventory_adjustment_group__to_json(v), None => Value::Null });
+    m.insert("adjustment_group".into(), match (&p.adjustment_group) { Some(v) => iface_inventory__adjustment_group__to_json(v), None => Value::Null });
     m.insert("catalog_object_id".into(), match (&p.catalog_object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("catalog_object_type".into(), match (&p.catalog_object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3729,7 +3729,7 @@ fn iface_inventory__inventory_adjustment__to_json(p: &iface_inventory::Inventory
     Value::Object(m)
 }
 
-fn iface_inventory__inventory_adjustment_group__to_json(p: &iface_inventory::InventoryAdjustmentGroup) -> Value {
+fn iface_inventory__adjustment_group__to_json(p: &iface_inventory::AdjustmentGroup) -> Value {
     let mut m = Map::new();
     m.insert("from_state".into(), match (&p.from_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3780,7 +3780,7 @@ fn iface_inventory__measurement_unit_custom__to_json(p: &iface_inventory::Measur
     Value::Object(m)
 }
 
-fn iface_inventory__inventory_physical_count__to_json(p: &iface_inventory::InventoryPhysicalCount) -> Value {
+fn iface_inventory__physical_count__to_json(p: &iface_inventory::PhysicalCount) -> Value {
     let mut m = Map::new();
     m.insert("catalog_object_id".into(), match (&p.catalog_object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("catalog_object_type".into(), match (&p.catalog_object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3796,7 +3796,7 @@ fn iface_inventory__inventory_physical_count__to_json(p: &iface_inventory::Inven
     Value::Object(m)
 }
 
-fn iface_inventory__inventory_transfer__to_json(p: &iface_inventory::InventoryTransfer) -> Value {
+fn iface_inventory__transfer__to_json(p: &iface_inventory::Transfer) -> Value {
     let mut m = Map::new();
     m.insert("catalog_object_id".into(), match (&p.catalog_object_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("catalog_object_type".into(), match (&p.catalog_object_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3827,7 +3827,7 @@ fn iface_inventory__retrieve_inventory_adjustment_params__to_json(p: &iface_inve
 
 fn iface_inventory__deprecated_batch_change_inventory_params__to_json(p: &iface_inventory::DeprecatedBatchChangeInventoryParams) -> Value {
     let mut m = Map::new();
-    m.insert("changes".into(), match (&p.changes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__inventory_change__to_json(v)).collect()), None => Value::Null });
+    m.insert("changes".into(), match (&p.changes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__change__to_json(v)).collect()), None => Value::Null });
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
     m.insert("ignore_unchanged_counts".into(), match (&p.ignore_unchanged_counts) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
@@ -3857,7 +3857,7 @@ fn iface_inventory__deprecated_batch_retrieve_inventory_counts_params__to_json(p
 
 fn iface_inventory__batch_change_inventory_params__to_json(p: &iface_inventory::BatchChangeInventoryParams) -> Value {
     let mut m = Map::new();
-    m.insert("changes".into(), match (&p.changes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__inventory_change__to_json(v)).collect()), None => Value::Null });
+    m.insert("changes".into(), match (&p.changes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__change__to_json(v)).collect()), None => Value::Null });
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
     m.insert("ignore_unchanged_counts".into(), match (&p.ignore_unchanged_counts) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
@@ -5962,29 +5962,29 @@ const OP_LOYALTY_REDEEM_LOYALTY_REWARD: OpSpec = OpSpec {
     ],
 };
 
-fn iface_loyalty__loyalty_account__to_json(p: &iface_loyalty::LoyaltyAccount) -> Value {
+fn iface_loyalty__account__to_json(p: &iface_loyalty::Account) -> Value {
     let mut m = Map::new();
     m.insert("balance".into(), match (&p.balance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("customer_id".into(), match (&p.customer_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("enrolled_at".into(), match (&p.enrolled_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("expiring_point_deadlines".into(), match (&p.expiring_point_deadlines) { Some(v) => Value::Array((v).iter().map(|v| iface_loyalty__loyalty_account_expiring_point_deadline__to_json(v)).collect()), None => Value::Null });
+    m.insert("expiring_point_deadlines".into(), match (&p.expiring_point_deadlines) { Some(v) => Value::Array((v).iter().map(|v| iface_loyalty__account_expiring_point_deadline__to_json(v)).collect()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("lifetime_points".into(), match (&p.lifetime_points) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("mapping".into(), match (&p.mapping) { Some(v) => iface_loyalty__loyalty_account_mapping__to_json(v), None => Value::Null });
+    m.insert("mapping".into(), match (&p.mapping) { Some(v) => iface_loyalty__account_mapping__to_json(v), None => Value::Null });
     m.insert("program_id".into(), Value::String((&p.program_id).clone()));
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_account_expiring_point_deadline__to_json(p: &iface_loyalty::LoyaltyAccountExpiringPointDeadline) -> Value {
+fn iface_loyalty__account_expiring_point_deadline__to_json(p: &iface_loyalty::AccountExpiringPointDeadline) -> Value {
     let mut m = Map::new();
     m.insert("expires_at".into(), Value::String((&p.expires_at).clone()));
     m.insert("points".into(), Value::Number(serde_json::Number::from(*(&p.points))));
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_account_mapping__to_json(p: &iface_loyalty::LoyaltyAccountMapping) -> Value {
+fn iface_loyalty__account_mapping__to_json(p: &iface_loyalty::AccountMapping) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -5995,11 +5995,11 @@ fn iface_loyalty__loyalty_account_mapping__to_json(p: &iface_loyalty::LoyaltyAcc
 fn iface_loyalty__search_loyalty_accounts_request_loyalty_account_query__to_json(p: &iface_loyalty::SearchLoyaltyAccountsRequestLoyaltyAccountQuery) -> Value {
     let mut m = Map::new();
     m.insert("customer_ids".into(), match (&p.customer_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("mappings".into(), match (&p.mappings) { Some(v) => Value::Array((v).iter().map(|v| iface_loyalty__loyalty_account_mapping__to_json(v)).collect()), None => Value::Null });
+    m.insert("mappings".into(), match (&p.mappings) { Some(v) => Value::Array((v).iter().map(|v| iface_loyalty__account_mapping__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_accumulate_points__to_json(p: &iface_loyalty::LoyaltyEventAccumulatePoints) -> Value {
+fn iface_loyalty__event_accumulate_points__to_json(p: &iface_loyalty::EventAccumulatePoints) -> Value {
     let mut m = Map::new();
     m.insert("loyalty_program_id".into(), match (&p.loyalty_program_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("order_id".into(), match (&p.order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -6007,7 +6007,7 @@ fn iface_loyalty__loyalty_event_accumulate_points__to_json(p: &iface_loyalty::Lo
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_adjust_points__to_json(p: &iface_loyalty::LoyaltyEventAdjustPoints) -> Value {
+fn iface_loyalty__event_adjust_points__to_json(p: &iface_loyalty::EventAdjustPoints) -> Value {
     let mut m = Map::new();
     m.insert("loyalty_program_id".into(), match (&p.loyalty_program_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("points".into(), Value::Number(serde_json::Number::from(*(&p.points))));
@@ -6015,23 +6015,23 @@ fn iface_loyalty__loyalty_event_adjust_points__to_json(p: &iface_loyalty::Loyalt
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_query__to_json(p: &iface_loyalty::LoyaltyEventQuery) -> Value {
+fn iface_loyalty__event_query__to_json(p: &iface_loyalty::EventQuery) -> Value {
     let mut m = Map::new();
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_loyalty__loyalty_event_filter__to_json(v), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_loyalty__event_filter__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_filter__to_json(p: &iface_loyalty::LoyaltyEventFilter) -> Value {
+fn iface_loyalty__event_filter__to_json(p: &iface_loyalty::EventFilter) -> Value {
     let mut m = Map::new();
-    m.insert("date_time_filter".into(), match (&p.date_time_filter) { Some(v) => iface_loyalty__loyalty_event_date_time_filter__to_json(v), None => Value::Null });
-    m.insert("location_filter".into(), match (&p.location_filter) { Some(v) => iface_loyalty__loyalty_event_location_filter__to_json(v), None => Value::Null });
-    m.insert("loyalty_account_filter".into(), match (&p.loyalty_account_filter) { Some(v) => iface_loyalty__loyalty_event_loyalty_account_filter__to_json(v), None => Value::Null });
-    m.insert("order_filter".into(), match (&p.order_filter) { Some(v) => iface_loyalty__loyalty_event_order_filter__to_json(v), None => Value::Null });
-    m.insert("type_filter".into(), match (&p.type_filter) { Some(v) => iface_loyalty__loyalty_event_type_filter__to_json(v), None => Value::Null });
+    m.insert("date_time_filter".into(), match (&p.date_time_filter) { Some(v) => iface_loyalty__event_date_time_filter__to_json(v), None => Value::Null });
+    m.insert("location_filter".into(), match (&p.location_filter) { Some(v) => iface_loyalty__event_location_filter__to_json(v), None => Value::Null });
+    m.insert("loyalty_account_filter".into(), match (&p.loyalty_account_filter) { Some(v) => iface_loyalty__event_loyalty_account_filter__to_json(v), None => Value::Null });
+    m.insert("order_filter".into(), match (&p.order_filter) { Some(v) => iface_loyalty__event_order_filter__to_json(v), None => Value::Null });
+    m.insert("type_filter".into(), match (&p.type_filter) { Some(v) => iface_loyalty__event_type_filter__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_date_time_filter__to_json(p: &iface_loyalty::LoyaltyEventDateTimeFilter) -> Value {
+fn iface_loyalty__event_date_time_filter__to_json(p: &iface_loyalty::EventDateTimeFilter) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), iface_loyalty__time_range__to_json(&p.created_at));
     Value::Object(m)
@@ -6044,25 +6044,25 @@ fn iface_loyalty__time_range__to_json(p: &iface_loyalty::TimeRange) -> Value {
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_location_filter__to_json(p: &iface_loyalty::LoyaltyEventLocationFilter) -> Value {
+fn iface_loyalty__event_location_filter__to_json(p: &iface_loyalty::EventLocationFilter) -> Value {
     let mut m = Map::new();
     m.insert("location_ids".into(), Value::Array((&p.location_ids).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_loyalty_account_filter__to_json(p: &iface_loyalty::LoyaltyEventLoyaltyAccountFilter) -> Value {
+fn iface_loyalty__event_loyalty_account_filter__to_json(p: &iface_loyalty::EventLoyaltyAccountFilter) -> Value {
     let mut m = Map::new();
     m.insert("loyalty_account_id".into(), Value::String((&p.loyalty_account_id).clone()));
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_order_filter__to_json(p: &iface_loyalty::LoyaltyEventOrderFilter) -> Value {
+fn iface_loyalty__event_order_filter__to_json(p: &iface_loyalty::EventOrderFilter) -> Value {
     let mut m = Map::new();
     m.insert("order_id".into(), Value::String((&p.order_id).clone()));
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_event_type_filter__to_json(p: &iface_loyalty::LoyaltyEventTypeFilter) -> Value {
+fn iface_loyalty__event_type_filter__to_json(p: &iface_loyalty::EventTypeFilter) -> Value {
     let mut m = Map::new();
     m.insert("types".into(), Value::Array((&p.types).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
@@ -6075,7 +6075,7 @@ fn iface_loyalty__money__to_json(p: &iface_loyalty::Money) -> Value {
     Value::Object(m)
 }
 
-fn iface_loyalty__loyalty_reward__to_json(p: &iface_loyalty::LoyaltyReward) -> Value {
+fn iface_loyalty__reward__to_json(p: &iface_loyalty::Reward) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -6099,7 +6099,7 @@ fn iface_loyalty__search_loyalty_rewards_request_loyalty_reward_query__to_json(p
 fn iface_loyalty__create_loyalty_account_params__to_json(p: &iface_loyalty::CreateLoyaltyAccountParams) -> Value {
     let mut m = Map::new();
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
-    m.insert("loyalty_account".into(), iface_loyalty__loyalty_account__to_json(&p.loyalty_account));
+    m.insert("loyalty_account".into(), iface_loyalty__account__to_json(&p.loyalty_account));
     Value::Object(m)
 }
 
@@ -6120,7 +6120,7 @@ fn iface_loyalty__retrieve_loyalty_account_params__to_json(p: &iface_loyalty::Re
 fn iface_loyalty__accumulate_loyalty_points_params__to_json(p: &iface_loyalty::AccumulateLoyaltyPointsParams) -> Value {
     let mut m = Map::new();
     m.insert("account_id".into(), Value::String((&p.account_id).clone()));
-    m.insert("accumulate_points".into(), iface_loyalty__loyalty_event_accumulate_points__to_json(&p.accumulate_points));
+    m.insert("accumulate_points".into(), iface_loyalty__event_accumulate_points__to_json(&p.accumulate_points));
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
     m.insert("location_id".into(), Value::String((&p.location_id).clone()));
     Value::Object(m)
@@ -6129,7 +6129,7 @@ fn iface_loyalty__accumulate_loyalty_points_params__to_json(p: &iface_loyalty::A
 fn iface_loyalty__adjust_loyalty_points_params__to_json(p: &iface_loyalty::AdjustLoyaltyPointsParams) -> Value {
     let mut m = Map::new();
     m.insert("account_id".into(), Value::String((&p.account_id).clone()));
-    m.insert("adjust_points".into(), iface_loyalty__loyalty_event_adjust_points__to_json(&p.adjust_points));
+    m.insert("adjust_points".into(), iface_loyalty__event_adjust_points__to_json(&p.adjust_points));
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
     Value::Object(m)
 }
@@ -6138,7 +6138,7 @@ fn iface_loyalty__search_loyalty_events_params__to_json(p: &iface_loyalty::Searc
     let mut m = Map::new();
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("query".into(), match (&p.query) { Some(v) => iface_loyalty__loyalty_event_query__to_json(v), None => Value::Null });
+    m.insert("query".into(), match (&p.query) { Some(v) => iface_loyalty__event_query__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -6159,7 +6159,7 @@ fn iface_loyalty__calculate_loyalty_points_params__to_json(p: &iface_loyalty::Ca
 fn iface_loyalty__create_loyalty_reward_params__to_json(p: &iface_loyalty::CreateLoyaltyRewardParams) -> Value {
     let mut m = Map::new();
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
-    m.insert("reward".into(), iface_loyalty__loyalty_reward__to_json(&p.reward));
+    m.insert("reward".into(), iface_loyalty__reward__to_json(&p.reward));
     Value::Object(m)
 }
 
@@ -7976,9 +7976,9 @@ const OP_TEAM_UPDATE_WAGE_SETTING: OpSpec = OpSpec {
     ],
 };
 
-fn iface_team__team_member__to_json(p: &iface_team::TeamMember) -> Value {
+fn iface_team__member__to_json(p: &iface_team::Member) -> Value {
     let mut m = Map::new();
-    m.insert("assigned_locations".into(), match (&p.assigned_locations) { Some(v) => iface_team__team_member_assigned_locations__to_json(v), None => Value::Null });
+    m.insert("assigned_locations".into(), match (&p.assigned_locations) { Some(v) => iface_team__member_assigned_locations__to_json(v), None => Value::Null });
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("email_address".into(), match (&p.email_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("family_name".into(), match (&p.family_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -7992,7 +7992,7 @@ fn iface_team__team_member__to_json(p: &iface_team::TeamMember) -> Value {
     Value::Object(m)
 }
 
-fn iface_team__team_member_assigned_locations__to_json(p: &iface_team::TeamMemberAssignedLocations) -> Value {
+fn iface_team__member_assigned_locations__to_json(p: &iface_team::MemberAssignedLocations) -> Value {
     let mut m = Map::new();
     m.insert("assignment_type".into(), match (&p.assignment_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("location_ids".into(), match (&p.location_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -8055,7 +8055,7 @@ fn iface_team__money__to_json(p: &iface_team::Money) -> Value {
 fn iface_team__create_team_member_params__to_json(p: &iface_team::CreateTeamMemberParams) -> Value {
     let mut m = Map::new();
     m.insert("idempotency_key".into(), match (&p.idempotency_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__team_member__to_json(v), None => Value::Null });
+    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__member__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8088,7 +8088,7 @@ fn iface_team__retrieve_team_member_params__to_json(p: &iface_team::RetrieveTeam
 fn iface_team__update_team_member_params__to_json(p: &iface_team::UpdateTeamMemberParams) -> Value {
     let mut m = Map::new();
     m.insert("team_member_id".into(), Value::String((&p.team_member_id).clone()));
-    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__team_member__to_json(v), None => Value::Null });
+    m.insert("team_member".into(), match (&p.team_member) { Some(v) => iface_team__member__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8235,7 +8235,7 @@ const OP_TERMINAL_CANCEL_TERMINAL_REFUND: OpSpec = OpSpec {
     ],
 };
 
-fn iface_terminal__terminal_checkout__to_json(p: &iface_terminal::TerminalCheckout) -> Value {
+fn iface_terminal__checkout__to_json(p: &iface_terminal::Checkout) -> Value {
     let mut m = Map::new();
     m.insert("amount_money".into(), iface_terminal__money__to_json(&p.amount_money));
     m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -8279,14 +8279,14 @@ fn iface_terminal__tip_settings__to_json(p: &iface_terminal::TipSettings) -> Val
     Value::Object(m)
 }
 
-fn iface_terminal__terminal_checkout_query__to_json(p: &iface_terminal::TerminalCheckoutQuery) -> Value {
+fn iface_terminal__checkout_query__to_json(p: &iface_terminal::CheckoutQuery) -> Value {
     let mut m = Map::new();
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_terminal__terminal_checkout_query_filter__to_json(v), None => Value::Null });
-    m.insert("sort".into(), match (&p.sort) { Some(v) => iface_terminal__terminal_checkout_query_sort__to_json(v), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_terminal__checkout_query_filter__to_json(v), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => iface_terminal__checkout_query_sort__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_terminal__terminal_checkout_query_filter__to_json(p: &iface_terminal::TerminalCheckoutQueryFilter) -> Value {
+fn iface_terminal__checkout_query_filter__to_json(p: &iface_terminal::CheckoutQueryFilter) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => iface_terminal__time_range__to_json(v), None => Value::Null });
     m.insert("device_id".into(), match (&p.device_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -8301,13 +8301,13 @@ fn iface_terminal__time_range__to_json(p: &iface_terminal::TimeRange) -> Value {
     Value::Object(m)
 }
 
-fn iface_terminal__terminal_checkout_query_sort__to_json(p: &iface_terminal::TerminalCheckoutQuerySort) -> Value {
+fn iface_terminal__checkout_query_sort__to_json(p: &iface_terminal::CheckoutQuerySort) -> Value {
     let mut m = Map::new();
     m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_terminal__terminal_refund__to_json(p: &iface_terminal::TerminalRefund) -> Value {
+fn iface_terminal__refund__to_json(p: &iface_terminal::Refund) -> Value {
     let mut m = Map::new();
     m.insert("amount_money".into(), iface_terminal__money__to_json(&p.amount_money));
     m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -8326,14 +8326,14 @@ fn iface_terminal__terminal_refund__to_json(p: &iface_terminal::TerminalRefund) 
     Value::Object(m)
 }
 
-fn iface_terminal__terminal_refund_query__to_json(p: &iface_terminal::TerminalRefundQuery) -> Value {
+fn iface_terminal__refund_query__to_json(p: &iface_terminal::RefundQuery) -> Value {
     let mut m = Map::new();
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_terminal__terminal_refund_query_filter__to_json(v), None => Value::Null });
-    m.insert("sort".into(), match (&p.sort) { Some(v) => iface_terminal__terminal_refund_query_sort__to_json(v), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_terminal__refund_query_filter__to_json(v), None => Value::Null });
+    m.insert("sort".into(), match (&p.sort) { Some(v) => iface_terminal__refund_query_sort__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_terminal__terminal_refund_query_filter__to_json(p: &iface_terminal::TerminalRefundQueryFilter) -> Value {
+fn iface_terminal__refund_query_filter__to_json(p: &iface_terminal::RefundQueryFilter) -> Value {
     let mut m = Map::new();
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => iface_terminal__time_range__to_json(v), None => Value::Null });
     m.insert("device_id".into(), match (&p.device_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -8341,7 +8341,7 @@ fn iface_terminal__terminal_refund_query_filter__to_json(p: &iface_terminal::Ter
     Value::Object(m)
 }
 
-fn iface_terminal__terminal_refund_query_sort__to_json(p: &iface_terminal::TerminalRefundQuerySort) -> Value {
+fn iface_terminal__refund_query_sort__to_json(p: &iface_terminal::RefundQuerySort) -> Value {
     let mut m = Map::new();
     m.insert("sort_order".into(), match (&p.sort_order) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -8349,7 +8349,7 @@ fn iface_terminal__terminal_refund_query_sort__to_json(p: &iface_terminal::Termi
 
 fn iface_terminal__create_terminal_checkout_params__to_json(p: &iface_terminal::CreateTerminalCheckoutParams) -> Value {
     let mut m = Map::new();
-    m.insert("checkout".into(), iface_terminal__terminal_checkout__to_json(&p.checkout));
+    m.insert("checkout".into(), iface_terminal__checkout__to_json(&p.checkout));
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
     Value::Object(m)
 }
@@ -8358,7 +8358,7 @@ fn iface_terminal__search_terminal_checkouts_params__to_json(p: &iface_terminal:
     let mut m = Map::new();
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("query".into(), match (&p.query) { Some(v) => iface_terminal__terminal_checkout_query__to_json(v), None => Value::Null });
+    m.insert("query".into(), match (&p.query) { Some(v) => iface_terminal__checkout_query__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8377,7 +8377,7 @@ fn iface_terminal__cancel_terminal_checkout_params__to_json(p: &iface_terminal::
 fn iface_terminal__create_terminal_refund_params__to_json(p: &iface_terminal::CreateTerminalRefundParams) -> Value {
     let mut m = Map::new();
     m.insert("idempotency_key".into(), Value::String((&p.idempotency_key).clone()));
-    m.insert("refund".into(), match (&p.refund) { Some(v) => iface_terminal__terminal_refund__to_json(v), None => Value::Null });
+    m.insert("refund".into(), match (&p.refund) { Some(v) => iface_terminal__refund__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -8385,7 +8385,7 @@ fn iface_terminal__search_terminal_refunds_params__to_json(p: &iface_terminal::S
     let mut m = Map::new();
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("query".into(), match (&p.query) { Some(v) => iface_terminal__terminal_refund_query__to_json(v), None => Value::Null });
+    m.insert("query".into(), match (&p.query) { Some(v) => iface_terminal__refund_query__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 

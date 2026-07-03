@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:bulksms"
-version = "0.2.1+bulksms-1.0.0"
+version = "0.3.0+bulksms-1.0.0"
 registry = "ghcr.io/autostamp/bulksms"
 kind = "component"
 file = "build/bulksms.wasm"

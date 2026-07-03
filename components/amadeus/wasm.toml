@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:amadeus"
-version = "0.2.1+amadeus-2.2.0"
+version = "0.3.0+amadeus-2.2.0"
 registry = "ghcr.io/autostamp/amadeus"
 kind = "component"
 file = "build/amadeus.wasm"

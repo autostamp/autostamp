@@ -20,8 +20,9 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:atlassian@0.2.1` |
-| Published version | `0.2.1+atlassian-1001.0.0-SNAPSHOT` |
+| Package | `autostamp:atlassian@0.3.0` |
+| Published version | `0.3.0+atlassian-1001.0.0-SNAPSHOT` |
 | Tag filter | all tags |
 | Operations generated | 499 |
+| Infer API-key credentials | enabled — not triggered |
 | Prune duplicate credential fields | enabled — not triggered |

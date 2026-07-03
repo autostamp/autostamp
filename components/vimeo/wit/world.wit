@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `oauth2` | `Authorization: Bearer <secret>` |
-package autostamp:vimeo@0.2.1;
+package autostamp:vimeo@0.3.0;
 
 interface api-information {
   /// Get an API specification

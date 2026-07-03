@@ -1,4 +1,4 @@
-package autostamp:qualtrics@0.2.1;
+package autostamp:qualtrics@0.3.0;
 
 interface directories {
   /// Create contact in mailing list

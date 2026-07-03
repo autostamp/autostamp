@@ -1,6 +1,6 @@
 [package]
 name = "autostamp:stackexchange"
-version = "0.2.1+stackexchange-2.0"
+version = "0.3.0+stackexchange-2.0"
 registry = "ghcr.io/autostamp/stackexchange"
 kind = "component"
 file = "build/stackexchange.wasm"

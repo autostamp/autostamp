@@ -354,7 +354,7 @@ const OP_ACCOUNT_VERIFY_NEW_ACCOUNT: OpSpec = OpSpec {
     ],
 };
 
-const OP_ACCOUNT_ACCOUNT_USAGE: OpSpec = OpSpec {
+const OP_ACCOUNT_USAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/usage/{year}/{month}/{type}",
     fields: &[
@@ -410,7 +410,7 @@ fn iface_account__verify_new_account_params__to_json(p: &iface_account::VerifyNe
     Value::Object(m)
 }
 
-fn iface_account__account_usage_params__to_json(p: &iface_account::AccountUsageParams) -> Value {
+fn iface_account__usage_params__to_json(p: &iface_account::UsageParams) -> Value {
     let mut m = Map::new();
     m.insert("year".into(), Value::String((&p.year).clone()));
     m.insert("month".into(), Value::String((&p.month).clone()));
@@ -438,9 +438,9 @@ impl iface_account::Guest for crate::Component {
         let json = iface_account__verify_new_account_params__to_json(&params);
         dispatch(&OP_ACCOUNT_VERIFY_NEW_ACCOUNT, json)
     }
-    fn account_usage(params: iface_account::AccountUsageParams) -> Result<String, String> {
-        let json = iface_account__account_usage_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_ACCOUNT_USAGE, json)
+    fn usage(params: iface_account::UsageParams) -> Result<String, String> {
+        let json = iface_account__usage_params__to_json(&params);
+        dispatch(&OP_ACCOUNT_USAGE, json)
     }
 }
 use crate::exports::autostamp::clicksend::automation_rules as iface_automation_rules;
@@ -3385,7 +3385,7 @@ const OP_RESELLER_UPDATE_RESELLER_SETTING: OpSpec = OpSpec {
     ],
 };
 
-const OP_RESELLER_RESELLER_BY_SUBDOMAIN: OpSpec = OpSpec {
+const OP_RESELLER_BY_SUBDOMAIN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reseller/{subdomain}",
     fields: &[
@@ -3409,7 +3409,7 @@ fn iface_reseller__update_reseller_setting_params__to_json(p: &iface_reseller::U
     Value::Object(m)
 }
 
-fn iface_reseller__reseller_by_subdomain_params__to_json(p: &iface_reseller::ResellerBySubdomainParams) -> Value {
+fn iface_reseller__by_subdomain_params__to_json(p: &iface_reseller::BySubdomainParams) -> Value {
     let mut m = Map::new();
     m.insert("subdomain".into(), Value::String((&p.subdomain).clone()));
     Value::Object(m)
@@ -3423,9 +3423,9 @@ impl iface_reseller::Guest for crate::Component {
         let json = iface_reseller__update_reseller_setting_params__to_json(&params);
         dispatch(&OP_RESELLER_UPDATE_RESELLER_SETTING, json)
     }
-    fn reseller_by_subdomain(params: iface_reseller::ResellerBySubdomainParams) -> Result<String, String> {
-        let json = iface_reseller__reseller_by_subdomain_params__to_json(&params);
-        dispatch(&OP_RESELLER_RESELLER_BY_SUBDOMAIN, json)
+    fn by_subdomain(params: iface_reseller::BySubdomainParams) -> Result<String, String> {
+        let json = iface_reseller__by_subdomain_params__to_json(&params);
+        dispatch(&OP_RESELLER_BY_SUBDOMAIN, json)
     }
 }
 use crate::exports::autostamp::clicksend::reseller_accounts as iface_reseller_accounts;
@@ -3597,7 +3597,7 @@ impl iface_reseller_accounts::Guest for crate::Component {
 }
 use crate::exports::autostamp::clicksend::sdk as iface_sdk;
 
-const OP_SDK_SDK_DOWNLOAD: OpSpec = OpSpec {
+const OP_SDK_DOWNLOAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sdk-download/{type}",
     fields: &[
@@ -3607,21 +3607,21 @@ const OP_SDK_SDK_DOWNLOAD: OpSpec = OpSpec {
     ],
 };
 
-fn iface_sdk__sdk_download_params__to_json(p: &iface_sdk::SdkDownloadParams) -> Value {
+fn iface_sdk__download_params__to_json(p: &iface_sdk::DownloadParams) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     Value::Object(m)
 }
 
 impl iface_sdk::Guest for crate::Component {
-    fn sdk_download(params: iface_sdk::SdkDownloadParams) -> Result<String, String> {
-        let json = iface_sdk__sdk_download_params__to_json(&params);
-        dispatch(&OP_SDK_SDK_DOWNLOAD, json)
+    fn download(params: iface_sdk::DownloadParams) -> Result<String, String> {
+        let json = iface_sdk__download_params__to_json(&params);
+        dispatch(&OP_SDK_DOWNLOAD, json)
     }
 }
 use crate::exports::autostamp::clicksend::search as iface_search;
 
-const OP_SEARCH_SEARCH_CONTACTS_LISTS: OpSpec = OpSpec {
+const OP_SEARCH_CONTACTS_LISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/contacts-lists?q={q}",
     fields: &[
@@ -3631,16 +3631,16 @@ const OP_SEARCH_SEARCH_CONTACTS_LISTS: OpSpec = OpSpec {
     ],
 };
 
-fn iface_search__search_contacts_lists_params__to_json(p: &iface_search::SearchContactsListsParams) -> Value {
+fn iface_search__contacts_lists_params__to_json(p: &iface_search::ContactsListsParams) -> Value {
     let mut m = Map::new();
     m.insert("q".into(), Value::String((&p.q).clone()));
     Value::Object(m)
 }
 
 impl iface_search::Guest for crate::Component {
-    fn search_contacts_lists(params: iface_search::SearchContactsListsParams) -> Result<String, String> {
-        let json = iface_search__search_contacts_lists_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH_CONTACTS_LISTS, json)
+    fn contacts_lists(params: iface_search::ContactsListsParams) -> Result<String, String> {
+        let json = iface_search__contacts_lists_params__to_json(&params);
+        dispatch(&OP_SEARCH_CONTACTS_LISTS, json)
     }
 }
 use crate::exports::autostamp::clicksend::sms_campaigns as iface_sms_campaigns;
@@ -4709,7 +4709,7 @@ const OP_VOICE_GET_VOICE_HISTORY: OpSpec = OpSpec {
     ],
 };
 
-const OP_VOICE_VOICE_LANGUAGES: OpSpec = OpSpec {
+const OP_VOICE_LANGUAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/voice/lang",
     fields: &[
@@ -4888,8 +4888,8 @@ impl iface_voice::Guest for crate::Component {
         let json = iface_voice__get_voice_history_params__to_json(&params);
         dispatch(&OP_VOICE_GET_VOICE_HISTORY, json)
     }
-    fn voice_languages() -> Result<String, String> {
-        dispatch(&OP_VOICE_VOICE_LANGUAGES, Value::Object(Map::new()))
+    fn languages() -> Result<String, String> {
+        dispatch(&OP_VOICE_LANGUAGES, Value::Object(Map::new()))
     }
     fn post_voice_price(params: iface_voice::PostVoicePriceParams) -> Result<String, String> {
         let json = iface_voice__post_voice_price_params__to_json(&params);
