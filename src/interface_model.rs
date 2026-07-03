@@ -440,9 +440,17 @@ impl InterfaceModel {
         let mut fields: Vec<Field> = vec![];
 
         for p in &op.parameters {
+            // Resolve a `$ref` parameter (a shared `#/components/parameters/...`) instead of
+            // dropping it. Many specs — GitHub's especially — declare parameters like `owner`,
+            // `username`, or `per-page` once and reference them from every operation; skipping
+            // them left operations with an empty argument list. If resolution fails, skip just
+            // that parameter and still emit the operation.
             let p = match p {
                 ReferenceOr::Item(p) => p,
-                ReferenceOr::Reference { .. } => continue,
+                ReferenceOr::Reference { reference } => match ctx.resolve_parameter(reference) {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                },
             };
             let (data, location) = match p {
                 Parameter::Path { parameter_data, .. } => (parameter_data, Location::Path),
@@ -554,7 +562,7 @@ impl InterfaceModel {
         // already supplies from `wasmcloud:secrets`. Runs before the duplicate-credential prune
         // below so the two heuristics' diagnostics stay distinct.
         if auth.is_empty() {
-            for cred in infer_api_key_credentials(op) {
+            for cred in infer_api_key_credentials(ctx, op) {
                 let before = fields.len();
                 fields
                     .retain(|f| !(f.location == cred.location && f.name_snake == cred.field_snake));
@@ -678,10 +686,19 @@ struct InferredCredential {
 /// scope (a path key would require substituting the secret into the URL template at runtime).
 /// The secret key is the parameter's kebab-cased name; the wire name preserves the original
 /// spelling so the request is reproduced verbatim.
-fn infer_api_key_credentials(op: &Operation) -> Vec<InferredCredential> {
+fn infer_api_key_credentials(ctx: &SchemaCtx, op: &Operation) -> Vec<InferredCredential> {
     let mut out = Vec::new();
     for p in &op.parameters {
-        let ReferenceOr::Item(p) = p else { continue };
+        // Mirror the main parameter loop: resolve `$ref` parameters so a shared credential
+        // parameter is still inferred as a host-injected secret rather than leaking through as
+        // an ordinary request field.
+        let p = match p {
+            ReferenceOr::Item(p) => p,
+            ReferenceOr::Reference { reference } => match ctx.resolve_parameter(reference) {
+                Ok(p) => p,
+                Err(_) => continue,
+            },
+        };
         let (data, location) = match p {
             Parameter::Query { parameter_data, .. } => (parameter_data, Location::Query),
             Parameter::Header { parameter_data, .. } => (parameter_data, Location::Header),
