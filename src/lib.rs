@@ -199,7 +199,7 @@ pub fn generate(
                 .entry(iface_name.clone())
                 .or_insert_with(|| InterfaceModel::new(iface_name.clone()));
             let auth = registry.operation_requirement(spec, op);
-            iface.process_operation(&ctx, method, path, op, auth)?;
+            iface.process_operation(&ctx, method, path, &item.parameters, op, auth)?;
         }
     }
 

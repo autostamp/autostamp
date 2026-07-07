@@ -7,8 +7,8 @@
 use anyhow::Result;
 use heck::{ToKebabCase, ToSnakeCase};
 use openapiv3::{
-    AnySchema, Operation, Parameter, ParameterSchemaOrContent, ReferenceOr, RequestBody, Schema,
-    SchemaKind, Type,
+    AnySchema, MediaType, Operation, Parameter, ParameterSchemaOrContent, ReferenceOr, RequestBody,
+    Schema, SchemaKind, Type,
 };
 use std::collections::BTreeSet;
 
@@ -245,9 +245,21 @@ impl InterfaceModel {
                     Ok(WitType::Named(record_name))
                 }
             },
-            SchemaKind::OneOf { .. } | SchemaKind::AnyOf { .. } | SchemaKind::AllOf { .. } => {
-                Ok(WitType::String)
+            SchemaKind::AllOf { .. } => {
+                // `allOf` composes one object from its members, typically the common
+                // `[{$ref: Base}, {inline extension}]` shape. Merge the members' properties into
+                // a single record instead of degrading to an opaque `string`, so a body or field
+                // defined by composition keeps every field. (DigitalOcean models many request
+                // bodies this way; the old mapping dropped all of their fields.)
+                let record_name = unique_name(&name_hint.to_kebab_case(), |n| self.name_in_use(n));
+                self.emit_record_from_schema(ctx, schema, &record_name)?;
+                Ok(WitType::Named(record_name))
             }
+            // `oneOf`/`anyOf` describe a value that is exactly one of / at least one of several
+            // alternatives; no single record represents that faithfully, so they remain an
+            // opaque JSON `string` — a deliberate, documented simplification. `not` has no record
+            // form either.
+            SchemaKind::OneOf { .. } | SchemaKind::AnyOf { .. } => Ok(WitType::String),
             SchemaKind::Not { .. } => Ok(WitType::String),
             SchemaKind::Any(any) => self.map_any_schema(ctx, any, name_hint),
         }
@@ -278,27 +290,31 @@ impl InterfaceModel {
         }
         let description = schema.schema_data.description.clone();
 
-        let (properties, required): (PropertyEntries<'_>, Vec<String>) = match &schema.schema_kind {
-            SchemaKind::Type(Type::Object(o)) => {
-                (o.properties.iter().collect(), o.required.clone())
-            }
-            SchemaKind::Any(any) => (any.properties.iter().collect(), any.required.clone()),
-            _ => {
-                self.records.push(RecordModel {
-                    name_kebab: record_name.to_string(),
-                    description,
-                    fields: vec![Field {
-                        name_kebab: "value".into(),
-                        name_snake: "value".into(),
-                        description: Some("opaque schema; raw JSON".into()),
-                        ty: WitType::String,
-                        location: Location::Body,
-                    }],
-                });
-                return Ok(());
-            }
-        };
+        // Only object-shaped schemas contribute named fields. `allOf` is object-shaped once its
+        // members are merged; everything else (scalars, `oneOf`/`anyOf`/`not`) has no record form
+        // and gets a single raw-JSON `value` escape hatch.
+        let structured = matches!(
+            &schema.schema_kind,
+            SchemaKind::Type(Type::Object(_)) | SchemaKind::Any(_) | SchemaKind::AllOf { .. }
+        );
+        if !structured {
+            self.records.push(RecordModel {
+                name_kebab: record_name.to_string(),
+                description,
+                fields: vec![Field {
+                    name_kebab: "value".into(),
+                    name_snake: "value".into(),
+                    wire_name: "value".into(),
+                    description: Some("opaque schema; raw JSON".into()),
+                    ty: WitType::String,
+                    location: Location::Body,
+                }],
+            });
+            return Ok(());
+        }
 
+        // Reserve the record slot before lowering fields so a self-referential member resolves
+        // back to this record rather than recursing forever.
         self.records.push(RecordModel {
             name_kebab: record_name.to_string(),
             description,
@@ -306,7 +322,97 @@ impl InterfaceModel {
         });
         let idx = self.records.len() - 1;
 
-        let mut fields = Vec::with_capacity(properties.len());
+        let mut fields = Vec::new();
+        self.merge_schema_fields(ctx, record_name, schema, &mut fields, 0)?;
+        dedupe_field_names(&mut fields);
+        if fields.is_empty() {
+            // WIT records must have at least one field. For schemas with no named
+            // properties (free-form `object`s, `additionalProperties: true`), provide
+            // a JSON-blob escape hatch so callers can still pass arbitrary content.
+            fields.push(Field {
+                name_kebab: "data".into(),
+                name_snake: "data".into(),
+                wire_name: "data".into(),
+                description: Some("JSON-encoded free-form object payload".into()),
+                ty: WitType::Option(Box::new(WitType::String)),
+                location: Location::Body,
+            });
+        }
+        if let Some(record) = self.records.get_mut(idx) {
+            record.fields = fields;
+        }
+        Ok(())
+    }
+
+    /// Collect the record fields contributed by `schema` into `out`, flattening `allOf`.
+    ///
+    /// An object/`any` schema contributes its own properties. An `allOf` contributes the union of
+    /// its members' properties — the whole point of `allOf` composition — resolving each member
+    /// `$ref` and recursing so a base that is itself composed still flattens. `oneOf`/`anyOf` and
+    /// scalar members name no fields and are skipped. `depth` bounds pathological cyclic `allOf`.
+    fn merge_schema_fields(
+        &mut self,
+        ctx: &SchemaCtx,
+        record_name: &str,
+        schema: &Schema,
+        out: &mut Vec<Field>,
+        depth: usize,
+    ) -> Result<()> {
+        if depth > 8 {
+            return Ok(());
+        }
+        match &schema.schema_kind {
+            SchemaKind::Type(Type::Object(o)) => {
+                self.push_object_fields(
+                    ctx,
+                    record_name,
+                    o.properties.iter().collect(),
+                    &o.required,
+                    out,
+                )?;
+            }
+            SchemaKind::Any(any) => {
+                self.push_object_fields(
+                    ctx,
+                    record_name,
+                    any.properties.iter().collect(),
+                    &any.required,
+                    out,
+                )?;
+            }
+            SchemaKind::AllOf { all_of } => {
+                for member in all_of {
+                    match ctx.resolve_schema(member) {
+                        Ok(member_schema) => {
+                            self.merge_schema_fields(
+                                ctx,
+                                record_name,
+                                member_schema,
+                                out,
+                                depth + 1,
+                            )?;
+                        }
+                        Err(err) => eprintln!(
+                            "openapi-bindgen: skipping unresolvable allOf member in `{record_name}`: {err}"
+                        ),
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Lower one object/`any` schema's `properties` into `out`, wrapping each non-`required`
+    /// field in `option<...>`. Shared by plain object records and `allOf` merging.
+    fn push_object_fields(
+        &mut self,
+        ctx: &SchemaCtx,
+        record_name: &str,
+        properties: PropertyEntries<'_>,
+        required: &[String],
+        out: &mut Vec<Field>,
+    ) -> Result<()> {
         for (field_name, schema_ref) in properties {
             let name_kebab = sanitize_wit_name(&field_name.to_kebab_case());
             let nested_hint = format!("{record_name}-{name_kebab}");
@@ -321,29 +427,14 @@ impl InterfaceModel {
                 ReferenceOr::Item(s) => s.schema_data.description.clone(),
                 _ => None,
             };
-            fields.push(Field {
+            out.push(Field {
                 name_kebab,
                 name_snake: field_name.to_snake_case(),
+                wire_name: field_name.clone(),
                 description: desc,
                 ty,
                 location: Location::Body,
             });
-        }
-        dedupe_field_names(&mut fields);
-        if fields.is_empty() {
-            // WIT records must have at least one field. For schemas with no named
-            // properties (free-form `object`s, `additionalProperties: true`), provide
-            // a JSON-blob escape hatch so callers can still pass arbitrary content.
-            fields.push(Field {
-                name_kebab: "data".into(),
-                name_snake: "data".into(),
-                description: Some("JSON-encoded free-form object payload".into()),
-                ty: WitType::Option(Box::new(WitType::String)),
-                location: Location::Body,
-            });
-        }
-        if let Some(record) = self.records.get_mut(idx) {
-            record.fields = fields;
         }
         Ok(())
     }
@@ -382,6 +473,7 @@ impl InterfaceModel {
             fields.push(Field {
                 name_kebab,
                 name_snake: field_name.to_snake_case(),
+                wire_name: field_name.clone(),
                 description: desc,
                 ty,
                 location: Location::Body,
@@ -392,6 +484,7 @@ impl InterfaceModel {
             fields.push(Field {
                 name_kebab: "data".into(),
                 name_snake: "data".into(),
+                wire_name: "data".into(),
                 description: Some("JSON-encoded free-form object payload".into()),
                 ty: WitType::Option(Box::new(WitType::String)),
                 location: Location::Body,
@@ -403,12 +496,81 @@ impl InterfaceModel {
         Ok(())
     }
 
-    pub(crate) fn process_operation(
+    /// Lower a single resolved parameter into a [`Field`], or `None` for a cookie parameter
+    /// (not yet represented in the request runtime). Shared by the operation- and
+    /// path-item-level parameter passes in [`process_operation`].
+    fn lower_parameter(
         &mut self,
         ctx: &SchemaCtx,
+        op_kebab: &str,
+        param: &Parameter,
+    ) -> Result<Option<Field>> {
+        let (data, location) = match param {
+            Parameter::Path { parameter_data, .. } => (parameter_data, Location::Path),
+            Parameter::Query { parameter_data, .. } => (parameter_data, Location::Query),
+            Parameter::Header { parameter_data, .. } => (parameter_data, Location::Header),
+            Parameter::Cookie { parameter_data, .. } => {
+                // Cookie parameters aren't represented in the request runtime yet (see
+                // docs/known-limitations.md). They're vanishingly rare in practice — no provider
+                // in the curated corpus uses one — so rather than model them we drop them, but
+                // never silently: surface a diagnostic so the omission is visible.
+                eprintln!(
+                    "openapi-bindgen: dropping unsupported cookie parameter `{}` on `{op_kebab}`",
+                    parameter_data.name
+                );
+                return Ok(None);
+            }
+        };
+        let name_kebab = sanitize_wit_name(&data.name.to_kebab_case());
+        let name_snake = data.name.to_snake_case();
+        let wire_name = data.name.clone();
+        let hint = format!("{op_kebab}-{name_kebab}");
+
+        let schema_ref = match &data.format {
+            ParameterSchemaOrContent::Schema(s) => s,
+            ParameterSchemaOrContent::Content(_) => {
+                return Ok(Some(Field {
+                    name_kebab,
+                    name_snake,
+                    wire_name,
+                    description: data.description.clone(),
+                    ty: if data.required {
+                        WitType::String
+                    } else {
+                        WitType::Option(Box::new(WitType::String))
+                    },
+                    location,
+                }));
+            }
+        };
+
+        let raw_ty = if location == Location::Path || ctx.is_object_schema(schema_ref) {
+            WitType::String
+        } else {
+            self.map_schema_to_wit_type_unboxed(ctx, schema_ref, &hint)?
+        };
+        let ty = if data.required {
+            raw_ty
+        } else {
+            WitType::Option(Box::new(raw_ty))
+        };
+        Ok(Some(Field {
+            name_kebab,
+            name_snake,
+            wire_name,
+            description: data.description.clone(),
+            ty,
+            location,
+        }))
+    }
+
+    pub(crate) fn process_operation<'a>(
+        &mut self,
+        ctx: &SchemaCtx<'a>,
         method: &str,
         path: &str,
-        op: &Operation,
+        path_item_params: &'a [ReferenceOr<Parameter>],
+        op: &'a Operation,
         mut auth: Vec<AuthApply>,
     ) -> Result<()> {
         // `operationId` is optional in OpenAPI; synthesize a deterministic id from the
@@ -439,64 +601,34 @@ impl InterfaceModel {
 
         let mut fields: Vec<Field> = vec![];
 
+        // Gather the effective parameter list: path-item-level parameters (shared by every
+        // method of the path) merged with the operation's own, resolving any
+        // `#/components/parameters/*` `$ref`. Operation-level parameters override a path-level
+        // one with the same (name, location), per the OpenAPI spec; path-item params that the
+        // operation does not redefine are lowered first, then the operation's own. An
+        // unresolvable `$ref` is reported and skipped rather than silently dropped.
+        let mut op_keys: BTreeSet<(String, String)> = BTreeSet::new();
         for p in &op.parameters {
-            // Resolve a `$ref` parameter (a shared `#/components/parameters/...`) instead of
-            // dropping it. Many specs — GitHub's especially — declare parameters like `owner`,
-            // `username`, or `per-page` once and reference them from every operation; skipping
-            // them left operations with an empty argument list. If resolution fails, skip just
-            // that parameter and still emit the operation.
-            let p = match p {
-                ReferenceOr::Item(p) => p,
-                ReferenceOr::Reference { reference } => match ctx.resolve_parameter(reference) {
-                    Ok(p) => p,
-                    Err(_) => continue,
-                },
-            };
-            let (data, location) = match p {
-                Parameter::Path { parameter_data, .. } => (parameter_data, Location::Path),
-                Parameter::Query { parameter_data, .. } => (parameter_data, Location::Query),
-                Parameter::Header { parameter_data, .. } => (parameter_data, Location::Header),
-                Parameter::Cookie { .. } => continue,
-            };
-            let name_kebab = sanitize_wit_name(&data.name.to_kebab_case());
-            let name_snake = data.name.to_snake_case();
-            let hint = format!("{op_kebab}-{name_kebab}");
-
-            let schema_ref = match &data.format {
-                ParameterSchemaOrContent::Schema(s) => s,
-                ParameterSchemaOrContent::Content(_) => {
-                    fields.push(Field {
-                        name_kebab,
-                        name_snake,
-                        description: data.description.clone(),
-                        ty: if data.required {
-                            WitType::String
-                        } else {
-                            WitType::Option(Box::new(WitType::String))
-                        },
-                        location,
-                    });
+            if let Some(param) = resolve_param_ref(ctx, p) {
+                op_keys.insert(param_key(param));
+            }
+        }
+        for p in path_item_params {
+            if let Some(param) = resolve_param_ref(ctx, p) {
+                if op_keys.contains(&param_key(param)) {
                     continue;
                 }
-            };
-
-            let raw_ty = if location == Location::Path || ctx.is_object_schema(schema_ref) {
-                WitType::String
-            } else {
-                self.map_schema_to_wit_type_unboxed(ctx, schema_ref, &hint)?
-            };
-            let ty = if data.required {
-                raw_ty
-            } else {
-                WitType::Option(Box::new(raw_ty))
-            };
-            fields.push(Field {
-                name_kebab,
-                name_snake,
-                description: data.description.clone(),
-                ty,
-                location,
-            });
+                if let Some(field) = self.lower_parameter(ctx, &op_kebab, param)? {
+                    fields.push(field);
+                }
+            }
+        }
+        for p in &op.parameters {
+            if let Some(param) = resolve_param_ref(ctx, p)
+                && let Some(field) = self.lower_parameter(ctx, &op_kebab, param)?
+            {
+                fields.push(field);
+            }
         }
 
         if let Some(body_ref) = &op.request_body {
@@ -513,7 +645,7 @@ impl InterfaceModel {
                 }
             };
             if let Some(body) = &resolved
-                && let Some(media) = body.content.get("application/json")
+                && let Some(media) = select_body_media(body)
                 && let Some(body_schema_ref) = &media.schema
             {
                 let hint = format!("{op_kebab}-body");
@@ -542,6 +674,7 @@ impl InterfaceModel {
                         fields.push(Field {
                             name_kebab: "body".into(),
                             name_snake: "body".into(),
+                            wire_name: "body".into(),
                             description: None,
                             ty: if body.required {
                                 other
@@ -562,7 +695,7 @@ impl InterfaceModel {
         // already supplies from `wasmcloud:secrets`. Runs before the duplicate-credential prune
         // below so the two heuristics' diagnostics stay distinct.
         if auth.is_empty() {
-            for cred in infer_api_key_credentials(ctx, op) {
+            for cred in infer_api_key_credentials(op) {
                 let before = fields.len();
                 fields
                     .retain(|f| !(f.location == cred.location && f.name_snake == cred.field_snake));
@@ -644,6 +777,66 @@ impl InterfaceModel {
     }
 }
 
+/// Resolve a parameter reference to the concrete [`Parameter`], following
+/// `#/components/parameters/*` `$ref`s. Returns `None` — after printing a diagnostic — when a
+/// reference can't be resolved, so a bad `$ref` skips just that parameter instead of the whole
+/// operation, and never vanishes silently.
+fn resolve_param_ref<'a>(
+    ctx: &SchemaCtx<'a>,
+    p: &'a ReferenceOr<Parameter>,
+) -> Option<&'a Parameter> {
+    match p {
+        ReferenceOr::Item(param) => Some(param),
+        ReferenceOr::Reference { reference } => match ctx.resolve_parameter(reference) {
+            Ok(param) => Some(param),
+            Err(err) => {
+                eprintln!(
+                    "openapi-bindgen: skipping unresolved parameter $ref `{reference}`: {err}"
+                );
+                None
+            }
+        },
+    }
+}
+
+/// The `(location, name)` identity of a parameter, used to dedupe path-item-level against
+/// operation-level parameters (operation-level wins). OpenAPI keys parameter uniqueness on the
+/// `name` + `in` pair, so both are part of the key.
+fn param_key(p: &Parameter) -> (String, String) {
+    let (loc, data) = match p {
+        Parameter::Path { parameter_data, .. } => ("path", parameter_data),
+        Parameter::Query { parameter_data, .. } => ("query", parameter_data),
+        Parameter::Header { parameter_data, .. } => ("header", parameter_data),
+        Parameter::Cookie { parameter_data, .. } => ("cookie", parameter_data),
+    };
+    (loc.to_string(), data.name.clone())
+}
+
+/// Pick which request-body media type to bind.
+///
+/// Preference order: `application/json`, then any structured `*+json` (e.g.
+/// `application/vnd.github+json`), then `application/x-www-form-urlencoded`, then
+/// `multipart/form-data`, then whatever is listed first. Historically only `application/json`
+/// was read, which silently dropped the *entire* request body for the many real specs that
+/// never use it — Stripe and Twilio model every write as `application/x-www-form-urlencoded`,
+/// so operations like `post-account-links` emitted a param-less function. Once selected, the
+/// media type's schema is lowered exactly as a JSON body would be (object → inline fields,
+/// otherwise a single opaque `body: string`).
+fn select_body_media(body: &RequestBody) -> Option<&MediaType> {
+    let content = &body.content;
+    content
+        .get("application/json")
+        .or_else(|| {
+            content
+                .iter()
+                .find(|(name, _)| name.ends_with("+json"))
+                .map(|(_, media)| media)
+        })
+        .or_else(|| content.get("application/x-www-form-urlencoded"))
+        .or_else(|| content.get("multipart/form-data"))
+        .or_else(|| content.iter().next().map(|(_, media)| media))
+}
+
 /// Whether `field` duplicates a security credential the runtime injects for this operation.
 ///
 /// Matches a non-`Path` field whose snake-cased name equals either the security scheme's name
@@ -686,19 +879,10 @@ struct InferredCredential {
 /// scope (a path key would require substituting the secret into the URL template at runtime).
 /// The secret key is the parameter's kebab-cased name; the wire name preserves the original
 /// spelling so the request is reproduced verbatim.
-fn infer_api_key_credentials(ctx: &SchemaCtx, op: &Operation) -> Vec<InferredCredential> {
+fn infer_api_key_credentials(op: &Operation) -> Vec<InferredCredential> {
     let mut out = Vec::new();
     for p in &op.parameters {
-        // Mirror the main parameter loop: resolve `$ref` parameters so a shared credential
-        // parameter is still inferred as a host-injected secret rather than leaking through as
-        // an ordinary request field.
-        let p = match p {
-            ReferenceOr::Item(p) => p,
-            ReferenceOr::Reference { reference } => match ctx.resolve_parameter(reference) {
-                Ok(p) => p,
-                Err(_) => continue,
-            },
-        };
+        let ReferenceOr::Item(p) = p else { continue };
         let (data, location) = match p {
             Parameter::Query { parameter_data, .. } => (parameter_data, Location::Query),
             Parameter::Header { parameter_data, .. } => (parameter_data, Location::Header),
@@ -773,27 +957,71 @@ fn looks_like_api_key(name_snake: &str, required: bool, description: Option<&str
 
 /// Ensure a record's fields have unique WIT names.
 ///
-/// Two situations produce colliding fields: an OpenAPI document can declare the same field
-/// twice (TfL repeats `startDate`/`endDate` as "automatically added" query params, and an
-/// inlined request body can restate a query parameter), or two distinct names can sanitize to
-/// the same WIT identifier. Either way the emitted record would carry duplicate fields, which
-/// makes wit-bindgen generate a struct with two identically-named fields (`E0124`) and a
-/// double-initialized literal (`E0062`). We keep the first occurrence of each WIT name; a later
-/// field with the *same* source (snake) name is a genuine duplicate and is dropped, while a
-/// collision between *distinct* source fields is disambiguated with a numeric suffix so no field
-/// is silently lost.
+/// Colliding fields arise three ways: an OpenAPI document can declare the same input twice (TfL
+/// repeats `startDate`/`endDate` as "automatically added" query parameters), two distinct source
+/// names can sanitize to the same WIT identifier, or two *genuinely different* inputs can share a
+/// name — a path parameter and a query parameter both called `path` (Kubernetes' proxy endpoints:
+/// the `{path}` URL segment plus a `path` query string), Twilio's `DateCreated`, `DateCreated<`
+/// and `DateCreated>` range filters, or a request-body field restating a query/header parameter.
+/// OpenAPI keys parameter uniqueness on the (`name`, `in`) pair, and body fields live in yet
+/// another location, so these are distinct request inputs that must both be carried — dropping one
+/// silently loses an argument and, for a `{placeholder}` collision, can leave the URL unfillable.
+///
+/// A field carries three names: `wire_name` (verbatim on the HTTP wire), `name_snake` (the internal
+/// key of the params record the guest serializes and the runtime reads back) and `name_kebab` (the
+/// WIT/struct identifier). We treat two fields as the *same* input — dropping the later — only when
+/// they share both `wire_name` and `location`; such a pair is indistinguishable to the server.
+/// Otherwise we keep both and repair any name clash without touching `wire_name` or `location`, so
+/// each field still travels under its correct name in its correct place:
+///
+/// * `name_kebab` is made unique with a numeric suffix (wit-bindgen rejects duplicate struct field
+///   names, `E0124`); renaming the identifier is always safe.
+/// * `name_snake` is made unique so two fields can't clobber each other's value in the params
+///   record. A path field's snake must equal its `{placeholder}` (see `snake_path_template`), so
+///   when a path field collides with a non-path field we rename the non-path field instead.
 fn dedupe_field_names(fields: &mut Vec<Field>) {
     let mut kept: Vec<Field> = Vec::with_capacity(fields.len());
     for mut f in std::mem::take(fields) {
-        if let Some(existing) = kept.iter().find(|g| g.name_kebab == f.name_kebab) {
-            if existing.name_snake == f.name_snake {
-                continue;
-            }
+        // Pass 1 — drop true duplicates: same wire name in the same location.
+        if kept
+            .iter()
+            .any(|g| g.location == f.location && g.wire_name == f.wire_name)
+        {
+            continue;
+        }
+        // Pass 2 — unique WIT identifier.
+        if kept.iter().any(|g| g.name_kebab == f.name_kebab) {
             f.name_kebab = unique_name(&f.name_kebab, |n| kept.iter().any(|g| g.name_kebab == n));
+        }
+        // Pass 3 — unique internal JSON key, keeping path fields' placeholder-matching snake.
+        if f.location == Location::Path {
+            if let Some(pos) = kept
+                .iter()
+                .position(|g| g.name_snake == f.name_snake && g.location != Location::Path)
+            {
+                let mut taken: Vec<String> = kept.iter().map(|g| g.name_snake.clone()).collect();
+                taken.push(f.name_snake.clone());
+                if let Some(g) = kept.get_mut(pos) {
+                    g.name_snake = unique_snake(&g.name_kebab, &taken);
+                }
+            }
+        } else if kept.iter().any(|g| g.name_snake == f.name_snake) {
+            let taken: Vec<String> = kept.iter().map(|g| g.name_snake.clone()).collect();
+            f.name_snake = unique_snake(&f.name_kebab, &taken);
         }
         kept.push(f);
     }
     *fields = kept;
+}
+
+/// Derive a `name_snake` not present in `taken`, based on the (already unique) WIT identifier
+/// `base_kebab`. Reuses `unique_name`'s suffixing so a unique kebab yields a unique snake.
+fn unique_snake(base_kebab: &str, taken: &[String]) -> String {
+    let unique_kebab = unique_name(base_kebab, |cand| {
+        let cand_snake = cand.replace('-', "_");
+        taken.contains(&cand_snake)
+    });
+    unique_kebab.replace('-', "_")
 }
 
 impl InterfaceModel {
