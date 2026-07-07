@@ -883,43 +883,38 @@ fn resolves_shared_ref_request_body() {
     );
 }
 
-// r[verify codegen.parameter.shared-ref]
-// GitHub's API (and many others) declare their operation parameters once under
-// `#/components/parameters` and reference them by `$ref` from every operation (`owner`, `repo`,
-// `username`, `per-page`, ...). The generator must resolve those `$ref`s into fields; the
-// original code skipped reference parameters outright, so e.g. "list repositories for a user"
-// generated with an empty argument list instead of taking the user to list for.
+// r[verify codegen.request-body.non-json-media]
+// Many production specs never use `application/json` for request bodies: Stripe and Twilio
+// model every write as `application/x-www-form-urlencoded`. The old code read only
+// `content["application/json"]`, so those operations emitted a param-less function and their
+// entire body silently vanished. The generator must fall back to a non-JSON media type and
+// inline its schema's fields exactly as it would for JSON.
 #[test]
-fn resolves_shared_ref_parameters() {
+fn handles_non_json_request_body() {
     let spec_json = r##"{
       "openapi": "3.0.0",
       "info": { "title": "demo", "version": "1.0.0" },
       "paths": {
-        "/users/{username}/repos": {
-          "get": {
-            "tags": ["repos"],
-            "operationId": "listForUser",
-            "parameters": [
-              { "$ref": "#/components/parameters/username" },
-              { "$ref": "#/components/parameters/per-page" }
-            ],
+        "/account_links": {
+          "post": {
+            "tags": ["account"],
+            "operationId": "createAccountLink",
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/x-www-form-urlencoded": {
+                  "schema": {
+                    "type": "object",
+                    "required": ["account"],
+                    "properties": {
+                      "account": { "type": "string" },
+                      "return_url": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            },
             "responses": { "200": { "description": "ok" } }
-          }
-        }
-      },
-      "components": {
-        "parameters": {
-          "username": {
-            "name": "username",
-            "in": "path",
-            "required": true,
-            "schema": { "type": "string" }
-          },
-          "per-page": {
-            "name": "per_page",
-            "in": "query",
-            "required": false,
-            "schema": { "type": "integer" }
           }
         }
       }
@@ -928,17 +923,16 @@ fn resolves_shared_ref_parameters() {
     let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
     let generated = generate(&spec, &package, None).unwrap();
 
-    assert!(generated.interfaces.iter().any(|i| i == "repos"));
-    // The `$ref` path parameter resolves into a required field ...
+    // The form-urlencoded body's fields are inlined into the params record, just like JSON:
+    // the required field is non-optional, the optional field is `option<...>`.
     assert!(
-        generated.wit.contains("username: string"),
-        "shared `$ref` path parameter should resolve into a field:\n{}",
+        generated.wit.contains("account: string"),
+        "form-urlencoded body's required field should be inlined:\n{}",
         generated.wit
     );
-    // ... and the `$ref` query parameter resolves into an optional field.
     assert!(
-        generated.wit.contains("per-page: option<"),
-        "shared `$ref` query parameter should resolve into a field:\n{}",
+        generated.wit.contains("return-url: option<string>"),
+        "form-urlencoded body's optional field should be inlined:\n{}",
         generated.wit
     );
 }
@@ -1022,5 +1016,407 @@ fn escapes_enum_wire_values_with_quotes() {
     assert!(
         !generated.rust.contains(r#"=> ""Ashburn"#),
         "must not emit the doubled-quote form that fails to lex"
+    );
+}
+
+// r[verify codegen.params.resolve-component-ref]
+// A `$ref` to `#/components/parameters/*` must resolve to the shared parameter rather than
+// being dropped (`ReferenceOr::Reference { .. } => continue`). The field surfaces on the params
+// record, and a shared *path* parameter fills its `{placeholder}` in the URL template —
+// otherwise the request path carries a literal `{owner}`/`{repo}` no field can substitute
+// (GitHub `$ref`s `#/components/parameters/*` over 2000 times, incl. `owner`/`repo`).
+#[test]
+fn resolves_component_parameter_refs() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/repos/{owner}/{repo}": {
+          "get": {
+            "tags": ["repos"],
+            "operationId": "repos/get",
+            "parameters": [
+              { "$ref": "#/components/parameters/owner" },
+              { "$ref": "#/components/parameters/repo" },
+              { "$ref": "#/components/parameters/per-page" }
+            ],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "parameters": {
+          "owner": { "name": "owner", "in": "path", "required": true, "schema": { "type": "string" } },
+          "repo": { "name": "repo", "in": "path", "required": true, "schema": { "type": "string" } },
+          "per-page": { "name": "per_page", "in": "query", "required": false, "schema": { "type": "integer" } }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // All three shared params surface on the operation's params record.
+    assert!(generated.wit.contains("owner: string"), "{}", generated.wit);
+    assert!(generated.wit.contains("repo: string"), "{}", generated.wit);
+    assert!(
+        generated.wit.contains("per-page: option<s32>"),
+        "resolved query param should be typed and optional:\n{}",
+        generated.wit
+    );
+    // The path placeholders have matching `FieldLocation::Path` fields in the runtime OpSpec, so
+    // `{owner}`/`{repo}` are fillable rather than emitted verbatim into the request URL.
+    assert!(
+        generated.rust.contains(
+            "FieldSpec { snake: \"owner\", wire: \"owner\", location: FieldLocation::Path }"
+        ),
+        "{}",
+        generated.rust
+    );
+    assert!(
+        generated.rust.contains(
+            "FieldSpec { snake: \"repo\", wire: \"repo\", location: FieldLocation::Path }"
+        ),
+        "{}",
+        generated.rust
+    );
+}
+
+// r[verify codegen.params.path-item-level]
+// Parameters declared at the *path-item* level apply to every operation of that path (Kubernetes
+// declares them on 372 of 428 paths). They must be merged into each operation, and an
+// operation-level parameter overrides a path-level one with the same (name, location) — never
+// duplicated.
+#[test]
+fn merges_path_item_level_parameters() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/things/{id}": {
+          "parameters": [
+            { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+            { "name": "trace", "in": "query", "required": false, "schema": { "type": "string" } }
+          ],
+          "get": {
+            "tags": ["things"],
+            "operationId": "getThing",
+            "responses": { "200": { "description": "ok" } }
+          },
+          "delete": {
+            "tags": ["things"],
+            "operationId": "deleteThing",
+            "parameters": [
+              { "name": "trace", "in": "query", "required": true, "schema": { "type": "string" } }
+            ],
+            "responses": { "204": { "description": "gone" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The shared path-item `id` reaches both operations and fills `{id}` for each.
+    let id_path_fields = generated
+        .rust
+        .matches("FieldSpec { snake: \"id\", wire: \"id\", location: FieldLocation::Path }")
+        .count();
+    assert_eq!(
+        id_path_fields, 2,
+        "both operations should carry the shared path-item `id` field:\n{}",
+        generated.rust
+    );
+    // `trace` appears once per operation (2 total): the delete op's operation-level `trace`
+    // overrides — rather than duplicates — the path-level one.
+    let trace_fields = generated.rust.matches("snake: \"trace\"").count();
+    assert_eq!(
+        trace_fields, 2,
+        "operation-level param must override, not duplicate, the path-level param:\n{}",
+        generated.rust
+    );
+    // getThing keeps the path-level optional `trace`; deleteThing's override is required.
+    assert!(
+        generated.wit.contains("trace: option<string>"),
+        "path-level trace is optional on getThing:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("trace: string"),
+        "overriding trace is required on deleteThing:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.params.same-name-distinct-location]
+// OpenAPI keys parameter uniqueness on the (name, `in`) pair, so an operation may legitimately
+// carry a path parameter and a query parameter that share a name — Kubernetes' proxy endpoints
+// expose the `{path}` URL segment *and* a `path` query string on the same operation. The old
+// dedup collapsed them by WIT name and silently dropped the query parameter (and, for other
+// specs, request-body fields that restate a parameter). Both distinct inputs must survive: the
+// path field to fill `{path}`, the query field to carry the query string.
+#[test]
+fn keeps_same_named_path_and_query_parameters() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/nodes/{name}/proxy/{path}": {
+          "get": {
+            "tags": ["proxy"],
+            "operationId": "proxyNode",
+            "parameters": [
+              { "name": "name", "in": "path", "required": true, "schema": { "type": "string" } },
+              { "name": "path", "in": "path", "required": true, "schema": { "type": "string" } },
+              { "name": "path", "in": "query", "required": false, "schema": { "type": "string" } }
+            ],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The path `{path}` segment is still fillable: a path-location field named `path` survives.
+    assert!(
+        generated.rust.contains(
+            "FieldSpec { snake: \"path\", wire: \"path\", location: FieldLocation::Path }"
+        ),
+        "the path `{{path}}` segment must keep its path field:\n{}",
+        generated.rust
+    );
+    // The distinct query parameter `path` is not dropped: it survives as a query-location field.
+    // Its internal params key (`snake`) is disambiguated to keep the params record unambiguous,
+    // but its wire name stays `path`, so the runtime still sends `?path=…`.
+    assert!(
+        generated.rust.contains(
+            "FieldSpec { snake: \"path_v2\", wire: \"path\", location: FieldLocation::Query }"
+        ),
+        "the same-named query parameter must be carried, not dropped:\n{}",
+        generated.rust
+    );
+    // Nothing is left unfillable: the params record exposes two distinct fields for the two
+    // `path` inputs (`path` and a suffix-disambiguated sibling).
+    assert!(
+        generated.wit.contains("path: string") && generated.wit.contains("path-v2: option<string>"),
+        "both `path` inputs should surface as distinct WIT fields:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.params.wire-name-fidelity]
+// The name a field takes on the HTTP wire must be the source name verbatim, not the snake_cased
+// WIT/plumbing name. The runtime keys query strings, headers and body properties off `FieldSpec.
+// wire`; keying off the internal snake key would corrupt every API whose parameters aren't already
+// snake_case — Twilio's `PhoneNumber`/`DateCreated`, Kubernetes' `dryRun`, etc. — and would also
+// collapse distinct inputs that happen to share a snake key. This checks that (a) a camelCase
+// query parameter keeps its wire name while carrying a snake_case params key, and (b) Twilio's
+// `DateCreated` / `DateCreated<` range filters survive as two fields with distinct wire names.
+#[test]
+fn preserves_verbatim_wire_names() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/messages": {
+          "get": {
+            "tags": ["msg"],
+            "operationId": "listMessages",
+            "parameters": [
+              { "name": "phoneNumber", "in": "query", "required": false, "schema": { "type": "string" } },
+              { "name": "DateCreated", "in": "query", "required": false, "schema": { "type": "string" } },
+              { "name": "DateCreated<", "in": "query", "required": false, "schema": { "type": "string" } }
+            ],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // A camelCase parameter travels under its verbatim wire name, keyed internally by snake_case.
+    assert!(
+        generated.rust.contains(
+            "FieldSpec { snake: \"phone_number\", wire: \"phoneNumber\", location: FieldLocation::Query }"
+        ),
+        "camelCase query parameter must keep its verbatim wire name:\n{}",
+        generated.rust
+    );
+    // The params record the guest serializes keys by the internal snake name, not the wire name;
+    // the runtime re-keys to `wire` during dispatch.
+    assert!(
+        generated.rust.contains("m.insert(\"phone_number\".into()"),
+        "params record should key by the internal snake name:\n{}",
+        generated.rust
+    );
+    // `DateCreated` and `DateCreated<` are distinct inputs: both survive, each under its own wire
+    // name, with disambiguated internal snake keys so they can't clobber each other.
+    assert!(
+        generated.rust.contains(
+            "FieldSpec { snake: \"date_created\", wire: \"DateCreated\", location: FieldLocation::Query }"
+        ),
+        "first DateCreated filter must keep its wire name:\n{}",
+        generated.rust
+    );
+    assert!(
+        generated.rust.contains(
+            "FieldSpec { snake: \"date_created_v2\", wire: \"DateCreated<\", location: FieldLocation::Query }"
+        ),
+        "the `DateCreated<` range filter must survive with its distinct wire name:\n{}",
+        generated.rust
+    );
+}
+
+// r[verify codegen.schema.all-of-merge]
+// A request body defined by `allOf` composition (the common `[{$ref: Base}, {inline extension}]`
+// shape) must merge its members' properties into one record. The old mapping degraded any
+// `allOf` to an opaque `string`, dropping every field — DigitalOcean models many request bodies
+// this way. `oneOf`/`anyOf` stay opaque `string` (a deliberate, documented choice), so the same
+// spec confirms an `anyOf` field does *not* become a record.
+#[test]
+fn merges_all_of_body_into_record() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/widgets": {
+          "post": {
+            "tags": ["widgets"],
+            "operationId": "createWidget",
+            "requestBody": {
+              "required": true,
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "allOf": [
+                      { "$ref": "#/components/schemas/Base" },
+                      {
+                        "type": "object",
+                        "required": ["color"],
+                        "properties": {
+                          "color": { "type": "string" },
+                          "flavor": {
+                            "anyOf": [
+                              { "type": "string" },
+                              { "type": "integer" }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "Base": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // Fields from the `$ref` base member survive (required stays non-optional, optional stays
+    // `option<...>`) ...
+    assert!(
+        generated.wit.contains("id: string"),
+        "allOf base member's required field must be inlined:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("name: option<string>"),
+        "allOf base member's optional field must be inlined:\n{}",
+        generated.wit
+    );
+    // ... alongside the inline extension member's fields, in one merged record.
+    assert!(
+        generated.wit.contains("color: string"),
+        "allOf inline member's required field must be inlined:\n{}",
+        generated.wit
+    );
+    // The nested `anyOf` field is present but stays an opaque `string` (deliberate choice), not a
+    // record — so it must not have degraded the whole `allOf` to a string.
+    assert!(
+        generated.wit.contains("flavor: option<string>"),
+        "anyOf field should remain an opaque optional string within the merged record:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.parameter.shared-ref]
+// GitHub's API (and many others) declare their operation parameters once under
+// `#/components/parameters` and reference them by `$ref` from every operation (`owner`, `repo`,
+// `username`, `per-page`, ...). The generator must resolve those `$ref`s into fields; the
+// original code skipped reference parameters outright, so e.g. "list repositories for a user"
+// generated with an empty argument list instead of taking the user to list for.
+#[test]
+fn resolves_shared_ref_parameters() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/users/{username}/repos": {
+          "get": {
+            "tags": ["repos"],
+            "operationId": "listForUser",
+            "parameters": [
+              { "$ref": "#/components/parameters/username" },
+              { "$ref": "#/components/parameters/per-page" }
+            ],
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "parameters": {
+          "username": {
+            "name": "username",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          "per-page": {
+            "name": "per_page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(generated.interfaces.iter().any(|i| i == "repos"));
+    // The `$ref` path parameter resolves into a required field ...
+    assert!(
+        generated.wit.contains("username: string"),
+        "shared `$ref` path parameter should resolve into a field:\n{}",
+        generated.wit
+    );
+    // ... and the `$ref` query parameter resolves into an optional field.
+    assert!(
+        generated.wit.contains("per-page: option<"),
+        "shared `$ref` query parameter should resolve into a field:\n{}",
+        generated.wit
     );
 }

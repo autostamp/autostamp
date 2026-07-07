@@ -69,14 +69,14 @@ impl<'a> SchemaCtx<'a> {
 
     /// Resolve a `#/components/parameters/{Name}` reference to the parameter it points at.
     ///
-    /// Many specs — most notably GitHub's — declare their path/query parameters once under
-    /// `#/components/parameters` and reference them by `$ref` from every operation (`owner`,
-    /// `repo`, `username`, `per-page`, …). Without resolving these the operation would surface
-    /// with an empty argument list — e.g. "list repositories for a user" would take no user to
-    /// list for. Follows up to a small fixed depth of indirection in case the named entry is
-    /// itself a `$ref`.
+    /// Shared parameters are pervasive: GitHub alone `$ref`s `#/components/parameters/*` over
+    /// 2000 times (pagination `per-page`/`page` and the `owner`/`repo` *path* params). An
+    /// unresolved ref previously hit `ReferenceOr::Reference { .. } => continue`, silently
+    /// dropping the argument — and, for a path parameter, leaving a `{placeholder}` in the URL
+    /// template with nothing to fill it. Follows chained refs to a small fixed depth in case the
+    /// named entry is itself a `$ref`.
     pub(crate) fn resolve_parameter(&self, reference: &str) -> Result<&'a Parameter> {
-        let parameters = &self
+        let params = &self
             .spec
             .components
             .as_ref()
@@ -90,7 +90,7 @@ impl<'a> SchemaCtx<'a> {
             if name.is_empty() {
                 bail!("malformed parameter $ref: {reference}");
             }
-            match parameters
+            match params
                 .get(name)
                 .with_context(|| format!("parameter $ref not found: {reference}"))?
             {
@@ -294,13 +294,12 @@ mod tests {
     }
 
     // r[verify schema-ctx.parameter.resolve-ref]
-    // Specs commonly declare parameters once under `#/components/parameters` and reference them
-    // by `$ref` from every operation (GitHub's `owner`/`repo`/`username`, …). Those references
-    // must resolve to the named parameter — following an intermediate `$ref` alias — rather than
-    // being skipped, which previously left operations with an empty argument list.
+    // Shared parameters referenced via `#/components/parameters/*` (GitHub uses these for
+    // `owner`/`repo`/`per-page` thousands of times) must resolve to the named parameter,
+    // following one level of `$ref` indirection; a dangling ref is an error so the caller can
+    // skip just that parameter with a diagnostic.
     #[test]
     fn resolves_parameter_ref() {
-        use openapiv3::Parameter;
         let spec: OpenAPI = serde_json::from_str(
             r##"{
               "openapi": "3.0.0",
@@ -308,13 +307,13 @@ mod tests {
               "paths": {},
               "components": {
                 "parameters": {
-                  "username": {
-                    "name": "username",
-                    "in": "path",
-                    "required": true,
-                    "schema": { "type": "string" }
+                  "PerPage": {
+                    "name": "per_page",
+                    "in": "query",
+                    "required": false,
+                    "schema": { "type": "integer" }
                   },
-                  "Alias": { "$ref": "#/components/parameters/username" }
+                  "Alias": { "$ref": "#/components/parameters/PerPage" }
                 }
               }
             }"##,
@@ -323,21 +322,15 @@ mod tests {
         let ctx = SchemaCtx::new(&spec);
         // Direct reference resolves to the named parameter.
         let param = ctx
-            .resolve_parameter("#/components/parameters/username")
+            .resolve_parameter("#/components/parameters/PerPage")
             .unwrap();
-        assert!(matches!(
-            param,
-            Parameter::Path { parameter_data, .. } if parameter_data.name == "username"
-        ));
+        assert!(matches!(param, openapiv3::Parameter::Query { .. }));
         // A `$ref` that points at another `$ref` is followed to the concrete parameter.
         let chained = ctx
             .resolve_parameter("#/components/parameters/Alias")
             .unwrap();
-        assert!(matches!(
-            chained,
-            Parameter::Path { parameter_data, .. } if parameter_data.name == "username"
-        ));
-        // A dangling reference is an error (callers fall back to skipping just that parameter).
+        assert!(matches!(chained, openapiv3::Parameter::Query { .. }));
+        // A dangling reference is an error (callers skip just that parameter, with a warning).
         assert!(
             ctx.resolve_parameter("#/components/parameters/Missing")
                 .is_err()

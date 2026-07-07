@@ -85,8 +85,8 @@ pub(crate) fn emit_rust(
                     Location::Body => "FieldLocation::Body",
                 };
                 out.push_str(&format!(
-                    "        FieldSpec {{ snake: {:?}, location: {loc} }},\n",
-                    f.name_snake
+                    "        FieldSpec {{ snake: {:?}, wire: {:?}, location: {loc} }},\n",
+                    f.name_snake, f.wire_name
                 ));
             }
             out.push_str("    ],\n");
@@ -118,11 +118,18 @@ pub(crate) fn emit_rust(
 
         // Record -> Value helpers (for both supporting records and per-op params records)
         for r in &iface.records {
-            emit_record_to_json(&mut out, &mod_snake, &r.name_kebab, &r.fields, iface);
+            emit_record_to_json(&mut out, &mod_snake, &r.name_kebab, &r.fields, iface, true);
         }
         for op in &iface.operations {
             if !op.fields.is_empty() {
-                emit_record_to_json(&mut out, &mod_snake, &op.params_record, &op.fields, iface);
+                emit_record_to_json(
+                    &mut out,
+                    &mod_snake,
+                    &op.params_record,
+                    &op.fields,
+                    iface,
+                    false,
+                );
             }
         }
 
@@ -223,12 +230,19 @@ fn helper_name(mod_snake: &str, kebab: &str, suffix: &str) -> String {
     format!("{mod_snake}__{body}__{suffix}")
 }
 
+/// Emit a `record -> serde_json::Value` helper for a params or supporting record.
+///
+/// `key_by_wire` selects the JSON key for each field. Supporting records (`iface.records`) model
+/// request-body shapes that go on the wire verbatim, so they key by `wire_name`. The synthetic
+/// per-operation params record is internal plumbing — the runtime reads it back by `name_snake`
+/// and re-keys each field to its wire name during dispatch — so it keys by `name_snake`.
 fn emit_record_to_json(
     out: &mut String,
     mod_snake: &str,
     record_kebab: &str,
     fields: &[Field],
     iface: &InterfaceModel,
+    key_by_wire: bool,
 ) {
     let fn_name = helper_name(mod_snake, record_kebab, "to_json");
     let pascal = to_rust_type_name(record_kebab);
@@ -239,10 +253,12 @@ fn emit_record_to_json(
     for f in fields {
         let field_snake = to_rust_ident(&f.name_kebab);
         let expr = field_to_json_expr(&format!("&p.{field_snake}"), &f.ty, iface, mod_snake);
-        out.push_str(&format!(
-            "    m.insert(\"{}\".into(), {});\n",
-            f.name_snake, expr
-        ));
+        let key = if key_by_wire {
+            &f.wire_name
+        } else {
+            &f.name_snake
+        };
+        out.push_str(&format!("    m.insert(\"{key}\".into(), {expr});\n"));
     }
     out.push_str("    Value::Object(m)\n");
     out.push_str("}\n\n");
