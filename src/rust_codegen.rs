@@ -2,13 +2,17 @@
 
 use heck::ToSnakeCase;
 
+use crate::enum_model::EnumModel;
 use crate::field::Field;
 use crate::interface_model::InterfaceModel;
 use crate::location::Location;
 use crate::naming::{to_rust_case_name, to_rust_ident, to_rust_type_name};
+use crate::operation_model::OperationModel;
 use crate::package_name::PackageName;
 use crate::security::{AuthApply, AuthKind};
+use crate::variant_model::{CaseStatus, VariantModel};
 use crate::wit_type::WitType;
+use std::collections::BTreeSet;
 
 /// The shared request + auth runtime, embedded verbatim into every generated component as a
 /// private `runtime` module. It lives outside `src/` so it is not compiled into the
@@ -133,31 +137,60 @@ pub(crate) fn emit_rust(
             }
         }
 
+        // Value -> record / &str -> enum decoders, emitted only for the types reachable from a
+        // response `ok` body (a record used solely as a request body needs no decoder).
+        let response_types = response_reachable_types(iface);
+        for r in &iface.records {
+            if response_types.contains(&r.name_kebab) {
+                emit_record_from_json(&mut out, &mod_snake, &r.name_kebab, &r.fields, iface);
+            }
+        }
+        for e in &iface.enums {
+            if response_types.contains(&e.name_kebab) {
+                emit_enum_from_str(&mut out, &mod_snake, e);
+            }
+        }
+
+        // Per-operation response adapters: decode the ok body into its typed value, and map a
+        // `DispatchError` onto the operation's typed error (a variant case or a plain string).
+        for op in &iface.operations {
+            emit_op_ok(&mut out, &mod_snake, op, iface);
+            emit_op_err(&mut out, &mod_snake, op, iface);
+        }
+
         // Guest impl
         out.push_str(&format!(
             "impl {mod_snake}::Guest for crate::Component {{\n"
         ));
         for op in &iface.operations {
             let const_name = op_const_name(iface, op);
+            let ok_rust = rust_type_of(&op.ok_ty, &mod_snake);
+            let err_rust = rust_type_of(&op.err_ty, &mod_snake);
+            let ok_fn = helper_name(&mod_snake, &op.op_kebab, "ok");
+            let err_fn = helper_name(&mod_snake, &op.op_kebab, "err");
             if op.fields.is_empty() {
                 out.push_str(&format!(
-                    "    fn {}() -> Result<String, String> {{\n",
+                    "    fn {}() -> Result<{ok_rust}, {err_rust}> {{\n",
                     op.op_snake
                 ));
                 out.push_str(&format!(
-                    "        dispatch(&{const_name}, Value::Object(Map::new()))\n"
+                    "        match dispatch(&{const_name}, Value::Object(Map::new())).and_then({ok_fn}) {{\n"
                 ));
-                out.push_str("    }\n");
-                continue;
+            } else {
+                let params_pascal = to_rust_type_name(&op.params_record);
+                let to_json = helper_name(&mod_snake, &op.params_record, "to_json");
+                out.push_str(&format!(
+                    "    fn {}(params: {mod_snake}::{params_pascal}) -> Result<{ok_rust}, {err_rust}> {{\n",
+                    op.op_snake
+                ));
+                out.push_str(&format!("        let json = {to_json}(&params);\n"));
+                out.push_str(&format!(
+                    "        match dispatch(&{const_name}, json).and_then({ok_fn}) {{\n"
+                ));
             }
-            let params_pascal = to_rust_type_name(&op.params_record);
-            let to_json = helper_name(&mod_snake, &op.params_record, "to_json");
-            out.push_str(&format!(
-                "    fn {}(params: {mod_snake}::{params_pascal}) -> Result<String, String> {{\n",
-                op.op_snake
-            ));
-            out.push_str(&format!("        let json = {to_json}(&params);\n"));
-            out.push_str(&format!("        dispatch(&{const_name}, json)\n"));
+            out.push_str("            Ok(v) => Ok(v),\n");
+            out.push_str(&format!("            Err(e) => Err({err_fn}(e)),\n"));
+            out.push_str("        }\n");
             out.push_str("    }\n");
         }
         out.push_str("}\n");
@@ -295,4 +328,248 @@ fn field_to_json_expr(expr: &str, ty: &WitType, iface: &InterfaceModel, mod_snak
             }
         }
     }
+}
+
+/// The Rust type wit-bindgen generates for `ty` in an exported function's *return* position:
+/// owned scalars/strings, `Option`/`Vec` wrappers, and `{mod}::{Pascal}` for a named
+/// record/enum/variant (all defined in the exported-interface module aliased to `mod_snake`).
+fn rust_type_of(ty: &WitType, mod_snake: &str) -> String {
+    match ty {
+        WitType::String => "String".into(),
+        WitType::Bool => "bool".into(),
+        WitType::S32 => "i32".into(),
+        WitType::S64 => "i64".into(),
+        WitType::F64 => "f64".into(),
+        WitType::Option(inner) => format!("Option<{}>", rust_type_of(inner, mod_snake)),
+        WitType::List(inner) => format!("Vec<{}>", rust_type_of(inner, mod_snake)),
+        WitType::Named(name) => format!("{mod_snake}::{}", to_rust_type_name(name)),
+    }
+}
+
+/// The set of record/enum names reachable from any operation's response `ok` type, following
+/// record→field edges to a fixpoint. Only these need a decoder emitted; a record used solely as
+/// a request body is serialized, never deserialized.
+fn response_reachable_types(iface: &InterfaceModel) -> BTreeSet<String> {
+    let mut reachable: BTreeSet<String> = BTreeSet::new();
+    let mut work: Vec<String> = Vec::new();
+    for op in &iface.operations {
+        for n in named_of(&op.ok_ty) {
+            if reachable.insert(n.clone()) {
+                work.push(n);
+            }
+        }
+    }
+    while let Some(name) = work.pop() {
+        if let Some(r) = iface.records.iter().find(|r| r.name_kebab == name) {
+            for f in &r.fields {
+                for n in named_of(&f.ty) {
+                    if reachable.insert(n.clone()) {
+                        work.push(n);
+                    }
+                }
+            }
+        }
+    }
+    reachable
+}
+
+/// The named types directly referenced by `ty` (unwrapping `option`/`list`).
+fn named_of(ty: &WitType) -> Vec<String> {
+    match ty {
+        WitType::Named(n) => vec![n.clone()],
+        WitType::Option(inner) | WitType::List(inner) => named_of(inner),
+        _ => vec![],
+    }
+}
+
+/// Emit a `&Value -> Option<Record>` decoder mirroring [`emit_record_to_json`]. Reads each field
+/// by its verbatim wire name. A missing/mismatched scalar or list defaults; a missing/mismatched
+/// required nested record or enum (which has no `Default`) fails the whole decode by returning
+/// `None`, so the operation surfaces the raw body as an error rather than fabricating a value.
+fn emit_record_from_json(
+    out: &mut String,
+    mod_snake: &str,
+    record_kebab: &str,
+    fields: &[Field],
+    iface: &InterfaceModel,
+) {
+    let fn_name = helper_name(mod_snake, record_kebab, "from_json");
+    let pascal = to_rust_type_name(record_kebab);
+    out.push_str(&format!(
+        "fn {fn_name}(v: &Value) -> Option<{mod_snake}::{pascal}> {{\n"
+    ));
+    out.push_str("    let m = v.as_object()?;\n");
+    out.push_str(&format!("    Some({mod_snake}::{pascal} {{\n"));
+    for f in fields {
+        let field_rust = to_rust_ident(&f.name_kebab);
+        let init = field_from_json_expr(&f.wire_name, &f.ty, iface, mod_snake);
+        out.push_str(&format!("        {field_rust}: {init},\n"));
+    }
+    out.push_str("    })\n");
+    out.push_str("}\n\n");
+}
+
+/// Render the initializer expression for a record field decoded from the object map `m`.
+fn field_from_json_expr(
+    wire: &str,
+    ty: &WitType,
+    iface: &InterfaceModel,
+    mod_snake: &str,
+) -> String {
+    match ty {
+        WitType::Option(inner) => {
+            let val = from_value_expr("v", inner, iface, mod_snake);
+            format!("m.get({wire:?}).filter(|v| !v.is_null()).and_then(|v| {val})")
+        }
+        WitType::Named(name) if iface.is_record(name) || iface.is_enum(name) => {
+            let val = from_value_expr("v", ty, iface, mod_snake);
+            format!(
+                "match m.get({wire:?}).and_then(|v| {val}) {{ Some(x) => x, None => return None }}"
+            )
+        }
+        _ => {
+            let val = from_value_expr("v", ty, iface, mod_snake);
+            format!("m.get({wire:?}).and_then(|v| {val}).unwrap_or_default()")
+        }
+    }
+}
+
+/// Render an expression that decodes `v` (a `&Value`) into `Option<RustType>` for `ty`.
+fn from_value_expr(v: &str, ty: &WitType, iface: &InterfaceModel, mod_snake: &str) -> String {
+    match ty {
+        WitType::String => format!("({v}).as_str().map(|s| s.to_string())"),
+        WitType::Bool => format!("({v}).as_bool()"),
+        WitType::S32 => format!("({v}).as_i64().map(|n| n as i32)"),
+        WitType::S64 => format!("({v}).as_i64()"),
+        WitType::F64 => format!("({v}).as_f64()"),
+        // An `option` value is decoded as its inner type; presence is handled at the field level.
+        WitType::Option(inner) => from_value_expr(v, inner, iface, mod_snake),
+        WitType::List(inner) => {
+            let inner_expr = from_value_expr("x", inner, iface, mod_snake);
+            format!("({v}).as_array().map(|a| a.iter().filter_map(|x| {inner_expr}).collect())")
+        }
+        WitType::Named(name) => {
+            if iface.is_enum(name) {
+                let fn_name = helper_name(mod_snake, name, "from_str");
+                format!("({v}).as_str().and_then({fn_name})")
+            } else if iface.is_record(name) {
+                let fn_name = helper_name(mod_snake, name, "from_json");
+                format!("{fn_name}({v})")
+            } else {
+                // A variant is never a value-level type in our model (errors only).
+                "None".into()
+            }
+        }
+    }
+}
+
+/// Emit a `&str -> Option<Enum>` decoder, the inverse of the enum's `to_str` helper.
+fn emit_enum_from_str(out: &mut String, mod_snake: &str, e: &EnumModel) {
+    let fn_name = helper_name(mod_snake, &e.name_kebab, "from_str");
+    let pascal = to_rust_type_name(&e.name_kebab);
+    out.push_str(&format!(
+        "fn {fn_name}(s: &str) -> Option<{mod_snake}::{pascal}> {{\n"
+    ));
+    out.push_str("    match s {\n");
+    for (kebab, raw) in &e.cases {
+        let case_pascal = to_rust_case_name(kebab);
+        out.push_str(&format!(
+            "        {raw:?} => Some({mod_snake}::{pascal}::{case_pascal}),\n"
+        ));
+    }
+    out.push_str("        _ => None,\n");
+    out.push_str("    }\n");
+    out.push_str("}\n\n");
+}
+
+/// Emit the per-op `ok` adapter: `String -> Result<OkType, DispatchError>`. A `string` ok type
+/// returns the raw body verbatim; any other type parses the body as JSON and decodes it,
+/// surfacing a parse/shape mismatch as a `Transport` error (mapped to the op's catch-all).
+fn emit_op_ok(out: &mut String, mod_snake: &str, op: &OperationModel, iface: &InterfaceModel) {
+    let ok_rust = rust_type_of(&op.ok_ty, mod_snake);
+    let fn_name = helper_name(mod_snake, &op.op_kebab, "ok");
+    out.push_str(&format!(
+        "fn {fn_name}(body: String) -> Result<{ok_rust}, crate::runtime::DispatchError> {{\n"
+    ));
+    match &op.ok_ty {
+        WitType::String => out.push_str("    Ok(body)\n"),
+        ty => {
+            out.push_str("    let v: Value = match serde_json::from_str(&body) {\n");
+            out.push_str("        Ok(v) => v,\n");
+            out.push_str("        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!(\"failed to decode response body as JSON: {e}\"))),\n");
+            out.push_str("    };\n");
+            let expr = from_value_expr("&v", ty, iface, mod_snake);
+            out.push_str(&format!("    match {expr} {{\n"));
+            out.push_str("        Some(x) => Ok(x),\n");
+            out.push_str("        None => Err(crate::runtime::DispatchError::Transport(\"response body did not match the expected schema\".to_string())),\n");
+            out.push_str("    }\n");
+        }
+    }
+    out.push_str("}\n\n");
+}
+
+/// Emit the per-op `err` adapter: `DispatchError -> ErrType`. For a `string` error type this
+/// flattens to a message (preserving the original `HTTP {status}: {body}` form); for an
+/// enumerated variant it routes each HTTP status to its case (specific codes first, then status
+/// ranges) and sends transport failures and undeclared statuses to the catch-all `other` case.
+fn emit_op_err(out: &mut String, mod_snake: &str, op: &OperationModel, iface: &InterfaceModel) {
+    let err_rust = rust_type_of(&op.err_ty, mod_snake);
+    let fn_name = helper_name(mod_snake, &op.op_kebab, "err");
+    out.push_str(&format!(
+        "fn {fn_name}(e: crate::runtime::DispatchError) -> {err_rust} {{\n"
+    ));
+    match &op.err_ty {
+        WitType::Named(name) if iface_variant(iface, name).is_some() => {
+            let variant = iface_variant(iface, name).expect("variant present");
+            let pascal = to_rust_type_name(name);
+            let other = variant
+                .cases
+                .iter()
+                .find(|c| c.status == CaseStatus::Other)
+                .map(|c| to_rust_case_name(&c.name_kebab))
+                .unwrap_or_else(|| "Other".to_string());
+            out.push_str("    match e {\n");
+            out.push_str(
+                "        crate::runtime::DispatchError::Http { status, body } => match status {\n",
+            );
+            for case in &variant.cases {
+                if let CaseStatus::Code(code) = case.status {
+                    let cp = to_rust_case_name(&case.name_kebab);
+                    out.push_str(&format!(
+                        "            {code}u16 => {mod_snake}::{pascal}::{cp}(body),\n"
+                    ));
+                }
+            }
+            for case in &variant.cases {
+                if let CaseStatus::Range(r) = case.status {
+                    let cp = to_rust_case_name(&case.name_kebab);
+                    let lo = u16::from(r) * 100;
+                    let hi = lo + 100;
+                    out.push_str(&format!(
+                        "            s if ({lo}u16..{hi}u16).contains(&s) => {mod_snake}::{pascal}::{cp}(body),\n"
+                    ));
+                }
+            }
+            out.push_str(&format!(
+                "            _ => {mod_snake}::{pascal}::{other}(body),\n"
+            ));
+            out.push_str("        },\n");
+            out.push_str(&format!(
+                "        crate::runtime::DispatchError::Transport(m) => {mod_snake}::{pascal}::{other}(m),\n"
+            ));
+            out.push_str("    }\n");
+        }
+        _ => {
+            out.push_str("    match e {\n");
+            out.push_str("        crate::runtime::DispatchError::Http { status, body } => format!(\"HTTP {status}: {body}\"),\n");
+            out.push_str("        crate::runtime::DispatchError::Transport(m) => m,\n");
+            out.push_str("    }\n");
+        }
+    }
+    out.push_str("}\n\n");
+}
+
+/// Find the variant model named `name` in `iface`, if any.
+fn iface_variant<'a>(iface: &'a InterfaceModel, name: &str) -> Option<&'a VariantModel> {
+    iface.variants.iter().find(|v| v.name_kebab == name)
 }

@@ -1,8 +1,11 @@
 //! Convert OpenAPI schema definitions to WebAssembly Components.
 //!
 //! Reads an OpenAPI 2 (Swagger) or 3 document and produces:
-//! - WIT source: one interface per tag, with per-operation parameter records
-//! - Rust source: `Guest` trait impls plus manual `*_to_json` / `*_to_str` helpers
+//! - WIT source: one interface per tag, with per-operation parameter records and typed
+//!   `result<ok, err>` returns (success bodies lowered to records/lists, declared errors
+//!   enumerated into a per-operation `variant`)
+//! - Rust source: `Guest` trait impls plus manual `*_to_json` / `*_to_str` request encoders
+//!   and `*_from_json` / `*_from_str` response decoders
 //!
 //! [`parse_openapi`] (and [`from_json_value`]) read a document, transparently normalizing
 //! Swagger 2.0 into the OpenAPI 3 model so the rest of the pipeline only ever sees v3. The
@@ -12,8 +15,10 @@
 //! matches the generated interfaces.
 //!
 //! We deliberately avoid `additional_derives: [Serialize]` on the wit-bindgen macro because
-//! it conflicts with imported wasi resource types. Instead, codegen emits an explicit
-//! `<record>_to_json` per WIT record and `<enum>_to_str` per WIT enum.
+//! it conflicts with imported wasi resource types. Instead, codegen emits explicit
+//! serializers (`<record>_to_json` per WIT record, `<enum>_to_str` per WIT enum) for request
+//! inputs and matching deserializers (`<record>_from_json`, `<enum>_from_str`) for the typed
+//! response bodies.
 //!
 //! # Examples
 //!
@@ -52,6 +57,7 @@ mod schema_ctx;
 mod security;
 mod servers;
 mod swagger2;
+mod variant_model;
 mod version;
 mod wit_type;
 

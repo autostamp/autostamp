@@ -8,7 +8,7 @@ use anyhow::Result;
 use heck::{ToKebabCase, ToSnakeCase};
 use openapiv3::{
     AnySchema, MediaType, Operation, Parameter, ParameterSchemaOrContent, ReferenceOr, RequestBody,
-    Schema, SchemaKind, Type,
+    Response, Responses, Schema, SchemaKind, StatusCode, Type,
 };
 use std::collections::BTreeSet;
 
@@ -23,10 +23,18 @@ use crate::package_name::PackageName;
 use crate::record_model::RecordModel;
 use crate::schema_ctx::SchemaCtx;
 use crate::security::{AuthApply, AuthKind};
+use crate::variant_model::{CaseStatus, VariantCase, VariantModel};
 use crate::wit_type::WitType;
 
 /// Borrowed `(field-name, field-schema)` entries from an object/`any` schema.
 type PropertyEntries<'a> = Vec<(&'a String, &'a ReferenceOr<Box<Schema>>)>;
+
+/// Backstop on how deeply nested-record emission may recurse before a schema is degraded to an
+/// opaque `string`. Real-world schemas nest only a handful of records deep; a run beyond this is
+/// a pathological or cyclic schema (e.g. a self-reference the `$ref`-cycle guard can't see because
+/// it is wrapped in an inline `allOf`). Bounding it keeps such a schema from expanding without
+/// limit — an unmodelable body always falls back to the raw-body `string` rather than hanging.
+const MAX_RECORD_DEPTH: usize = 24;
 
 /// The generated model for a single WIT interface (one per OpenAPI tag).
 #[derive(Debug)]
@@ -35,6 +43,8 @@ pub(crate) struct InterfaceModel {
     pub(crate) operations: Vec<OperationModel>,
     pub(crate) records: Vec<RecordModel>,
     pub(crate) enums: Vec<EnumModel>,
+    /// Per-operation error variants enumerating each operation's declared error responses.
+    pub(crate) variants: Vec<VariantModel>,
     /// Count of request fields dropped by the duplicate-credential pruning heuristic, surfaced
     /// in the generated README's diagnostics.
     pub(crate) pruned_credential_fields: usize,
@@ -45,6 +55,9 @@ pub(crate) struct InterfaceModel {
     /// Records currently being emitted (the recursion stack). A `$ref` to a
     /// record in this set is a cycle and gets degraded to `string`.
     emitting: BTreeSet<String>,
+    /// Depth of the nested-record emission recursion, used as a backstop against pathologically
+    /// deep or cyclic schemas that escape the `emitting` `$ref`-cycle guard.
+    record_depth: usize,
     /// Stable WIT name assigned to each `#/components/schemas/{simple_name}` reference lowered
     /// into this interface. The name is the schema name with the redundant enclosing-interface
     /// prefix stripped; memoizing it keeps every reference to one schema resolving to the same
@@ -59,9 +72,11 @@ impl InterfaceModel {
             operations: vec![],
             records: vec![],
             enums: vec![],
+            variants: vec![],
             pruned_credential_fields: 0,
             inferred_api_key_secrets: vec![],
             emitting: BTreeSet::new(),
+            record_depth: 0,
             schema_names: std::collections::BTreeMap::new(),
         }
     }
@@ -81,6 +96,7 @@ impl InterfaceModel {
     fn name_in_use(&self, name_kebab: &str) -> bool {
         self.is_record(name_kebab)
             || self.is_enum(name_kebab)
+            || self.variants.iter().any(|v| v.name_kebab == name_kebab)
             || self
                 .operations
                 .iter()
@@ -121,6 +137,9 @@ impl InterfaceModel {
         schema_ref: &ReferenceOr<Box<Schema>>,
         name_hint: &str,
     ) -> Result<WitType> {
+        if self.record_depth > MAX_RECORD_DEPTH {
+            return Ok(WitType::String);
+        }
         if let ReferenceOr::Reference { reference } = schema_ref
             && let Some(simple_name) = reference.strip_prefix("#/components/schemas/")
         {
@@ -148,6 +167,9 @@ impl InterfaceModel {
         schema_ref: &ReferenceOr<Schema>,
         name_hint: &str,
     ) -> Result<WitType> {
+        if self.record_depth > MAX_RECORD_DEPTH {
+            return Ok(WitType::String);
+        }
         if let ReferenceOr::Reference { reference } = schema_ref
             && let Some(simple_name) = reference.strip_prefix("#/components/schemas/")
         {
@@ -245,7 +267,17 @@ impl InterfaceModel {
                     Ok(WitType::Named(record_name))
                 }
             },
-            SchemaKind::AllOf { .. } => {
+            SchemaKind::AllOf { all_of } => {
+                // A single-member `allOf` is exactly its member. Delegate to the member so a
+                // `$ref` member travels the cycle-guarded reference path: some specs wrap a
+                // self-referential schema as `allOf: [$ref Self]` (e.g. Jira's
+                // `NotificationEvent.templateEvent`), and lowering that as an anonymous merged
+                // record instead mints a fresh record name at every level, recursing without
+                // bound. As a plain reference it resolves to the named record (or degrades to
+                // `string` when it closes a cycle) exactly like a direct `$ref`.
+                if let [only] = all_of.as_slice() {
+                    return self.map_schema_to_wit_type_unboxed(ctx, only, name_hint);
+                }
                 // `allOf` composes one object from its members, typically the common
                 // `[{$ref: Base}, {inline extension}]` shape. Merge the members' properties into
                 // a single record instead of degrading to an opaque `string`, so a body or field
@@ -323,7 +355,10 @@ impl InterfaceModel {
         let idx = self.records.len() - 1;
 
         let mut fields = Vec::new();
-        self.merge_schema_fields(ctx, record_name, schema, &mut fields, 0)?;
+        self.record_depth += 1;
+        let merged = self.merge_schema_fields(ctx, record_name, schema, &mut fields, 0);
+        self.record_depth -= 1;
+        merged?;
         dedupe_field_names(&mut fields);
         if fields.is_empty() {
             // WIT records must have at least one field. For schemas with no named
@@ -456,30 +491,35 @@ impl InterfaceModel {
         let idx = self.records.len() - 1;
 
         let mut fields = vec![];
-        for (field_name, schema_ref) in &any.properties {
-            let name_kebab = sanitize_wit_name(&field_name.to_kebab_case());
-            let nested_hint = format!("{record_name}-{name_kebab}");
-            let inner_ty = self.map_schema_to_wit_type(ctx, schema_ref, &nested_hint)?;
-            let req = any.required.iter().any(|r| r == field_name);
-            let ty = if req {
-                inner_ty
-            } else {
-                WitType::Option(Box::new(inner_ty))
-            };
-            let desc = match schema_ref {
-                ReferenceOr::Item(s) => s.schema_data.description.clone(),
-                _ => None,
-            };
-            fields.push(Field {
-                name_kebab,
-                name_snake: field_name.to_snake_case(),
-                wire_name: field_name.clone(),
-                description: desc,
-                ty,
-                location: Location::Body,
-            });
-        }
-        dedupe_field_names(&mut fields);
+        self.record_depth += 1;
+        let lowered = (|| -> Result<()> {
+            for (field_name, schema_ref) in &any.properties {
+                let name_kebab = sanitize_wit_name(&field_name.to_kebab_case());
+                let nested_hint = format!("{record_name}-{name_kebab}");
+                let inner_ty = self.map_schema_to_wit_type(ctx, schema_ref, &nested_hint)?;
+                let req = any.required.iter().any(|r| r == field_name);
+                let ty = if req {
+                    inner_ty
+                } else {
+                    WitType::Option(Box::new(inner_ty))
+                };
+                let desc = match schema_ref {
+                    ReferenceOr::Item(s) => s.schema_data.description.clone(),
+                    _ => None,
+                };
+                fields.push(Field {
+                    name_kebab,
+                    name_snake: field_name.to_snake_case(),
+                    wire_name: field_name.clone(),
+                    description: desc,
+                    ty,
+                    location: Location::Body,
+                });
+            }
+            Ok(())
+        })();
+        self.record_depth -= 1;
+        lowered?;
         if fields.is_empty() {
             fields.push(Field {
                 name_kebab: "data".into(),
@@ -730,21 +770,131 @@ impl InterfaceModel {
             op_kebab == n || self.name_in_use(n)
         });
 
+        // Reserve the operation's function and params-record names *before* lowering the
+        // response surface. WIT shares one namespace for functions and types, and a success
+        // response is frequently a schema named after the operation (e.g. Plaid's
+        // `transferIntentCreate` returns `TransferIntentCreateResponse`, whose `transfer_intent`
+        // field is `$ref TransferIntentCreate` -> record `transfer-intent-create`). Without this
+        // reservation `name_in_use` would not yet know the operation's own name, so that response
+        // record would claim `transfer-intent-create` and then collide with the function when it
+        // is emitted ("defined more than once"). Push the model now with placeholder result types
+        // so response records and error variants are disambiguated against it, then fill in the
+        // real `ok`/`err` types once lowered.
         self.operations.push(OperationModel {
-            op_kebab,
+            op_kebab: op_kebab.clone(),
             op_snake,
             method: method.to_uppercase(),
             path_template: path.to_string(),
             summary: op.summary.clone(),
             params_record,
             fields,
+            ok_ty: WitType::String,
+            err_ty: WitType::String,
             auth,
         });
+        let op_index = self.operations.len() - 1;
+
+        // Model the response surface: the typed 2xx success body (the `ok` arm) and an
+        // enumerated error variant over the declared error responses (the `err` arm).
+        let (ok_ty, err_ty) = self.lower_responses(ctx, &op_kebab, &op.responses)?;
+        if let Some(model) = self.operations.get_mut(op_index) {
+            model.ok_ty = ok_ty;
+            model.err_ty = err_ty;
+        }
         Ok(())
     }
 
+    /// Lower an operation's `responses` into the `(ok, err)` types of its returned `result`.
+    ///
+    /// The `ok` type is the typed body of the primary success (2xx) response; the `err` type is
+    /// an enumerated variant over the declared error responses. See [`Self::lower_success_response`]
+    /// and [`Self::lower_error_responses`] for the exact selection and fallback rules.
+    fn lower_responses<'a>(
+        &mut self,
+        ctx: &SchemaCtx<'a>,
+        op_kebab: &str,
+        responses: &'a Responses,
+    ) -> Result<(WitType, WitType)> {
+        let ok_ty = self.lower_success_response(ctx, op_kebab, responses)?;
+        let err_ty = self.lower_error_responses(op_kebab, responses)?;
+        Ok((ok_ty, err_ty))
+    }
+
+    /// Lower the primary success (2xx) response body to the `ok` arm of the operation's `result`.
+    ///
+    /// The success response is chosen by [`select_success_response`] (preferring `200`, then
+    /// `201`, then the lowest 2xx, then a `2XX` range). Its JSON media type's schema is lowered
+    /// exactly like a request body — an object becomes a named record, an array a `list`, and so
+    /// on. Operations with no success response, no content, or no schema (`204 No Content`, a
+    /// bare `description`) keep [`WitType::String`]: the raw response body, preserving the
+    /// original always-return-the-body behavior.
+    fn lower_success_response<'a>(
+        &mut self,
+        ctx: &SchemaCtx<'a>,
+        op_kebab: &str,
+        responses: &'a Responses,
+    ) -> Result<WitType> {
+        let Some(resp_ref) = select_success_response(responses) else {
+            return Ok(WitType::String);
+        };
+        let Some(resp) = resolve_response_ref(ctx, resp_ref) else {
+            return Ok(WitType::String);
+        };
+        let Some(media) = select_response_media(resp) else {
+            return Ok(WitType::String);
+        };
+        let Some(schema_ref) = &media.schema else {
+            return Ok(WitType::String);
+        };
+        let hint = format!("{op_kebab}-response");
+        self.map_schema_to_wit_type_unboxed(ctx, schema_ref, &hint)
+    }
+
+    /// Enumerate the declared error responses into the `err` arm of the operation's `result`.
+    ///
+    /// Every specific non-2xx status (`401`, `404`, …) and non-2xx status range (`4XX`, `5XX`)
+    /// becomes a named variant case carrying the raw response body as a `string`, plus a trailing
+    /// `other(string)` catch-all for undeclared statuses and transport-level failures. `default`
+    /// (a catch-all fallback) and any success codes fold into `other` rather than a named case.
+    /// An operation that declares no specific error responses keeps [`WitType::String`] — a raw
+    /// error message — so its `result` stays `result<ok, string>` rather than a single-case
+    /// variant that would carry no more information than the string it wraps.
+    fn lower_error_responses(&mut self, op_kebab: &str, responses: &Responses) -> Result<WitType> {
+        let mut cases: Vec<VariantCase> = Vec::new();
+        let mut seen: BTreeSet<String> = BTreeSet::new();
+        for code in responses.responses.keys() {
+            let (base_name, status) = match code {
+                StatusCode::Code(c) if (200..300).contains(c) => continue,
+                StatusCode::Code(c) => (status_case_name(*c), CaseStatus::Code(*c)),
+                StatusCode::Range(2) => continue,
+                StatusCode::Range(r) => (range_case_name(*r), CaseStatus::Range(*r as u8)),
+            };
+            let name = unique_name(&base_name, |n| seen.contains(n));
+            seen.insert(name.clone());
+            cases.push(VariantCase {
+                name_kebab: name,
+                payload: Some(WitType::String),
+                status,
+            });
+        }
+        if cases.is_empty() {
+            return Ok(WitType::String);
+        }
+        let other = unique_name("other", |n| seen.contains(n));
+        cases.push(VariantCase {
+            name_kebab: other,
+            payload: Some(WitType::String),
+            status: CaseStatus::Other,
+        });
+        let variant_name = unique_name(&format!("{op_kebab}-error"), |n| self.name_in_use(n));
+        self.variants.push(VariantModel {
+            name_kebab: variant_name.clone(),
+            cases,
+        });
+        Ok(WitType::Named(variant_name))
+    }
+
     /// Drop records that no operation can reach, so request-body records whose fields were
-    /// inlined into a params record — and any types reachable only through other dead records —
     /// don't linger as dead WIT. Records exist solely to support operation params/bodies, so
     /// the live set is everything reachable from an operation's fields by following
     /// record→record edges to a fixpoint. Anything outside that set is unreferenced and safe to
@@ -765,6 +915,11 @@ impl InterfaceModel {
             for f in &op.fields {
                 mark(&f.ty, &mut reachable, &mut worklist);
             }
+            // Response types keep their records alive too: a success body lowered to a record
+            // (and everything reachable from it) is referenced only through `ok_ty`, never a
+            // field, so without marking it here `prune_unused_records` would delete it.
+            mark(&op.ok_ty, &mut reachable, &mut worklist);
+            mark(&op.err_ty, &mut reachable, &mut worklist);
         }
         while let Some(name) = worklist.pop() {
             if let Some(rec) = self.records.iter().find(|r| r.name_kebab == name).cloned() {
@@ -810,6 +965,140 @@ fn param_key(p: &Parameter) -> (String, String) {
         Parameter::Cookie { parameter_data, .. } => ("cookie", parameter_data),
     };
     (loc.to_string(), data.name.clone())
+}
+
+/// Pick which success (2xx) response to bind as the operation's `ok` type.
+///
+/// Preference order: `200`, then `201`, then the lowest declared 2xx status code, then a `2XX`
+/// range. `default` is deliberately excluded — it is a catch-all that conventionally carries an
+/// *error* body — so an operation whose only response is `default` returns the raw body string.
+fn select_success_response(responses: &Responses) -> Option<&ReferenceOr<Response>> {
+    if let Some(r) = responses.responses.get(&StatusCode::Code(200)) {
+        return Some(r);
+    }
+    if let Some(r) = responses.responses.get(&StatusCode::Code(201)) {
+        return Some(r);
+    }
+    let mut best: Option<(u16, &ReferenceOr<Response>)> = None;
+    for (code, r) in &responses.responses {
+        if let StatusCode::Code(c) = code
+            && (200..300).contains(c)
+            && best.is_none_or(|(b, _)| *c < b)
+        {
+            best = Some((*c, r));
+        }
+    }
+    if let Some((_, r)) = best {
+        return Some(r);
+    }
+    responses.responses.get(&StatusCode::Range(2))
+}
+
+/// Resolve a response reference to the concrete [`Response`], following
+/// `#/components/responses/*` `$ref`s. Returns `None` — after a diagnostic — when a reference
+/// can't be resolved, so a bad `$ref` degrades the response to the raw body string instead of
+/// failing the whole operation.
+fn resolve_response_ref<'a>(
+    ctx: &SchemaCtx<'a>,
+    r: &'a ReferenceOr<Response>,
+) -> Option<&'a Response> {
+    match r {
+        ReferenceOr::Item(resp) => Some(resp),
+        ReferenceOr::Reference { reference } => match ctx.resolve_response(reference) {
+            Ok(resp) => Some(resp),
+            Err(err) => {
+                eprintln!(
+                    "openapi-bindgen: skipping unresolved response $ref `{reference}`: {err}"
+                );
+                None
+            }
+        },
+    }
+}
+
+/// Pick which response media type to bind, preferring `application/json`, then any structured
+/// `*+json`, then whatever is listed first. Mirrors [`select_body_media`] for responses.
+fn select_response_media(resp: &Response) -> Option<&MediaType> {
+    let content = &resp.content;
+    content
+        .get("application/json")
+        .or_else(|| {
+            content
+                .iter()
+                .find(|(name, _)| name.ends_with("+json"))
+                .map(|(_, media)| media)
+        })
+        .or_else(|| content.iter().next().map(|(_, media)| media))
+}
+
+/// The canonical kebab-case case name for a specific HTTP error status code (the standard
+/// reason phrase, kebab-cased). Unknown codes fall back to `status-{code}`.
+fn status_case_name(code: u16) -> String {
+    let name = match code {
+        400 => "bad-request",
+        401 => "unauthorized",
+        402 => "payment-required",
+        403 => "forbidden",
+        404 => "not-found",
+        405 => "method-not-allowed",
+        406 => "not-acceptable",
+        407 => "proxy-authentication-required",
+        408 => "request-timeout",
+        409 => "conflict",
+        410 => "gone",
+        411 => "length-required",
+        412 => "precondition-failed",
+        413 => "payload-too-large",
+        414 => "uri-too-long",
+        415 => "unsupported-media-type",
+        416 => "range-not-satisfiable",
+        417 => "expectation-failed",
+        418 => "im-a-teapot",
+        421 => "misdirected-request",
+        422 => "unprocessable-entity",
+        423 => "locked",
+        424 => "failed-dependency",
+        425 => "too-early",
+        426 => "upgrade-required",
+        428 => "precondition-required",
+        429 => "too-many-requests",
+        431 => "request-header-fields-too-large",
+        451 => "unavailable-for-legal-reasons",
+        500 => "internal-server-error",
+        501 => "not-implemented",
+        502 => "bad-gateway",
+        503 => "service-unavailable",
+        504 => "gateway-timeout",
+        505 => "http-version-not-supported",
+        506 => "variant-also-negotiates",
+        507 => "insufficient-storage",
+        508 => "loop-detected",
+        510 => "not-extended",
+        511 => "network-authentication-required",
+        300 => "multiple-choices",
+        301 => "moved-permanently",
+        302 => "found",
+        303 => "see-other",
+        304 => "not-modified",
+        305 => "use-proxy",
+        307 => "temporary-redirect",
+        308 => "permanent-redirect",
+        _ => return format!("status-{code}"),
+    };
+    name.to_string()
+}
+
+/// The kebab-case case name for a status *range* (`4XX` → `client-error`, etc.), keyed by its
+/// leading digit.
+fn range_case_name(leading_digit: u16) -> String {
+    let name = match leading_digit {
+        1 => "informational",
+        3 => "redirect",
+        4 => "client-error",
+        5 => "server-error",
+        other => return format!("status-{other}xx"),
+    };
+    name.to_string()
 }
 
 /// Pick which request-body media type to bind.
@@ -1059,18 +1348,33 @@ impl InterfaceModel {
             out.push_str("  }\n\n");
         }
 
+        for v in &self.variants {
+            out.push_str(&format!("  variant {} {{\n", v.name_kebab));
+            for (i, case) in v.cases.iter().enumerate() {
+                let comma = if i + 1 < v.cases.len() { "," } else { "" };
+                match &case.payload {
+                    Some(ty) => out.push_str(&format!(
+                        "    {}({}){}\n",
+                        case.name_kebab,
+                        ty.render(),
+                        comma
+                    )),
+                    None => out.push_str(&format!("    {}{}\n", case.name_kebab, comma)),
+                }
+            }
+            out.push_str("  }\n\n");
+        }
+
         for op in &self.operations {
             if let Some(s) = &op.summary {
                 for line in s.lines() {
                     out.push_str(&format!("  /// {line}\n"));
                 }
             }
+            let ret = render_result_type(&op.ok_ty, &op.err_ty);
             if op.fields.is_empty() {
                 // No params — no record, no argument.
-                out.push_str(&format!(
-                    "  {}: func() -> result<string, string>;\n\n",
-                    op.op_kebab
-                ));
+                out.push_str(&format!("  {}: func() -> {ret};\n\n", op.op_kebab));
                 continue;
             }
             out.push_str(&format!("  record {} {{\n", op.params_record));
@@ -1086,7 +1390,7 @@ impl InterfaceModel {
             }
             out.push_str("  }\n");
             out.push_str(&format!(
-                "  {}: func(params: {}) -> result<string, string>;\n\n",
+                "  {}: func(params: {}) -> {ret};\n\n",
                 op.op_kebab, op.params_record
             ));
         }
@@ -1094,6 +1398,11 @@ impl InterfaceModel {
         out.push_str("}\n");
         out
     }
+}
+
+/// Render the WIT return type of an operation: `result<{ok}, {err}>`.
+fn render_result_type(ok: &WitType, err: &WitType) -> String {
+    format!("result<{}, {}>", ok.render(), err.render())
 }
 
 fn ref_or_to_box(r: &ReferenceOr<Schema>) -> ReferenceOr<Box<Schema>> {

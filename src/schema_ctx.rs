@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result, bail};
 use indexmap::IndexMap;
-use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Schema, SchemaKind, Type};
+use openapiv3::{OpenAPI, Parameter, ReferenceOr, RequestBody, Response, Schema, SchemaKind, Type};
 
 /// Resolves schema references against the components section of an OpenAPI document.
 pub(crate) struct SchemaCtx<'a> {
@@ -99,6 +99,40 @@ impl<'a> SchemaCtx<'a> {
             }
         }
         bail!("parameter $ref nested too deeply: {reference}")
+    }
+
+    /// Resolve a `#/components/responses/{Name}` reference to the response it points at.
+    ///
+    /// Response `$ref`s are pervasive in real specs: GitHub points its `304`/`404`/`500`/`503`
+    /// entries at shared `#/components/responses/*` definitions (`not_modified`, `not_found`,
+    /// `internal_error`, `service_unavailable`) on nearly every operation. Without resolving
+    /// them the operation's declared error surface — and any typed success body defined by
+    /// reference — was invisible, leaving every function at `result<string, string>`. Follows
+    /// chained refs to a small fixed depth in case the named entry is itself a `$ref`.
+    pub(crate) fn resolve_response(&self, reference: &str) -> Result<&'a Response> {
+        let responses = &self
+            .spec
+            .components
+            .as_ref()
+            .context("spec missing components section")?
+            .responses;
+        let mut reference = reference;
+        for _ in 0..8 {
+            let name = reference
+                .strip_prefix("#/components/responses/")
+                .with_context(|| format!("unsupported response $ref: {reference}"))?;
+            if name.is_empty() {
+                bail!("malformed response $ref: {reference}");
+            }
+            match responses
+                .get(name)
+                .with_context(|| format!("response $ref not found: {reference}"))?
+            {
+                ReferenceOr::Item(r) => return Ok(r),
+                ReferenceOr::Reference { reference: next } => reference = next,
+            }
+        }
+        bail!("response $ref nested too deeply: {reference}")
     }
 
     /// Resolve a `#/components/schemas/...` reference string to the schema it points at.
@@ -333,6 +367,45 @@ mod tests {
         // A dangling reference is an error (callers skip just that parameter, with a warning).
         assert!(
             ctx.resolve_parameter("#/components/parameters/Missing")
+                .is_err()
+        );
+    }
+
+    // r[verify schema-ctx.response.resolve-ref]
+    // Responses shared via `#/components/responses/*` (issue #5) must resolve to the named
+    // response, following `$ref` chains, so their body schema can be typed. A dangling ref is
+    // an error, letting the caller fall back to the raw-body `string` instead of failing.
+    #[test]
+    fn resolves_response_ref() {
+        let spec: OpenAPI = serde_json::from_str(
+            r##"{
+              "openapi": "3.0.0",
+              "info": { "title": "t", "version": "1" },
+              "paths": {},
+              "components": {
+                "responses": {
+                  "Pet": {
+                    "description": "a pet",
+                    "content": { "application/json": { "schema": { "type": "object" } } }
+                  },
+                  "Alias": { "$ref": "#/components/responses/Pet" }
+                }
+              }
+            }"##,
+        )
+        .unwrap();
+        let ctx = SchemaCtx::new(&spec);
+        // Direct reference resolves to the named response.
+        let resp = ctx.resolve_response("#/components/responses/Pet").unwrap();
+        assert!(resp.content.contains_key("application/json"));
+        // A `$ref` that points at another `$ref` is followed to the concrete response.
+        let chained = ctx
+            .resolve_response("#/components/responses/Alias")
+            .unwrap();
+        assert!(chained.content.contains_key("application/json"));
+        // A dangling reference is an error (callers fall back to the raw-body string).
+        assert!(
+            ctx.resolve_response("#/components/responses/Missing")
                 .is_err()
         );
     }

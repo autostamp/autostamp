@@ -1420,3 +1420,485 @@ fn resolves_shared_ref_parameters() {
         generated.wit
     );
 }
+
+// r[verify codegen.response.success-body-typed]
+// Issue #6: a success (2xx) response body with a JSON schema must be lowered to a typed WIT
+// value so the operation returns `result<{ok}, ...>` instead of the old `result<string, ...>`.
+// An object schema referenced by `$ref` becomes a named record, and the operation's `ok` arm
+// is that record — not a raw string.
+#[test]
+fn types_success_response_body_as_record() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets/{id}": {
+          "get": {
+            "tags": ["pets"],
+            "operationId": "getPet",
+            "parameters": [
+              { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+            ],
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": {
+                  "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "age": { "type": "integer", "format": "int32" }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The 2xx schema becomes a named record ...
+    assert!(
+        generated.wit.contains("record pet {"),
+        "success body schema should be lowered to a record:\n{}",
+        generated.wit
+    );
+    // ... and the operation returns it on the `ok` arm (no declared errors -> `string` err).
+    assert!(
+        generated.wit.contains("-> result<pet, string>"),
+        "operation should return the typed success record:\n{}",
+        generated.wit
+    );
+    // The generated Rust deserializes the raw body into the record type.
+    assert!(
+        generated.rust.contains("__ok(body: String)"),
+        "a typed ok body should emit a `__ok` decoder over the raw body:\n{}",
+        generated.rust
+    );
+}
+
+// r[verify codegen.response.success-body-list]
+// A 2xx body whose schema is an array of a `$ref` becomes `list<{item}>`, mirroring how request
+// bodies and parameters lower arrays.
+#[test]
+fn types_success_response_body_as_list() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets": {
+          "get": {
+            "tags": ["pets"],
+            "operationId": "listPets",
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": {
+                  "application/json": {
+                    "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        generated.wit.contains("-> result<list<pet>, string>"),
+        "array success body should lower to `list<...>`:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.response.errors-enumerated]
+// Issue #7: declared non-2xx responses must be enumerated into a per-operation error `variant`,
+// one case per status (named from the standard reason phrase), plus a trailing `other(string)`
+// catch-all. The operation's `err` arm is that variant instead of a flat `string`.
+#[test]
+fn enumerates_declared_error_responses() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets/{id}": {
+          "get": {
+            "tags": ["pets"],
+            "operationId": "getPet",
+            "parameters": [
+              { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+            ],
+            "responses": {
+              "200": { "description": "ok" },
+              "404": { "description": "missing" },
+              "500": { "description": "boom" }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // A per-operation error variant with a case per declared status plus a catch-all.
+    assert!(
+        generated.wit.contains("variant get-pet-error {"),
+        "declared errors should become a per-op variant:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("not-found(string)"),
+        "404 should map to a `not-found` case:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("internal-server-error(string)"),
+        "500 should map to an `internal-server-error` case:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("other(string)"),
+        "an `other` catch-all case is always present:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("-> result<string, get-pet-error>"),
+        "the operation's err arm should be the variant:\n{}",
+        generated.wit
+    );
+    // The generated Rust maps each HTTP status onto its case, with a catch-all for the rest.
+    assert!(
+        generated.rust.contains("404u16 =>") && generated.rust.contains("::NotFound(body)"),
+        "404 should map onto the NotFound case in Rust:\n{}",
+        generated.rust
+    );
+    assert!(
+        generated.rust.contains("500u16 =>")
+            && generated.rust.contains("::InternalServerError(body)"),
+        "500 should map onto the InternalServerError case in Rust:\n{}",
+        generated.rust
+    );
+    assert!(
+        generated.rust.contains("_ =>") && generated.rust.contains("::Other(body)"),
+        "undeclared statuses fall through to the Other case:\n{}",
+        generated.rust
+    );
+}
+
+// r[verify codegen.response.errors-range]
+// A non-2xx *range* response (`4XX`, `5XX`) becomes a single variant case keyed by the range,
+// and the Rust maps the whole 100-code window onto it via a guarded match arm.
+#[test]
+fn maps_error_status_ranges_to_variant_cases() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets": {
+          "get": {
+            "tags": ["pets"],
+            "operationId": "listPets",
+            "responses": {
+              "200": { "description": "ok" },
+              "4XX": { "description": "client error" },
+              "5XX": { "description": "server error" }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        generated.wit.contains("client-error(string)")
+            && generated.wit.contains("server-error(string)"),
+        "status ranges should map to `client-error`/`server-error` cases:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.rust.contains("(400u16..500u16).contains(&s)"),
+        "a 4XX range should map onto a guarded 400..500 match arm:\n{}",
+        generated.rust
+    );
+    assert!(
+        generated.rust.contains("(500u16..600u16).contains(&s)"),
+        "a 5XX range should map onto a guarded 500..600 match arm:\n{}",
+        generated.rust
+    );
+}
+
+// r[verify codegen.response.no-errors-string]
+// An operation that declares no *specific* non-2xx response keeps a flat `string` error arm
+// (its `result` stays `result<ok, string>`): a single-case variant would carry no more
+// information than the string it wraps. `default` alone does not create a variant.
+#[test]
+fn keeps_string_error_without_declared_error_responses() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets": {
+          "get": {
+            "tags": ["pets"],
+            "operationId": "listPets",
+            "responses": {
+              "200": { "description": "ok" },
+              "default": { "description": "fallback" }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        !generated.wit.contains("-error {"),
+        "no specific error responses should emit no error variant:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("-> result<string, string>"),
+        "with no typed body or declared errors the result stays `result<string, string>`:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.response.ref-resolved]
+// Issue #5: a response declared via `#/components/responses/*` `$ref` must be resolved so its
+// body schema is typed exactly as an inline response would be — the response half of `$ref`
+// codegen that the parameter/request-body work already covers.
+#[test]
+fn resolves_component_response_ref() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets/{id}": {
+          "get": {
+            "tags": ["pets"],
+            "operationId": "getPet",
+            "parameters": [
+              { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+            ],
+            "responses": {
+              "200": { "$ref": "#/components/responses/PetResponse" }
+            }
+          }
+        }
+      },
+      "components": {
+        "responses": {
+          "PetResponse": {
+            "description": "a pet",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Pet" } }
+            }
+          }
+        },
+        "schemas": {
+          "Pet": {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The shared response `$ref` resolves and its body schema is typed like an inline one.
+    assert!(
+        generated.wit.contains("record pet {"),
+        "shared response `$ref` should resolve and type its body schema:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("-> result<pet, string>"),
+        "operation should return the resolved response's typed body:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.response.no-schema-string]
+// A success response with no content or no schema (`204 No Content`, a bare `description`)
+// keeps `string` on the `ok` arm: the raw response body, preserving the original
+// always-return-the-body behavior so an unmodelable response never regresses an operation.
+#[test]
+fn keeps_string_success_without_response_schema() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/ping": {
+          "get": {
+            "tags": ["health"],
+            "operationId": "ping",
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        generated.wit.contains("-> result<string, string>"),
+        "a response without a schema keeps the raw-body `string` ok arm:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.response.self-referential-allof]
+// A single-member `allOf` that wraps a `$ref` back to its own enclosing schema (Jira's
+// `NotificationEvent.templateEvent = allOf[$ref NotificationEvent]`) must not send the record
+// emitter into unbounded recursion. An inline single-member `allOf` never enters the `$ref`
+// cycle guard directly, so it is delegated to its sole member; when that member closes a cycle
+// it degrades to `string` exactly as a direct self-`$ref` already does. Reachable through a
+// response body (the schema is only ever returned) — the path that first exposed the hang.
+#[test]
+fn does_not_recurse_on_self_referential_single_member_allof() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/events/{id}": {
+          "get": {
+            "tags": ["events"],
+            "operationId": "getEvent",
+            "parameters": [
+              { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+            ],
+            "responses": {
+              "200": {
+                "description": "an event",
+                "content": {
+                  "application/json": { "schema": { "$ref": "#/components/schemas/NotificationEvent" } }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "NotificationEvent": {
+            "type": "object",
+            "properties": {
+              "eventType": { "type": "string" },
+              "templateEvent": { "allOf": [ { "$ref": "#/components/schemas/NotificationEvent" } ] }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    // The real assertion is simply that this returns (does not hang / overflow the stack).
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        generated.wit.contains("record notification-event {"),
+        "the self-referential schema should still emit one bounded record:\n{}",
+        generated.wit
+    );
+    // The cyclic self-reference is broken by degrading it to `string`, never a recursive record.
+    assert!(
+        generated.wit.contains("template-event: option<string>"),
+        "the single-member allOf self-`$ref` should degrade to `string`, not recurse:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.response.op-name-collision]
+// A success response whose body is a schema named after the operation (Plaid's
+// `transferIntentCreate` returns `TransferIntentCreateResponse`, whose `transfer_intent` field
+// is `$ref TransferIntentCreate` -> record `transfer-intent-create`) must not let the response
+// record claim the operation's own function name. WIT shares one namespace for functions and
+// types, so the operation reserves its name before responses are lowered; the colliding record
+// is disambiguated with a numeric suffix instead of producing a "defined more than once" error.
+#[test]
+fn response_record_named_after_operation_does_not_collide() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/intents": {
+          "post": {
+            "tags": ["intents"],
+            "operationId": "createIntent",
+            "responses": {
+              "200": {
+                "description": "created",
+                "content": {
+                  "application/json": { "schema": { "$ref": "#/components/schemas/CreateIntentResponse" } }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "CreateIntentResponse": {
+            "type": "object",
+            "required": ["intent"],
+            "properties": { "intent": { "$ref": "#/components/schemas/CreateIntent" } }
+          },
+          "CreateIntent": {
+            "type": "object",
+            "required": ["id"],
+            "properties": { "id": { "type": "string" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    // Must generate at all: a name collision here surfaces as a wit-parser "defined more than
+    // once" error out of `generate`.
+    let generated = generate(&spec, &package, None).unwrap();
+
+    // The function keeps the clean operation name.
+    assert!(
+        generated.wit.contains("create-intent: func("),
+        "the operation should keep its function name:\n{}",
+        generated.wit
+    );
+    // The response body record named after the operation yields, taking a suffixed name.
+    assert!(
+        generated.wit.contains("record create-intent-v2 {"),
+        "the response record colliding with the function name should be disambiguated:\n{}",
+        generated.wit
+    );
+}
