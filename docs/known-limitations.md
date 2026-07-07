@@ -37,10 +37,36 @@ The following mappings are **deliberate simplifications**, not accidental drops:
 - **`oneOf` / `anyOf` schemas become an opaque `string`.** A union of alternatives can't be
   represented as a single WIT record without losing fidelity, so the field is passed through as a
   JSON string the caller encodes. (`allOf`, by contrast, *is* merged into a record.)
-- **Responses are modeled as `result<string, string>`.** Every operation returns the raw response
-  body as a string (or an error message); response schemas are not turned into typed records.
 - **Path parameters are typed as `string`.** They exist only to fill `{placeholder}` segments in
   the URL, so they're always interpolated as strings regardless of their declared schema.
 - **Cookie parameters are dropped** (with a diagnostic on stderr). They aren't represented in the
   request runtime; they're vanishingly rare in practice — no provider in the curated corpus uses
   one.
+
+## Response modeling
+
+Every operation returns `result<ok, err>`. The **success** arm is typed from the primary 2xx
+response body: the generator picks a response (preferring `200`, then `201`, then the lowest 2xx
+code, then a `2XX` range), selects its JSON media type, and lowers that schema exactly like a
+request body — an object becomes a named record, an array a `list<...>`, and so on. Response
+bodies shared via `#/components/responses/*` `$ref`s are resolved first, so a referenced response
+is typed just like an inline one. The **error** arm enumerates the declared non-2xx responses into
+a per-operation `variant`: each specific status (`404` → `not-found`, `500` →
+`internal-server-error`) and each status range (`4XX` → `client-error`, `5XX` → `server-error`)
+becomes a named case, plus a trailing `other(string)` catch-all for undeclared statuses and
+transport-level failures. The runtime returns the response status and raw body to the generated
+per-operation wrapper, which deserializes the success body into its typed value or routes the
+failure onto the matching error case.
+
+The following mappings are **deliberate simplifications**:
+
+- **Success bodies with no typeable schema stay `string`.** A response with no content or no
+  schema (`204 No Content`, a bare `description`), or a `oneOf`/`anyOf` body, keeps the raw
+  response body as a `string` on the `ok` arm — an unmodelable response never regresses an
+  operation to un-generatable.
+- **Error case payloads are always the raw body `string`.** Each error variant case carries the
+  response body verbatim rather than a typed error schema; typed error bodies are a future
+  refinement.
+- **Operations with no declared error responses keep `result<ok, string>`.** When a spec declares
+  no specific non-2xx response (only a 2xx, or a bare `default`), the error arm stays a flat
+  `string` — a single-case variant would carry no more information than the string it wraps.
