@@ -1,0 +1,261 @@
+name: Regenerate and publish
+
+# Automated regen -> build -> publish pipeline.
+#
+# On a weekly schedule (and on demand) this: pulls the latest upstream OpenAPI schemas,
+# bumps the shared base version, regenerates every component, opens an *intermediate PR*
+# with the diff, triggers CI on that PR, and — once CI passes — builds every component and
+# publishes it to ghcr.io/autostamp. After a successful publish the PR is auto-merged so
+# `main` stays in sync with what was published.
+#
+# Why the close/reopen dance: a pull request opened with the default GITHUB_TOKEN does NOT
+# trigger `on: pull_request` workflow runs (GitHub suppresses downstream runs from the
+# built-in token to avoid loops). We therefore open the PR with GITHUB_TOKEN and then close
+# + reopen it with a PAT (REGEN_PAT); the `reopened` activity — performed as a real user —
+# triggers ci.yaml. See docs/building-and-publishing.md.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      bump_level:
+        description: "Version bump: patch, minor, major, or an explicit X.Y.Z"
+        type: string
+        default: minor
+      vendor_update:
+        description: "Pull the latest upstream OpenAPI schemas before regenerating"
+        type: boolean
+        default: true
+      dry_run:
+        description: "Preview the publish without pushing to GHCR (also skips the auto-merge)"
+        type: boolean
+        default: false
+
+# Never run two publishes at once: a manual dispatch during the weekly run should queue,
+# not cancel a publish mid-flight.
+concurrency:
+  group: regen-and-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+env:
+  # The `component` CLI must include the OCI-tag fix that maps SemVer build metadata
+  # (`0.1.0+2026-01-14`) onto a valid tag (`0.1.0_2026-01-14`); install from a ref that has it.
+  COMPONENT_CLI_REF: main
+
+jobs:
+  regen:
+    name: Regenerate bindings and open PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      pr_number: ${{ steps.pr.outputs.pr_number }}
+      branch: ${{ steps.commit.outputs.branch }}
+      version: ${{ steps.regen.outputs.version }}
+      dry_run: ${{ steps.vars.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve run inputs
+        id: vars
+        # Inputs are read via env (not inlined into the script) to avoid shell injection.
+        env:
+          IN_BUMP_LEVEL: ${{ github.event.inputs.bump_level }}
+          IN_VENDOR_UPDATE: ${{ github.event.inputs.vendor_update }}
+          IN_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          # Defaults cover the `schedule` event, where the dispatch inputs are empty.
+          bump_level="${IN_BUMP_LEVEL:-minor}"
+          if [ "$EVENT_NAME" = "schedule" ] || [ "$IN_VENDOR_UPDATE" = "true" ]; then
+            vendor_update=true
+          else
+            vendor_update=false
+          fi
+          dry_run=false
+          [ "$IN_DRY_RUN" = "true" ] && dry_run=true
+          {
+            echo "bump_level=$bump_level"
+            echo "vendor_update=$vendor_update"
+            echo "dry_run=$dry_run"
+          } >> "$GITHUB_OUTPUT"
+          echo "bump_level=$bump_level vendor_update=$vendor_update dry_run=$dry_run"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Regenerate bindings
+        id: regen
+        env:
+          VENDOR_UPDATE: ${{ steps.vars.outputs.vendor_update }}
+          BUMP_LEVEL: ${{ steps.vars.outputs.bump_level }}
+        run: |
+          set -euo pipefail
+          # Fetch the vendored schemas (sparse, blobless), optionally re-pinning to latest upstream.
+          just vendor-init
+          if [ "$VENDOR_UPDATE" = "true" ]; then
+            just vendor-update
+          fi
+          # Always bump the shared base version, then regenerate every component at the new base.
+          just bump "$BUMP_LEVEL"
+          version="$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' version.toml | head -n1)"
+          just gen
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "regenerated at base version $version"
+
+      - name: Commit and push
+        id: commit
+        env:
+          VERSION: ${{ steps.regen.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="auto/regen-v${VERSION}-$(date -u +%Y%m%d%H%M%S)"
+          git checkout -b "$branch"
+          # Scope the add to the regenerated sources, the version ledger, and the schema pin.
+          git add components/ version.toml vendor/schemas
+          git commit -m "Regenerate components at v${VERSION}" \
+            -m "Automated regen from the weekly regen-and-publish pipeline." \
+            -m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
+          git push origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open intermediate PR
+        id: pr
+        env:
+          # Opened with the built-in token on purpose: this does NOT trigger ci.yaml.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.commit.outputs.branch }}
+          VERSION: ${{ steps.regen.outputs.version }}
+        run: |
+          set -euo pipefail
+          body="$(printf '%s\n\n%s\n' \
+            "Automated regeneration of all component bindings at base version \`$VERSION\`." \
+            "Opened by the \`regen-and-publish\` pipeline. CI is (re)triggered via a PAT-driven close/reopen; on green the pipeline builds and publishes every component to ghcr.io/autostamp, then merges this PR.")"
+          # gh prints the new PR's URL on stdout; the number is its last path segment.
+          pr_url="$(gh pr create --base main --head "$BRANCH" --title "Regenerate components at v$VERSION" --body "$body")"
+          pr_number="${pr_url##*/}"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "opened PR #$pr_number for $BRANCH"
+
+      - name: Trigger CI (close + reopen with PAT)
+        env:
+          # A real-user token: the `reopened` activity it generates DOES trigger ci.yaml,
+          # whereas anything driven by GITHUB_TOKEN would be suppressed.
+          GH_TOKEN: ${{ secrets.REGEN_PAT }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          gh pr close "$PR_NUMBER"
+          # Brief pause so the reopen registers as a distinct event.
+          sleep 5
+          gh pr reopen "$PR_NUMBER"
+          echo "closed and reopened PR #$PR_NUMBER to trigger CI"
+
+  await-ci:
+    name: Wait for PR CI to pass
+    needs: regen
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Watch PR checks
+        env:
+          GH_TOKEN: ${{ secrets.REGEN_PAT }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.regen.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          # Tolerate the window after reopen before the triggered checks register (runner
+          # queueing can delay this well past the reopen). Up to ~5 min.
+          registered=false
+          for i in $(seq 1 30); do
+            if gh pr checks "$PR_NUMBER" >/dev/null 2>&1; then
+              registered=true
+              break
+            fi
+            echo "waiting for checks to register on PR #$PR_NUMBER ($i)…"
+            sleep 10
+          done
+          if [ "$registered" != "true" ]; then
+            echo "::error::No checks registered on PR #$PR_NUMBER — the PAT-driven reopen may not have triggered ci.yaml (check REGEN_PAT scope and the 'Allow Actions to create PRs' setting)." >&2
+            exit 1
+          fi
+          # --watch blocks until every check concludes; --fail-fast exits nonzero on the first
+          # failure. A nonzero exit here fails the pipeline and blocks the publish job.
+          gh pr checks "$PR_NUMBER" --watch --fail-fast --interval 30
+
+  publish:
+    name: Build and publish to ghcr.io/autostamp
+    needs: [regen, await-ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.regen.outputs.branch }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Install the component CLI
+        run: cargo install --locked --git https://github.com/yoshuawuyts/component-registry --branch "${COMPONENT_CLI_REF}" component
+
+      - name: Fetch vendored OpenAPI schemas
+        run: just vendor-init
+
+      - name: Log in to ghcr.io
+        # A classic PAT with write:packages (fine-grained PATs frequently lack it).
+        # The username is ignored by GHCR when authenticating with a token.
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u token --password-stdin
+
+      - name: Build components
+        # Regenerates from the (pinned) schemas — idempotent here — then compiles each crate.
+        # This is the substantive component gate: a build failure blocks publishing.
+        run: just build
+
+      - name: Publish components
+        run: just publish-components "" "${DRY_RUN_FLAG}"
+        env:
+          DRY_RUN_FLAG: ${{ needs.regen.outputs.dry_run == 'true' && '1' || '' }}
+
+  merge:
+    name: Merge the regen PR
+    needs: [regen, publish]
+    if: ${{ needs.regen.outputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Squash-merge and delete the branch
+        env:
+          GH_TOKEN: ${{ secrets.REGEN_PAT }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.regen.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_NUMBER" --squash --delete-branch
+          echo "merged PR #$PR_NUMBER into main"
