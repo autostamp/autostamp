@@ -194,6 +194,17 @@ fn perform(
     for (name, value) in headers {
         builder = builder.header(name.as_str(), value.as_str());
     }
+    // These APIs speak JSON, but some default to another representation when the client
+    // doesn't ask (e.g. CircleCI v1.1 returns EDN without an `Accept`). Request and label
+    // JSON explicitly, unless the operation set the header itself.
+    if !headers.iter().any(|(n, _)| n.eq_ignore_ascii_case("accept")) {
+        builder = builder.header("accept", "application/json");
+    }
+    if !body.is_empty()
+        && !headers.iter().any(|(n, _)| n.eq_ignore_ascii_case("content-type"))
+    {
+        builder = builder.header("content-type", "application/json");
+    }
     let request = builder
         .body(if body.is_empty() {
             Body::empty()
