@@ -1534,6 +1534,65 @@ fn types_success_response_body_as_list() {
     );
 }
 
+// r[verify codegen.named-array-schema]
+// A *named* schema that is itself `type: array` (e.g. CircleCI's `Builds: { type:
+// array, items: $ref Build }`, referenced from a response as `$ref: "#/components/
+// schemas/Builds"` rather than declared inline) used to fall into
+// `emit_record_from_schema`'s scalar fallback, which only special-cases object-shaped
+// schemas and degrades everything else — including arrays — to an opaque
+// `{ value: string }` record. That silently discarded the item type. It must resolve
+// to `list<pet>` exactly like the inline-array case above, with the `$ref`ed item
+// schema resolved recursively.
+#[test]
+fn types_success_response_body_as_list_via_named_array_schema() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/pets": {
+          "get": {
+            "tags": ["pets"],
+            "operationId": "listPets",
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": {
+                  "application/json": {
+                    "schema": { "$ref": "#/components/schemas/Pets" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "Pets": { "type": "array", "items": { "$ref": "#/components/schemas/Pet" } },
+          "Pet": {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string" } }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        generated.wit.contains("-> result<list<pet>, string>"),
+        "named array schema should lower to `list<...>`, not degrade to an opaque record:\n{}",
+        generated.wit
+    );
+    assert!(
+        !generated.wit.contains("record pets"),
+        "named array schema must not emit an opaque wrapper record:\n{}",
+        generated.wit
+    );
+}
+
 // r[verify codegen.response.errors-enumerated]
 // Issue #7: declared non-2xx responses must be enumerated into a per-operation error `variant`,
 // one case per status (named from the standard reason phrase), plus a trailing `other(string)`
@@ -1899,6 +1958,164 @@ fn response_record_named_after_operation_does_not_collide() {
     assert!(
         generated.wit.contains("record create-intent-v2 {"),
         "the response record colliding with the function name should be disambiguated:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.free-form-object-as-map]
+// A `type: object` schema that declares no `properties` is an open map (free-form object),
+// e.g. CircleCI's `BuildParameters: { type: object }` used for arbitrary env-var name/value
+// pairs. It used to degrade to an opaque `record build-parameters { data: option<string> }`
+// wrapper, discarding the map shape. It must instead lower to a `list<{name}-entry>` where
+// `{name}-entry` is a `record { key: string, value: V }` named after the containing type
+// (string values, since a bare `type: object` gives no value type), and a `$ref` to it must
+// resolve to that map type rather than minting an opaque wrapper record.
+#[test]
+fn types_free_form_object_as_string_map() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/build": {
+          "post": {
+            "tags": ["pipelines"],
+            "operationId": "startBuild",
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "build_parameters": { "$ref": "#/components/schemas/BuildParameters" }
+                    }
+                  }
+                }
+              }
+            },
+            "responses": { "200": { "description": "ok" } }
+          }
+        }
+      },
+      "components": {
+        "schemas": {
+          "BuildParameters": { "type": "object" }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        generated
+            .wit
+            .contains("build-parameters: option<list<build-parameters-entry>>"),
+        "a free-form `type: object` should lower to a `list<{{name}}-entry>` map:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated
+            .wit
+            .contains("record build-parameters-entry {\n    key: string,\n    value: string\n  }"),
+        "the map must emit a `key`/`value` entry record named after the containing type:\n{}",
+        generated.wit
+    );
+    // The map serializes to a JSON *object*, not serde's default array-of-`{key, value}` objects.
+    assert!(
+        generated.rust.contains(
+            ".iter().map(|e| (e.key.clone(), Value::String((&e.value).clone()))).collect()"
+        ),
+        "the map must serialize into a JSON object:\n{}",
+        generated.rust
+    );
+}
+
+// r[verify codegen.free-form-object-typed-values]
+// When a free-form object declares `additionalProperties: <schema>`, the value type is known,
+// so the map is typed: `additionalProperties: { type: integer }` -> `list<tuple<string, s32>>`.
+#[test]
+fn types_free_form_object_with_typed_additional_properties() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/counts": {
+          "get": {
+            "tags": ["counts"],
+            "operationId": "getCounts",
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": {
+                  "application/json": {
+                    "schema": { "type": "object", "additionalProperties": { "type": "integer" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        generated
+            .wit
+            .contains("-> result<list<get-counts-response-entry>, string>"),
+        "a free-form object response should return a `list<{{name}}-entry>` map:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated
+            .wit
+            .contains("record get-counts-response-entry {\n    key: string,\n    value: s32\n  }"),
+        "a typed `additionalProperties` schema should type the entry's `value` field:\n{}",
+        generated.wit
+    );
+}
+
+// r[verify codegen.closed-empty-object-keeps-record]
+// A *closed* empty object (`additionalProperties: false`, no properties) is not a map — it has
+// no entries at all — so it keeps the opaque escape-hatch record rather than becoming a map.
+#[test]
+fn types_closed_empty_object_keeps_escape_hatch_record() {
+    let spec_json = r##"{
+      "openapi": "3.0.0",
+      "info": { "title": "demo", "version": "1.0.0" },
+      "paths": {
+        "/thing": {
+          "get": {
+            "tags": ["thing"],
+            "operationId": "getThing",
+            "responses": {
+              "200": {
+                "description": "ok",
+                "content": {
+                  "application/json": {
+                    "schema": { "type": "object", "additionalProperties": false }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }"##;
+    let spec = parse_openapi(spec_json).unwrap();
+    let package = PackageName::parse("wilted:demo@0.1.0").unwrap();
+    let generated = generate(&spec, &package, None).unwrap();
+
+    assert!(
+        !generated.wit.contains("tuple<string"),
+        "a closed empty object must not become a map:\n{}",
+        generated.wit
+    );
+    assert!(
+        generated.wit.contains("data: option<string>"),
+        "a closed empty object should keep the JSON-blob escape hatch:\n{}",
         generated.wit
     );
 }
